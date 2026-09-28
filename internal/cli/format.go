@@ -28,7 +28,7 @@ type Obj struct{ V any }
 type Flags map[string][]string
 
 var boolFlags = map[string]bool{
-	"quiet": true, "q": true, "global": true, "async": true, "uniform-bucket-level-access": true, "allow-unauthenticated": true,
+	"quiet": true, "table": true, "dataset": true, "q": true, "global": true, "async": true, "uniform-bucket-level-access": true, "allow-unauthenticated": true,
 	"auto-allocate-nat-external-ips": true, "nat-all-subnet-ip-ranges": true, "versioning": true, "auto-ack": true,
 	"dry-run": true, "dry_run": true, "tunnel-through-iap": true, "spot": true, "preemptible": true, "all": true, "recursive": true,
 	"r": true, "R": true, "require-ssl": true, "to-latest": true, "preview": true, "deletion-protection": true, "shielded-secure-boot": true,

@@ -1,0 +1,80 @@
+id: ace-d26-hybrid-design
+title: "Day 26 · Case study: connect the on-prem datacenter"
+summary: Choose and justify the hybrid connectivity design, then build the HA VPN with dynamic routing.
+track: ace-30
+day: 26
+level: advanced
+branch: networking
+type: challenge
+skills: [networking.hybrid, networking.routing, architecture.design]
+wellArchitected: [reliability, security]
+certs: [PCA, PCNE]
+difficulty: 4
+minutes: 75
+params:
+  peerasn: ["65010", "65020"]
+baseline: [default-network]
+story: |
+  **Case study — Tallerix Logistics.** The Madrid datacenter (`10.50.0.0/16`, BGP ASN {{.peerasn}}) must
+  reach the application VPC `app-vpc` in {{.region}}. Requirements:
+
+  - 99.99% availability SLA for the link, encrypted, available **this week**
+  - expected traffic 300 Mbps, growing to 5 Gbps in two years
+  - no manual route maintenance when on-prem adds subnets
+
+  Build the first phase: VPC `app-vpc` (custom, subnet `app` 10.10.0.0/20), Cloud Router `onprem-router`
+  (ASN 64514), HA VPN gateway `onprem-gw` with **two tunnels** (interfaces 0 and 1) towards the peer
+  gateway `madrid-peer` (IPs 203.0.113.10 and 203.0.113.11) and one BGP session per tunnel.
+  Then answer the design questions with justification.
+objectives:
+  - Choose the connectivity option and justify it
+  - HA VPN with two tunnels and BGP
+  - Plan the evolution (Interconnect)
+quiz:
+  - id: q1
+    question: Which option meets the requirements for phase 1?
+    options: ["Classic VPN with static routes", "HA VPN with two tunnels and Cloud Router (BGP)", "Dedicated Interconnect", "VPC peering"]
+    answer: [1]
+    justify: true
+    keywords: [[99.99, sla], [bgp, dynamic, dinamic]]
+  - id: q2
+    question: What is the right evolution when traffic reaches 5 Gbps sustained?
+    options: ["Add more classic VPN tunnels", "Partner or Dedicated Interconnect with redundant attachments", "Move to public IPs", "Cloud NAT"]
+    answer: [1]
+    justify: true
+    keywords: [[interconnect], [bandwidth, ancho de banda, gbps, throughput]]
+  - id: q3
+    question: What avoids manual route maintenance when on-prem adds subnets?
+    options: ["Static routes per subnet", "BGP advertisements through Cloud Router", "Firewall rules", "Private Google Access"]
+    answer: [1]
+hints:
+  - text: "HA VPN needs an external VPN gateway resource (peer), a Cloud Router and one tunnel per interface."
+solution: |
+  gcloud compute networks create app-vpc --subnet-mode=custom
+  gcloud compute networks subnets create app --network=app-vpc --region={{.region}} --range=10.10.0.0/20
+  gcloud compute routers create onprem-router --network=app-vpc --region={{.region}} --asn=64514
+  gcloud compute vpn-gateways create onprem-gw --network=app-vpc --region={{.region}}
+  gcloud compute vpn-tunnels create tunnel-0 --vpn-gateway=onprem-gw --interface=0 --peer-external-gateway=madrid-peer --peer-external-gateway-interface=0 --router=onprem-router --region={{.region}} --ike-version=2 --shared-secret=s3cr3t-a
+  gcloud compute vpn-tunnels create tunnel-1 --vpn-gateway=onprem-gw --interface=1 --peer-external-gateway=madrid-peer --peer-external-gateway-interface=1 --router=onprem-router --region={{.region}} --ike-version=2 --shared-secret=s3cr3t-b
+  gcloud compute routers add-bgp-peer onprem-router --peer-name=madrid-0 --interface=if-tunnel-0 --peer-asn={{.peerasn}} --region={{.region}}
+  gcloud compute routers add-bgp-peer onprem-router --peer-name=madrid-1 --interface=if-tunnel-1 --peer-asn={{.peerasn}} --region={{.region}}
+rubric:
+  - name: Design decisions
+    validator: quiz
+    points: 40
+    checks:
+      - {type: quiz, ratio: 1, desc: "All design questions correct and justified"}
+  - name: HA VPN
+    validator: state
+    points: 35
+    all: true
+    checks:
+      - {type: exists, path: "networks[\"app-vpc\"]", desc: "Application VPC"}
+      - {type: exists, path: "vpnGateways[\"onprem-gw\"]", expect: {network: app-vpc, tunnels: {minLen: 2}}, desc: "Two tunnels on the HA gateway"}
+      - {type: exists, path: "vpnGateways[\"onprem-gw\"].tunnels", expect: {"": {regex: "\"interface\":1"}}, desc: "Both interfaces used"}
+  - name: Dynamic routing
+    validator: state
+    points: 25
+    checks:
+      - {type: exists, path: "routers[\"onprem-router\"]", expect: {asn: 64514, bgpPeers: {minLen: 2}}, desc: "One BGP session per tunnel"}
+      - {type: exists, path: "routers[\"onprem-router\"].bgpPeers", expect: {"": {regex: "\"peerAsn\":{{.peerasn}}"}}, desc: "Peer ASN matches on-prem"}

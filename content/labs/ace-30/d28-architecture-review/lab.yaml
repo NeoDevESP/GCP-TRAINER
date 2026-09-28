@@ -1,0 +1,84 @@
+id: ace-d28-architecture-review
+title: "Day 28 · Architecture review: reliable and affordable"
+summary: Redesign an over-provisioned, fragile stack to meet reliability and budget targets, justifying each trade-off.
+track: ace-30
+day: 28
+level: advanced
+branch: architecture
+type: challenge
+skills: [architecture.reliability, architecture.cost, compute.mig, databases.ha]
+wellArchitected: [reliability, cost]
+certs: [PCA, ACE]
+difficulty: 4
+minutes: 90
+params:
+  budget: ["900", "1000"]
+baseline: [default-network]
+setup: |
+  gcloud compute instance-templates create web-tpl --machine-type=e2-small --image-family=debian-12 --image-project=debian-cloud --tags=web --metadata=startup-script='apt-get install -y nginx'
+  gcloud compute instance-groups managed create web-mig --template=web-tpl --size=1 --zone={{.zone}}
+  gcloud compute health-checks create http web-hc --port=80 --request-path=/
+  gcloud compute instances create reports-vm --zone={{.zone}} --machine-type=e2-standard-32 --image-family=debian-12 --image-project=debian-cloud
+  gcloud compute addresses create old-lb-ip --region={{.region}}
+  gcloud sql instances create orders-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --availability-type=ZONAL --no-backup
+story: |
+  The review board flagged `{{.project}}`:
+
+  - `web-mig` runs a single VM without autohealing — one crash means downtime
+  - `orders-db` is zonal and has **no backups** (RPO target 24 h, must survive a zone outage)
+  - `reports-vm` is an `e2-standard-32` running a nightly report at 3% CPU
+  - a static IP `old-lb-ip` has been reserved and unused for months
+
+  Fix the design so the monthly estimate stays **under {{.budget}} EUR** and answer the review questions.
+objectives:
+  - Meet reliability requirements (HA database with backups, resilient web tier)
+  - Rightsize and remove waste
+  - Justify trade-offs
+quiz:
+  - id: q1
+    question: Which Cloud SQL configuration survives a zone outage with an RPO of 24 hours?
+    options: ["Zonal with read replica in the same zone", "Regional (HA) with automated backups", "Zonal without backups plus snapshots of the VM", "Export to Cloud Storage once per month"]
+    answer: [1]
+    justify: true
+    keywords: [[regional, ha, standby], [backup, copia]]
+  - id: q2
+    question: What is the best action for reports-vm?
+    options: ["Keep it — it may be needed", "Rightsize to a small machine type (or schedule it)", "Add GPUs", "Move it to a bigger region"]
+    answer: [1]
+hints:
+  - text: "`gcloud sql instances patch orders-db --availability-type=REGIONAL --backup-start-time=02:00`"
+  - text: "Autohealing: `gcloud compute instance-groups managed update web-mig --health-check=web-hc --initial-delay=120`"
+solution: |
+  gcloud billing estimate
+  gcloud sql instances patch orders-db --availability-type=REGIONAL --backup-start-time=02:00
+  gcloud compute instance-groups managed resize web-mig --size=2 --zone={{.zone}}
+  gcloud compute instance-groups managed update web-mig --health-check=web-hc --initial-delay=120 --zone={{.zone}}
+  gcloud compute instances stop reports-vm --zone={{.zone}}
+  gcloud compute instances set-machine-type reports-vm --machine-type=e2-standard-2 --zone={{.zone}}
+  gcloud compute instances start reports-vm --zone={{.zone}}
+  gcloud compute addresses delete old-lb-ip --region={{.region}} --quiet
+  gcloud billing estimate
+rubric:
+  - name: Reliability
+    validator: reliability
+    points: 35
+    all: true
+    checks:
+      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db], resilientGroups: [web-mig]}, desc: "HA database with backups, resilient web tier"}
+  - name: Cost
+    validator: cost
+    points: 30
+    all: true
+    checks:
+      - {type: policy, package: gcplab.cost, params: {maxMonthlyEur: "{{.budget}}"}, desc: "No waste and within budget"}
+      - {type: exists, path: "instances[\"reports-vm\"]", desc: "Report VM kept (rightsized, not deleted)"}
+  - name: Trade-offs
+    validator: quiz
+    points: 25
+    checks:
+      - {type: quiz, ratio: 1, desc: "Review questions answered and justified"}
+  - name: Measurement
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "billing estimate", min: 2, desc: "Cost measured before and after"}

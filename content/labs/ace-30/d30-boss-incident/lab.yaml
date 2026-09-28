@@ -1,0 +1,91 @@
+id: ace-d30-boss-incident
+title: "Day 30 · BOSS: Black Friday cascade"
+summary: Multiple simultaneous faults under time pressure — restore service, avoid collateral damage, communicate and write the postmortem.
+track: ace-30
+day: 30
+level: expert
+branch: architecture
+type: boss
+skills: [observability.incident, networking.firewall, databases.performance, iam.serviceaccounts, compute.serverless, security.exposure]
+wellArchitected: [reliability, security, operations]
+certs: [ACE, PCA, PCD]
+difficulty: 5
+minutes: 120
+params:
+  pool: ["70", "90"]
+baseline: [default-network, shop-platform]
+faults:
+  - {type: run_env, service: stock-api, key: DB_POOL_SIZE, value: "{{.pool}}", actor: "release-bot@{{.project}}.iam.gserviceaccount.com"}
+  - {type: iam_remove, role: roles/cloudsql.client, member: "serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com", actor: "cleanup-job@{{.project}}.iam.gserviceaccount.com"}
+  - {type: bucket_public, bucket: "exports-{{.project}}", actor: "cleanup-job@{{.project}}.iam.gserviceaccount.com"}
+  - {type: log_noise, severity: WARNING, resourceType: cloud_run_revision, lines: ["upstream connect error or disconnect/reset before headers (from CDN edge)", "slow request /products took 2.3s"]}
+traffic:
+  - {name: checkout, target: "run:checkout", path: /checkout, rps: 40}
+  - {name: stock, target: "run:stock-api", path: /stock, rps: 60}
+timeline:
+  - {at: "08:50", from: "PagerDuty", text: "P1: checkout error rate 100%"}
+  - {at: "08:55", from: "Security", text: "External scan reports a public bucket named exports-*"}
+  - {at: "09:05", from: "Finance", text: "Do NOT touch legacy-batch, it is running quarter-close jobs."}
+story: |
+  **Black Friday, 08:50.** Checkout is down, stock pages time out and security reports a public bucket.
+  Two overnight jobs ran (`release-bot`, `cleanup-job`). You are incident commander and fixer.
+
+  - Restore `checkout` and `stock-api` with the minimum change
+  - Close the data exposure
+  - Do not touch unrelated resources (read the timeline)
+  - Post an incident update and the postmortem
+objectives:
+  - Triage and prioritise simultaneous problems
+  - Fix every root cause with minimum privilege
+  - Avoid collateral damage
+  - Communicate and document
+hints:
+  - text: "The audit log shows every change made overnight — filter by the two bot identities."
+  - text: "Three different root causes; three different services."
+solution: |
+  gcloud logging read 'logName:cloudaudit protoPayload.authenticationInfo.principalEmail:bot OR protoPayload.authenticationInfo.principalEmail:cleanup' --limit=20 --format='table(timestamp,protoPayload.methodName,protoPayload.resourceName)'
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud run services update stock-api --region={{.region}} --update-env-vars=DB_POOL_SIZE=5
+  gcloud storage buckets remove-iam-policy-binding gs://exports-{{.project}} --member=allUsers --role=roles/storage.objectViewer
+  sleep 120
+  curl -s $(gcloud run services describe checkout --region={{.region}} --format='value(status.url)')/checkout
+evidence:
+  fields: [update, rootCause, prevention]
+  sample:
+    update: "09:20 update: checkout and stock restored; the public exports bucket is closed. Customer impact 30 minutes. Next update in 30 minutes."
+    rootCause: The cleanup job removed cloudsql.client from checkout-sa and made the exports bucket public; the release bot raised DB_POOL_SIZE on stock-api which exhausted Cloud SQL connections.
+    prevention: Run bots with least privilege, require review for IAM changes, cap pool size times instances under max_connections and enforce public access prevention.
+rubric:
+  - name: Service restored
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: http, target: "run:checkout", path: /checkout, status: 200, desc: "Checkout works"}
+      - {type: http, target: "run:stock-api", path: /stock, status: 200, desc: "Stock works"}
+      - {type: sql_healthy, instance: shop-db, settle: 2, desc: "Database connections healthy"}
+  - name: Exposure closed
+    validator: security
+    points: 20
+    critical: true
+    checks:
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.project}}/x", expect: false, desc: "Exports bucket private"}
+  - name: No collateral damage
+    validator: security
+    points: 15
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "instances[\"legacy-batch\"]", expect: {status: RUNNING}, desc: "Decoy left running"}
+      - {type: no_basic_roles, members: ["serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Fix did not use basic roles"}
+  - name: Diagnosis
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "logging read", desc: "Audit log investigated"}
+  - name: Communication & postmortem
+    validator: evidence
+    points: 25
+    checks:
+      - {type: evidence, fields: [update], keywords: [[restor, restabl, recover], [next update, proxima], [impact, impacto]], desc: "Incident update"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[cloudsql.client, iam], [pool, connection], [public, allusers]], desc: "All root causes and prevention"}

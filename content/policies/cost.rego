@@ -4,7 +4,7 @@ package gcplab.cost
 import rego.v1
 
 deny contains msg if {
-	limit := input.params.maxMonthlyEur
+	limit := to_number(input.params.maxMonthlyEur)
 	input.project.cost.monthlyEur > limit
 	msg := sprintf("OVER_BUDGET: estimated %.2f EUR/month exceeds %.2f", [input.project.cost.monthlyEur, limit])
 }

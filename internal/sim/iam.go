@@ -212,6 +212,7 @@ type Resource struct {
 	Name    string // full resource name used in conditions
 	Service string
 	Policies []*Policy // resource-level policies (bucket, SA, secret...)
+	NoPublic bool      // public access prevention: allUsers/allAuthenticatedUsers never match
 }
 
 // ProjectResource is the project itself.
@@ -300,6 +301,9 @@ func (s *State) Explain(principal, perm string, r Resource) (bool, string) {
 		for _, b := range pol.Bindings {
 			matched := false
 			for _, m := range b.Members {
+				if r.NoPublic && (m == "allUsers" || m == "allAuthenticatedUsers") {
+					continue
+				}
 				if s.memberMatches(m, principal) {
 					matched = true
 					break

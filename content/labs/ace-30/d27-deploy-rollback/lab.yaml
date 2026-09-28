@@ -1,0 +1,129 @@
+id: ace-d27-deploy-rollback
+title: "Day 27 · Progressive delivery with automatic rollback"
+summary: Build a Cloud Deploy pipeline with verification and automatic rollback, prove it with a bad release and ship the good one.
+track: ace-30
+day: 27
+level: advanced
+branch: devops
+type: challenge
+skills: [devops.cicd, devops.release, compute.serverless]
+wellArchitected: [reliability, operations]
+certs: [PCD, ACE]
+difficulty: 4
+minutes: 75
+baseline: [empty]
+setup: |
+  gcloud run deploy checkout-staging --image=europe-docker.pkg.dev/gcplab-public/apps/shop-api:1.4 --region={{.region}} --allow-unauthenticated
+  gcloud run deploy checkout-prod --image=europe-docker.pkg.dev/gcplab-public/apps/shop-api:1.4 --region={{.region}} --allow-unauthenticated
+files:
+  clouddeploy.yaml: |
+    apiVersion: deploy.cloud.google.com/v1
+    kind: DeliveryPipeline
+    metadata:
+      name: checkout
+    serialPipeline:
+      stages:
+      - targetId: checkout-staging
+      - targetId: checkout-prod
+    ---
+    apiVersion: deploy.cloud.google.com/v1
+    kind: Target
+    metadata:
+      name: checkout-staging
+    run:
+      location: projects/{{.project}}/locations/{{.region}}
+    ---
+    apiVersion: deploy.cloud.google.com/v1
+    kind: Target
+    metadata:
+      name: checkout-prod
+    run:
+      location: projects/{{.project}}/locations/{{.region}}
+traffic:
+  - {name: prod, target: "run:checkout-prod", path: /search, rps: 30}
+story: |
+  Last month version 1.3 of `shop-api` broke `/search` in production for 40 minutes. Change the
+  release process so that:
+
+  - releases go staging → prod through the Cloud Deploy pipeline `checkout` (draft in `clouddeploy.yaml`)
+  - every stage **verifies** the release and failed verifications **roll back automatically**
+  - prove it: create release `r13` with `shop-api:1.3` (must be rolled back in staging), then release
+    `r14` with `shop-api:1.4` and promote it to prod.
+objectives:
+  - Pipeline with verification per stage
+  - Automatic rollback on failure
+  - Good release in production, bad release stopped
+hints:
+  - text: "Add `strategy: {standard: {verify: true}}` to each stage."
+  - text: "An `Automation` resource with a repairRollout rule enables automatic rollback."
+solution: |
+  cat > clouddeploy.yaml <<'YAML'
+  apiVersion: deploy.cloud.google.com/v1
+  kind: DeliveryPipeline
+  metadata:
+    name: checkout
+  serialPipeline:
+    stages:
+    - targetId: checkout-staging
+      strategy:
+        standard:
+          verify: true
+    - targetId: checkout-prod
+      strategy:
+        standard:
+          verify: true
+  ---
+  apiVersion: deploy.cloud.google.com/v1
+  kind: Target
+  metadata:
+    name: checkout-staging
+  run:
+    location: projects/{{.project}}/locations/{{.region}}
+  ---
+  apiVersion: deploy.cloud.google.com/v1
+  kind: Target
+  metadata:
+    name: checkout-prod
+  run:
+    location: projects/{{.project}}/locations/{{.region}}
+  ---
+  apiVersion: deploy.cloud.google.com/v1
+  kind: Automation
+  metadata:
+    name: checkout/repair
+  selector:
+  - target:
+      id: "*"
+  rules:
+  - repairRolloutRule:
+      id: rollback
+      repairPhases:
+      - rollback: {}
+  YAML
+  gcloud deploy apply --file=clouddeploy.yaml --region={{.region}}
+  gcloud deploy releases create r13 --delivery-pipeline=checkout --region={{.region}} --images=shop-api=europe-docker.pkg.dev/gcplab-public/apps/shop-api:1.3
+  gcloud deploy rollouts list --release=r13 --delivery-pipeline=checkout --region={{.region}}
+  gcloud deploy releases create r14 --delivery-pipeline=checkout --region={{.region}} --images=shop-api=europe-docker.pkg.dev/gcplab-public/apps/shop-api:1.4
+  gcloud deploy releases promote --release=r14 --delivery-pipeline=checkout --region={{.region}}
+rubric:
+  - name: Pipeline
+    validator: state
+    points: 25
+    checks:
+      - {type: exists, path: "deliveryPipelines.checkout.stages", expect: {"": {regex: "\"verify\":true.*\"verify\":true"}}, desc: "Verification in both stages"}
+      - {type: exists, path: "deliveryPipelines.checkout", expect: {automaticRollback: true}, desc: "Automatic rollback automation"}
+  - name: Bad release contained
+    validator: functional
+    points: 35
+    all: true
+    checks:
+      - {type: rollout, target: checkout-staging, imageContains: "1.3", state: FAILED, detailContains: "rolled back", desc: "r13 failed verification and was rolled back"}
+      - {type: rollout, target: checkout-prod, imageContains: "1.3", state: SUCCEEDED, not: true, desc: "r13 never reached prod"}
+  - name: Good release shipped
+    validator: functional
+    points: 40
+    all: true
+    checks:
+      - {type: rollout, target: checkout-prod, imageContains: "1.4", state: SUCCEEDED, desc: "r14 promoted to prod"}
+      - {type: http, target: "run:checkout-prod", path: /search, status: 200, desc: "/search healthy in prod"}
+      - {type: http, target: "run:checkout-staging", path: /search, status: 200, desc: "Staging healthy"}

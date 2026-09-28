@@ -1,0 +1,78 @@
+id: ace-d25-public-exposure
+title: "Day 25 · INC: admin portal and backups exposed to the internet"
+summary: Contain a public exposure, remove anonymous access, add a preventive guardrail and document the incident.
+track: ace-30
+day: 25
+level: advanced
+branch: security
+type: incident
+skills: [security.exposure, storage.access, iam.leastprivilege, security.governance]
+wellArchitected: [security]
+certs: [ACE, PCSE]
+difficulty: 4
+minutes: 60
+baseline: [default-network]
+setup: |
+  gcloud storage buckets create gs://backups-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  echo "pg_dump" > db.sql
+  gcloud storage cp db.sql gs://backups-{{.project}}/2026-08-31/db.sql
+  gcloud run deploy admin-portal --image=europe-docker.pkg.dev/gcplab-public/apps/admin-portal:1.0 --region={{.region}} --no-allow-unauthenticated
+faults:
+  - {type: bucket_public, bucket: "backups-{{.project}}", actor: "intern-script@{{.project}}.iam.gserviceaccount.com"}
+  - {type: run_iam_public, service: admin-portal, actor: "intern-script@{{.project}}.iam.gserviceaccount.com"}
+  - {type: log_noise, severity: INFO, resourceType: gcs_bucket, lines: ["GET /backups-{{.project}}/2026-08-31/db.sql 200 from 185.220.101.4", "GET /backups-{{.project}}/2026-08-31/db.sql 200 from 45.155.205.9"]}
+story: |
+  **SEC-104 (P1)** — An external researcher reports that `admin-portal` opens without login and that a
+  database dump can be downloaded anonymously. Contain the exposure now, then make sure nobody in the
+  project can make a bucket public again. Admins will keep access through `group:platform-admins@gcplab.dev`.
+objectives:
+  - Detect every exposed resource (use Security Command Center)
+  - Remove anonymous access without breaking legitimate admins
+  - Add a preventive guardrail (organization policy)
+  - Document impact, root cause and prevention
+hints:
+  - text: "`gcloud scc findings list` shows PUBLIC_BUCKET_ACL and PUBLIC_SENSITIVE_SERVICE."
+  - text: "`gcloud resource-manager org-policies enable-enforce storage.publicAccessPrevention --project=...`"
+solution: |
+  gcloud scc findings list --format='table(category,resourceName)'
+  gcloud storage buckets remove-iam-policy-binding gs://backups-{{.project}} --member=allUsers --role=roles/storage.objectViewer
+  gcloud run services remove-iam-policy-binding admin-portal --region={{.region}} --member=allUsers --role=roles/run.invoker
+  gcloud run services add-iam-policy-binding admin-portal --region={{.region}} --member=group:platform-admins@gcplab.dev --role=roles/run.invoker
+  gcloud resource-manager org-policies enable-enforce storage.publicAccessPrevention --project={{.project}}
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:setIamPolicy' --limit=5 --format='value(protoPayload.authenticationInfo.principalEmail)'
+evidence:
+  fields: [impact, rootCause, prevention]
+  sample:
+    impact: The database dump was downloaded anonymously from two external IP addresses and the admin portal was reachable without authentication; credentials in the dump must be rotated.
+    rootCause: The intern-script service account granted allUsers access to the backups bucket and to the admin-portal Cloud Run service.
+    prevention: Enforce the publicAccessPrevention organization policy, restrict setIamPolicy permissions, and alert on SCC public findings.
+rubric:
+  - name: Containment
+    validator: security
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:backups-{{.project}}/2026-08-31/db.sql", expect: false, desc: "Dump no longer anonymous"}
+      - {type: http, target: "run:admin-portal", path: /admin, status: 403, desc: "Admin portal requires authentication"}
+  - name: Legitimate access
+    validator: functional
+    points: 15
+    checks:
+      - {type: exists, path: "runServices[\"admin-portal\"].iamPolicy.bindings", expect: {"": {regex: "platform-admins"}}, desc: "Admins keep access"}
+  - name: Guardrail
+    validator: security
+    points: 20
+    checks:
+      - {type: exists, path: "orgPolicies[\"storage.publicAccessPrevention\"]", expect: {enforce: true}, desc: "Public access prevention enforced"}
+  - name: Detection
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "scc findings list", desc: "Used Security Command Center"}
+  - name: Postmortem
+    validator: evidence
+    points: 20
+    checks:
+      - {type: evidence, fields: [impact], keywords: [[download, descarg], [anonym, anonim, external, extern]], desc: "Impact"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[allusers], [org policy, organization policy, organizacion, publicaccessprevention]], desc: "Root cause and prevention"}

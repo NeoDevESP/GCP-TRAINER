@@ -370,7 +370,8 @@ func (s *State) BucketResource(b *Bucket, object string) Resource {
 		name += "/objects/" + object
 		typ = "storage.googleapis.com/Object"
 	}
-	return Resource{Project: b.Project, Type: typ, Name: name, Service: "storage.googleapis.com", Policies: []*Policy{&b.IAM}}
+	pap := b.PAP == "enforced" || s.OrgPolicyEnforced(b.Project, "storage.publicAccessPrevention")
+	return Resource{Project: b.Project, Type: typ, Name: name, Service: "storage.googleapis.com", Policies: []*Policy{&b.IAM}, NoPublic: pap}
 }
 
 func pathMatch(paths []string, p string) bool {
