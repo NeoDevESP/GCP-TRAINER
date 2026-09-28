@@ -1,0 +1,13 @@
+# Learning paths. A track is an ordered list of labs aligned to a certification
+# or a role. `reference` is the official Google learning path used by
+# `labctl curriculum` for the quarterly sync. Phases follow the roadmap
+# (MVP → V1 → V2 → V3).
+tracks:
+  - id: ace-30
+    title: Associate Cloud Engineer — 30 days
+    description: One lab per day from context and IAM to incidents, capstone and boss battle. Builds the ACE competences through hands-on work.
+    level: associate
+    certs: [ACE]
+    phase: MVP
+    reference: https://cloud.google.com/learn/certification/cloud-engineer
+    labs: [ace-d01-context, ace-d02-iam-storage-read, ace-d03-secure-bucket, ace-d04-web-vm, ace-d05-subnet-isolation, ace-d06-cloud-run, ace-d07-cloud-sql, ace-d08-logs-alert, ace-d09-health-check, ace-d10-checkpoint, ace-d11-app-403, ace-d12-private-egress, ace-d13-lb-dns, ace-d14-terraform, ace-d15-cloud-build, ace-d16-gke-two-services, ace-d17-gke-hpa, ace-d18-api-db-firewall, ace-d19-secret-env, ace-d20-sql-saturated, ace-d21-bigquery-cost, ace-d22-pubsub-ingestion, ace-d23-ml-endpoint, ace-d24-cmek, ace-d25-public-exposure, ace-d26-hybrid-design, ace-d27-deploy-rollback, ace-d28-architecture-review, ace-d29-capstone-orders, ace-d30-boss-incident]

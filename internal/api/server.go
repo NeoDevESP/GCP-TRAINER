@@ -27,18 +27,18 @@ import (
 
 // Server wires the learning plane.
 type Server struct {
-	Cat      *learning.Catalog
-	Engine   *learning.Engine
-	Store    store.Store
-	Labs     orchestrator.LabPlane
-	Tokens   *learning.Tokens
-	OIDC     *learning.OIDC
-	Pool     *fidelity.Pool
-	WebDir   string
-	Log      *slog.Logger
+	Cat       *learning.Catalog
+	Engine    *learning.Engine
+	Store     store.Store
+	Labs      orchestrator.LabPlane
+	Tokens    *learning.Tokens
+	OIDC      *learning.OIDC
+	Pool      *fidelity.Pool
+	WebDir    string
+	Log       *slog.Logger
 	F2Monthly int // max real-cloud sessions per user per month
-	mu       sync.Mutex
-	rl       map[string][]time.Time
+	mu        sync.Mutex
+	rl        map[string][]time.Time
 }
 
 // Class is an enterprise classroom (instructor + members + assigned tracks).
@@ -337,11 +337,11 @@ func (s *Server) Handler() http.Handler {
 			return nil, httpErr{404, "class not found"}
 		}
 		type row struct {
-			User      string             `json:"user"`
-			Email     string             `json:"email"`
-			XP        int                `json:"xp"`
-			Level     string             `json:"level"`
-			Branches  map[string]float64 `json:"branches"`
+			User      string               `json:"user"`
+			Email     string               `json:"email"`
+			XP        int                  `json:"xp"`
+			Level     string               `json:"level"`
+			Branches  map[string]float64   `json:"branches"`
 			Readiness []learning.Readiness `json:"readiness"`
 		}
 		var rows []row
@@ -691,6 +691,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err := json.NewDecoder(io.LimitReader(r.Body, 256<<10)).Decode(&sub); err != nil {
 		return nil, err
 	}
+	sub.HintsUsed = len(att.HintsUsed)
 	res, err := s.Labs.Grade(info.ID, sub)
 	if err != nil {
 		return nil, err

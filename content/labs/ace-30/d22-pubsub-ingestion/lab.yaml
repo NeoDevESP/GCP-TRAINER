@@ -8,7 +8,7 @@ branch: data
 type: challenge
 skills: [data.pubsub, data.pipelines, iam.serviceaccounts]
 wellArchitected: [reliability, security]
-certs: [PDE, PCD]
+certs: [PDE, PCDE]
 difficulty: 3
 minutes: 75
 baseline: [default-network]

@@ -20,20 +20,20 @@ type State struct {
 	Folders  map[string]*Folder  `json:"folders"`
 	Projects map[string]*Project `json:"projects"`
 	// Buckets live in a global namespace in GCS.
-	Logs    []LogEntry            `json:"logs"`
-	Metrics map[string][]Point    `json:"metrics"`
-	Traffic []TrafficSpec         `json:"traffic"`
-	Images  map[string]*Behavior  `json:"images"` // image catalog (behaviour models)
-	Tick    int                   `json:"tick"`
-	Extra   map[string]string     `json:"extra,omitempty"`
+	Logs    []LogEntry           `json:"logs"`
+	Metrics map[string][]Point   `json:"metrics"`
+	Traffic []TrafficSpec        `json:"traffic"`
+	Images  map[string]*Behavior `json:"images"` // image catalog (behaviour models)
+	Tick    int                  `json:"tick"`
+	Extra   map[string]string    `json:"extra,omitempty"`
 	ipSeq   map[string]int
 	rng     *rand.Rand
 }
 
 type Organization struct {
-	ID          string              `json:"id"`
-	DisplayName string              `json:"displayName"`
-	IAM         Policy              `json:"iamPolicy"`
+	ID          string                `json:"id"`
+	DisplayName string                `json:"displayName"`
+	IAM         Policy                `json:"iamPolicy"`
 	OrgPolicies map[string]*OrgPolicy `json:"orgPolicies"`
 }
 
@@ -104,43 +104,43 @@ type Project struct {
 	VPNGateways       map[string]*VPNGateway       `json:"vpnGateways"`
 	DNSZones          map[string]*DNSZone          `json:"dnsZones"`
 
-	Buckets      map[string]*Bucket      `json:"buckets"`
-	RunServices  map[string]*RunService  `json:"runServices"`
-	SQLInstances map[string]*SQLInstance `json:"sqlInstances"`
-	Topics       map[string]*Topic       `json:"topics"`
+	Buckets      map[string]*Bucket       `json:"buckets"`
+	RunServices  map[string]*RunService   `json:"runServices"`
+	SQLInstances map[string]*SQLInstance  `json:"sqlInstances"`
+	Topics       map[string]*Topic        `json:"topics"`
 	Subs         map[string]*Subscription `json:"subscriptions"`
-	Secrets      map[string]*Secret      `json:"secrets"`
-	KeyRings     map[string]*KeyRing     `json:"keyRings"`
-	Clusters     map[string]*Cluster     `json:"clusters"`
+	Secrets      map[string]*Secret       `json:"secrets"`
+	KeyRings     map[string]*KeyRing      `json:"keyRings"`
+	Clusters     map[string]*Cluster      `json:"clusters"`
 
-	ArtifactRepos map[string]*ArtifactRepo `json:"artifactRepos"`
-	Builds        []*Build                 `json:"builds"`
-	Triggers      map[string]*BuildTrigger `json:"buildTriggers"`
-	SourceRepos   map[string]*SourceRepo   `json:"sourceRepos"`
+	ArtifactRepos map[string]*ArtifactRepo     `json:"artifactRepos"`
+	Builds        []*Build                     `json:"builds"`
+	Triggers      map[string]*BuildTrigger     `json:"buildTriggers"`
+	SourceRepos   map[string]*SourceRepo       `json:"sourceRepos"`
 	Pipelines     map[string]*DeliveryPipeline `json:"deliveryPipelines"`
-	DeployTargets map[string]*DeployTarget `json:"deployTargets"`
-	Releases      []*Release               `json:"releases"`
+	DeployTargets map[string]*DeployTarget     `json:"deployTargets"`
+	Releases      []*Release                   `json:"releases"`
 
 	Datasets    map[string]*Dataset    `json:"datasets"`
 	BQJobs      []*BQJob               `json:"bqJobs"`
 	AIModels    map[string]*AIModel    `json:"aiModels"`
 	AIEndpoints map[string]*AIEndpoint `json:"aiEndpoints"`
 
-	LogMetrics    map[string]*LogMetric    `json:"logMetrics"`
-	AlertPolicies map[string]*AlertPolicy  `json:"alertPolicies"`
+	LogMetrics    map[string]*LogMetric           `json:"logMetrics"`
+	AlertPolicies map[string]*AlertPolicy         `json:"alertPolicies"`
 	Channels      map[string]*NotificationChannel `json:"notificationChannels"`
-	UptimeChecks  map[string]*UptimeCheck  `json:"uptimeChecks"`
-	Budgets       map[string]*Budget       `json:"budgets"`
-	LogSinks      map[string]*LogSink      `json:"logSinks"`
-	Perimeters    map[string]*Perimeter    `json:"perimeters"`
+	UptimeChecks  map[string]*UptimeCheck         `json:"uptimeChecks"`
+	Budgets       map[string]*Budget              `json:"budgets"`
+	LogSinks      map[string]*LogSink             `json:"logSinks"`
+	Perimeters    map[string]*Perimeter           `json:"perimeters"`
 }
 
 type ServiceAccount struct {
-	Email       string   `json:"email"`
-	DisplayName string   `json:"displayName"`
-	Disabled    bool     `json:"disabled"`
-	IAM         Policy   `json:"iamPolicy"`
-	Keys        []SAKey  `json:"keys"`
+	Email       string  `json:"email"`
+	DisplayName string  `json:"displayName"`
+	Disabled    bool    `json:"disabled"`
+	IAM         Policy  `json:"iamPolicy"`
+	Keys        []SAKey `json:"keys"`
 }
 
 type SAKey struct {
@@ -218,11 +218,11 @@ type Route struct {
 }
 
 type Router struct {
-	Name    string `json:"name"`
-	Region  string `json:"region"`
-	Network string `json:"network"`
-	ASN     int    `json:"asn"`
-	NATs    []NAT  `json:"nats"`
+	Name     string    `json:"name"`
+	Region   string    `json:"region"`
+	Network  string    `json:"network"`
+	ASN      int       `json:"asn"`
+	NATs     []NAT     `json:"nats"`
 	BGPPeers []BGPPeer `json:"bgpPeers,omitempty"`
 }
 
@@ -252,30 +252,30 @@ type Address struct {
 }
 
 type Instance struct {
-	Name           string            `json:"name"`
-	Zone           string            `json:"zone"`
-	MachineType    string            `json:"machineType"`
-	Status         string            `json:"status"`
-	Tags           []string          `json:"tags"`
-	Labels         map[string]string `json:"labels"`
-	Metadata       map[string]string `json:"metadata"`
-	Network        string            `json:"network"`
-	Subnet         string            `json:"subnetwork"`
-	InternalIP     string            `json:"networkIP"`
-	ExternalIP     string            `json:"natIP,omitempty"`
-	ServiceAccount string            `json:"serviceAccount"`
-	Scopes         []string          `json:"scopes"`
-	Image          string            `json:"image"`
-	BootDisk       string            `json:"bootDisk"`
-	Disks          []string          `json:"disks"`
-	GPUs           int               `json:"gpus"`
-	Spot           bool              `json:"spot"`
-	DeletionProtection bool          `json:"deletionProtection"`
-	Group          string            `json:"group,omitempty"`
-	CPU            float64           `json:"cpuUtilization"`
-	CreatedBy      string            `json:"createdBy,omitempty"`
-	ShieldedVM     bool              `json:"shieldedVm"`
-	OSLogin        bool              `json:"osLogin"`
+	Name               string            `json:"name"`
+	Zone               string            `json:"zone"`
+	MachineType        string            `json:"machineType"`
+	Status             string            `json:"status"`
+	Tags               []string          `json:"tags"`
+	Labels             map[string]string `json:"labels"`
+	Metadata           map[string]string `json:"metadata"`
+	Network            string            `json:"network"`
+	Subnet             string            `json:"subnetwork"`
+	InternalIP         string            `json:"networkIP"`
+	ExternalIP         string            `json:"natIP,omitempty"`
+	ServiceAccount     string            `json:"serviceAccount"`
+	Scopes             []string          `json:"scopes"`
+	Image              string            `json:"image"`
+	BootDisk           string            `json:"bootDisk"`
+	Disks              []string          `json:"disks"`
+	GPUs               int               `json:"gpus"`
+	Spot               bool              `json:"spot"`
+	DeletionProtection bool              `json:"deletionProtection"`
+	Group              string            `json:"group,omitempty"`
+	CPU                float64           `json:"cpuUtilization"`
+	CreatedBy          string            `json:"createdBy,omitempty"`
+	ShieldedVM         bool              `json:"shieldedVm"`
+	OSLogin            bool              `json:"osLogin"`
 }
 
 type InstanceTemplate struct {
@@ -319,14 +319,14 @@ type AutoHealing struct {
 }
 
 type Disk struct {
-	Name   string   `json:"name"`
-	Zone   string   `json:"zone"`
-	SizeGB int      `json:"sizeGb"`
-	Type   string   `json:"type"`
-	Image  string   `json:"sourceImage,omitempty"`
-	Users  []string `json:"users"`
-	Snapshot string `json:"sourceSnapshot,omitempty"`
-	KMSKey string   `json:"kmsKey,omitempty"`
+	Name     string   `json:"name"`
+	Zone     string   `json:"zone"`
+	SizeGB   int      `json:"sizeGb"`
+	Type     string   `json:"type"`
+	Image    string   `json:"sourceImage,omitempty"`
+	Users    []string `json:"users"`
+	Snapshot string   `json:"sourceSnapshot,omitempty"`
+	KMSKey   string   `json:"kmsKey,omitempty"`
 }
 
 type Snapshot struct {
@@ -362,9 +362,9 @@ type BackendService struct {
 }
 
 type Backend struct {
-	Group string `json:"group,omitempty"`
-	Zone  string `json:"zone,omitempty"`
-	NEG   string `json:"neg,omitempty"`
+	Group         string `json:"group,omitempty"`
+	Zone          string `json:"zone,omitempty"`
+	NEG           string `json:"neg,omitempty"`
 	BalancingMode string `json:"balancingMode,omitempty"`
 }
 
@@ -441,21 +441,21 @@ type VPNGateway struct {
 }
 
 type VPNTunnel struct {
-	Name     string `json:"name"`
-	PeerIP   string `json:"peerIp"`
-	Router   string `json:"router"`
-	Status   string `json:"status"`
-	Interface int   `json:"interface"`
+	Name      string `json:"name"`
+	PeerIP    string `json:"peerIp"`
+	Router    string `json:"router"`
+	Status    string `json:"status"`
+	Interface int    `json:"interface"`
 }
 
 type DNSZone struct {
-	Name       string      `json:"name"`
-	DNSName    string      `json:"dnsName"`
-	Visibility string      `json:"visibility"`
-	Networks   []string    `json:"networks,omitempty"`
-	Records    []DNSRecord `json:"records"`
-	DNSSEC     bool        `json:"dnssec"`
-	Description string     `json:"description"`
+	Name        string      `json:"name"`
+	DNSName     string      `json:"dnsName"`
+	Visibility  string      `json:"visibility"`
+	Networks    []string    `json:"networks,omitempty"`
+	Records     []DNSRecord `json:"records"`
+	DNSSEC      bool        `json:"dnssec"`
+	Description string      `json:"description"`
 }
 
 type DNSRecord struct {
@@ -548,31 +548,31 @@ type Revision struct {
 }
 
 type SQLInstance struct {
-	Name           string            `json:"name"`
-	Version        string            `json:"databaseVersion"`
-	Tier           string            `json:"tier"`
-	Region         string            `json:"region"`
-	PublicIP       string            `json:"publicIp,omitempty"`
-	PrivateIP      string            `json:"privateIp,omitempty"`
-	Network        string            `json:"network,omitempty"`
-	AuthorizedNets []string          `json:"authorizedNetworks"`
-	Availability   string            `json:"availabilityType"`
-	BackupsEnabled bool              `json:"backupEnabled"`
-	BackupStart    string            `json:"backupStartTime,omitempty"`
-	PITR           bool              `json:"pointInTimeRecovery"`
-	Flags          map[string]string `json:"databaseFlags"`
-	State          string            `json:"state"`
-	Databases      []string          `json:"databases"`
-	Users          map[string]string `json:"users"`
-	Master         string            `json:"masterInstanceName,omitempty"`
-	Replicas       []string          `json:"replicaNames"`
-	Backups        []SQLBackup       `json:"backups"`
-	RequireSSL     bool              `json:"requireSsl"`
-	DeletionProtection bool          `json:"deletionProtection"`
-	Connections    int               `json:"activeConnections"`
-	CPU            float64           `json:"cpuUtilization"`
-	SlowQueries    []string          `json:"slowQueries,omitempty"`
-	Indexes        []string          `json:"indexes,omitempty"`
+	Name               string            `json:"name"`
+	Version            string            `json:"databaseVersion"`
+	Tier               string            `json:"tier"`
+	Region             string            `json:"region"`
+	PublicIP           string            `json:"publicIp,omitempty"`
+	PrivateIP          string            `json:"privateIp,omitempty"`
+	Network            string            `json:"network,omitempty"`
+	AuthorizedNets     []string          `json:"authorizedNetworks"`
+	Availability       string            `json:"availabilityType"`
+	BackupsEnabled     bool              `json:"backupEnabled"`
+	BackupStart        string            `json:"backupStartTime,omitempty"`
+	PITR               bool              `json:"pointInTimeRecovery"`
+	Flags              map[string]string `json:"databaseFlags"`
+	State              string            `json:"state"`
+	Databases          []string          `json:"databases"`
+	Users              map[string]string `json:"users"`
+	Master             string            `json:"masterInstanceName,omitempty"`
+	Replicas           []string          `json:"replicaNames"`
+	Backups            []SQLBackup       `json:"backups"`
+	RequireSSL         bool              `json:"requireSsl"`
+	DeletionProtection bool              `json:"deletionProtection"`
+	Connections        int               `json:"activeConnections"`
+	CPU                float64           `json:"cpuUtilization"`
+	SlowQueries        []string          `json:"slowQueries,omitempty"`
+	Indexes            []string          `json:"indexes,omitempty"`
 }
 
 type SQLBackup struct {
@@ -582,10 +582,10 @@ type SQLBackup struct {
 }
 
 type Topic struct {
-	Name      string    `json:"name"`
-	Retention string    `json:"messageRetentionDuration,omitempty"`
-	KMSKey    string    `json:"kmsKeyName,omitempty"`
-	Published int       `json:"publishedCount"`
+	Name      string `json:"name"`
+	Retention string `json:"messageRetentionDuration,omitempty"`
+	KMSKey    string `json:"kmsKeyName,omitempty"`
+	Published int    `json:"publishedCount"`
 }
 
 type Subscription struct {
@@ -652,21 +652,21 @@ type KeyVersion struct {
 }
 
 type Cluster struct {
-	Name             string      `json:"name"`
-	Location         string      `json:"location"`
-	Autopilot        bool        `json:"autopilot"`
-	NodePools        []NodePool  `json:"nodePools"`
-	WorkloadPool     string      `json:"workloadPool,omitempty"`
-	Network          string      `json:"network"`
-	Subnet           string      `json:"subnetwork"`
-	PrivateNodes     bool        `json:"privateNodes"`
-	MasterAuthNets   []string    `json:"masterAuthorizedNetworks,omitempty"`
-	ReleaseChannel   string      `json:"releaseChannel"`
-	Status           string      `json:"status"`
-	Endpoint         string      `json:"endpoint"`
-	K8s              *K8sState   `json:"k8s"`
-	ShieldedNodes    bool        `json:"shieldedNodes"`
-	BinaryAuthz      bool        `json:"binaryAuthorization"`
+	Name           string     `json:"name"`
+	Location       string     `json:"location"`
+	Autopilot      bool       `json:"autopilot"`
+	NodePools      []NodePool `json:"nodePools"`
+	WorkloadPool   string     `json:"workloadPool,omitempty"`
+	Network        string     `json:"network"`
+	Subnet         string     `json:"subnetwork"`
+	PrivateNodes   bool       `json:"privateNodes"`
+	MasterAuthNets []string   `json:"masterAuthorizedNetworks,omitempty"`
+	ReleaseChannel string     `json:"releaseChannel"`
+	Status         string     `json:"status"`
+	Endpoint       string     `json:"endpoint"`
+	K8s            *K8sState  `json:"k8s"`
+	ShieldedNodes  bool       `json:"shieldedNodes"`
+	BinaryAuthz    bool       `json:"binaryAuthorization"`
 }
 
 type NodePool struct {
@@ -690,16 +690,16 @@ type ArtifactRepo struct {
 }
 
 type Build struct {
-	ID       string   `json:"id"`
-	Status   string   `json:"status"`
-	Source   string   `json:"source"`
-	Trigger  string   `json:"buildTriggerId,omitempty"`
-	Images   []string `json:"images"`
-	Steps    []string `json:"steps"`
-	Log      []string `json:"log"`
-	Commit   string   `json:"commitSha,omitempty"`
-	SA       string   `json:"serviceAccount,omitempty"`
-	Created  string   `json:"createTime"`
+	ID      string   `json:"id"`
+	Status  string   `json:"status"`
+	Source  string   `json:"source"`
+	Trigger string   `json:"buildTriggerId,omitempty"`
+	Images  []string `json:"images"`
+	Steps   []string `json:"steps"`
+	Log     []string `json:"log"`
+	Commit  string   `json:"commitSha,omitempty"`
+	SA      string   `json:"serviceAccount,omitempty"`
+	Created string   `json:"createTime"`
 }
 
 type BuildTrigger struct {
@@ -712,8 +712,8 @@ type BuildTrigger struct {
 }
 
 type SourceRepo struct {
-	Name    string       `json:"name"`
-	Commits []GitCommit  `json:"commits"`
+	Name    string      `json:"name"`
+	Commits []GitCommit `json:"commits"`
 }
 
 type GitCommit struct {
@@ -724,24 +724,24 @@ type GitCommit struct {
 }
 
 type DeliveryPipeline struct {
-	Name     string        `json:"name"`
-	Region   string        `json:"region"`
-	Stages   []DeployStage `json:"stages"`
-	RollbackOnFailure bool `json:"automaticRollback"`
+	Name              string        `json:"name"`
+	Region            string        `json:"region"`
+	Stages            []DeployStage `json:"stages"`
+	RollbackOnFailure bool          `json:"automaticRollback"`
 }
 
 type DeployStage struct {
-	Target  string `json:"targetId"`
-	Verify  bool   `json:"verify"`
-	Canary  []int  `json:"canaryPercentages,omitempty"`
+	Target string `json:"targetId"`
+	Verify bool   `json:"verify"`
+	Canary []int  `json:"canaryPercentages,omitempty"`
 }
 
 type DeployTarget struct {
-	Name       string `json:"name"`
-	Region     string `json:"region"`
-	RunService string `json:"runService,omitempty"`
-	Cluster    string `json:"gkeCluster,omitempty"`
-	RequireApproval bool `json:"requireApproval"`
+	Name            string `json:"name"`
+	Region          string `json:"region"`
+	RunService      string `json:"runService,omitempty"`
+	Cluster         string `json:"gkeCluster,omitempty"`
+	RequireApproval bool   `json:"requireApproval"`
 }
 
 type Release struct {
@@ -758,25 +758,25 @@ type Rollout struct {
 }
 
 type Dataset struct {
-	ID       string            `json:"datasetId"`
-	Location string            `json:"location"`
-	Tables   map[string]*Table `json:"tables"`
-	IAM      Policy            `json:"access"`
-	DefaultExpirationDays int  `json:"defaultTableExpirationDays,omitempty"`
+	ID                    string            `json:"datasetId"`
+	Location              string            `json:"location"`
+	Tables                map[string]*Table `json:"tables"`
+	IAM                   Policy            `json:"access"`
+	DefaultExpirationDays int               `json:"defaultTableExpirationDays,omitempty"`
 }
 
 type Table struct {
-	ID             string    `json:"tableId"`
-	Kind           string    `json:"type"` // TABLE, VIEW, MODEL, MATERIALIZED_VIEW
-	Schema         []Field   `json:"schema"`
-	Rows           int64     `json:"numRows"`
-	PartitionField string    `json:"partitionField,omitempty"`
-	PartitionType  string    `json:"partitionType,omitempty"`
-	PartitionDays  int       `json:"partitionDays,omitempty"`
-	Clustering     []string  `json:"clustering,omitempty"`
-	Query          string    `json:"query,omitempty"`
-	RequirePartitionFilter bool `json:"requirePartitionFilter"`
-	ModelType      string    `json:"modelType,omitempty"`
+	ID                     string   `json:"tableId"`
+	Kind                   string   `json:"type"` // TABLE, VIEW, MODEL, MATERIALIZED_VIEW
+	Schema                 []Field  `json:"schema"`
+	Rows                   int64    `json:"numRows"`
+	PartitionField         string   `json:"partitionField,omitempty"`
+	PartitionType          string   `json:"partitionType,omitempty"`
+	PartitionDays          int      `json:"partitionDays,omitempty"`
+	Clustering             []string `json:"clustering,omitempty"`
+	Query                  string   `json:"query,omitempty"`
+	RequirePartitionFilter bool     `json:"requirePartitionFilter"`
+	ModelType              string   `json:"modelType,omitempty"`
 }
 
 type Field struct {
@@ -830,13 +830,13 @@ type LogMetric struct {
 }
 
 type AlertPolicy struct {
-	Name       string           `json:"name"`
-	DisplayName string          `json:"displayName"`
-	Conditions []AlertCondition `json:"conditions"`
-	Channels   []string         `json:"notificationChannels"`
-	Enabled    bool             `json:"enabled"`
-	Firing     bool             `json:"firing"`
-	Documentation string        `json:"documentation,omitempty"`
+	Name          string           `json:"name"`
+	DisplayName   string           `json:"displayName"`
+	Conditions    []AlertCondition `json:"conditions"`
+	Channels      []string         `json:"notificationChannels"`
+	Enabled       bool             `json:"enabled"`
+	Firing        bool             `json:"firing"`
+	Documentation string           `json:"documentation,omitempty"`
 }
 
 type AlertCondition struct {
@@ -855,19 +855,19 @@ type NotificationChannel struct {
 }
 
 type UptimeCheck struct {
-	Name   string `json:"name"`
-	Host   string `json:"host"`
-	Path   string `json:"path"`
-	Port   int    `json:"port"`
-	Period string `json:"period"`
-	Passing bool  `json:"passing"`
+	Name    string `json:"name"`
+	Host    string `json:"host"`
+	Path    string `json:"path"`
+	Port    int    `json:"port"`
+	Period  string `json:"period"`
+	Passing bool   `json:"passing"`
 }
 
 type Budget struct {
-	Name       string    `json:"name"`
-	Amount     float64   `json:"amount"`
-	Thresholds []float64 `json:"thresholds"`
-	PubSubTopic string   `json:"pubsubTopic,omitempty"`
+	Name        string    `json:"name"`
+	Amount      float64   `json:"amount"`
+	Thresholds  []float64 `json:"thresholds"`
+	PubSubTopic string    `json:"pubsubTopic,omitempty"`
 }
 
 type LogSink struct {
@@ -918,10 +918,10 @@ type Point struct {
 // TrafficSpec declares synthetic user traffic that exercises the scenario so
 // that symptoms (logs, metrics, HTTP errors) appear without the student acting.
 type TrafficSpec struct {
-	Name   string `json:"name" yaml:"name"`
-	Target string `json:"target" yaml:"target"` // URL, host, run:svc, k8s:cluster/svc
-	Path   string `json:"path" yaml:"path"`
-	RPS    int    `json:"rps" yaml:"rps"`
+	Name    string `json:"name" yaml:"name"`
+	Target  string `json:"target" yaml:"target"` // URL, host, run:svc, k8s:cluster/svc
+	Path    string `json:"path" yaml:"path"`
+	RPS     int    `json:"rps" yaml:"rps"`
 	Project string `json:"project" yaml:"project"`
 }
 

@@ -37,34 +37,34 @@ type StartRequest struct {
 
 // SessionInfo is the public view of a session.
 type SessionInfo struct {
-	ID          string            `json:"id"`
-	UserID      string            `json:"userId"`
-	LabID       string            `json:"labId"`
-	AttemptID   string            `json:"attemptId"`
-	Project     string            `json:"project"`
-	Region      string            `json:"region"`
-	Zone        string            `json:"zone"`
-	Fidelity    string            `json:"fidelity"`
-	Reason      string            `json:"fidelityReason"`
-	Seed        int64             `json:"seed"`
-	Params      map[string]string `json:"params"`
-	Started     time.Time         `json:"started"`
-	Expires     time.Time         `json:"expires"`
-	Status      string            `json:"status"`
-	ProvisionMs int64             `json:"provisionMs"`
-	Commands    int               `json:"commands"`
-	Errors      int               `json:"errors"`
-	SimTime     string            `json:"simTime"`
-	Title       string            `json:"title"`
-	Story       string            `json:"story"`
-	Instructions string           `json:"instructions"`
-	Objectives  []string          `json:"objectives"`
-	Timeline    []scenario.TimelineEvent `json:"timeline"`
-	Constraints []string          `json:"constraints"`
-	HintCount   int               `json:"hintCount"`
-	Evidence    *scenario.Evidence `json:"evidence,omitempty"`
-	Quiz        []scenario.Question `json:"quiz,omitempty"`
-	Live        map[string]any    `json:"live"`
+	ID           string                   `json:"id"`
+	UserID       string                   `json:"userId"`
+	LabID        string                   `json:"labId"`
+	AttemptID    string                   `json:"attemptId"`
+	Project      string                   `json:"project"`
+	Region       string                   `json:"region"`
+	Zone         string                   `json:"zone"`
+	Fidelity     string                   `json:"fidelity"`
+	Reason       string                   `json:"fidelityReason"`
+	Seed         int64                    `json:"seed"`
+	Params       map[string]string        `json:"params"`
+	Started      time.Time                `json:"started"`
+	Expires      time.Time                `json:"expires"`
+	Status       string                   `json:"status"`
+	ProvisionMs  int64                    `json:"provisionMs"`
+	Commands     int                      `json:"commands"`
+	Errors       int                      `json:"errors"`
+	SimTime      string                   `json:"simTime"`
+	Title        string                   `json:"title"`
+	Story        string                   `json:"story"`
+	Instructions string                   `json:"instructions"`
+	Objectives   []string                 `json:"objectives"`
+	Timeline     []scenario.TimelineEvent `json:"timeline"`
+	Constraints  []string                 `json:"constraints"`
+	HintCount    int                      `json:"hintCount"`
+	Evidence     *scenario.Evidence       `json:"evidence,omitempty"`
+	Quiz         []scenario.Question      `json:"quiz,omitempty"`
+	Live         map[string]any           `json:"live"`
 }
 
 // LabPlane is implemented by the in-process Service and by the HTTP client

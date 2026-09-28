@@ -475,7 +475,9 @@ func (s *State) ResolveHost(host string, from Endpoint) (string, bool) {
 var publicInternet = []string{"debian.org", "ubuntu.com", "google.com", "googleapis.com", "github.com", "pypi.org", "npmjs.org", "docker.io", "example.com", "exchangerate.example", "golang.org"}
 
 // NetworksConnected is the exported form of networksConnected.
-func (s *State) NetworksConnected(pa, na, pb, nb string) bool { return s.networksConnected(pa, na, pb, nb) }
+func (s *State) NetworksConnected(pa, na, pb, nb string) bool {
+	return s.networksConnected(pa, na, pb, nb)
+}
 
 // autoSubnets is the auto-mode subnet plan (subset of regions).
 var autoSubnets = map[string]string{

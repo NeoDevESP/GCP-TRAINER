@@ -15,35 +15,35 @@ import (
 var PredefinedRoles = map[string][]string{
 	"roles/browser": {"resourcemanager.projects.get", "resourcemanager.folders.get", "resourcemanager.folders.list", "resourcemanager.organizations.get"},
 
-	"roles/storage.objectViewer":  {"storage.objects.get", "storage.objects.list", "resourcemanager.projects.get"},
-	"roles/storage.objectCreator": {"storage.objects.create"},
-	"roles/storage.objectUser":    {"storage.objects.create", "storage.objects.delete", "storage.objects.get", "storage.objects.list", "storage.objects.update", "storage.objects.restore"},
-	"roles/storage.objectAdmin":   {"storage.objects.*", "storage.buckets.get", "storage.buckets.list"},
-	"roles/storage.admin":         {"storage.*", "resourcemanager.projects.get"},
+	"roles/storage.objectViewer":       {"storage.objects.get", "storage.objects.list", "resourcemanager.projects.get"},
+	"roles/storage.objectCreator":      {"storage.objects.create"},
+	"roles/storage.objectUser":         {"storage.objects.create", "storage.objects.delete", "storage.objects.get", "storage.objects.list", "storage.objects.update", "storage.objects.restore"},
+	"roles/storage.objectAdmin":        {"storage.objects.*", "storage.buckets.get", "storage.buckets.list"},
+	"roles/storage.admin":              {"storage.*", "resourcemanager.projects.get"},
 	"roles/storage.legacyBucketReader": {"storage.buckets.get", "storage.objects.list"},
-	"roles/storage.bucketViewer":  {"storage.buckets.get", "storage.buckets.list"},
+	"roles/storage.bucketViewer":       {"storage.buckets.get", "storage.buckets.list"},
 
-	"roles/compute.viewer":         {"compute.*.get", "compute.*.list", "compute.*.getIamPolicy"},
-	"roles/compute.instanceAdmin.v1": {"compute.instances.*", "compute.disks.*", "compute.instanceGroups.*", "compute.instanceGroupManagers.*", "compute.instanceTemplates.*", "compute.autoscalers.*", "compute.snapshots.*", "compute.images.useReadOnly", "compute.subnetworks.use", "compute.subnetworks.useExternalIp", "compute.networks.get", "compute.networks.list", "compute.subnetworks.get", "compute.subnetworks.list", "compute.zones.list", "compute.machineTypes.list"},
-	"roles/compute.networkAdmin":   {"compute.networks.*", "compute.subnetworks.*", "compute.routes.*", "compute.routers.*", "compute.addresses.*", "compute.globalAddresses.*", "compute.forwardingRules.*", "compute.globalForwardingRules.*", "compute.backendServices.*", "compute.healthChecks.*", "compute.urlMaps.*", "compute.targetHttpProxies.*", "compute.targetHttpsProxies.*", "compute.networkEndpointGroups.*", "compute.vpnGateways.*", "compute.vpnTunnels.*", "compute.instances.get", "compute.instances.list", "compute.firewalls.get", "compute.firewalls.list", "dns.*"},
-	"roles/compute.securityAdmin":  {"compute.firewalls.*", "compute.securityPolicies.*", "compute.sslCertificates.*", "compute.networks.updatePolicy", "compute.networks.get", "compute.networks.list"},
+	"roles/compute.viewer":            {"compute.*.get", "compute.*.list", "compute.*.getIamPolicy"},
+	"roles/compute.instanceAdmin.v1":  {"compute.instances.*", "compute.disks.*", "compute.instanceGroups.*", "compute.instanceGroupManagers.*", "compute.instanceTemplates.*", "compute.autoscalers.*", "compute.snapshots.*", "compute.images.useReadOnly", "compute.subnetworks.use", "compute.subnetworks.useExternalIp", "compute.networks.get", "compute.networks.list", "compute.subnetworks.get", "compute.subnetworks.list", "compute.zones.list", "compute.machineTypes.list"},
+	"roles/compute.networkAdmin":      {"compute.networks.*", "compute.subnetworks.*", "compute.routes.*", "compute.routers.*", "compute.addresses.*", "compute.globalAddresses.*", "compute.forwardingRules.*", "compute.globalForwardingRules.*", "compute.backendServices.*", "compute.healthChecks.*", "compute.urlMaps.*", "compute.targetHttpProxies.*", "compute.targetHttpsProxies.*", "compute.networkEndpointGroups.*", "compute.vpnGateways.*", "compute.vpnTunnels.*", "compute.instances.get", "compute.instances.list", "compute.firewalls.get", "compute.firewalls.list", "dns.*"},
+	"roles/compute.securityAdmin":     {"compute.firewalls.*", "compute.securityPolicies.*", "compute.sslCertificates.*", "compute.networks.updatePolicy", "compute.networks.get", "compute.networks.list"},
 	"roles/compute.loadBalancerAdmin": {"compute.backendServices.*", "compute.forwardingRules.*", "compute.globalForwardingRules.*", "compute.healthChecks.*", "compute.urlMaps.*", "compute.targetHttpProxies.*", "compute.targetHttpsProxies.*", "compute.networkEndpointGroups.*", "compute.instanceGroups.use", "compute.instanceGroups.get", "compute.instanceGroups.list", "compute.globalAddresses.*", "compute.addresses.*"},
-	"roles/compute.osLogin":        {"compute.instances.osLogin", "compute.instances.get", "compute.instances.list"},
-	"roles/compute.osAdminLogin":   {"compute.instances.osAdminLogin", "compute.instances.osLogin", "compute.instances.get", "compute.instances.list"},
+	"roles/compute.osLogin":           {"compute.instances.osLogin", "compute.instances.get", "compute.instances.list"},
+	"roles/compute.osAdminLogin":      {"compute.instances.osAdminLogin", "compute.instances.osLogin", "compute.instances.get", "compute.instances.list"},
 
-	"roles/iam.serviceAccountUser":         {"iam.serviceAccounts.actAs", "iam.serviceAccounts.get", "iam.serviceAccounts.list"},
-	"roles/iam.serviceAccountTokenCreator": {"iam.serviceAccounts.getAccessToken", "iam.serviceAccounts.getOpenIdToken", "iam.serviceAccounts.signBlob", "iam.serviceAccounts.signJwt", "iam.serviceAccounts.implicitDelegation"},
-	"roles/iam.serviceAccountAdmin":        {"iam.serviceAccounts.create", "iam.serviceAccounts.delete", "iam.serviceAccounts.get", "iam.serviceAccounts.list", "iam.serviceAccounts.update", "iam.serviceAccounts.setIamPolicy", "iam.serviceAccounts.getIamPolicy", "iam.serviceAccounts.disable", "iam.serviceAccounts.enable"},
-	"roles/iam.serviceAccountKeyAdmin":     {"iam.serviceAccountKeys.*"},
-	"roles/iam.roleAdmin":                  {"iam.roles.*"},
-	"roles/iap.tunnelResourceAccessor":     {"iap.tunnelInstances.accessViaIAP", "iap.tunnelDestGroups.accessViaIAP"},
-	"roles/iap.httpsResourceAccessor":      {"iap.webServiceVersions.accessViaIAP"},
-	"roles/iam.roleViewer":                 {"iam.roles.get", "iam.roles.list"},
-	"roles/iam.securityReviewer":           {"*.getIamPolicy", "iam.roles.get", "iam.roles.list", "resourcemanager.projects.get"},
-	"roles/iam.securityAdmin":              {"*.getIamPolicy", "*.setIamPolicy", "iam.roles.*", "iam.serviceAccountKeys.*"},
-	"roles/resourcemanager.projectIamAdmin": {"resourcemanager.projects.getIamPolicy", "resourcemanager.projects.setIamPolicy"},
-	"roles/orgpolicy.policyAdmin":          {"orgpolicy.*"},
-	"roles/serviceusage.serviceUsageAdmin": {"serviceusage.*"},
+	"roles/iam.serviceAccountUser":            {"iam.serviceAccounts.actAs", "iam.serviceAccounts.get", "iam.serviceAccounts.list"},
+	"roles/iam.serviceAccountTokenCreator":    {"iam.serviceAccounts.getAccessToken", "iam.serviceAccounts.getOpenIdToken", "iam.serviceAccounts.signBlob", "iam.serviceAccounts.signJwt", "iam.serviceAccounts.implicitDelegation"},
+	"roles/iam.serviceAccountAdmin":           {"iam.serviceAccounts.create", "iam.serviceAccounts.delete", "iam.serviceAccounts.get", "iam.serviceAccounts.list", "iam.serviceAccounts.update", "iam.serviceAccounts.setIamPolicy", "iam.serviceAccounts.getIamPolicy", "iam.serviceAccounts.disable", "iam.serviceAccounts.enable"},
+	"roles/iam.serviceAccountKeyAdmin":        {"iam.serviceAccountKeys.*"},
+	"roles/iam.roleAdmin":                     {"iam.roles.*"},
+	"roles/iap.tunnelResourceAccessor":        {"iap.tunnelInstances.accessViaIAP", "iap.tunnelDestGroups.accessViaIAP"},
+	"roles/iap.httpsResourceAccessor":         {"iap.webServiceVersions.accessViaIAP"},
+	"roles/iam.roleViewer":                    {"iam.roles.get", "iam.roles.list"},
+	"roles/iam.securityReviewer":              {"*.getIamPolicy", "iam.roles.get", "iam.roles.list", "resourcemanager.projects.get"},
+	"roles/iam.securityAdmin":                 {"*.getIamPolicy", "*.setIamPolicy", "iam.roles.*", "iam.serviceAccountKeys.*"},
+	"roles/resourcemanager.projectIamAdmin":   {"resourcemanager.projects.getIamPolicy", "resourcemanager.projects.setIamPolicy"},
+	"roles/orgpolicy.policyAdmin":             {"orgpolicy.*"},
+	"roles/serviceusage.serviceUsageAdmin":    {"serviceusage.*"},
 	"roles/serviceusage.serviceUsageConsumer": {"serviceusage.services.use", "serviceusage.services.get", "serviceusage.services.list"},
 
 	"roles/run.invoker":   {"run.routes.invoke"},
@@ -51,11 +51,11 @@ var PredefinedRoles = map[string][]string{
 	"roles/run.developer": {"run.services.create", "run.services.update", "run.services.get", "run.services.list", "run.services.delete", "run.revisions.*", "run.routes.invoke", "run.services.getIamPolicy"},
 	"roles/run.admin":     {"run.*"},
 
-	"roles/cloudsql.client": {"cloudsql.instances.connect", "cloudsql.instances.get"},
+	"roles/cloudsql.client":       {"cloudsql.instances.connect", "cloudsql.instances.get"},
 	"roles/cloudsql.instanceUser": {"cloudsql.instances.login", "cloudsql.instances.get"},
-	"roles/cloudsql.viewer": {"cloudsql.*.get", "cloudsql.*.list"},
-	"roles/cloudsql.editor": {"cloudsql.instances.get", "cloudsql.instances.list", "cloudsql.instances.update", "cloudsql.instances.restart", "cloudsql.databases.*", "cloudsql.users.*", "cloudsql.backupRuns.*", "cloudsql.instances.connect"},
-	"roles/cloudsql.admin":  {"cloudsql.*"},
+	"roles/cloudsql.viewer":       {"cloudsql.*.get", "cloudsql.*.list"},
+	"roles/cloudsql.editor":       {"cloudsql.instances.get", "cloudsql.instances.list", "cloudsql.instances.update", "cloudsql.instances.restart", "cloudsql.databases.*", "cloudsql.users.*", "cloudsql.backupRuns.*", "cloudsql.instances.connect"},
+	"roles/cloudsql.admin":        {"cloudsql.*"},
 
 	"roles/pubsub.publisher":  {"pubsub.topics.publish"},
 	"roles/pubsub.subscriber": {"pubsub.subscriptions.consume", "pubsub.topics.attachSubscription", "pubsub.snapshots.seek"},
@@ -75,11 +75,11 @@ var PredefinedRoles = map[string][]string{
 	"roles/cloudkms.admin":                       {"cloudkms.keyRings.*", "cloudkms.cryptoKeys.*", "cloudkms.cryptoKeyVersions.create", "cloudkms.cryptoKeyVersions.destroy", "cloudkms.cryptoKeyVersions.get", "cloudkms.cryptoKeyVersions.list", "cloudkms.cryptoKeyVersions.update"},
 	"roles/cloudkms.viewer":                      {"cloudkms.*.get", "cloudkms.*.list"},
 
-	"roles/container.viewer":        {"container.*.get", "container.*.list"},
-	"roles/container.clusterViewer": {"container.clusters.get", "container.clusters.list"},
-	"roles/container.developer":     {"container.clusters.get", "container.clusters.list", "container.deployments.*", "container.services.*", "container.pods.*", "container.configMaps.*", "container.secrets.*", "container.horizontalPodAutoscalers.*", "container.ingresses.*", "container.jobs.*", "container.serviceAccounts.*"},
-	"roles/container.admin":         {"container.*"},
-	"roles/container.clusterAdmin":  {"container.clusters.*", "container.operations.*"},
+	"roles/container.viewer":                    {"container.*.get", "container.*.list"},
+	"roles/container.clusterViewer":             {"container.clusters.get", "container.clusters.list"},
+	"roles/container.developer":                 {"container.clusters.get", "container.clusters.list", "container.deployments.*", "container.services.*", "container.pods.*", "container.configMaps.*", "container.secrets.*", "container.horizontalPodAutoscalers.*", "container.ingresses.*", "container.jobs.*", "container.serviceAccounts.*"},
+	"roles/container.admin":                     {"container.*"},
+	"roles/container.clusterAdmin":              {"container.clusters.*", "container.operations.*"},
 	"roles/container.defaultNodeServiceAccount": {"logging.logEntries.create", "monitoring.timeSeries.create", "monitoring.metricDescriptors.create", "autoscaling.sites.writeMetrics", "artifactregistry.repositories.downloadArtifacts"},
 
 	"roles/artifactregistry.reader": {"artifactregistry.repositories.downloadArtifacts", "artifactregistry.repositories.get", "artifactregistry.repositories.list", "artifactregistry.dockerimages.*"},
@@ -107,24 +107,24 @@ var PredefinedRoles = map[string][]string{
 	"roles/aiplatform.viewer": {"aiplatform.*.get", "aiplatform.*.list"},
 	"roles/aiplatform.admin":  {"aiplatform.*"},
 
-	"roles/logging.viewer":        {"logging.logEntries.list", "logging.logs.list", "logging.logMetrics.get", "logging.logMetrics.list", "logging.sinks.get", "logging.sinks.list"},
-	"roles/logging.privateLogViewer": {"logging.logEntries.list", "logging.privateLogEntries.list", "logging.logs.list"},
-	"roles/logging.logWriter":     {"logging.logEntries.create"},
-	"roles/logging.configWriter":  {"logging.logMetrics.*", "logging.sinks.*", "logging.exclusions.*"},
-	"roles/logging.admin":         {"logging.*"},
-	"roles/monitoring.viewer":     {"monitoring.*.get", "monitoring.*.list"},
-	"roles/monitoring.metricWriter": {"monitoring.timeSeries.create", "monitoring.metricDescriptors.create"},
+	"roles/logging.viewer":               {"logging.logEntries.list", "logging.logs.list", "logging.logMetrics.get", "logging.logMetrics.list", "logging.sinks.get", "logging.sinks.list"},
+	"roles/logging.privateLogViewer":     {"logging.logEntries.list", "logging.privateLogEntries.list", "logging.logs.list"},
+	"roles/logging.logWriter":            {"logging.logEntries.create"},
+	"roles/logging.configWriter":         {"logging.logMetrics.*", "logging.sinks.*", "logging.exclusions.*"},
+	"roles/logging.admin":                {"logging.*"},
+	"roles/monitoring.viewer":            {"monitoring.*.get", "monitoring.*.list"},
+	"roles/monitoring.metricWriter":      {"monitoring.timeSeries.create", "monitoring.metricDescriptors.create"},
 	"roles/monitoring.alertPolicyEditor": {"monitoring.alertPolicies.*"},
-	"roles/monitoring.editor":     {"monitoring.*"},
-	"roles/monitoring.admin":      {"monitoring.*"},
+	"roles/monitoring.editor":            {"monitoring.*"},
+	"roles/monitoring.admin":             {"monitoring.*"},
 
-	"roles/securitycenter.findingsViewer": {"securitycenter.findings.list", "securitycenter.findings.get"},
-	"roles/securitycenter.admin":          {"securitycenter.*"},
-	"roles/dns.admin":  {"dns.*"},
-	"roles/dns.reader": {"dns.*.get", "dns.*.list"},
+	"roles/securitycenter.findingsViewer":    {"securitycenter.findings.list", "securitycenter.findings.get"},
+	"roles/securitycenter.admin":             {"securitycenter.*"},
+	"roles/dns.admin":                        {"dns.*"},
+	"roles/dns.reader":                       {"dns.*.get", "dns.*.list"},
 	"roles/accesscontextmanager.policyAdmin": {"accesscontextmanager.*"},
-	"roles/billing.viewer": {"billing.*.get", "billing.*.list"},
-	"roles/billing.costsManager": {"billing.budgets.*"},
+	"roles/billing.viewer":                   {"billing.*.get", "billing.*.list"},
+	"roles/billing.costsManager":             {"billing.budgets.*"},
 }
 
 // adminPermsExcludedFromEditor are permissions Editor does not include.
@@ -207,10 +207,10 @@ func (s *State) RoleHasPermission(role, perm string) bool {
 
 // Resource identifies an IAM-protected resource for policy evaluation.
 type Resource struct {
-	Project string // owning project
-	Type    string // e.g. storage.googleapis.com/Bucket
-	Name    string // full resource name used in conditions
-	Service string
+	Project  string // owning project
+	Type     string // e.g. storage.googleapis.com/Bucket
+	Name     string // full resource name used in conditions
+	Service  string
 	Policies []*Policy // resource-level policies (bucket, SA, secret...)
 	NoPublic bool      // public access prevention: allUsers/allAuthenticatedUsers never match
 }

@@ -18,15 +18,15 @@ type K8sState struct {
 }
 
 type Namespace struct {
-	Deployments     map[string]*Deployment        `json:"deployments"`
-	Services        map[string]*K8sService        `json:"services"`
-	HPAs            map[string]*HPA               `json:"hpas"`
-	ConfigMaps      map[string]map[string]string  `json:"configMaps"`
-	Secrets         map[string]map[string]string  `json:"secrets"`
-	ServiceAccounts map[string]*KSA               `json:"serviceAccounts"`
-	Ingresses       map[string]*Ingress           `json:"ingresses"`
-	Pods            map[string]*Pod               `json:"pods"` // standalone pods (kubectl run)
-	NetworkPolicies map[string]*NetworkPolicy     `json:"networkPolicies"`
+	Deployments     map[string]*Deployment       `json:"deployments"`
+	Services        map[string]*K8sService       `json:"services"`
+	HPAs            map[string]*HPA              `json:"hpas"`
+	ConfigMaps      map[string]map[string]string `json:"configMaps"`
+	Secrets         map[string]map[string]string `json:"secrets"`
+	ServiceAccounts map[string]*KSA              `json:"serviceAccounts"`
+	Ingresses       map[string]*Ingress          `json:"ingresses"`
+	Pods            map[string]*Pod              `json:"pods"` // standalone pods (kubectl run)
+	NetworkPolicies map[string]*NetworkPolicy    `json:"networkPolicies"`
 }
 
 type Deployment struct {
@@ -51,8 +51,8 @@ type Container struct {
 	Image     string            `json:"image"`
 	Ports     []int             `json:"ports"`
 	Env       map[string]string `json:"env"`
-	EnvFrom   []string          `json:"envFrom"`             // configmap:name or secret:name
-	EnvRefs   map[string]string `json:"envRefs"`             // ENV -> secret:name/key or configmap:name/key
+	EnvFrom   []string          `json:"envFrom"` // configmap:name or secret:name
+	EnvRefs   map[string]string `json:"envRefs"` // ENV -> secret:name/key or configmap:name/key
 	Requests  Resources         `json:"requests"`
 	Limits    Resources         `json:"limits"`
 	Readiness *Probe            `json:"readinessProbe,omitempty"`
@@ -73,12 +73,12 @@ type Probe struct {
 }
 
 type K8sService struct {
-	Name       string            `json:"name"`
-	Type       string            `json:"type"`
-	Selector   map[string]string `json:"selector"`
-	Ports      []SvcPort         `json:"ports"`
-	ClusterIP  string            `json:"clusterIP"`
-	ExternalIP string            `json:"externalIP,omitempty"`
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Selector    map[string]string `json:"selector"`
+	Ports       []SvcPort         `json:"ports"`
+	ClusterIP   string            `json:"clusterIP"`
+	ExternalIP  string            `json:"externalIP,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 

@@ -6,7 +6,7 @@ day: 25
 level: advanced
 branch: security
 type: incident
-skills: [security.exposure, storage.access, iam.leastprivilege, security.governance]
+skills: [security.armor, storage.access, iam.leastprivilege, iam.orgpolicy]
 wellArchitected: [security]
 certs: [ACE, PCSE]
 difficulty: 4

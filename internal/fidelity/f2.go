@@ -34,13 +34,13 @@ const (
 
 // PoolProject is one project of the training pool.
 type PoolProject struct {
-	ID          string    `json:"id"`
-	State       string    `json:"state"`
-	LeaseID     string    `json:"leaseId,omitempty"`
-	Recycled    int       `json:"recycled"`
-	LastError   string    `json:"lastError,omitempty"`
-	LastChange  time.Time `json:"lastChange"`
-	Orphans     []string  `json:"orphans,omitempty"`
+	ID         string    `json:"id"`
+	State      string    `json:"state"`
+	LeaseID    string    `json:"leaseId,omitempty"`
+	Recycled   int       `json:"recycled"`
+	LastError  string    `json:"lastError,omitempty"`
+	LastChange time.Time `json:"lastChange"`
+	Orphans    []string  `json:"orphans,omitempty"`
 }
 
 // Lease grants temporary access to a pool project.
@@ -497,12 +497,12 @@ func (d *SimDriver) ListResources(ctx context.Context, project string) ([]string
 // administrator service account via impersonation (no long-lived keys).
 
 type GcloudDriver struct {
-	AdminSA    string // pool-admin@<control-project>.iam.gserviceaccount.com
-	Gcloud     string
-	Terraform  string
+	AdminSA     string // pool-admin@<control-project>.iam.gserviceaccount.com
+	Gcloud      string
+	Terraform   string
 	BaselineDir string // content/labs/<lab>/f2 terraform baselines
-	DryRun     bool
-	Log        func(string)
+	DryRun      bool
+	Log         func(string)
 }
 
 func (d *GcloudDriver) Name() string { return "gcloud" }
@@ -640,11 +640,11 @@ func (d *GcloudDriver) Snapshot(ctx context.Context, project string) (*sim.State
 	for _, fw := range get("compute", "firewall-rules", "list") {
 		b, _ := json.Marshal(fw)
 		var f struct {
-			Name, Network, Direction string
-			Priority                 int
-			Allowed, Denied          []sim.FWRule
+			Name, Network, Direction             string
+			Priority                             int
+			Allowed, Denied                      []sim.FWRule
 			SourceRanges, TargetTags, SourceTags []string
-			Disabled                 bool
+			Disabled                             bool
 		}
 		_ = json.Unmarshal(b, &f)
 		rule := &sim.Firewall{Name: f.Name, Network: short(f.Network), Direction: f.Direction, Priority: f.Priority, SourceRanges: f.SourceRanges, TargetTags: f.TargetTags, SourceTags: f.SourceTags, Disabled: f.Disabled, Action: "ALLOW", Rules: f.Allowed}

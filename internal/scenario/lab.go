@@ -27,6 +27,7 @@ type Lab struct {
 	Day             int                 `yaml:"day" json:"day,omitempty"`
 	Level           string              `yaml:"level" json:"level"`
 	Branch          string              `yaml:"branch" json:"branch"`
+	Mode            string              `yaml:"mode" json:"mode,omitempty"` // learn, lab, production, architecture, career, unknown (Blueprint §1, §12)
 	Type            string              `yaml:"type" json:"type"`
 	Skills          []string            `yaml:"skills" json:"skills"`
 	WellArchitected []string            `yaml:"wellArchitected" json:"wellArchitected"`
@@ -93,22 +94,22 @@ type Hint struct {
 
 // Evidence configures the explanation / postmortem requirement.
 type Evidence struct {
-	Prompt   string     `yaml:"prompt" json:"prompt"`
-	Fields   []string   `yaml:"fields" json:"fields"` // e.g. rootCause, fix, prevention
-	Keywords [][]string `yaml:"keywords" json:"-"`
-	MinWords int        `yaml:"minWords" json:"minWords"`
+	Prompt   string            `yaml:"prompt" json:"prompt"`
+	Fields   []string          `yaml:"fields" json:"fields"` // e.g. rootCause, fix, prevention
+	Keywords [][]string        `yaml:"keywords" json:"-"`
+	MinWords int               `yaml:"minWords" json:"minWords"`
 	Sample   map[string]string `yaml:"sample" json:"-"` // reference answer used by CI
 }
 
 // Question is a quiz / architecture decision item.
 type Question struct {
-	ID          string   `yaml:"id" json:"id"`
-	Question    string   `yaml:"question" json:"question"`
-	Options     []string `yaml:"options" json:"options"`
-	Answer      []int    `yaml:"answer" json:"-"`
-	Explanation string   `yaml:"explanation" json:"-"`
-	Points      int      `yaml:"points" json:"points"`
-	Justify     bool     `yaml:"justify" json:"justify"`
+	ID          string     `yaml:"id" json:"id"`
+	Question    string     `yaml:"question" json:"question"`
+	Options     []string   `yaml:"options" json:"options"`
+	Answer      []int      `yaml:"answer" json:"-"`
+	Explanation string     `yaml:"explanation" json:"-"`
+	Points      int        `yaml:"points" json:"points"`
+	Justify     bool       `yaml:"justify" json:"justify"`
 	Keywords    [][]string `yaml:"keywords" json:"-"`
 }
 

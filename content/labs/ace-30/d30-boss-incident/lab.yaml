@@ -3,12 +3,12 @@ title: "Day 30 · BOSS: Black Friday cascade"
 summary: Multiple simultaneous faults under time pressure — restore service, avoid collateral damage, communicate and write the postmortem.
 track: ace-30
 day: 30
-level: expert
+level: professional
 branch: architecture
 type: boss
-skills: [observability.incident, networking.firewall, databases.performance, iam.serviceaccounts, compute.serverless, security.exposure]
+skills: [observability.incident, networking.firewall, databases.performance, iam.serviceaccounts, compute.serverless, security.armor]
 wellArchitected: [reliability, security, operations]
-certs: [ACE, PCA, PCD]
+certs: [ACE, PCA, PCDE]
 difficulty: 5
 minutes: 120
 params:

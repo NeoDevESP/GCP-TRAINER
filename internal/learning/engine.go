@@ -221,6 +221,8 @@ type Profile struct {
 	LabsPassed      int                `json:"labsPassed"`
 	Attempts        int                `json:"attempts"`
 	League          string             `json:"league"`
+	Student         StudentModel       `json:"student"`
+	Career          CareerProfile      `json:"career"`
 }
 
 func (e *Engine) now() time.Time {
@@ -246,13 +248,13 @@ func submitted(attempts []Attempt) []Attempt {
 func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 	att := submitted(attempts)
 	type acc struct {
-		bestByLab               map[string]int
-		indep                   []float64
-		diff                    []float64
-		incident                []float64
-		firstPass, retestPassAt time.Time
-		retest30                bool
-		n                       int
+		bestByLab                            map[string]int
+		indep                                []float64
+		diff                                 []float64
+		incident                             []float64
+		firstPass, retestPassAt              time.Time
+		retest30                             bool
+		n                                    int
 		hasChallenge, hasIncident, hasRetest bool
 	}
 	per := map[string]*acc{}
@@ -606,26 +608,28 @@ func (e *Engine) Profile(u User, attempts []Attempt, trackID string) Profile {
 	p.Badges = e.Badges(skills, branches, attempts)
 	p.Recommendations = e.Recommend(skills, branches, attempts, trackID)
 	p.League = League(u.ID, p.LevelIndex, e.now())
+	p.Student = e.Student(attempts, skills)
+	p.Career = e.Career(skills, branches, p.Student, attempts)
 	p.User.PasswordHash = ""
 	return p
 }
 
 // TrackReport is the end-of-track report (e.g. 30-day ACE).
 type TrackReport struct {
-	Track            string             `json:"track"`
-	LabsCompleted    int                `json:"labsCompleted"`
-	LabsTotal        int                `json:"labsTotal"`
-	Points           int                `json:"points"`
-	PointsMax        int                `json:"pointsMax"`
-	BonusXP          int                `json:"bonusXp"`
-	NoHints          int                `json:"labsWithoutHints"`
-	IncidentsSolved  int                `json:"incidentsSolved"`
-	IncidentsTotal   int                `json:"incidentsTotal"`
-	MedianMTTR       string             `json:"medianMttr"`
-	Strongest        []BranchValue      `json:"strongest"`
-	Weakest          []BranchValue      `json:"weakest"`
-	Recommendations  []Recommendation   `json:"recommendations"`
-	Readiness        []Readiness        `json:"readiness"`
+	Track           string           `json:"track"`
+	LabsCompleted   int              `json:"labsCompleted"`
+	LabsTotal       int              `json:"labsTotal"`
+	Points          int              `json:"points"`
+	PointsMax       int              `json:"pointsMax"`
+	BonusXP         int              `json:"bonusXp"`
+	NoHints         int              `json:"labsWithoutHints"`
+	IncidentsSolved int              `json:"incidentsSolved"`
+	IncidentsTotal  int              `json:"incidentsTotal"`
+	MedianMTTR      string           `json:"medianMttr"`
+	Strongest       []BranchValue    `json:"strongest"`
+	Weakest         []BranchValue    `json:"weakest"`
+	Recommendations []Recommendation `json:"recommendations"`
+	Readiness       []Readiness      `json:"readiness"`
 }
 
 // BranchValue is a named score.
@@ -685,7 +689,9 @@ func (e *Engine) Report(trackID string, attempts []Attempt) TrackReport {
 	for b, s := range branches {
 		bl = append(bl, BranchValue{e.branchName(b), s})
 	}
-	sort.Slice(bl, func(i, j int) bool { return bl[i].Score > bl[j].Score || (bl[i].Score == bl[j].Score && bl[i].Branch < bl[j].Branch) })
+	sort.Slice(bl, func(i, j int) bool {
+		return bl[i].Score > bl[j].Score || (bl[i].Score == bl[j].Score && bl[i].Branch < bl[j].Branch)
+	})
 	if len(bl) >= 3 {
 		r.Strongest = bl[:3]
 		r.Weakest = []BranchValue{bl[len(bl)-1], bl[len(bl)-2]}

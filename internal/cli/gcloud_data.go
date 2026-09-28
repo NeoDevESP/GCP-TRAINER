@@ -147,7 +147,7 @@ func sqlView(p *sim.Project, in *sim.SQLInstance) map[string]any {
 		"ipAddresses": ips, "gceZone": in.Region + "-b", "masterInstanceName": in.Master, "replicaNames": in.Replicas,
 		"settings": map[string]any{"tier": in.Tier, "availabilityType": in.Availability, "databaseFlags": flags, "deletionProtectionEnabled": in.DeletionProtection,
 			"backupConfiguration": map[string]any{"enabled": in.BackupsEnabled, "startTime": in.BackupStart, "pointInTimeRecoveryEnabled": in.PITR},
-			"ipConfiguration": map[string]any{"ipv4Enabled": in.PublicIP != "", "privateNetwork": in.Network, "authorizedNetworks": an, "requireSsl": in.RequireSSL}},
+			"ipConfiguration":     map[string]any{"ipv4Enabled": in.PublicIP != "", "privateNetwork": in.Network, "authorizedNetworks": an, "requireSsl": in.RequireSSL}},
 		"primaryAddress": in.PublicIP, "privateAddress": in.PrivateIP}
 }
 
@@ -680,9 +680,9 @@ func init() {
 			return nil, fmt.Errorf("NOT_FOUND: Resource not found (resource=%s).", n)
 		}
 		return Obj{V: map[string]any{"name": "projects/" + p.ID + "/subscriptions/" + s.Name, "topic": "projects/" + p.ID + "/topics/" + s.Topic, "ackDeadlineSeconds": s.AckDeadline,
-			"pushConfig": map[string]any{"pushEndpoint": s.PushEndpoint, "oidcToken": map[string]any{"serviceAccountEmail": s.PushSA}},
+			"pushConfig":       map[string]any{"pushEndpoint": s.PushEndpoint, "oidcToken": map[string]any{"serviceAccountEmail": s.PushSA}},
 			"deadLetterPolicy": map[string]any{"deadLetterTopic": s.DeadLetterTopic, "maxDeliveryAttempts": s.MaxDeliveryAttempts},
-			"bigqueryConfig": map[string]any{"table": s.BQTable}, "filter": s.Filter, "numUndeliveredMessages": len(s.Backlog), "ackedMessages": s.Acked, "deadLettered": s.DeadLettered}}, nil
+			"bigqueryConfig":   map[string]any{"table": s.BQTable}, "filter": s.Filter, "numUndeliveredMessages": len(s.Backlog), "ackedMessages": s.Acked, "deadLettered": s.DeadLettered}}, nil
 	})
 	reg("pubsub subscriptions delete", func(c *Cmd) (any, error) {
 		p, err := c.P()

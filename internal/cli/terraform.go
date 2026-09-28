@@ -830,20 +830,28 @@ func init() {
 	proj := func(s *Session, cfg *tfConfig, d string) *sim.Project { return s.State.Projects[d] }
 	_ = proj
 	tfTypes["google_project_service"] = &tfType{required: []string{"service"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return cfg.proj(d) + "/" + sv(d, "service", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"id": cfg.proj(d) + "/" + sv(d, "service", "")} },
-		norm:     func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
+		id: func(cfg *tfConfig, d map[string]any) string { return cfg.proj(d) + "/" + sv(d, "service", "") },
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"id": cfg.proj(d) + "/" + sv(d, "service", "")}
+		},
+		norm: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
 		read: func(s *Session, cfg *tfConfig, id string) (map[string]any, bool) {
 			p, svc, _ := strings.Cut(id, "/")
 			pr := s.State.Projects[p]
 			return map[string]any{}, pr != nil && pr.Services[svc]
 		},
-		create:  func(s *Session, cfg *tfConfig, d map[string]any) error { return s.tfExec(cfg.proj(d), "services", "enable", sv(d, "service", "")) },
+		create: func(s *Session, cfg *tfConfig, d map[string]any) error {
+			return s.tfExec(cfg.proj(d), "services", "enable", sv(d, "service", ""))
+		},
 		destroy: func(s *Session, cfg *tfConfig, id string) error { return nil },
 	}
 	tfTypes["google_compute_network"] = &tfType{required: []string{"name"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return "projects/" + cfg.proj(d) + "/global/networks/" + sv(d, "name", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return tfSelf(cfg, d, "global/networks/"+sv(d, "name", "")) },
+		id: func(cfg *tfConfig, d map[string]any) string {
+			return "projects/" + cfg.proj(d) + "/global/networks/" + sv(d, "name", "")
+		},
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return tfSelf(cfg, d, "global/networks/"+sv(d, "name", ""))
+		},
 		norm: func(cfg *tfConfig, d map[string]any) map[string]any {
 			return map[string]any{"auto_create_subnetworks": bv(d, "auto_create_subnetworks", true)}
 		},
@@ -919,8 +927,12 @@ func init() {
 		return action, strings.Join(rs, ",")
 	}
 	tfTypes["google_compute_firewall"] = &tfType{required: []string{"name", "network"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return "projects/" + cfg.proj(d) + "/global/firewalls/" + sv(d, "name", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return tfSelf(cfg, d, "global/firewalls/"+sv(d, "name", "")) },
+		id: func(cfg *tfConfig, d map[string]any) string {
+			return "projects/" + cfg.proj(d) + "/global/firewalls/" + sv(d, "name", "")
+		},
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return tfSelf(cfg, d, "global/firewalls/"+sv(d, "name", ""))
+		},
 		norm: func(cfg *tfConfig, d map[string]any) map[string]any {
 			a, r := fwRules(d)
 			src := lv(d, "source_ranges")
@@ -1158,8 +1170,10 @@ func init() {
 		},
 	}
 	tfTypes["google_storage_bucket"] = &tfType{required: []string{"name", "location"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return sv(d, "name", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"id": sv(d, "name", ""), "url": "gs://" + sv(d, "name", ""), "name": sv(d, "name", "")} },
+		id: func(cfg *tfConfig, d map[string]any) string { return sv(d, "name", "") },
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"id": sv(d, "name", ""), "url": "gs://" + sv(d, "name", ""), "name": sv(d, "name", "")}
+		},
 		norm: func(cfg *tfConfig, d map[string]any) map[string]any {
 			ver := false
 			if v := blk(d, "versioning"); v != nil {
@@ -1238,7 +1252,9 @@ func init() {
 			e := sv(d, "account_id", "") + "@" + cfg.proj(d) + ".iam.gserviceaccount.com"
 			return map[string]any{"email": e, "member": "serviceAccount:" + e, "id": "projects/" + cfg.proj(d) + "/serviceAccounts/" + e, "name": "projects/" + cfg.proj(d) + "/serviceAccounts/" + e}
 		},
-		norm: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"display_name": sv(d, "display_name", "")} },
+		norm: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"display_name": sv(d, "display_name", "")}
+		},
 		read: func(s *Session, cfg *tfConfig, id string) (map[string]any, bool) {
 			for _, p := range s.State.Projects {
 				if sa := p.ServiceAccounts[id]; sa != nil {
@@ -1255,9 +1271,13 @@ func init() {
 		},
 	}
 	tfTypes["google_project_iam_member"] = &tfType{required: []string{"role", "member"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return cfg.proj(d) + "/" + sv(d, "role", "") + "/" + sv(d, "member", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"id": cfg.proj(d) + "/" + sv(d, "role", "") + "/" + sv(d, "member", "")} },
-		norm:     func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
+		id: func(cfg *tfConfig, d map[string]any) string {
+			return cfg.proj(d) + "/" + sv(d, "role", "") + "/" + sv(d, "member", "")
+		},
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"id": cfg.proj(d) + "/" + sv(d, "role", "") + "/" + sv(d, "member", "")}
+		},
+		norm: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
 		read: func(s *Session, cfg *tfConfig, id string) (map[string]any, bool) {
 			parts := strings.SplitN(id, "/", 2)
 			p := s.State.Projects[parts[0]]
@@ -1366,9 +1386,13 @@ func init() {
 	tfTypes["google_cloud_run_v2_service_iam_member"] = runIAMType
 	tfTypes["google_cloud_run_service_iam_member"] = runIAMType
 	tfTypes["google_pubsub_topic"] = &tfType{required: []string{"name"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return "projects/" + cfg.proj(d) + "/topics/" + sv(d, "name", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"id": "projects/" + cfg.proj(d) + "/topics/" + sv(d, "name", ""), "name": sv(d, "name", "")} },
-		norm:     func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
+		id: func(cfg *tfConfig, d map[string]any) string {
+			return "projects/" + cfg.proj(d) + "/topics/" + sv(d, "name", "")
+		},
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"id": "projects/" + cfg.proj(d) + "/topics/" + sv(d, "name", ""), "name": sv(d, "name", "")}
+		},
+		norm: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
 		read: func(s *Session, cfg *tfConfig, id string) (map[string]any, bool) {
 			parts := strings.Split(id, "/")
 			p := s.State.Projects[parts[1]]
@@ -1383,8 +1407,12 @@ func init() {
 		},
 	}
 	tfTypes["google_pubsub_subscription"] = &tfType{required: []string{"name", "topic"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return "projects/" + cfg.proj(d) + "/subscriptions/" + sv(d, "name", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"id": "projects/" + cfg.proj(d) + "/subscriptions/" + sv(d, "name", ""), "name": sv(d, "name", "")} },
+		id: func(cfg *tfConfig, d map[string]any) string {
+			return "projects/" + cfg.proj(d) + "/subscriptions/" + sv(d, "name", "")
+		},
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"id": "projects/" + cfg.proj(d) + "/subscriptions/" + sv(d, "name", ""), "name": sv(d, "name", "")}
+		},
 		norm: func(cfg *tfConfig, d map[string]any) map[string]any {
 			push := ""
 			if pc := blk(d, "push_config"); pc != nil {
@@ -1430,7 +1458,9 @@ func init() {
 		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
 			return map[string]any{"id": "projects/" + cfg.proj(d) + "/locations/" + sv(d, "location", cfg.Region) + "/repositories/" + sv(d, "repository_id", ""), "name": sv(d, "repository_id", "")}
 		},
-		norm: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"format": strings.ToUpper(sv(d, "format", ""))} },
+		norm: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"format": strings.ToUpper(sv(d, "format", ""))}
+		},
 		read: func(s *Session, cfg *tfConfig, id string) (map[string]any, bool) {
 			parts := strings.Split(id, "/")
 			p := s.State.Projects[parts[1]]
@@ -1449,9 +1479,13 @@ func init() {
 		},
 	}
 	tfTypes["google_secret_manager_secret"] = &tfType{required: []string{"secret_id"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return "projects/" + cfg.proj(d) + "/secrets/" + sv(d, "secret_id", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"id": "projects/" + cfg.proj(d) + "/secrets/" + sv(d, "secret_id", ""), "secret_id": sv(d, "secret_id", "")} },
-		norm:     func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
+		id: func(cfg *tfConfig, d map[string]any) string {
+			return "projects/" + cfg.proj(d) + "/secrets/" + sv(d, "secret_id", "")
+		},
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"id": "projects/" + cfg.proj(d) + "/secrets/" + sv(d, "secret_id", ""), "secret_id": sv(d, "secret_id", "")}
+		},
+		norm: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{} },
 		read: func(s *Session, cfg *tfConfig, id string) (map[string]any, bool) {
 			parts := strings.Split(id, "/")
 			p := s.State.Projects[parts[1]]
@@ -1466,8 +1500,10 @@ func init() {
 		},
 	}
 	tfTypes["google_sql_database_instance"] = &tfType{required: []string{"name", "database_version", "settings"},
-		id:       func(cfg *tfConfig, d map[string]any) string { return cfg.proj(d) + "/" + sv(d, "name", "") },
-		computed: func(cfg *tfConfig, d map[string]any) map[string]any { return map[string]any{"name": sv(d, "name", ""), "connection_name": cfg.proj(d) + ":" + sv(d, "region", cfg.Region) + ":" + sv(d, "name", ""), "private_ip_address": "(known after apply)"} },
+		id: func(cfg *tfConfig, d map[string]any) string { return cfg.proj(d) + "/" + sv(d, "name", "") },
+		computed: func(cfg *tfConfig, d map[string]any) map[string]any {
+			return map[string]any{"name": sv(d, "name", ""), "connection_name": cfg.proj(d) + ":" + sv(d, "region", cfg.Region) + ":" + sv(d, "name", ""), "private_ip_address": "(known after apply)"}
+		},
 		norm: func(cfg *tfConfig, d map[string]any) map[string]any {
 			st := blk(d, "settings")
 			return map[string]any{"tier": sv(st, "tier", ""), "availability": sv(st, "availability_type", "ZONAL")}

@@ -20,11 +20,11 @@ import (
 
 // F1Config points to emulator endpoints (see deploy/docker-compose.yaml).
 type F1Config struct {
-	PubSubHost    string // e.g. pubsub-emulator:8085 (PUBSUB_EMULATOR_HOST)
-	GCSHost       string // e.g. http://fake-gcs:4443 (STORAGE_EMULATOR_HOST)
-	Kubeconfig    string // kubeconfig of a kind cluster
-	KubectlPath   string
-	HTTP          *http.Client
+	PubSubHost  string // e.g. pubsub-emulator:8085 (PUBSUB_EMULATOR_HOST)
+	GCSHost     string // e.g. http://fake-gcs:4443 (STORAGE_EMULATOR_HOST)
+	Kubeconfig  string // kubeconfig of a kind cluster
+	KubectlPath string
+	HTTP        *http.Client
 }
 
 // F1ConfigFromEnv reads the standard emulator environment variables.

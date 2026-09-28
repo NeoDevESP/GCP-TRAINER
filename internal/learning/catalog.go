@@ -18,14 +18,16 @@ import (
 type Branch struct {
 	ID     string  `yaml:"id" json:"id"`
 	Name   string  `yaml:"name" json:"name"`
+	Block  string  `yaml:"block" json:"block,omitempty"` // master curriculum block (Blueprint §4)
 	Skills []Skill `yaml:"skills" json:"skills"`
 }
 
 // Skill is an observable competence.
 type Skill struct {
-	ID          string `yaml:"id" json:"id"`
-	Name        string `yaml:"name" json:"name"`
-	Observable  string `yaml:"observable" json:"observable"`
+	ID         string   `yaml:"id" json:"id"`
+	Name       string   `yaml:"name" json:"name"`
+	Observable string   `yaml:"observable" json:"observable"`
+	Requires   []string `yaml:"requires" json:"requires,omitempty"` // prerequisite skills (skill graph edges)
 }
 
 // Track is an ordered learning path aligned to a certification.
@@ -64,12 +66,13 @@ type CertBlueprint struct {
 
 // Catalog is the loaded curriculum.
 type Catalog struct {
-	Branches []Branch                  `json:"branches"`
-	Tracks   []Track                   `json:"tracks"`
-	Badges   []BadgeDef                `json:"badges"`
-	Certs    []CertBlueprint           `json:"certs"`
-	Labs     map[string]*scenario.Lab  `json:"-"`
-	LabOrder []string                  `json:"-"`
+	Branches    []Branch                 `json:"branches"`
+	Tracks      []Track                  `json:"tracks"`
+	Badges      []BadgeDef               `json:"badges"`
+	Certs       []CertBlueprint          `json:"certs"`
+	Career      CareerDef                `json:"career"`
+	Labs        map[string]*scenario.Lab `json:"-"`
+	LabOrder    []string                 `json:"-"`
 	skillBranch map[string]string
 }
 
@@ -104,6 +107,11 @@ func LoadCatalog(root string) (*Catalog, error) {
 		return nil, err
 	}
 	c.Certs = ce.Certs
+	if _, err := os.Stat(filepath.Join(root, "career.yaml")); err == nil {
+		if err := readYAML(filepath.Join(root, "career.yaml"), &c.Career); err != nil {
+			return nil, err
+		}
+	}
 	for _, b := range c.Branches {
 		for _, s := range b.Skills {
 			c.skillBranch[s.ID] = b.ID
@@ -163,6 +171,36 @@ func (c *Catalog) Validate() []string {
 		}
 		if l.RetestOf != "" && c.Labs[l.RetestOf] == nil {
 			problems = append(problems, fmt.Sprintf("lab %s: retestOf unknown lab %s", l.ID, l.RetestOf))
+		}
+	}
+	problems = append(problems, c.validateGraph()...)
+	for _, st := range c.Career.Stages {
+		for _, id := range st.Capstones {
+			if c.Labs[id] == nil {
+				problems = append(problems, fmt.Sprintf("career stage %s: unknown capstone %s", st.ID, id))
+			}
+		}
+		for b := range st.Branches {
+			if !c.hasBranch(b) {
+				problems = append(problems, fmt.Sprintf("career stage %s: unknown branch %s", st.ID, b))
+			}
+		}
+	}
+	for _, sp := range c.Career.Specializations {
+		for _, id := range sp.Capstones {
+			if c.Labs[id] == nil {
+				problems = append(problems, fmt.Sprintf("specialization %s: unknown capstone %s", sp.ID, id))
+			}
+		}
+		for _, s := range sp.Skills {
+			if _, ok := c.skillBranch[s]; !ok {
+				problems = append(problems, fmt.Sprintf("specialization %s: unknown skill %s", sp.ID, s))
+			}
+		}
+		for b := range sp.Branches {
+			if !c.hasBranch(b) {
+				problems = append(problems, fmt.Sprintf("specialization %s: unknown branch %s", sp.ID, b))
+			}
 		}
 	}
 	for _, t := range c.Tracks {

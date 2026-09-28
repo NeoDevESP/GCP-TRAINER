@@ -463,7 +463,9 @@ func init() {
 	reg("auth print-identity-token", func(c *Cmd) (any, error) {
 		return IdentityToken(c.Principal()) + "\n", nil
 	})
-	reg("auth login", func(c *Cmd) (any, error) { return "You are already authenticated as [" + c.S.Account + "] in the lab.\n", nil })
+	reg("auth login", func(c *Cmd) (any, error) {
+		return "You are already authenticated as [" + c.S.Account + "] in the lab.\n", nil
+	})
 	reg("auth application-default login", registry["auth login"])
 	reg("auth configure-docker", func(c *Cmd) (any, error) {
 		for _, h := range append(c.Args, "gcr.io") {

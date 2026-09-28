@@ -1719,4 +1719,3 @@ func init() {
 }
 
 var fwCols = []Col{{"NAME", "name"}, {"NETWORK", "network"}, {"DIRECTION", "direction"}, {"PRIORITY", "priority"}, {"ALLOW", "allowStr"}, {"DENY", "denyStr"}, {"SRC_RANGES", "sourceRanges"}, {"SRC_TAGS", "sourceTags"}, {"TARGET_TAGS", "targetTags"}, {"DISABLED", "disabled"}}
-

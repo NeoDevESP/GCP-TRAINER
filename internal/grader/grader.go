@@ -29,6 +29,7 @@ type Submission struct {
 	Evidence       map[string]string `json:"evidence"`       // rootCause, fix, prevention, postmortem, explanation...
 	Answers        map[string][]int  `json:"answers"`        // quiz id -> selected options
 	Justifications map[string]string `json:"justifications"` // quiz id -> text
+	HintsUsed      int               `json:"hintsUsed"`      // set by the platform, never by the learner
 }
 
 // CheckResult is the outcome of one assertion.
@@ -51,14 +52,15 @@ type ItemResult struct {
 
 // Result is the full grading report.
 type Result struct {
-	LabID          string             `json:"labId"`
-	Score          int                `json:"score"`
-	Max            int                `json:"max"`
-	Passed         bool               `json:"passed"`
-	CriticalFailed bool               `json:"criticalFailed"`
-	Items          []ItemResult       `json:"items"`
+	LabID          string                `json:"labId"`
+	Score          int                   `json:"score"`
+	Max            int                   `json:"max"`
+	Passed         bool                  `json:"passed"`
+	CriticalFailed bool                  `json:"criticalFailed"`
+	Items          []ItemResult          `json:"items"`
 	Validators     map[string][2]float64 `json:"validators"` // earned, max
-	Feedback       []string           `json:"feedback"`
+	Feedback       []string              `json:"feedback"`
+	Process        *ProcessReport        `json:"process,omitempty"`
 }
 
 // Context is everything the grader can observe.
@@ -120,6 +122,13 @@ func Grade(lab *scenario.Lab, st *sim.State, sess *cli.Session, project string, 
 				res.Feedback = append(res.Feedback, fmt.Sprintf("[%s] %s", it.Name, c.Desc))
 			}
 		}
+	}
+	res.Process = AssessProcess(lab, sess, res, sub, sub.HintsUsed)
+	for _, v := range res.Process.Violations {
+		res.Feedback = append(res.Feedback, "[Process] "+v)
+	}
+	if n := len(res.Process.BlindFixes); n > 0 {
+		res.Feedback = append(res.Feedback, fmt.Sprintf("[Process] %d change(s) made before gathering evidence — form a hypothesis first", n))
 	}
 	return res
 }

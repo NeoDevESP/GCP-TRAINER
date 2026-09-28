@@ -13,15 +13,15 @@ import (
 
 // Report summarises the verification of one lab variant.
 type Report struct {
-	LabID       string   `json:"labId"`
-	Seed        int64    `json:"seed"`
+	LabID       string            `json:"labId"`
+	Seed        int64             `json:"seed"`
 	Params      map[string]string `json:"params"`
-	BeforeScore int      `json:"beforeScore"`
-	AfterScore  int      `json:"afterScore"`
-	OK          bool     `json:"ok"`
-	Problems    []string `json:"problems"`
-	SolutionLog string   `json:"-"`
-	Failed      []string `json:"failedChecks,omitempty"`
+	BeforeScore int               `json:"beforeScore"`
+	AfterScore  int               `json:"afterScore"`
+	OK          bool              `json:"ok"`
+	Problems    []string          `json:"problems"`
+	SolutionLog string            `json:"-"`
+	Failed      []string          `json:"failedChecks,omitempty"`
 }
 
 // SampleSubmission builds the reference answers stored in the lab.
@@ -81,6 +81,9 @@ func Verify(l *scenario.Lab, seed int64) Report {
 				r.Failed = append(r.Failed, fmt.Sprintf("%s / %s: %s (%s)", it.Name, c.Type, c.Desc, c.Detail))
 			}
 		}
+	}
+	if after.Process != nil && len(after.Process.Violations) > 0 {
+		r.Problems = append(r.Problems, "official solution violates lab constraints: "+strings.Join(after.Process.Violations, "; "))
 	}
 	if !after.Passed || after.Score < 90 {
 		r.Problems = append(r.Problems, fmt.Sprintf("official solution scores %d (critical failed=%v)", after.Score, after.CriticalFailed))

@@ -17,12 +17,12 @@ import (
 
 // Policy constrains what a student may do in a lab (anti-abuse, cost control).
 type Policy struct {
-	AllowGPUs          bool     `json:"allowGpus" yaml:"allowGpus"`
-	MaxInstances       int      `json:"maxInstances" yaml:"maxInstances"`
-	AllowedRegions     []string `json:"allowedRegions" yaml:"allowedRegions"`
-	DeniedCommands     []string `json:"deniedCommands" yaml:"deniedCommands"`
-	MaxMachineCPUs     int      `json:"maxMachineCpus" yaml:"maxMachineCpus"`
-	ReadOnlyResources  []string `json:"readOnlyResources" yaml:"readOnlyResources"`
+	AllowGPUs         bool     `json:"allowGpus" yaml:"allowGpus"`
+	MaxInstances      int      `json:"maxInstances" yaml:"maxInstances"`
+	AllowedRegions    []string `json:"allowedRegions" yaml:"allowedRegions"`
+	DeniedCommands    []string `json:"deniedCommands" yaml:"deniedCommands"`
+	MaxMachineCPUs    int      `json:"maxMachineCpus" yaml:"maxMachineCpus"`
+	ReadOnlyResources []string `json:"readOnlyResources" yaml:"readOnlyResources"`
 }
 
 // ExecRecord is telemetry for one command line.
@@ -36,22 +36,22 @@ type ExecRecord struct {
 
 // Session is one terminal attached to a simulated world.
 type Session struct {
-	State       *sim.State         `json:"-"`
-	Project     string             `json:"project"`
-	Region      string             `json:"region"`
-	Zone        string             `json:"zone"`
-	Account     string             `json:"account"`
-	Impersonate string             `json:"impersonate"`
-	Files       map[string]string  `json:"files"`
-	Env         map[string]string  `json:"env"`
-	Records     []ExecRecord       `json:"records"`
-	Kube        KubeContext        `json:"kube"`
-	Git         GitState           `json:"git"`
-	Policy      Policy             `json:"policy"`
-	DockerAuth  map[string]bool    `json:"dockerAuth"`
-	LocalImages map[string]string  `json:"localImages"` // tag -> behaviour
-	NoTick      bool               `json:"-"`
-	Credentials map[string]string  `json:"credentials"` // activated SA key files
+	State       *sim.State        `json:"-"`
+	Project     string            `json:"project"`
+	Region      string            `json:"region"`
+	Zone        string            `json:"zone"`
+	Account     string            `json:"account"`
+	Impersonate string            `json:"impersonate"`
+	Files       map[string]string `json:"files"`
+	Env         map[string]string `json:"env"`
+	Records     []ExecRecord      `json:"records"`
+	Kube        KubeContext       `json:"kube"`
+	Git         GitState          `json:"git"`
+	Policy      Policy            `json:"policy"`
+	DockerAuth  map[string]bool   `json:"dockerAuth"`
+	LocalImages map[string]string `json:"localImages"` // tag -> behaviour
+	NoTick      bool              `json:"-"`
+	Credentials map[string]string `json:"credentials"` // activated SA key files
 	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
 	// take over a command before the simulator handles it.
 	Interceptor func(s *Session, args []string, stdin string) (handled bool, out string, err error) `json:"-"`

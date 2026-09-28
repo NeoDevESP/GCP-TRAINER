@@ -1,0 +1,46 @@
+# Career progression (Blueprint §14, §15, §22). Stages represent responsibility
+# and autonomy (autonomy ladder index: 0 Guided … 5 Expert), not years.
+stages:
+  - id: intern
+    name: Cloud Intern
+    scenario: Guided labs, concepts and atomic tasks
+    minAutonomy: 0
+  - id: junior
+    name: Junior Cloud Engineer
+    scenario: Clear tickets and low-risk changes
+    minAutonomy: 1
+    branches: {foundations: 40, iam: 30, compute: 30}
+    capstones: [ace-d10-checkpoint]
+  - id: engineer
+    name: Cloud Engineer
+    scenario: Multi-component incidents and automation
+    minAutonomy: 2
+    branches: {foundations: 60, iam: 55, compute: 55, networking: 50, storage: 50, observability: 45}
+    capstones: [ace-d29-capstone-orders]
+  - id: senior
+    name: Senior Cloud Engineer
+    scenario: Ambiguity, production, architecture and risk
+    minAutonomy: 3
+    branches: {iam: 70, networking: 70, compute: 65, security: 60, observability: 60, databases: 55}
+    capstones: [ace-d30-boss-incident]
+  - id: platform
+    name: Platform / DevOps / SRE Engineer
+    scenario: Reliability, internal platforms, pipelines, Kubernetes and observability
+    minAutonomy: 4
+    branches: {devops: 70, gke: 65, observability: 70, security: 65}
+  - id: architect
+    name: Cloud Architect
+    scenario: Global design, governance, HA/DR, cost and trade-offs
+    minAutonomy: 5
+    branches: {architecture: 75, networking: 75, security: 70, databases: 65, finops: 50}
+specializations:
+  - {id: devops, name: DevOps, requires: engineer, branches: {devops: 70, containers: 60}, skills: [devops.cicd, devops.delivery, devops.iac], capstones: [ace-d27-deploy-rollback], certs: [PCDE]}
+  - {id: sre, name: SRE, requires: engineer, branches: {observability: 70, gke: 55}, skills: [observability.slo, observability.incident], capstones: [ace-d30-boss-incident], certs: [PCDE]}
+  - {id: security, name: Security, requires: engineer, branches: {security: 70, iam: 70}, skills: [security.secrets, security.kms, security.audit], capstones: [ace-d25-public-exposure], certs: [PCSE]}
+  - {id: networking, name: Networking, requires: engineer, branches: {networking: 75, netfund: 60}, skills: [networking.hybrid, networking.lb, networking.dns], capstones: [ace-d26-hybrid-design], certs: [PCNE]}
+  - {id: data, name: Data, requires: engineer, branches: {data: 70, databases: 55}, skills: [data.bigquery, data.pipelines], capstones: [ace-d22-pubsub-ingestion], certs: [PDE]}
+  - {id: platform, name: Platform Engineering, requires: senior, branches: {gke: 70, devops: 65, architecture: 55}, skills: [gke.identity, devops.iac]}
+  - {id: clouddev, name: Cloud Development, requires: engineer, branches: {compute: 60, devtools: 60, containers: 60}, skills: [compute.serverless, devtools.apis]}
+  - {id: aiml, name: AI/ML, requires: engineer, branches: {data: 60}, skills: [data.ml], capstones: [ace-d23-ml-endpoint], certs: [PMLE]}
+  - {id: finops, name: FinOps, requires: engineer, branches: {finops: 65, architecture: 50}, skills: [architecture.cost], capstones: [ace-d28-architecture-review]}
+  - {id: architecture, name: Architecture, requires: senior, branches: {architecture: 75, networking: 65, security: 60}, skills: [architecture.design, architecture.reliability], capstones: [ace-d28-architecture-review], certs: [PCA]}

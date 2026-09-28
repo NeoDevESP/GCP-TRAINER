@@ -8,35 +8,35 @@ import (
 
 // LabKPI are per-lab learning indicators (used to calibrate difficulty).
 type LabKPI struct {
-	LabID              string  `json:"labId"`
-	Users              int     `json:"users"`
-	FirstAttemptSucc   float64 `json:"firstAttemptSuccess"`
-	HintDependency     float64 `json:"hintDependency"`
-	RetryToMastery     float64 `json:"retryToMastery"`
-	AvgScore           float64 `json:"avgScore"`
-	RootCauseRate      float64 `json:"rootCauseRate"`
-	MedianMinutes      float64 `json:"medianMinutes"`
-	Flag               string  `json:"flag,omitempty"`
+	LabID            string  `json:"labId"`
+	Users            int     `json:"users"`
+	FirstAttemptSucc float64 `json:"firstAttemptSuccess"`
+	HintDependency   float64 `json:"hintDependency"`
+	RetryToMastery   float64 `json:"retryToMastery"`
+	AvgScore         float64 `json:"avgScore"`
+	RootCauseRate    float64 `json:"rootCauseRate"`
+	MedianMinutes    float64 `json:"medianMinutes"`
+	Flag             string  `json:"flag,omitempty"`
 }
 
 // KPIs aggregates learning and platform indicators.
 type KPIs struct {
-	FirstAttemptSuccess float64            `json:"firstAttemptSuccess"`
-	HintDependency      float64            `json:"hintDependency"`
-	RetryToMastery      float64            `json:"retryToMastery"`
-	Retention7          float64            `json:"retention7d"`
-	Retention30         float64            `json:"retention30d"`
-	IncidentRootCause   float64            `json:"incidentRootCauseRate"`
-	CapstonePassRate    float64            `json:"capstonePassRate"`
-	SkillCoverage       float64            `json:"skillCoverage"`
-	ActiveUsers         int                `json:"activeUsers"`
-	Attempts            int                `json:"attempts"`
-	ProvisionP95Ms      int64              `json:"provisionP95Ms"`
-	GraderErrorRate     float64            `json:"graderErrorRate"`
-	AutoGradedLabs      float64            `json:"autoGradedLabs"`
-	InfraFailureRate    float64            `json:"infraFailureRate"`
-	PerLab              []LabKPI           `json:"perLab"`
-	Targets             map[string]string  `json:"targets"`
+	FirstAttemptSuccess float64           `json:"firstAttemptSuccess"`
+	HintDependency      float64           `json:"hintDependency"`
+	RetryToMastery      float64           `json:"retryToMastery"`
+	Retention7          float64           `json:"retention7d"`
+	Retention30         float64           `json:"retention30d"`
+	IncidentRootCause   float64           `json:"incidentRootCauseRate"`
+	CapstonePassRate    float64           `json:"capstonePassRate"`
+	SkillCoverage       float64           `json:"skillCoverage"`
+	ActiveUsers         int               `json:"activeUsers"`
+	Attempts            int               `json:"attempts"`
+	ProvisionP95Ms      int64             `json:"provisionP95Ms"`
+	GraderErrorRate     float64           `json:"graderErrorRate"`
+	AutoGradedLabs      float64           `json:"autoGradedLabs"`
+	InfraFailureRate    float64           `json:"infraFailureRate"`
+	PerLab              []LabKPI          `json:"perLab"`
+	Targets             map[string]string `json:"targets"`
 }
 
 // ComputeKPIs derives KPIs from all attempts (optionally for a class).
@@ -97,8 +97,8 @@ func (e *Engine) ComputeKPIs(all []Attempt) KPIs {
 	}
 	type labAgg struct {
 		users, firstOK, hintUsers, masteredRetries, mastered int
-		scores, minutes                                        []float64
-		rcOK, rcN                                              int
+		scores, minutes                                      []float64
+		rcOK, rcN                                            int
 	}
 	per := map[string]*labAgg{}
 	firstOK, firstN, hintN, hintYes, retriesSum, retriesN := 0, 0, 0, 0, 0, 0

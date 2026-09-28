@@ -6,9 +6,9 @@ day: 27
 level: advanced
 branch: devops
 type: challenge
-skills: [devops.cicd, devops.release, compute.serverless]
+skills: [devops.cicd, devops.delivery, compute.serverless]
 wellArchitected: [reliability, operations]
-certs: [PCD, ACE]
+certs: [PCDE, ACE]
 difficulty: 4
 minutes: 75
 baseline: [empty]

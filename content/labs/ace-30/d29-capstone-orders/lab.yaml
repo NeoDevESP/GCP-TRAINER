@@ -6,7 +6,7 @@ day: 29
 level: advanced
 branch: architecture
 type: capstone
-skills: [compute.serverless, databases.cloudsql, data.pubsub, data.bigquery, iam.serviceaccounts, security.secrets, observability.alerting, architecture.cost]
+skills: [compute.serverless, databases.cloudsql, data.pubsub, data.bigquery, iam.serviceaccounts, security.secrets, observability.monitoring, architecture.cost]
 wellArchitected: [security, reliability, operations, cost]
 certs: [ACE, PCA]
 difficulty: 5
