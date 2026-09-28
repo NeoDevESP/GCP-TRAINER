@@ -1,0 +1,7 @@
+/bin/
+/data/
+node_modules/
+.next/
+web/out/
+*.test
+coverage.out
