@@ -1,0 +1,72 @@
+id: ace-d22-pubsub-ingestion
+title: "Day 22 · Near-real-time event ingestion"
+summary: Connect producers to a private Cloud Run processor through Pub/Sub push with authentication and a dead-letter topic.
+track: ace-30
+day: 22
+level: advanced
+branch: data
+type: challenge
+skills: [data.pubsub, data.pipelines, iam.serviceaccounts]
+wellArchitected: [reliability, security]
+certs: [PDE, PCD]
+difficulty: 3
+minutes: 75
+baseline: [default-network]
+setup: |
+  gcloud storage buckets create gs://events-sink-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  gcloud iam service-accounts create processor-sa
+  gcloud iam service-accounts create push-sa
+  gcloud run deploy processor --image=europe-docker.pkg.dev/gcplab-public/apps/events-processor:1.0 --region={{.region}} --service-account=processor-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=SINK_BUCKET=events-sink-{{.project}} --no-allow-unauthenticated
+traffic:
+  - {name: producer, target: "pubsub:events", rps: 100}
+story: |
+  Producers publish order events to topic **events** (create it). Build the pipeline:
+
+  - push subscription `events-push` → `processor` service at path `/push`, authenticated as `push-sa`
+    (the processor must stay private)
+  - the processor writes to `gs://events-sink-{{.project}}` as `processor-sa`
+  - messages failing 5 times go to topic `events-dlq` (with a pull subscription `events-dlq-sub` for inspection)
+  - an alert on undelivered messages of `events-push`
+objectives:
+  - Producer → Pub/Sub → processing → sink
+  - Messages processed and stored
+  - Failure handling with a dead-letter topic
+  - Observability of the backlog
+hints:
+  - text: "Grant `roles/run.invoker` on the service to push-sa and use `--push-auth-service-account`."
+  - text: "The Pub/Sub service agent needs publisher on the DLQ topic."
+solution: |
+  gcloud pubsub topics create events
+  gcloud pubsub topics create events-dlq
+  gcloud pubsub subscriptions create events-dlq-sub --topic=events-dlq
+  gcloud run services add-iam-policy-binding processor --region={{.region}} --member=serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud storage buckets add-iam-policy-binding gs://events-sink-{{.project}} --member=serviceAccount:processor-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectCreator
+  gcloud pubsub subscriptions create events-push --topic=events --push-endpoint=$(gcloud run services describe processor --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com --dead-letter-topic=events-dlq --max-delivery-attempts=5
+  gcloud alpha monitoring policies create --display-name="events backlog" --condition-display-name=backlog --condition-filter='metric.type="pubsub.googleapis.com/subscription/num_undelivered_messages"' --if='> 1000' --duration=300s
+  sleep 300
+  gcloud pubsub subscriptions describe events-push
+rubric:
+  - name: Pipeline
+    validator: functional
+    points: 35
+    checks:
+      - {type: pubsub, subscription: events-push, ackedMin: 10, backlogMax: 50, settle: 3, desc: "Messages delivered and acknowledged"}
+  - name: Correctness
+    validator: security
+    points: 30
+    all: true
+    checks:
+      - {type: http, target: "run:processor", path: /push, status: 403, desc: "Processor is not public"}
+      - {type: iam, principal: "serviceAccount:processor-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.create, resource: "bucket:events-sink-{{.project}}/data/x", desc: "Processor can write the sink"}
+      - {type: iam, principal: "serviceAccount:processor-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:events-sink-{{.project}}/data/x", expect: false, desc: "Processor cannot delete"}
+  - name: Resilience
+    validator: state
+    points: 20
+    checks:
+      - {type: exists, path: "subscriptions[\"events-push\"]", expect: {deadLetterTopic: events-dlq, maxDeliveryAttempts: {gte: 5}}, desc: "Dead-letter policy"}
+      - {type: exists, path: "subscriptions[\"events-dlq-sub\"]", expect: {topic: events-dlq}, desc: "DLQ can be inspected"}
+  - name: Observability
+    validator: state
+    points: 15
+    checks:
+      - {type: alert_policy, filterContains: num_undelivered_messages, desc: "Backlog alert"}

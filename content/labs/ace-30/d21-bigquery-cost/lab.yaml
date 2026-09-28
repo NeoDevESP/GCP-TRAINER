@@ -1,0 +1,66 @@
+id: ace-d21-bigquery-cost
+title: "Day 21 · Cut the cost of a BigQuery report"
+summary: Redesign a table with partitioning and clustering and rewrite the query to process less data, proving it with dry runs.
+track: ace-30
+day: 21
+level: advanced
+branch: data
+type: challenge
+skills: [data.bigquery, architecture.cost]
+wellArchitected: [cost, performance]
+certs: [PDE, PCA]
+difficulty: 3
+minutes: 60
+params:
+  country: [ES, FR, DE]
+baseline: [empty]
+setup: |
+  bq mk --dataset --location=EU analytics
+  bq mk --table --sim_rows=2000000000 analytics.events event_ts:TIMESTAMP:8,user_id:STRING:16,country:STRING:4,event_type:STRING:12,payload:STRING:900,revenue:NUMERIC:16
+story: |
+  Finance runs this report **30 times a day** and BigQuery is now the top line of the bill:
+
+  ```sql
+  SELECT * FROM analytics.events
+  WHERE country = '{{.country}}'
+  ```
+  They only need **weekly revenue per country** for the last 7 days (2026-08-25..2026-08-31).
+  `analytics.events` has 2 billion rows (~1.9 TB), one year of history, and is not partitioned.
+objectives:
+  - Query only the needed columns and partitions
+  - A partitioned (by day on event_ts) and clustered (by country) table
+  - Measure bytes processed before and after (dry run)
+  - Explain the design
+hints:
+  - text: "`bq query --dry_run --use_legacy_sql=false '...'` reports bytes without running."
+  - text: "`CREATE TABLE analytics.events_p PARTITION BY DATE(event_ts) CLUSTER BY country AS SELECT * FROM analytics.events`"
+solution: |
+  bq query --dry_run --use_legacy_sql=false "SELECT * FROM analytics.events WHERE country = '{{.country}}'"
+  bq query --use_legacy_sql=false "CREATE TABLE analytics.events_p PARTITION BY DATE(event_ts) CLUSTER BY country AS SELECT * FROM analytics.events"
+  bq query --dry_run --use_legacy_sql=false "SELECT country, SUM(revenue) AS revenue FROM analytics.events_p WHERE DATE(event_ts) BETWEEN '2026-08-25' AND '2026-08-31' AND country = '{{.country}}' GROUP BY country"
+  bq query --use_legacy_sql=false "SELECT country, SUM(revenue) AS revenue FROM analytics.events_p WHERE DATE(event_ts) BETWEEN '2026-08-25' AND '2026-08-31' AND country = '{{.country}}' GROUP BY country"
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: Selecting three columns instead of SELECT * and filtering on the daily partition of event_ts plus clustering by country reduced bytes processed from about 1.9 TB to a few hundred MB, measured with dry run.
+rubric:
+  - name: SQL
+    validator: cost
+    points: 30
+    checks:
+      - {type: bq_bytes_max, queryContains: revenue, bytes: 1000000000, desc: "Report query processes less than 1 GB"}
+  - name: Design
+    validator: state
+    points: 30
+    checks:
+      - {type: count, collection: datasets.analytics.tables, where: {partitionField: event_ts, clustering: {contains: country}}, min: 1, desc: "Partitioned and clustered table"}
+  - name: Measurement
+    validator: diagnosis
+    points: 25
+    checks:
+      - {type: command, regex: "dry_run|dry-run", min: 2, desc: "Before/after dry runs"}
+  - name: Explanation
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[partition, particion], [cluster], [bytes, TB, GB, MB]], desc: "Explain the saving"}

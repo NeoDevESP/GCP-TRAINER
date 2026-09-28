@@ -616,6 +616,13 @@ func init() {
 		}
 		return Obj{V: map[string]any{"name": o.Name, "bucket": b.Name, "size": o.Size, "storage_class": o.StorageClass, "generation": o.Generation, "update_time": o.Updated}}, nil
 	})
+	reg("storage service-agent", func(c *Cmd) (any, error) {
+		p, err := c.P()
+		if err != nil {
+			return nil, err
+		}
+		return "service-" + p.Number + "@gs-project-accounts.iam.gserviceaccount.com\n", nil
+	})
 	reg("storage sign-url", func(c *Cmd) (any, error) {
 		ref, err := c.Arg(0, "URL")
 		if err != nil {

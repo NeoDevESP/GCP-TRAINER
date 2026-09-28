@@ -1,0 +1,81 @@
+id: ace-d19-secret-env
+title: "Day 19 · INC: an API key sits in a plain environment variable"
+summary: Move an exposed secret to Secret Manager, scope access to one identity and rotate the exposed value.
+track: ace-30
+day: 19
+level: intermediate
+branch: security
+type: incident
+skills: [security.secrets, iam.leastprivilege, compute.serverless]
+wellArchitected: [security]
+certs: [ACE, PCSE]
+difficulty: 3
+minutes: 60
+params:
+  exposed: [sk_live_51HxQ2exposedKEY, sk_live_77AbExposed9z]
+baseline: [default-network]
+setup: |
+  gcloud iam service-accounts create pay-sa --display-name="payments"
+  gcloud run deploy payments --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pay-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=API_KEY={{.exposed}} --allow-unauthenticated
+  echo -n "db-pass-123" | gcloud secrets create db-password --data-file=-
+traffic:
+  - {name: pay, target: "run:payments", path: /pay, rps: 10}
+story: |
+  **SEC-77 (high)** — A screenshot of `gcloud run services describe payments` was pasted in a
+  public chat. It shows the payment provider API key. The provider already issued a
+  replacement key for you: **`sk_live_ROTATED_{{.project}}`**.
+
+  Remove the secret from the configuration, serve the new key from Secret Manager to the
+  `payments` service only, and make sure the exposed value can never be served again.
+objectives:
+  - Detect where the secret is exposed
+  - Migrate it to Secret Manager and mount it in Cloud Run
+  - Grant access only to pay-sa on that secret
+  - Rotate the exposed value
+hints:
+  - text: "`--set-secrets=API_KEY=SECRET:latest` together with `--remove-env-vars=API_KEY`."
+  - text: "Grant `roles/secretmanager.secretAccessor` on the secret, not on the project."
+solution: |
+  gcloud run services describe payments --region={{.region}}
+  echo -n "sk_live_ROTATED_{{.project}}" | gcloud secrets create payments-api-key --data-file=-
+  gcloud secrets add-iam-policy-binding payments-api-key --member=serviceAccount:pay-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run services update payments --region={{.region}} --remove-env-vars=API_KEY --set-secrets=API_KEY=payments-api-key:latest
+  curl -s $(gcloud run services describe payments --region={{.region}} --format='value(status.url)')/pay
+evidence:
+  fields: [rootCause, prevention]
+  sample:
+    rootCause: The API key was stored as a plain environment variable in the Cloud Run configuration, visible to anyone with run.services.get and in screenshots.
+    prevention: Keep secrets in Secret Manager with per-secret IAM, rotate on exposure and add a CI policy check against secrets in environment variables.
+rubric:
+  - name: Detection
+    validator: evidence
+    points: 20
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[environment, entorno, env], [variable, config]], desc: "Where was the secret exposed?"}
+  - name: Migration
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV], desc: "No secrets in plain environment variables"}
+      - {type: exists, path: "runServices.payments.secrets.API_KEY", desc: "API_KEY served from Secret Manager"}
+      - {type: http, target: "run:payments", path: /pay, status: 200, desc: "Payments still work"}
+  - name: IAM
+    validator: security
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: "serviceAccount:pay-sa@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:db-password", expect: false, desc: "pay-sa must not read other secrets"}
+      - {type: no_basic_roles, members: ["serviceAccount:pay-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
+  - name: Rotation
+    validator: security
+    points: 15
+    checks:
+      - {type: count, collection: secrets, where: {versions: {regex: "sk_live_ROTATED"}}, min: 1, desc: "The new key is stored"}
+      - {type: count, collection: secrets, where: {versions: {regex: "{{.exposed}}\",\"state\":\"ENABLED"}}, max: 0, desc: "The exposed value is not served"}
+  - name: Evidence
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [prevention], keywords: [[rotat, rota], [secret manager, secret]], desc: "Prevention"}

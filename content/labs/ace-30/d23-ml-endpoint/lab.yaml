@@ -1,0 +1,70 @@
+id: ace-d23-ml-endpoint
+title: "Day 23 · Publish a controlled inference endpoint"
+summary: Serve a trained model on a Vertex AI endpoint with a dedicated identity, no GPUs, a caller with least privilege and monitoring.
+track: ace-30
+day: 23
+level: advanced
+branch: data
+type: challenge
+skills: [data.ml, iam.leastprivilege, architecture.cost]
+wellArchitected: [cost, security, operations]
+certs: [PMLE, PCA]
+difficulty: 3
+minutes: 60
+baseline: [default-network]
+setup: |
+  gcloud storage buckets create gs://models-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  echo "model" > model.bst
+  gcloud storage cp model.bst gs://models-{{.project}}/churn/v1/model.bst
+  gcloud iam service-accounts create predictor-sa
+  gcloud iam service-accounts create churn-app
+files:
+  request.json: |
+    {"instances": [{"tenure": 12, "plan": "pro", "tickets": 3}]}
+story: |
+  Data science trained `churn` (artifacts in `gs://models-{{.project}}/churn/v1/`, serving image
+  `europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest`). Publish it:
+
+  - endpoint `churn-endpoint` in {{.region}}, model deployed on `n1-standard-2`, 1–2 replicas, **no GPU**
+  - the model runs as `predictor-sa`
+  - only the application identity `churn-app` may call predictions (`roles/aiplatform.user` is acceptable for this lab)
+  - enable model monitoring and send a test request (`request.json`)
+objectives:
+  - Model uploaded and endpoint serving
+  - Successful test inference
+  - Controlled IAM for callers
+  - Monitoring enabled, cost bounded
+hints:
+  - text: "`gcloud ai models upload`, `gcloud ai endpoints create`, `gcloud ai endpoints deploy-model`."
+solution: |
+  gcloud ai models upload --region={{.region}} --display-name=churn --container-image-uri=europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest --artifact-uri=gs://models-{{.project}}/churn/v1/
+  gcloud ai endpoints create --region={{.region}} --display-name=churn-endpoint
+  gcloud ai endpoints deploy-model churn-endpoint --region={{.region}} --model=$(gcloud ai models list --region={{.region}} --format='value(id)') --display-name=churn-v1 --machine-type=n1-standard-2 --min-replica-count=1 --max-replica-count=2 --service-account=predictor-sa@{{.project}}.iam.gserviceaccount.com --traffic-split=0=100
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:churn-app@{{.project}}.iam.gserviceaccount.com --role=roles/aiplatform.user
+  gcloud ai endpoints update churn-endpoint --region={{.region}} --enable-monitoring
+  gcloud ai endpoints predict churn-endpoint --region={{.region}} --json-request=request.json
+rubric:
+  - name: Endpoint
+    validator: state
+    points: 30
+    checks:
+      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {minLen: 1}}, min: 1, desc: "Model deployed to the endpoint"}
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "predictor-sa"}}, min: 1, desc: "Runs as predictor-sa"}
+  - name: Inference
+    validator: functional
+    points: 30
+    checks:
+      - {type: count, collection: aiEndpoints, where: {predictionCount: {gte: 1}}, min: 1, desc: "A test prediction was served"}
+  - name: IAM
+    validator: security
+    points: 20
+    all: true
+    checks:
+      - {type: iam, principal: "serviceAccount:churn-app@{{.project}}.iam.gserviceaccount.com", permission: aiplatform.endpoints.predict, resource: project, desc: "The app can predict"}
+      - {type: no_basic_roles, members: ["serviceAccount:churn-app@{{.project}}.iam.gserviceaccount.com", "serviceAccount:predictor-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
+  - name: Monitoring & cost
+    validator: cost
+    points: 20
+    checks:
+      - {type: count, collection: aiEndpoints, where: {modelMonitoring: true}, min: 1, desc: "Monitoring enabled"}
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"acceleratorCount\":[1-9]"}}, max: 0, desc: "No GPUs"}

@@ -264,6 +264,24 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		ok, detail = c.policy(ch)
 	case "rollout":
 		ok, detail = c.rollout(ch)
+	case "secret_rotated":
+		sec := c.State.Projects[c.Project].Secrets[str(ch, "secret")]
+		ok, detail = false, "secret not found"
+		if sec != nil {
+			enabled := 0
+			ok, detail = true, "exposed value no longer served"
+			for _, v := range sec.Versions {
+				if v.State == "ENABLED" {
+					enabled++
+					if v.Data == str(ch, "exposedValue") {
+						ok, detail = false, fmt.Sprintf("version %d still contains the exposed value", v.ID)
+					}
+				}
+			}
+			if enabled == 0 {
+				ok, detail = false, "no enabled version"
+			}
+		}
 	case "session_config":
 		ok, detail = true, fmt.Sprintf("project=%s region=%s zone=%s", c.Session.Project, c.Session.Region, c.Session.Zone)
 		if v := str(ch, "project"); v != "" && c.Session.Project != v {

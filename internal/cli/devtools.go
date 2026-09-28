@@ -477,9 +477,23 @@ func (s *Session) bq(args []string, stdin string) (string, error) {
 		}
 		if len(c.Args) > 1 {
 			for _, fd := range strings.Split(c.Args[1], ",") {
-				n, typ, _ := strings.Cut(fd, ":")
-				t.Schema = append(t.Schema, sim.Field{Name: n, Type: strings.ToUpper(typ), Bytes: 8})
+				parts := strings.Split(fd, ":")
+				f := sim.Field{Name: parts[0], Type: "STRING", Bytes: 8}
+				if len(parts) > 1 {
+					f.Type = strings.ToUpper(parts[1])
+				}
+				if len(parts) > 2 {
+					fmt.Sscan(parts[2], &f.Bytes)
+				}
+				t.Schema = append(t.Schema, f)
 			}
+		}
+		// Simulator extension used by lab setups to model large historical tables.
+		if v := c.Str("sim_rows", ""); v != "" {
+			fmt.Sscan(v, &t.Rows)
+		}
+		if v := c.Str("sim_days", ""); v != "" {
+			fmt.Sscan(v, &t.PartitionDays)
 		}
 		ds.Tables[tn] = t
 		s.State.Audit(p.ID, s.Principal(), "bigquery.googleapis.com", "google.cloud.bigquery.v2.TableService.InsertTable", "projects/"+p.ID+"/datasets/"+dsn+"/tables/"+tn)
