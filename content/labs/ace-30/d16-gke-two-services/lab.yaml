@@ -1,0 +1,114 @@
+id: ace-d16-gke-two-services
+title: "Day 16 · Deploy a two-service app on GKE"
+summary: Deploy frontend and catalog Deployments with probes and Services and prove internal communication.
+track: ace-30
+day: 16
+level: intermediate
+branch: gke
+type: guided
+skills: [gke.workloads, gke.networking]
+wellArchitected: [reliability]
+certs: [ACE, PCDE]
+difficulty: 3
+minutes: 60
+baseline: [default-network]
+setup: |
+  gcloud container clusters create shop-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-2
+story: |
+  Deploy the shop on cluster **shop-gke** ({{.zone}}):
+
+  | Deployment | Image | Replicas | Port | Probes |
+  |---|---|---|---|---|
+  | catalog | europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0 | 2 | 8080 | `/healthz` |
+  | frontend | europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0 | 2 | 8080 | `/healthz` |
+
+  - `catalog` reachable inside the cluster as `http://catalog:8080`
+  - `frontend` gets `BACKEND_URL=http://catalog:8080/products` and is exposed publicly on port 80
+objectives:
+  - Correct Deployments and Services
+  - Readiness and liveness probes
+  - Internal communication frontend → catalog
+hints:
+  - text: "`gcloud container clusters get-credentials shop-gke --zone=...` first."
+  - text: "Service `targetPort` must match the container port."
+solution: |
+  gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+  cat > app.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: catalog}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: catalog}}
+    template:
+      metadata: {labels: {app: catalog}}
+      spec:
+        containers:
+        - name: catalog
+          image: europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8080}}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: catalog}
+  spec:
+    selector: {app: catalog}
+    ports: [{port: 8080, targetPort: 8080}]
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: frontend}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: frontend}}
+    template:
+      metadata: {labels: {app: frontend}}
+      spec:
+        containers:
+        - name: frontend
+          image: europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0
+          env: [{name: BACKEND_URL, value: "http://catalog:8080/products"}]
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8080}}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: frontend}
+  spec:
+    type: LoadBalancer
+    selector: {app: frontend}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  kubectl apply -f app.yaml
+  kubectl get pods
+  curl -s http://$(kubectl get svc frontend -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/shop || true
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: Both deployments have 2 ready pods; the frontend calls http://catalog:8080 via the ClusterIP service and /shop returns 200 through the LoadBalancer service.
+rubric:
+  - name: Kubernetes state
+    validator: state
+    points: 35
+    checks:
+      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog has 2 ready pods"}
+      - {type: k8s_ready, cluster: shop-gke, deployment: frontend, min: 2, desc: "frontend has 2 ready pods"}
+  - name: Probes
+    validator: state
+    points: 25
+    checks:
+      - {type: exists, path: "clusters[\"shop-gke\"].k8s.namespaces.default.deployments.catalog.template.containers[0].readinessProbe", expect: {port: 8080}, desc: "catalog readiness probe"}
+      - {type: exists, path: "clusters[\"shop-gke\"].k8s.namespaces.default.deployments.frontend.template.containers[0].livenessProbe", expect: {port: 8080}, desc: "frontend liveness probe"}
+  - name: Networking
+    validator: functional
+    points: 25
+    checks:
+      - {type: http, target: "k8s:shop-gke/frontend", path: /shop, status: 200, desc: "frontend → catalog works end to end"}
+  - name: Evidence
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[service, servicio], [ready, listo, pods]], desc: "Explain how you verified"}

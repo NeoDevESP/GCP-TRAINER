@@ -1,0 +1,87 @@
+id: ace-d15-cloud-build
+title: "Day 15 · Automatic builds: commit → Cloud Build → Artifact Registry"
+summary: Create a trigger that builds every commit on main with a dedicated service account and publishes an image tagged with the commit SHA.
+track: ace-30
+day: 15
+level: intermediate
+branch: devops
+type: challenge
+skills: [devops.cicd, devops.artifacts, security.supplychain]
+wellArchitected: [operations, security]
+certs: [ACE, PCDE]
+difficulty: 3
+minutes: 60
+baseline: [empty]
+setup: |
+  gcloud source repos create storefront
+  gcloud iam service-accounts create builder-sa --display-name="CI builder"
+files:
+  Dockerfile: |
+    FROM gcr.io/distroless/static
+    LABEL sim.behavior=web-frontend
+    COPY app /app
+    ENTRYPOINT ["/app"]
+  app: "(storefront binary)"
+story: |
+  Release engineering wants reproducible images:
+
+  - Docker repository `releases` in {{.region}}
+  - trigger `storefront-main` on repository `storefront`, branch `main`
+  - the build runs as **builder-sa** (not the default Cloud Build account), which may only push images
+  - images tagged with the commit (`$SHORT_SHA`)
+
+  Push your first commit and check the build.
+objectives:
+  - Pipeline from commit to artifact
+  - Reproducible, commit-tagged artifact
+  - Least-privilege build identity
+  - Evidence of the successful build
+hints:
+  - text: "A `cloudbuild.yaml` with a docker build + push step and `images:` using `${SHORT_SHA}`."
+  - text: "`roles/artifactregistry.writer` lets builder-sa push."
+solution: |
+  gcloud artifacts repositories create releases --repository-format=docker --location={{.region}}
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:builder-sa@{{.project}}.iam.gserviceaccount.com --role=roles/artifactregistry.writer
+  cat > cloudbuild.yaml <<'YAML'
+  steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -t, {{.region}}-docker.pkg.dev/$PROJECT_ID/releases/storefront:$SHORT_SHA, .]
+  images:
+  - {{.region}}-docker.pkg.dev/$PROJECT_ID/releases/storefront:$SHORT_SHA
+  options:
+    logging: CLOUD_LOGGING_ONLY
+  YAML
+  gcloud builds triggers create cloud-source-repositories --name=storefront-main --repo=storefront --branch-pattern='^main$' --build-config=cloudbuild.yaml --service-account=projects/{{.project}}/serviceAccounts/builder-sa@{{.project}}.iam.gserviceaccount.com
+  git init
+  git add .
+  git commit -m "first release"
+  git remote add origin https://source.developers.google.com/p/{{.project}}/r/storefront
+  git push origin main
+  gcloud builds list --limit=1
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: The trigger storefront-main built the commit with builder-sa and pushed storefront tagged with the short SHA; gcloud builds list shows SUCCESS.
+rubric:
+  - name: Pipeline
+    validator: functional
+    points: 40
+    checks:
+      - {type: build, trigger: true, imageRegex: "releases/storefront", desc: "A triggered build succeeded"}
+  - name: Artifact
+    validator: state
+    points: 25
+    checks:
+      - {type: build, trigger: true, imageRegex: "{{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:", shaTag: true, desc: "Image tagged with the commit SHA"}
+  - name: IAM
+    validator: security
+    points: 20
+    all: true
+    checks:
+      - {type: exists, path: "buildTriggers[\"storefront-main\"]", expect: {serviceAccount: "builder-sa@{{.project}}.iam.gserviceaccount.com"}, desc: "Trigger runs as builder-sa"}
+      - {type: no_basic_roles, members: ["serviceAccount:builder-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles for the builder"}
+  - name: Evidence
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[build, compil], [sha, commit]], desc: "Explain the evidence"}

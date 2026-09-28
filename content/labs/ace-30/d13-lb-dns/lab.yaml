@@ -1,0 +1,84 @@
+id: ace-d13-lb-dns
+title: "Day 13 · Publish two backends behind one load balancer and DNS"
+summary: Route / to the web tier and /products to the API tier through a global HTTP load balancer and publish it in Cloud DNS.
+track: ace-30
+day: 13
+level: intermediate
+branch: networking
+type: challenge
+skills: [networking.lb, networking.dns, networking.firewall]
+wellArchitected: [reliability, operations]
+certs: [ACE, PCNE]
+difficulty: 3
+minutes: 90
+params:
+  domain: [gcplab-shop.test, tienda-lab.test]
+baseline: [default-network]
+setup: |
+  gcloud compute instances create web-a --zone={{.zone}} --no-address --tags=web --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create api-a --zone={{.zone}} --no-address --tags=api --metadata=sim-preinstalled=docker-images,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0'
+  gcloud compute instance-groups unmanaged create web-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances web-ig --instances=web-a --zone={{.zone}}
+  gcloud compute instance-groups unmanaged create api-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances api-ig --instances=api-a --zone={{.zone}}
+story: |
+  Publish the shop at **http://www.{{.domain}}**:
+
+  - `/` → instance group `web-ig` (nginx, port 80)
+  - `/products` → instance group `api-ig` (catalog API, port 8080, health path `/healthz`)
+  - public DNS zone for `{{.domain}}` with an A record for `www`
+  - backends only accept traffic from Google's load balancers / health checkers
+objectives:
+  - Health checks, backend services and URL map with path routing
+  - Forwarding rule and DNS record
+  - Firewall scoped to the Google front-end ranges
+  - Both paths reachable through the DNS name
+hints:
+  - text: "Named ports map the backend service port name to each group's port."
+  - text: "Health checks and proxied traffic come from 35.191.0.0/16 and 130.211.0.0/22."
+  - text: "`gcloud compute url-maps add-path-matcher shop-map --path-matcher-name=paths --default-service=web-be --path-rules=/products=api-be`"
+solution: |
+  gcloud compute firewall-rules create allow-gfe --network=default --allow=tcp:80,tcp:8080 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=web,api
+  gcloud compute instance-groups set-named-ports web-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports api-ig --named-ports=http:8080 --zone={{.zone}}
+  gcloud compute health-checks create http web-hc --port=80 --request-path=/
+  gcloud compute health-checks create http api-hc --port=8080 --request-path=/healthz
+  gcloud compute backend-services create web-be --protocol=HTTP --port-name=http --health-checks=web-hc --global
+  gcloud compute backend-services add-backend web-be --instance-group=web-ig --instance-group-zone={{.zone}} --global
+  gcloud compute backend-services create api-be --protocol=HTTP --port-name=http --health-checks=api-hc --global
+  gcloud compute backend-services add-backend api-be --instance-group=api-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create shop-map --default-service=web-be
+  gcloud compute url-maps add-path-matcher shop-map --path-matcher-name=paths --default-service=web-be --path-rules=/products=api-be
+  gcloud compute target-http-proxies create shop-proxy --url-map=shop-map
+  gcloud compute addresses create shop-ip --global
+  gcloud compute forwarding-rules create shop-fr --global --target-http-proxy=shop-proxy --ports=80 --address=shop-ip
+  gcloud dns managed-zones create shop-zone --dns-name={{.domain}}. --description="shop"
+  gcloud dns record-sets create www.{{.domain}}. --zone=shop-zone --type=A --ttl=300 --rrdatas=$(gcloud compute addresses describe shop-ip --global --format='value(address)')
+  curl -s http://www.{{.domain}}/products
+rubric:
+  - name: Load balancer
+    validator: state
+    points: 35
+    checks:
+      - {type: count, collection: backendHealth, where: {healthy: true}, min: 2, desc: "Both backends healthy"}
+      - {type: count, collection: urlMaps, where: {pathMatchers: {regex: "/products"}}, min: 1, desc: "Path rule for /products"}
+  - name: Health
+    validator: functional
+    points: 20
+    checks:
+      - {type: http, target: "http://www.{{.domain}}", path: /, status: 200, desc: "/ through DNS"}
+  - name: DNS
+    validator: state
+    points: 20
+    checks:
+      - {type: count, collection: dnsZones, where: {dnsName: "{{.domain}}.", records: {regex: "www.{{.domain}}"}}, min: 1, desc: "A record for www"}
+  - name: Routing
+    validator: functional
+    points: 15
+    checks:
+      - {type: http, target: "http://www.{{.domain}}", path: /products, status: 200, desc: "/products routed to the API"}
+  - name: Test & scope
+    validator: security
+    points: 10
+    checks:
+      - {type: count, collection: firewalls, where: {sourceRanges: {contains: "0.0.0.0/0"}, targetTags: {regex: "web|api"}}, max: 0, desc: "Backends not exposed to the internet directly"}

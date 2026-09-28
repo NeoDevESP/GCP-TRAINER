@@ -1,0 +1,109 @@
+id: ace-d14-terraform
+title: "Day 14 · Reproduce the environment with Terraform"
+summary: Codify a network, firewall and VM in idempotent Terraform with variables and outputs.
+track: ace-30
+day: 14
+level: intermediate
+branch: devops
+type: challenge
+skills: [devops.iac, networking.vpc, compute.vm]
+wellArchitected: [operations]
+certs: [ACE, PCDE]
+difficulty: 3
+minutes: 90
+baseline: [empty]
+story: |
+  The staging environment was built by hand and nobody can reproduce it. Write Terraform
+  (in the Files tab or with `cat > main.tf`) that creates:
+
+  - network `stg-vpc` (custom) and subnet `stg-app` 10.50.0.0/24 in the region given by a **variable `region`**
+  - firewall `stg-allow-http` tcp:80 from anywhere to tag `app`
+  - VM `stg-app-1` (e2-small, tag `app`, nginx via startup script, public IP)
+  - an **output** with the VM name
+
+  `terraform plan` after `apply` must show **no changes**. SSH must not be open to the internet.
+objectives:
+  - Declarative, idempotent code
+  - Variables and outputs
+  - Correct structure and security
+hints:
+  - text: "Reference attributes (`google_compute_network.vpc.id`) instead of hard-coding names."
+  - text: "`access_config {}` inside `network_interface` gives an ephemeral public IP."
+solution: |
+  cat > main.tf <<'HCL'
+  variable "region" {
+    type    = string
+    default = "{{.region}}"
+  }
+  provider "google" {
+    project = "{{.project}}"
+    region  = var.region
+    zone    = "${var.region}-b"
+  }
+  resource "google_compute_network" "vpc" {
+    name                    = "stg-vpc"
+    auto_create_subnetworks = false
+  }
+  resource "google_compute_subnetwork" "app" {
+    name          = "stg-app"
+    ip_cidr_range = "10.50.0.0/24"
+    region        = var.region
+    network       = google_compute_network.vpc.id
+  }
+  resource "google_compute_firewall" "http" {
+    name          = "stg-allow-http"
+    network       = google_compute_network.vpc.name
+    source_ranges = ["0.0.0.0/0"]
+    target_tags   = ["app"]
+    allow {
+      protocol = "tcp"
+      ports    = ["80"]
+    }
+  }
+  resource "google_compute_instance" "app" {
+    name         = "stg-app-1"
+    machine_type = "e2-small"
+    tags         = ["app"]
+    boot_disk {
+      initialize_params {
+        image = "debian-cloud/debian-12"
+      }
+    }
+    network_interface {
+      subnetwork = google_compute_subnetwork.app.self_link
+      access_config {}
+    }
+    metadata_startup_script = "apt-get install -y nginx"
+  }
+  output "vm_name" {
+    value = google_compute_instance.app.name
+  }
+  HCL
+  terraform init
+  terraform plan
+  terraform apply -auto-approve
+  terraform plan
+rubric:
+  - name: IaC applied
+    validator: state
+    points: 40
+    checks:
+      - {type: exists, path: "networks[\"stg-vpc\"]", expect: {subnetMode: custom}, desc: "Network"}
+      - {type: exists, path: "subnets[\"stg-app\"]", expect: {ipCidrRange: 10.50.0.0/24}, desc: "Subnet"}
+      - {type: exists, path: "instances[\"stg-app-1\"]", expect: {machineType: e2-small, tags: {contains: app}}, desc: "VM"}
+      - {type: http, target: "vm:stg-app-1:80", status: 200, desc: "The VM serves HTTP"}
+  - name: Idempotence
+    validator: functional
+    points: 25
+    checks:
+      - {type: terraform_clean, minResources: 4, desc: "Second plan shows no changes"}
+  - name: Structure
+    validator: state
+    points: 20
+    checks:
+      - {type: terraform_clean, minResources: 4, requireVariables: [region], requireOutputs: true, desc: "Variables and outputs declared"}
+  - name: Security
+    validator: security
+    points: 15
+    checks:
+      - {type: forbid_firewall, port: 22, desc: "SSH not open to the internet"}

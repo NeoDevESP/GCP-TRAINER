@@ -437,6 +437,7 @@ func (s *State) ResolveHost(host string, from Endpoint) (string, bool) {
 			}
 		}
 	}
+	defer func() {}()
 	for _, pid := range SortedKeys(s.Projects) {
 		p := s.Projects[pid]
 		for _, zn := range SortedKeys(p.DNSZones) {
@@ -462,8 +463,16 @@ func (s *State) ResolveHost(host string, from Endpoint) (string, bool) {
 			}
 		}
 	}
+	for _, suffix := range publicInternet {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return "151.101.2.132", true
+		}
+	}
 	return "", false
 }
+
+// publicInternet are well-known internet domains resolvable by public DNS.
+var publicInternet = []string{"debian.org", "ubuntu.com", "google.com", "googleapis.com", "github.com", "pypi.org", "npmjs.org", "docker.io", "example.com", "exchangerate.example", "golang.org"}
 
 // NetworksConnected is the exported form of networksConnected.
 func (s *State) NetworksConnected(pa, na, pb, nb string) bool { return s.networksConnected(pa, na, pb, nb) }

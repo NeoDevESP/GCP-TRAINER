@@ -1,0 +1,70 @@
+id: ace-d11-app-403
+title: "Day 11 · The application gets 403 reading a bucket"
+summary: Identify the effective service account of a workload and grant exactly the read permission it needs.
+track: ace-30
+day: 11
+level: intermediate
+branch: iam
+type: challenge
+skills: [iam.serviceaccounts, iam.leastprivilege, storage.access]
+wellArchitected: [security]
+certs: [ACE, PCSE]
+difficulty: 3
+minutes: 45
+params:
+  sa: [worker-sa, exporter-sa, batch-reader]
+baseline: [default-network]
+setup: |
+  gcloud storage buckets create gs://exports-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  echo "id,total" > r.csv
+  gcloud storage cp r.csv gs://exports-{{.project}}/data/report.csv
+  gcloud iam service-accounts create {{.sa}}
+  gcloud iam service-accounts create report-sa
+  gcloud storage buckets add-iam-policy-binding gs://exports-{{.project}} --member=serviceAccount:report-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud run deploy report-worker --image=europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0 --region={{.region}} --service-account={{.sa}}@{{.project}}.iam.gserviceaccount.com --set-env-vars=BUCKET=exports-{{.project}} --allow-unauthenticated
+traffic:
+  - {name: reports, target: "run:report-worker", path: /reports, rps: 10}
+story: |
+  **Ticket OPS-588** — *"report-worker returns 403 since the migration. We already gave
+  `report-sa` access to the bucket, so IAM is fine."* Is it?
+objectives:
+  - Identify the identity the service really uses
+  - Grant only the read permission required, at the right level
+  - Validate the fix
+hints:
+  - text: "The application logs contain the principal that was denied."
+  - text: "`gcloud run services describe report-worker --region=...` shows the service account."
+solution: |
+  gcloud logging read 'severity>=ERROR' --limit=1 --format='value(textPayload)'
+  gcloud run services describe report-worker --region={{.region}} --format='value(serviceAccount)'
+  gcloud storage buckets add-iam-policy-binding gs://exports-{{.project}} --member=serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  curl -s $(gcloud run services describe report-worker --region={{.region}} --format='value(status.url)')/reports
+evidence:
+  fields: [rootCause]
+  sample:
+    rootCause: The service runs as {{.sa}}, not report-sa, and {{.sa}} lacked storage.objects.get, so Cloud Storage returned 403 permission denied.
+rubric:
+  - name: Effective identity
+    validator: evidence
+    points: 25
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [["{{.sa}}"]], desc: "Name the identity the service runs as"}
+  - name: Cause
+    validator: evidence
+    points: 25
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [["403", permission, permiso, denied, denegado]], desc: "Explain the denial"}
+  - name: Least privilege
+    validator: security
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: "serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:exports-{{.project}}/data/report.csv", desc: "Service can read the report"}
+      - {type: iam, principal: "serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:exports-{{.project}}/data/report.csv", expect: false, desc: "Service cannot delete"}
+      - {type: no_basic_roles, members: ["serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
+  - name: Validation
+    validator: functional
+    points: 20
+    checks:
+      - {type: http, target: "run:report-worker", path: /reports, status: 200, desc: "/reports works"}

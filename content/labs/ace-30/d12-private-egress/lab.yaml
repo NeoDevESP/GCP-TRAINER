@@ -1,0 +1,71 @@
+id: ace-d12-private-egress
+title: "Day 12 · INC: a private VM cannot download dependencies"
+summary: A build VM without public IP lost internet egress. Restore egress without giving it a public IP.
+track: ace-30
+day: 12
+level: intermediate
+branch: networking
+type: incident
+skills: [networking.nat, compute.troubleshooting, observability.incident]
+wellArchitected: [security, reliability]
+certs: [ACE, PCNE]
+difficulty: 3
+minutes: 45
+params:
+  vm: [builder-1, ci-runner, pkg-mirror]
+baseline: [empty]
+setup: |
+  gcloud compute networks create ops-vpc --subnet-mode=custom
+  gcloud compute networks subnets create private-ops --network=ops-vpc --range=10.40.0.0/24 --region={{.region}}
+  gcloud compute firewall-rules create ops-iap --network=ops-vpc --allow=tcp:22 --source-ranges=35.235.240.0/20
+  gcloud compute routers create ops-router --network=ops-vpc --region={{.region}}
+  gcloud compute routers nats create ops-nat --router=ops-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+  gcloud compute instances create {{.vm}} --zone={{.zone}} --subnet=private-ops --no-address --tags=build --metadata=startup-script='apt-get update && apt-get install -y nginx'
+faults:
+  - {type: nat_delete, router: ops-router, actor: "cost-cleanup@{{.project}}.iam.gserviceaccount.com"}
+story: |
+  **INC-2210** — *"{{.vm}} cannot `apt-get install` anything since last night. Just give it a
+  public IP?"* — Security policy forbids public IPs on build machines.
+objectives:
+  - Identify why egress stopped (use the serial console and audit logs)
+  - Restore egress without a public IP
+  - Keep SSH restricted to IAP
+  - Prove the VM can reach the internet
+hints:
+  - text: "`gcloud compute instances get-serial-port-output {{.vm}}` shows the startup errors."
+  - text: "Check the audit log for changes on routers: `gcloud logging read 'protoPayload.methodName:routers'`."
+solution: |
+  gcloud compute instances get-serial-port-output {{.vm}} --zone={{.zone}}
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:routers' --limit=3 --format='value(protoPayload.authenticationInfo.principalEmail,protoPayload.methodName)'
+  gcloud compute routers nats create ops-nat --router=ops-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+  gcloud compute ssh {{.vm}} --zone={{.zone}} --tunnel-through-iap --command='sudo apt-get update && curl -s -o /dev/null -w %{http_code} https://deb.debian.org'
+evidence:
+  fields: [rootCause]
+  sample:
+    rootCause: The Cloud NAT configuration ops-nat was removed from ops-router by cost-cleanup, so the private VM without external IP lost its egress route to the internet.
+rubric:
+  - name: Cause
+    validator: evidence
+    points: 30
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[nat], [egress, salida, internet, router]], desc: "Explain the missing egress path"}
+  - name: NAT restored
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: egress, from: "vm:{{.vm}}", desc: "The VM reaches the internet"}
+      - {type: exists, path: "routers[\"ops-router\"].nats[0]", desc: "Cloud NAT configured"}
+  - name: Security
+    validator: security
+    points: 20
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {natIP: {empty: true}}, desc: "No public IP on the build VM"}
+      - {type: forbid_firewall, port: 22, desc: "SSH only via IAP"}
+  - name: Test
+    validator: functional
+    points: 20
+    checks:
+      - {type: command, regex: "ssh .*(apt|curl)", desc: "Prove egress from the VM"}

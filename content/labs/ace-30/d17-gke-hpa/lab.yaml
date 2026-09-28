@@ -1,0 +1,99 @@
+id: ace-d17-gke-hpa
+title: "Day 17 · The app does not scale during the peak"
+summary: Make the Horizontal Pod Autoscaler work, generate load and demonstrate scale-out and scale-in.
+track: ace-30
+day: 17
+level: intermediate
+branch: gke
+type: challenge
+skills: [gke.autoscaling, gke.troubleshooting]
+wellArchitected: [performance, cost]
+certs: [ACE, PCDE]
+difficulty: 3
+minutes: 60
+baseline: [default-network]
+setup: |
+  gcloud container clusters create peak-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-4
+  cat > api.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: api}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: api}}
+    template:
+      metadata: {labels: {app: api}}
+      spec:
+        containers:
+        - name: api
+          image: europe-docker.pkg.dev/gcplab-public/apps/cpu-burner:1.0
+          ports: [{containerPort: 8080}]
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: api}
+  spec:
+    selector: {app: api}
+    ports: [{port: 8080, targetPort: 8080}]
+  ---
+  apiVersion: autoscaling/v2
+  kind: HorizontalPodAutoscaler
+  metadata: {name: api}
+  spec:
+    scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: api}
+    minReplicas: 1
+    maxReplicas: 6
+    metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 50}}
+  YAML
+  gcloud container clusters get-credentials peak-gke --zone={{.zone}}
+  kubectl apply -f api.yaml
+traffic:
+  - {name: api, target: "k8s:peak-gke/api", rps: 2}
+story: |
+  Black Friday rehearsal: `api` stayed at 1 replica while latency exploded.
+  The HPA exists (min 1, max 6, 50% CPU). Make it work and **demonstrate** scale-out
+  under load and scale-in when the load stops.
+objectives:
+  - Resource requests/limits so the HPA can compute utilisation
+  - HPA scaling out under generated load
+  - Scale-in after the load stops
+hints:
+  - text: "`kubectl describe hpa api` explains why it cannot compute metrics."
+  - text: "`kubectl run load --image=busybox -- /bin/sh -c 'while true; do wget -q -O- http://api:8080; done'`, then `sleep` to let time pass."
+solution: |
+  gcloud container clusters get-credentials peak-gke --zone={{.zone}}
+  kubectl describe hpa api
+  kubectl set resources deployment api --requests=cpu=200m,memory=128Mi --limits=cpu=500m,memory=256Mi
+  kubectl run load --image=busybox --restart=Never -- /bin/sh -c "while true; do wget -q -O- http://api:8080; done"
+  sleep 300
+  kubectl get hpa api
+  kubectl delete pod load
+  sleep 600
+  kubectl get hpa api
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: Without CPU requests the HPA showed unknown utilisation; after setting requests it scaled out to 6 replicas under load and scaled in after I deleted the load generator.
+rubric:
+  - name: Resources
+    validator: state
+    points: 30
+    checks:
+      - {type: exists, path: "clusters[\"peak-gke\"].k8s.namespaces.default.deployments.api.template.containers[0].requests", expect: {cpu: {regex: "m$|^[0-9.]+$"}}, desc: "CPU requests set"}
+  - name: HPA
+    validator: functional
+    points: 30
+    checks:
+      - {type: hpa_scaled, cluster: peak-gke, deployment: api, desc: "HPA scaled out"}
+  - name: Validation
+    validator: functional
+    points: 30
+    checks:
+      - {type: hpa_scaled, cluster: peak-gke, deployment: api, requireScaleIn: true, desc: "Scale-in demonstrated"}
+  - name: Explanation
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[request, solicitud], [scale, escal]], desc: "Explain the cause and demonstration"}
