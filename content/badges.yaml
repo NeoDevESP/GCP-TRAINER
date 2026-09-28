@@ -1,0 +1,19 @@
+badges:
+  # technical badges: branch mastery + number of passed labs in the branch
+  - {id: compute-operator, name: Compute Operator, kind: technical, branch: compute, minMastery: 60, minLabs: 3, description: "Operates VMs, MIGs and Cloud Run"}
+  - {id: iam-guardian, name: IAM Guardian, kind: technical, branch: iam, minMastery: 60, minLabs: 3, description: "Least privilege practitioner"}
+  - {id: network-troubleshooter, name: Network Troubleshooter, kind: technical, branch: networking, minMastery: 60, minLabs: 4, description: "Finds the packet's way"}
+  - {id: storage-keeper, name: Storage Keeper, kind: technical, branch: storage, minMastery: 60, minLabs: 2, description: "Secure, cheap, durable buckets"}
+  - {id: gke-operator, name: GKE Operator, kind: technical, branch: gke, minMastery: 60, minLabs: 3, description: "Runs workloads on GKE"}
+  - {id: sre-responder, name: SRE Responder, kind: technical, branch: observability, minMastery: 60, minLabs: 3, description: "Detects, mitigates and explains incidents"}
+  - {id: security-sentinel, name: Security Sentinel, kind: technical, branch: security, minMastery: 60, minLabs: 3, description: "Secrets, keys and exposure under control"}
+  - {id: data-engineer, name: Data Engineer, kind: technical, branch: data, minMastery: 60, minLabs: 3, description: "Pipelines and analytics on GCP"}
+  - {id: pipeline-builder, name: Pipeline Builder, kind: technical, branch: devops, minMastery: 60, minLabs: 3, description: "From commit to production, safely"}
+  - {id: db-operator, name: Database Operator, kind: technical, branch: databases, minMastery: 60, minLabs: 2, description: "Runs Cloud SQL like a pro"}
+  - {id: architect, name: Cloud Architect, kind: technical, branch: architecture, minMastery: 60, minLabs: 2, description: "Justifies trade-offs"}
+  # mastery badges: challenge + incident + delayed re-test without help
+  - {id: mastery-firewall, name: "Mastery · Firewall", kind: mastery, skill: networking.firewall, minMastery: 70}
+  - {id: mastery-least-privilege, name: "Mastery · Least privilege", kind: mastery, skill: iam.leastprivilege, minMastery: 70}
+  - {id: mastery-egress, name: "Mastery · Egress", kind: mastery, skill: networking.nat, minMastery: 70}
+  - {id: mastery-incident, name: "Mastery · Incident response", kind: mastery, skill: observability.incident, minMastery: 70}
+  - {id: mastery-secrets, name: "Mastery · Secrets", kind: mastery, skill: security.secrets, minMastery: 70}

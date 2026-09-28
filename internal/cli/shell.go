@@ -52,6 +52,9 @@ type Session struct {
 	LocalImages map[string]string  `json:"localImages"` // tag -> behaviour
 	NoTick      bool               `json:"-"`
 	Credentials map[string]string  `json:"credentials"` // activated SA key files
+	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
+	// take over a command before the simulator handles it.
+	Interceptor func(s *Session, args []string, stdin string) (handled bool, out string, err error) `json:"-"`
 }
 
 // KubeContext is the current kubectl context.
@@ -100,6 +103,12 @@ type exitErr struct {
 }
 
 func (e *exitErr) Error() string { return e.msg }
+
+// Fail builds an error with an exit code (exported for fidelity adapters).
+func Fail(code int, format string, a ...any) error { return fail(code, format, a...) }
+
+// RunArgs executes an already tokenised command inside the session.
+func (s *Session) RunArgs(args []string, stdin string) (string, error) { return s.run(args, stdin) }
 
 func fail(code int, format string, a ...any) error {
 	return &exitErr{code: code, msg: fmt.Sprintf(format, a...)}
@@ -469,6 +478,11 @@ func (s *Session) checkDenied(args []string) error {
 func (s *Session) run(args []string, stdin string) (string, error) {
 	if err := s.checkDenied(args); err != nil {
 		return "", err
+	}
+	if s.Interceptor != nil {
+		if handled, out, err := s.Interceptor(s, args, stdin); handled {
+			return out, err
+		}
 	}
 	switch args[0] {
 	case "gcloud":

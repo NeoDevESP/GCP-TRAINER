@@ -1,0 +1,95 @@
+# Skill taxonomy. Skills are *observable competences*, not topics:
+# "diagnoses why a workload cannot read an object and applies least privilege"
+# rather than "understands IAM".
+branches:
+  - id: foundations
+    name: Foundations
+    skills:
+      - {id: foundations.hierarchy, name: Resource hierarchy, observable: "Locates org, folders, projects, regions and zones and explains where a resource lives"}
+      - {id: foundations.cli, name: gcloud & Cloud Shell, observable: "Configures and verifies CLI context before operating"}
+      - {id: foundations.apis, name: APIs & org policy, observable: "Enables only the required APIs and respects organisation constraints"}
+      - {id: foundations.billing, name: Billing & budgets, observable: "Estimates cost, labels resources and configures budget alerts knowing they do not cap spend"}
+  - id: compute
+    name: Compute
+    skills:
+      - {id: compute.vm, name: Compute Engine VMs, observable: "Deploys a VM with the right zone, machine type, image, tags and startup script"}
+      - {id: compute.mig, name: Managed instance groups, observable: "Builds templates and MIGs with autoscaling and autohealing"}
+      - {id: compute.disks, name: Disks & snapshots, observable: "Protects and restores data with snapshots"}
+      - {id: compute.serverless, name: Cloud Run, observable: "Deploys and configures a container service with the right identity and ingress"}
+      - {id: compute.troubleshooting, name: Compute troubleshooting, observable: "Diagnoses unreachable or unhealthy workloads from evidence"}
+  - id: storage
+    name: Storage
+    skills:
+      - {id: storage.buckets, name: Buckets, observable: "Creates buckets in the required location and class"}
+      - {id: storage.lifecycle, name: Lifecycle & versioning, observable: "Automates retention and cost with lifecycle rules and versioning"}
+      - {id: storage.access, name: Object access control, observable: "Grants the minimum object access with UBLA and public access prevention"}
+      - {id: storage.encryption, name: Encryption, observable: "Protects data with CMEK and understands the service agent"}
+  - id: networking
+    name: Networking
+    skills:
+      - {id: networking.vpc, name: VPC & subnets, observable: "Designs custom VPCs and non-overlapping subnets"}
+      - {id: networking.firewall, name: Firewall rules, observable: "Reasons about priority, direction, tags and service accounts to allow only required traffic"}
+      - {id: networking.nat, name: Egress & Cloud NAT, observable: "Provides egress and Google API access without public IPs"}
+      - {id: networking.lb, name: Load balancing, observable: "Publishes backends through a load balancer with health checks"}
+      - {id: networking.dns, name: Cloud DNS, observable: "Publishes and troubleshoots public and private DNS"}
+      - {id: networking.hybrid, name: Hybrid connectivity, observable: "Chooses and builds VPN/Interconnect with dynamic routing"}
+      - {id: networking.peering, name: VPC peering & private access, observable: "Connects networks privately without overlapping ranges"}
+  - id: iam
+    name: IAM
+    skills:
+      - {id: iam.roles, name: Roles, observable: "Chooses predefined or custom roles instead of basic roles"}
+      - {id: iam.serviceaccounts, name: Service accounts, observable: "Identifies the effective identity of a workload and scopes its permissions"}
+      - {id: iam.leastprivilege, name: Least privilege, observable: "Grants only what is needed at the lowest level of the hierarchy"}
+      - {id: iam.conditions, name: IAM Conditions, observable: "Restricts access by time or resource with conditions"}
+      - {id: iam.impersonation, name: Impersonation, observable: "Uses short-lived credentials instead of keys"}
+      - {id: iam.orgpolicy, name: Organisation policy, observable: "Applies guardrails with org policy constraints"}
+  - id: security
+    name: Security
+    skills:
+      - {id: security.secrets, name: Secret Manager, observable: "Removes secrets from configuration, rotates and scopes access"}
+      - {id: security.kms, name: Cloud KMS, observable: "Manages keys, rotation and encrypter/decrypter separation"}
+      - {id: security.armor, name: Cloud Armor & exposure, observable: "Detects and closes unintended exposure"}
+      - {id: security.scc, name: Posture & findings, observable: "Triages Security Command Center findings by risk"}
+      - {id: security.audit, name: Audit & forensics, observable: "Reconstructs who did what from audit logs"}
+      - {id: security.supplychain, name: Supply chain, observable: "Builds from trusted sources with scoped build identities"}
+  - id: databases
+    name: Databases
+    skills:
+      - {id: databases.cloudsql, name: Cloud SQL, observable: "Creates instances, databases and users and connects privately"}
+      - {id: databases.ha, name: High availability & DR, observable: "Configures HA, backups, PITR and replicas"}
+      - {id: databases.performance, name: Performance, observable: "Correlates metrics, logs and queries to fix saturation"}
+  - id: data
+    name: Big Data / ML
+    skills:
+      - {id: data.bigquery, name: BigQuery, observable: "Designs partitioned/clustered tables and cheap queries"}
+      - {id: data.pubsub, name: Pub/Sub, observable: "Builds reliable messaging with push, pull and dead letters"}
+      - {id: data.pipelines, name: Pipelines, observable: "Connects producers, processing and sinks with failure handling"}
+      - {id: data.ml, name: ML serving, observable: "Serves a model with controlled identity, cost and monitoring"}
+  - id: gke
+    name: Kubernetes / GKE
+    skills:
+      - {id: gke.workloads, name: Workloads, observable: "Deploys Deployments/Services with probes and resources"}
+      - {id: gke.autoscaling, name: Autoscaling, observable: "Configures requests and HPA and demonstrates scale-out/in"}
+      - {id: gke.identity, name: Workload Identity, observable: "Grants pods Google access without node keys"}
+      - {id: gke.troubleshooting, name: GKE troubleshooting, observable: "Diagnoses CrashLoopBackOff, readiness and rollout failures"}
+      - {id: gke.networking, name: GKE networking, observable: "Exposes and isolates services (Service, Ingress, NetworkPolicy)"}
+  - id: devops
+    name: DevOps / CI-CD
+    skills:
+      - {id: devops.iac, name: Infrastructure as code, observable: "Writes idempotent Terraform with variables and outputs"}
+      - {id: devops.cicd, name: CI/CD, observable: "Automates build and publish from commits"}
+      - {id: devops.artifacts, name: Artifacts, observable: "Publishes reproducible, tagged images to Artifact Registry"}
+      - {id: devops.delivery, name: Progressive delivery, observable: "Releases with verification, canaries and rollback"}
+  - id: observability
+    name: Observability
+    skills:
+      - {id: observability.logging, name: Cloud Logging, observable: "Queries logs precisely and builds log-based metrics"}
+      - {id: observability.monitoring, name: Monitoring & alerting, observable: "Alerts on symptoms with actionable policies"}
+      - {id: observability.slo, name: SLI/SLO, observable: "Defines SLIs/SLOs and uptime checks"}
+      - {id: observability.incident, name: Incident response, observable: "Prioritises symptoms, isolates causes, restores and writes a postmortem"}
+  - id: architecture
+    name: Architecture
+    skills:
+      - {id: architecture.design, name: Solution design, observable: "Chooses between alternatives and justifies trade-offs"}
+      - {id: architecture.reliability, name: Reliability design, observable: "Designs for HA/DR against stated RTO/RPO"}
+      - {id: architecture.cost, name: Cost optimisation, observable: "Reduces cost without breaking requirements"}
