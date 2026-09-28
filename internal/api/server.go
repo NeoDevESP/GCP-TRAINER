@@ -36,7 +36,8 @@ type Server struct {
 	Pool      *fidelity.Pool
 	WebDir    string
 	Log       *slog.Logger
-	F2Monthly int // max real-cloud sessions per user per month
+	F2Monthly int               // max real-cloud sessions per user per month
+	Lib       *scenario.Library // failure library (incident generator)
 	mu        sync.Mutex
 	rl        map[string][]time.Time
 }
@@ -153,6 +154,25 @@ func (s *Server) Handler() http.Handler {
 		sort.Slice(att, func(i, j int) bool { return att[i].Started.After(att[j].Started) })
 		return att, err
 	})
+	h("GET /api/me/transcript", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		u := userOf(r)
+		att, _ := s.attemptsOf(u.ID)
+		p := s.Engine.Profile(*u, att, s.activeTrack(r))
+		return learning.NewTranscript(p, att, s.Tokens.Secret, time.Now()), nil
+	})
+	h("POST /api/auth/verify-transcript", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		var t learning.Transcript
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&t); err != nil {
+			return nil, err
+		}
+		return map[string]any{"valid": t.Verify(s.Tokens.Secret), "user": t.Name, "careerStage": t.Stage, "issued": t.Issued}, nil
+	})
+	h("GET /api/catalog/skills/graph", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return s.Cat.Graph(), nil
+	})
+	h("GET /api/catalog/career", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return s.Cat.Career, nil
+	})
 	h("GET /api/report/{track}", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		att, _ := s.attemptsOf(userOf(r).ID)
 		return s.Engine.Report(r.PathValue("track"), att), nil
@@ -173,12 +193,12 @@ func (s *Server) Handler() http.Handler {
 	h("GET /api/catalog", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		labs := []map[string]any{}
 		for _, id := range s.Cat.LabOrder {
-			labs = append(labs, labSummary(s.Cat.Labs[id]))
+			labs = append(labs, labSummary(s.Cat.Lab(id)))
 		}
 		return map[string]any{"branches": s.Cat.Branches, "tracks": s.Cat.Tracks, "certs": s.Cat.Certs, "badges": s.Cat.Badges, "labs": labs, "levels": learning.Levels}, nil
 	})
 	h("GET /api/labs/{id}", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		l := s.Cat.Labs[r.PathValue("id")]
+		l := s.Cat.Lab(r.PathValue("id"))
 		if l == nil {
 			return nil, httpErr{404, "lab not found"}
 		}
@@ -236,6 +256,8 @@ func (s *Server) Handler() http.Handler {
 		return map[string]bool{"ok": true}, s.Labs.PutFile(info.ID, req.Path, req.Content)
 	})
 	h("POST /api/sessions/{id}/hint", s.hint)
+	h("GET /api/failures", s.failureLibrary)
+	h("POST /api/incidents", s.generateIncident)
 	h("POST /api/sessions/{id}/check", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		_, info, err := s.ownSession(r)
 		if err != nil {
@@ -259,7 +281,7 @@ func (s *Server) Handler() http.Handler {
 			}
 			items = append(items, map[string]any{"name": it.Name, "earned": it.Earned, "points": it.Points, "failing": failing})
 		}
-		return map[string]any{"items": items, "mentor": mentor.Socratic(s.Cat.Labs[info.LabID], res)}, nil
+		return map[string]any{"items": items, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID), res)}, nil
 	})
 	h("POST /api/sessions/{id}/submit", s.submit)
 	h("POST /api/sessions/{id}/stop", func(w http.ResponseWriter, r *http.Request) (any, error) {
@@ -603,8 +625,7 @@ func (s *Server) ownSession(r *http.Request) (*learning.Attempt, *orchestrator.S
 }
 
 func (s *Server) start(w http.ResponseWriter, r *http.Request) (any, error) {
-	u := userOf(r)
-	l := s.Cat.Labs[r.PathValue("id")]
+	l := s.Cat.Lab(r.PathValue("id"))
 	if l == nil {
 		return nil, httpErr{404, "lab not found"}
 	}
@@ -612,6 +633,11 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request) (any, error) {
 		Fidelity string `json:"fidelity"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	return s.startLab(userOf(r), l, req.Fidelity)
+}
+
+// startLab creates an attempt and provisions a session (catalog or generated lab).
+func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity string) (any, error) {
 	prior, _ := s.attemptsOf(u.ID)
 	running := 0
 	for _, a := range prior {
@@ -622,7 +648,7 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request) (any, error) {
 	if running >= 3 {
 		return nil, httpErr{429, "you already have 3 running labs; stop one first"}
 	}
-	if strings.EqualFold(req.Fidelity, "F2") && s.F2Monthly > 0 {
+	if strings.EqualFold(fidelity, "F2") && s.F2Monthly > 0 {
 		n := 0
 		for _, a := range prior {
 			if a.Fidelity == "F2" && a.Started.Month() == time.Now().Month() {
@@ -635,8 +661,11 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	// each attempt gets a different variant so answers cannot be memorised
 	seed := int64(len(prior)*7919+int(time.Now().UnixNano()%9973)) + 1
+	if l.Generated != nil {
+		seed = l.Generated.Seed
+	}
 	att := learning.Attempt{ID: learning.NewID("a-"), UserID: u.ID, LabID: l.ID, Track: l.Track, Seed: seed, Started: time.Now(), Status: "running", HintsUsed: []int{}}
-	info, err := s.Labs.Start(orchestrator.StartRequest{UserID: u.ID, LabID: l.ID, Fidelity: req.Fidelity, Seed: seed, AttemptID: att.ID})
+	info, err := s.Labs.Start(orchestrator.StartRequest{UserID: u.ID, LabID: l.ID, Fidelity: fidelity, Seed: seed, AttemptID: att.ID, Gen: l.Generated})
 	if err != nil {
 		att.Status = "error"
 		now := time.Now()
@@ -651,6 +680,74 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request) (any, error) {
 	return info, nil
 }
 
+// generateIncident builds an incident from the failure library and starts it.
+func (s *Server) generateIncident(w http.ResponseWriter, r *http.Request) (any, error) {
+	if s.Lib == nil {
+		return nil, httpErr{404, "failure library not loaded"}
+	}
+	var spec scenario.GenSpec
+	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<10)).Decode(&spec); err != nil {
+		return nil, err
+	}
+	if spec.Seed == 0 {
+		spec.Seed = time.Now().UnixNano()%1000000 + 1
+	}
+	l, err := s.Lib.Generate(spec)
+	if err != nil {
+		return nil, err
+	}
+	s.Cat.AddGenerated(l)
+	_ = s.Store.Put("genlabs", l.ID, spec)
+	return s.startLab(userOf(r), l, "F0")
+}
+
+// LoadGenerated re-registers generated labs persisted in the store (after a restart).
+func (s *Server) LoadGenerated() {
+	if s.Lib == nil {
+		return
+	}
+	specs, _ := store.ListAs[scenario.GenSpec](s.Store, "genlabs")
+	for _, spec := range specs {
+		if l, err := s.Lib.Generate(spec); err == nil {
+			s.Cat.AddGenerated(l)
+		}
+	}
+}
+
+// failureLibrary exposes the symptom graph and systems (never solutions).
+func (s *Server) failureLibrary(w http.ResponseWriter, r *http.Request) (any, error) {
+	if s.Lib == nil {
+		return nil, httpErr{404, "failure library not loaded"}
+	}
+	type fv struct {
+		ID, Title, Symptom, Layer, Kind string
+		Skills                          []string
+	}
+	type sv struct {
+		ID, Title, Topology string
+		Failures            []fv
+	}
+	var systems []sv
+	for _, id := range sortedKeys(s.Lib.Systems) {
+		sys := s.Lib.Systems[id]
+		v := sv{ID: sys.ID, Title: sys.Title, Topology: sys.Topology}
+		for _, f := range sys.Failures {
+			v.Failures = append(v.Failures, fv{f.ID, f.Title, f.Symptom, f.Layer, f.Kind, f.Skills})
+		}
+		systems = append(systems, v)
+	}
+	return map[string]any{"symptoms": s.Lib.Symptoms, "contexts": s.Lib.Contexts, "systems": systems, "graph": s.Lib.SymptomGraph()}, nil
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (s *Server) hint(w http.ResponseWriter, r *http.Request) (any, error) {
 	att, info, err := s.ownSession(r)
 	if err != nil {
@@ -659,7 +756,7 @@ func (s *Server) hint(w http.ResponseWriter, r *http.Request) (any, error) {
 	if att == nil || att.Status != "running" {
 		return nil, fmt.Errorf("attempt not running")
 	}
-	l := s.Cat.Labs[info.LabID]
+	l := s.Cat.Lab(info.LabID)
 	if l.Type == "boss" {
 		return nil, httpErr{403, "boss battles have no hints"}
 	}
@@ -709,11 +806,11 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	u := userOf(r)
 	all, _ := s.attemptsOf(u.ID)
 	prof := s.Engine.Profile(*u, all, att.Track)
-	out := map[string]any{"result": res, "xp": att.XP, "bonus": att.Bonus, "bonusReasons": att.BonusReasons, "profile": prof, "mentor": mentor.Socratic(s.Cat.Labs[info.LabID], res)}
+	out := map[string]any{"result": res, "xp": att.XP, "bonus": att.Bonus, "bonusReasons": att.BonusReasons, "profile": prof, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID), res)}
 	if mentor.Enabled() && len(sub.Evidence) > 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()
-		if review, err := mentor.ReviewPostmortem(ctx, s.Cat.Labs[info.LabID], sub.Evidence); err == nil {
+		if review, err := mentor.ReviewPostmortem(ctx, s.Cat.Lab(info.LabID), sub.Evidence); err == nil {
 			out["postmortemReview"] = review
 		}
 	}

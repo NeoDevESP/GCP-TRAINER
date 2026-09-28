@@ -31,7 +31,11 @@ func main() {
 		byID[l.ID] = l
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /grade", orchestrator.HandleGrade(byID))
+	lib, err := scenario.LoadLibrary(filepath.Join(content, "failures"))
+	if err != nil {
+		log.Printf("failure library not loaded: %v", err)
+	}
+	mux.HandleFunc("POST /grade", orchestrator.HandleGrade(byID, lib))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	addr := os.Getenv("ADDR")
 	if addr == "" {

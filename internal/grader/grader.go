@@ -304,6 +304,8 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		}
 	case "log_contains":
 		ok, detail = c.logContains(ch)
+	case "ticket_update", "ticket_resolved", "asked":
+		ok, detail = c.deskCheck(res.Type, ch)
 	default:
 		return CheckResult{Type: res.Type, Desc: res.Desc, Detail: "unknown check type"}
 	}
@@ -1333,4 +1335,60 @@ func (c *Context) policy(ch scenario.Check) (bool, string) {
 		return false, strings.Join(hit, "; ")
 	}
 	return true, "policy " + pkg + " satisfied"
+}
+
+// deskCheck validates service-desk communication: stakeholder updates, the
+// resolution note and questions asked to simulated actors.
+func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
+	d := c.Session.Desk
+	if d == nil {
+		return false, "no service desk in this lab"
+	}
+	match := func(text string) bool {
+		groups := ch["keywords"]
+		gs, _ := groups.([]any)
+		t := normalize(text)
+		for _, g := range gs {
+			hit := false
+			alts, _ := g.([]any)
+			for _, a := range alts {
+				if strings.Contains(t, normalize(fmt.Sprint(a))) {
+					hit = true
+				}
+			}
+			if !hit {
+				return false
+			}
+		}
+		return true
+	}
+	switch typ {
+	case "ticket_update":
+		n := 0
+		for _, cm := range d.StudentComments(c.Session.Account) {
+			if (cm.Public || !boolean(ch, "public", true)) && len(strings.Fields(cm.Text)) >= 6 && match(cm.Text) {
+				n++
+			}
+		}
+		for _, cm := range d.StudentComments("student") {
+			if (cm.Public || !boolean(ch, "public", true)) && len(strings.Fields(cm.Text)) >= 6 && match(cm.Text) {
+				n++
+			}
+		}
+		return float64(n) >= num(ch, "min", 1), fmt.Sprintf("%d useful update(s)", n)
+	case "ticket_resolved":
+		if d.Ticket == nil || d.Ticket.Status != "RESOLVED" {
+			return false, "ticket not resolved"
+		}
+		return match(d.Ticket.Resolution), "resolved: " + d.Ticket.Resolution
+	case "asked":
+		n := 0
+		for _, q := range d.Questions {
+			if (str(ch, "actor") == "" || strings.EqualFold(q.Actor, str(ch, "actor"))) && (q.Useful || !boolean(ch, "useful", true)) {
+				n++
+			}
+		}
+		return float64(n) >= num(ch, "min", 1), fmt.Sprintf("%d relevant question(s)", n)
+	}
+	return false, "unknown desk check"
 }

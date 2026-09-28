@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/neodevesp/gcp-trainer/internal/scenario"
 	"gopkg.in/yaml.v3"
@@ -74,6 +75,30 @@ type Catalog struct {
 	Labs        map[string]*scenario.Lab `json:"-"`
 	LabOrder    []string                 `json:"-"`
 	skillBranch map[string]string
+
+	genMu     sync.RWMutex
+	generated map[string]*scenario.Lab
+}
+
+// Lab returns a lab by id, including labs created at runtime by the incident
+// generator.
+func (c *Catalog) Lab(id string) *scenario.Lab {
+	if l := c.Labs[id]; l != nil {
+		return l
+	}
+	c.genMu.RLock()
+	defer c.genMu.RUnlock()
+	return c.generated[id]
+}
+
+// AddGenerated registers a generated lab.
+func (c *Catalog) AddGenerated(l *scenario.Lab) {
+	c.genMu.Lock()
+	defer c.genMu.Unlock()
+	if c.generated == nil {
+		c.generated = map[string]*scenario.Lab{}
+	}
+	c.generated[l.ID] = l
 }
 
 // LoadCatalog reads content/{skills,tracks,badges,certs}.yaml and all labs.

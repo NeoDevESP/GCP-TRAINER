@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/desk"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,6 +113,21 @@ func Provision(base *Lab, seed int64, projectID string) (*World, error) {
 	st.Step(10)
 	sess := cli.NewSession(st, projectID, l.Student.Account)
 	sess.Policy = l.Policy
+	if l.Ticket != nil || len(l.Actors) > 0 {
+		d := &desk.Desk{Actors: l.Actors}
+		if l.Ticket != nil {
+			t := *l.Ticket
+			t.Comments = append([]desk.Comment{}, l.Ticket.Comments...)
+			if t.Status == "" {
+				t.Status = "NEW"
+			}
+			d.Ticket = &t
+			for _, a := range t.Attachments {
+				sess.Files[a.Name] = a.Content
+			}
+		}
+		sess.Desk = d
+	}
 	if l.Student.Unconfigured {
 		sess.Project = ""
 	}

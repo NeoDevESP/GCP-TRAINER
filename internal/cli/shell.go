@@ -6,6 +6,7 @@ package cli
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/desk"
 	"regexp"
 	"sort"
 	"strconv"
@@ -51,7 +52,8 @@ type Session struct {
 	DockerAuth  map[string]bool   `json:"dockerAuth"`
 	LocalImages map[string]string `json:"localImages"` // tag -> behaviour
 	NoTick      bool              `json:"-"`
-	Credentials map[string]string `json:"credentials"` // activated SA key files
+	Credentials map[string]string `json:"credentials"`    // activated SA key files
+	Desk        *desk.Desk        `json:"desk,omitempty"` // ticket and simulated actors
 	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
 	// take over a command before the simulator handles it.
 	Interceptor func(s *Session, args []string, stdin string) (handled bool, out string, err error) `json:"-"`
@@ -695,6 +697,8 @@ func (s *Session) run(args []string, stdin string) (string, error) {
 		return "", fail(1, "Use `gcloud compute ssh INSTANCE --command=\"...\"` to run commands on a VM.")
 	case "help":
 		return helpText, nil
+	case "ticket", "ask", "team":
+		return s.deskCmd(args, stdin)
 	case "watch":
 		return s.run(args[1:], stdin)
 	case "uuidgen":
@@ -869,6 +873,7 @@ const helpText = `GCP Lab Simulator terminal (F0). Available tools:
             expose, create, delete, run, exec, top
   terraform init, validate, plan, apply, destroy, output, fmt, show
   git, docker, curl, nc, ping, dig, psql
+  desk      ticket (show|comment|update|resolve|escalate), team, ask WHO "question"
   shell     echo, cat, ls, rm, export, env, grep, head, tail, wc, awk, cut,
             jq, base64, sleep (advances simulated time), history
 Tips: pipes (|), &&, ||, ;, > and >> redirections, heredocs (<<EOF) and
@@ -889,5 +894,6 @@ func (s *Session) Clone(st *sim.State) *Session {
 		c.Env[k] = v
 	}
 	c.Records = append([]ExecRecord{}, s.Records...)
+	c.Desk = s.Desk.Clone()
 	return &c
 }

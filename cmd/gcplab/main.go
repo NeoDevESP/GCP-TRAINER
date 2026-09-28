@@ -38,6 +38,10 @@ func main() {
 	content := env("CONTENT_DIR", "content")
 	scenario.BaselineDir = filepath.Join(content, "baselines")
 	grader.PolicyDir = filepath.Join(content, "policies")
+	lib, libErr := scenario.LoadLibrary(filepath.Join(content, "failures"))
+	if libErr != nil {
+		slog.Warn("failure library not loaded", "err", libErr)
+	}
 	cat, err := learning.LoadCatalog(content)
 	if err != nil {
 		log.Error("load catalog", "err", err)
@@ -93,6 +97,7 @@ func main() {
 	var svc *orchestrator.Service
 	if mode == "all" || mode == "labplane" {
 		svc = orchestrator.New(cat.Labs, router, st)
+		svc.Lib = lib
 		svc.GraderURL = os.Getenv("GRADER_URL")
 		svc.RunJanitor(30 * time.Second)
 		defer svc.Close()
@@ -111,7 +116,8 @@ func main() {
 		}
 		f2m, _ := strconv.Atoi(env("F2_MONTHLY", "10"))
 		srv := &api.Server{Cat: cat, Engine: &learning.Engine{Cat: cat}, Store: st, Labs: lp, Tokens: &learning.Tokens{Secret: []byte(secret), TTL: 12 * time.Hour},
-			Pool: pool, WebDir: env("WEB_DIR", "web/out"), Log: log, F2Monthly: f2m}
+			Pool: pool, WebDir: env("WEB_DIR", "web/out"), Log: log, F2Monthly: f2m, Lib: lib}
+		srv.LoadGenerated()
 		if iss := os.Getenv("OIDC_ISSUER"); iss != "" {
 			srv.OIDC = &learning.OIDC{Issuer: iss, ClientID: os.Getenv("OIDC_CLIENT_ID"), ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"), RedirectURL: os.Getenv("OIDC_REDIRECT_URL")}
 		}

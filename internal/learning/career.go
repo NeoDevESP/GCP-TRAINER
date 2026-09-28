@@ -89,7 +89,7 @@ func (e *Engine) stageNeeds(st CareerStage, branches map[string]float64, sm Stud
 	for _, c := range st.Capstones {
 		if !passed[c] {
 			title := c
-			if l := e.Cat.Labs[c]; l != nil {
+			if l := e.Cat.Lab(c); l != nil {
 				title = l.Title
 			}
 			need = append(need, "capstone: "+title)

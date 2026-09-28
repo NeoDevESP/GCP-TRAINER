@@ -137,7 +137,7 @@ func (e *Engine) ComputeKPIs(all []Attempt) KPIs {
 				break
 			}
 		}
-		lab := e.Cat.Labs[labID]
+		lab := e.Cat.Lab(labID)
 		if lab != nil && lab.Type == "capstone" {
 			capN++
 			if as[0].Passed {
@@ -210,7 +210,7 @@ func (e *Engine) ComputeKPIs(all []Attempt) KPIs {
 		total += len(b.Skills)
 	}
 	for _, a := range all {
-		if l := e.Cat.Labs[a.LabID]; l != nil && a.Status == "submitted" {
+		if l := e.Cat.Lab(a.LabID); l != nil && a.Status == "submitted" {
 			for _, s := range l.Skills {
 				covered[s] = true
 			}
@@ -289,7 +289,7 @@ func (e *Engine) Leaderboard(users []User, attempts []Attempt, league string) []
 				continue
 			}
 			d := 2.0
-			if l := e.Cat.Labs[a.LabID]; l != nil {
+			if l := e.Cat.Lab(a.LabID); l != nil {
 				d = float64(l.Difficulty)
 			}
 			pts += float64(a.XP) * d / 3

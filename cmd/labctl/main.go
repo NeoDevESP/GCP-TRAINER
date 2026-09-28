@@ -33,6 +33,10 @@ func usage() {
   labctl curriculum            compare tracks with the official learning paths
   labctl loadtest [-n 50] [-c 10]  concurrent provisioning/exec benchmark
   labctl stats                 catalogue statistics (labs, incidents, capstones)
+  labctl failures              failure library: symptom graph and systems
+  labctl generate -system ID [-difficulty 1-5] [-symptom S] [-failures a,b]
+                  [-context C] [-mode unknown] [-seed N] [-play]
+                               generate an incident (YAML) or play it
 
 Global: -content DIR (default ./content)
 `)
@@ -52,6 +56,13 @@ func main() {
 	n := fs.Int("n", 5, "count")
 	c := fs.Int("c", 8, "concurrency")
 	seed := fs.Int64("seed", 1, "seed")
+	system := fs.String("system", "three-tier", "failure-library system")
+	difficulty := fs.Int("difficulty", 3, "difficulty 1-5")
+	symptom := fs.String("symptom", "", "symptom id")
+	failures := fs.String("failures", "", "comma separated failure ids")
+	ctxID := fs.String("context", "", "business context id")
+	mode := fs.String("mode", "", "production or unknown")
+	play := fs.Bool("play", false, "play the generated incident")
 	_ = fs.Parse(os.Args[2:])
 	scenario.BaselineDir = filepath.Join(*content, "baselines")
 	grader.PolicyDir = filepath.Join(*content, "policies")
@@ -71,6 +82,20 @@ func main() {
 			}
 			if len(l.Objectives) == 0 {
 				problems = append(problems, fmt.Sprintf("lab %s: no objectives", l.ID))
+			}
+		}
+		lib, err := scenario.LoadLibrary(filepath.Join(*content, "failures"))
+		if err != nil {
+			problems = append(problems, "failure library: "+err.Error())
+		} else {
+			problems = append(problems, lib.Validate()...)
+			known := cat.SkillMap()
+			for _, f := range lib.Failures {
+				for _, sk := range f.Skills {
+					if _, ok := known[sk]; !ok {
+						problems = append(problems, fmt.Sprintf("failure %s: unknown skill %s", f.ID, sk))
+					}
+				}
 			}
 		}
 		sort.Strings(problems)
@@ -135,38 +160,48 @@ func main() {
 			fmt.Printf("seed %d: %s\n", i, b)
 		}
 	case "play":
-		l := loadLab(*content, *labID)
-		w, err := scenario.Provision(l, *seed, "lab-play-"+fmt.Sprint(*seed))
+		playLab(loadLab(*content, *labID), *seed)
+	case "curriculum":
+		curriculum(*content)
+	case "failures":
+		lib, err := scenario.LoadLibrary(filepath.Join(*content, "failures"))
 		if err != nil {
 			fail(err)
 		}
-		fmt.Printf("%s\n\n%s\n", w.Lab.Title, w.Lab.Story)
-		for _, o := range w.Lab.Objectives {
-			fmt.Println(" □", o)
+		for _, p := range lib.Validate() {
+			fmt.Println("✗", p)
 		}
-		fmt.Println("\nType commands; `:grade` to score, `:quit` to exit.")
-		in := bufio.NewScanner(os.Stdin)
-		for {
-			fmt.Printf("student@cloudshell:~ (%s)$ ", w.Project)
-			if !in.Scan() {
-				return
-			}
-			line := in.Text()
-			switch strings.TrimSpace(line) {
-			case ":quit":
-				return
-			case ":grade":
-				res := grader.Grade(w.Lab, w.State, w.Session, w.Project, labtest.SampleSubmission(w.Lab))
-				for _, it := range res.Items {
-					fmt.Printf("  %-32s %5.1f/%d\n", it.Name, it.Earned, it.Points)
+		last := ""
+		for _, e := range lib.SymptomGraph() {
+			if e.Symptom != last {
+				name := e.Symptom
+				if s := lib.Symptoms[e.Symptom]; s != nil {
+					name = s.Name
 				}
-				fmt.Printf("  score %d passed=%v\n", res.Score, res.Passed)
-				continue
+				fmt.Printf("\n%s\n", name)
+				last = e.Symptom
 			}
-			fmt.Print(w.Session.Exec(line).Output)
+			fmt.Printf("  ├─ %-15s %-24s %s [%s]\n", e.Layer, e.Failure, e.Title, e.System)
 		}
-	case "curriculum":
-		curriculum(*content)
+	case "generate":
+		lib, err := scenario.LoadLibrary(filepath.Join(*content, "failures"))
+		if err != nil {
+			fail(err)
+		}
+		spec := scenario.GenSpec{System: *system, Symptom: *symptom, Context: *ctxID, Difficulty: *difficulty, Mode: *mode, Seed: *seed}
+		if *failures != "" {
+			spec.Failures = strings.Split(*failures, ",")
+		}
+		l, err := lib.Generate(spec)
+		if err != nil {
+			fail(err)
+		}
+		if !*play {
+			b, _ := yaml.Marshal(l)
+			fmt.Print(string(b))
+			return
+		}
+		playLab(l, *seed)
 	case "stats":
 		cat, err := learning.LoadCatalog(*content)
 		if err != nil {
@@ -304,5 +339,49 @@ func curriculum(content string) {
 	}
 	if gaps > 0 {
 		os.Exit(3)
+	}
+}
+
+func playLab(l *scenario.Lab, seed int64) {
+	w, err := scenario.Provision(l, seed, "lab-play-"+fmt.Sprint(seed))
+	if err != nil {
+		fail(err)
+	}
+	fmt.Printf("%s\n\n%s\n", w.Lab.Title, w.Lab.Story)
+	for _, o := range w.Lab.Objectives {
+		fmt.Println(" □", o)
+	}
+	fmt.Println("\nType commands; `:grade` to score, `:solution` to replay the official solution, `:quit` to exit.")
+	in := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Printf("student@cloudshell:~ (%s)$ ", w.Project)
+		if !in.Scan() {
+			return
+		}
+		line := in.Text()
+		switch strings.TrimSpace(line) {
+		case ":quit":
+			return
+		case ":solution":
+			out, err := scenario.RunSolution(w)
+			fmt.Print(out)
+			if err != nil {
+				fmt.Println(err)
+			}
+			continue
+		case ":grade":
+			res := grader.Grade(w.Lab, w.State, w.Session, w.Project, labtest.SampleSubmission(w.Lab))
+			for _, it := range res.Items {
+				fmt.Printf("  %-32s %5.1f/%d\n", it.Name, it.Earned, it.Points)
+			}
+			fmt.Printf("  score %d passed=%v\n", res.Score, res.Passed)
+			if res.Process != nil {
+				for _, f := range res.Process.Factors {
+					fmt.Printf("  · %-14s %5.1f %s\n", f.Name, f.Score, strings.Join(f.Signal, "; "))
+				}
+			}
+			continue
+		}
+		fmt.Print(w.Session.Exec(line).Output)
 	}
 }

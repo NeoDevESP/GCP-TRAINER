@@ -109,7 +109,7 @@ func explicitness(typ, mode string) int {
 // dimensionsOf derives dimension scores (0..100) measured by one attempt.
 func (e *Engine) dimensionsOf(a Attempt) map[string]float64 {
 	out := map[string]float64{}
-	lab := e.Cat.Labs[a.LabID]
+	lab := e.Cat.Lab(a.LabID)
 	if lab == nil || a.Result == nil {
 		return out
 	}
@@ -210,7 +210,7 @@ func (e *Engine) Retention(attempts []Attempt, skills []SkillScore) []SkillReten
 	}
 	per := map[string]*st{}
 	for _, a := range submitted(attempts) {
-		lab := e.Cat.Labs[a.LabID]
+		lab := e.Cat.Lab(a.LabID)
 		if lab == nil || !a.Passed {
 			continue
 		}
@@ -249,7 +249,7 @@ func (e *Engine) Autonomy(attempts []Attempt) AutonomyStage {
 	}
 	var passes []pass
 	for _, a := range submitted(attempts) {
-		lab := e.Cat.Labs[a.LabID]
+		lab := e.Cat.Lab(a.LabID)
 		if lab == nil || !a.Passed || a.SolutionShown || len(a.HintsUsed) > 1 {
 			continue
 		}
@@ -321,7 +321,7 @@ func (e *Engine) RecurringErrors(attempts []Attempt) []ErrorPattern {
 		if a.Result == nil {
 			continue
 		}
-		lab := e.Cat.Labs[a.LabID]
+		lab := e.Cat.Lab(a.LabID)
 		var skills []string
 		if lab != nil {
 			skills = lab.Skills

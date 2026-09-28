@@ -169,7 +169,27 @@ func AssessProcess(lab *scenario.Lab, sess *cli.Session, res *Result, sub Submis
 	risk := 100 - 10*float64(len(pr.Destructive)) - 20*float64(len(pr.Violations))
 	add("risk", risk, pluralSig(len(pr.Destructive), "destructive command"), pluralSig(len(pr.Violations), "constraint violation"))
 	// Communication: incident updates / ticket comments.
-	add("communication", textQuality(sub.Evidence, []string{"update", "communication", "ticket", "status", "impact"}))
+	comm := textQuality(sub.Evidence, []string{"update", "communication", "ticket", "status", "impact"})
+	if d := sess.Desk; d != nil {
+		updates := 0
+		for _, cm := range d.StudentComments("student") {
+			if len(strings.Fields(cm.Text)) >= 6 {
+				updates++
+			}
+		}
+		asked := 0
+		for _, q := range d.Questions {
+			if q.Useful {
+				asked++
+			}
+		}
+		deskScore := math.Min(100, 35*float64(updates)+15*float64(asked))
+		if d.Ticket != nil && d.Ticket.Status == "RESOLVED" {
+			deskScore = math.Min(100, deskScore+30)
+		}
+		comm = math.Max(comm, deskScore)
+	}
+	add("communication", comm)
 	// Documentation: postmortem / runbook quality.
 	add("documentation", textQuality(sub.Evidence, []string{"rootCause", "prevention", "postmortem", "runbook", "explanation", "architecture", "fix"}))
 	// Autonomy: minimal assistance.

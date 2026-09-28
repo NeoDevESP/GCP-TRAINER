@@ -6,6 +6,7 @@ package scenario
 import (
 	"bytes"
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/desk"
 	"os"
 	"path/filepath"
 	"sort"
@@ -58,6 +59,9 @@ type Lab struct {
 	RetestOf        string              `yaml:"retestOf" json:"retestOf,omitempty"`
 	Timeline        []TimelineEvent     `yaml:"timeline" json:"timeline,omitempty"`
 	Constraints     []string            `yaml:"constraints" json:"constraints,omitempty"`
+	Ticket          *desk.Ticket        `yaml:"ticket" json:"ticket,omitempty"`       // service-desk framing (INC/REQ/CHG/PRB/SEC/COST/MIG)
+	Actors          []desk.Actor        `yaml:"actors" json:"actors,omitempty"`       // simulated people the learner can question
+	Generated       *GenSpec            `yaml:"generated" json:"generated,omitempty"` // set when built by the incident generator
 	Noise           []string            `yaml:"noise" json:"-"`
 	Dir             string              `yaml:"-" json:"-"`
 }

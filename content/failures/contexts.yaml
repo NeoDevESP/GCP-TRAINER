@@ -1,0 +1,30 @@
+# Business contexts for generated incidents (Blueprint §7: business context).
+contexts:
+  - id: checkout
+    company: Nebula Corporation
+    service: online checkout
+    impact: "Customers cannot pay; revenue loss is about 2,000 EUR per minute during the sales campaign."
+    reporter: Customer Support
+    priority: P2
+    constraints: [no-downtime, no-public]
+  - id: internal-reporting
+    company: Nebula Corporation
+    service: internal reporting portal
+    impact: "Finance cannot run the quarter-close reports due tomorrow."
+    reporter: Finance (Marta)
+    priority: P3
+    constraints: [no-basic-roles]
+  - id: partner-api
+    company: Nebula Corporation
+    service: partner API
+    impact: "Three logistics partners cannot submit shipments; contractual SLA penalties start in 2 hours."
+    reporter: Partner Success
+    priority: P2
+    constraints: [no-public, no-basic-roles]
+  - id: black-friday
+    company: Nebula Corporation
+    service: shop platform
+    impact: "Black Friday traffic peak: every minute of outage is front-page news."
+    reporter: Incident Commander
+    priority: P1
+    constraints: [no-downtime, no-public, no-basic-roles]

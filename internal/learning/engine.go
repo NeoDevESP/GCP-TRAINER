@@ -88,7 +88,7 @@ const BonusCap = 300
 // XP is earned by demonstrated competence: first pass awards score minus hint
 // costs; later attempts only award the improvement over the best previous XP.
 func (e *Engine) Award(a *Attempt, prior []Attempt) {
-	lab := e.Cat.Labs[a.LabID]
+	lab := e.Cat.Lab(a.LabID)
 	best := 0
 	passedBefore := false
 	var firstPass *Attempt
@@ -259,7 +259,7 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 	}
 	per := map[string]*acc{}
 	for _, a := range att {
-		lab := e.Cat.Labs[a.LabID]
+		lab := e.Cat.Lab(a.LabID)
 		if lab == nil {
 			continue
 		}
@@ -465,7 +465,7 @@ func (e *Engine) Badges(skills []SkillScore, branches map[string]float64, attemp
 	for _, a := range submitted(attempts) {
 		if a.Passed && !passed[a.LabID] {
 			passed[a.LabID] = true
-			if l := e.Cat.Labs[a.LabID]; l != nil {
+			if l := e.Cat.Lab(a.LabID); l != nil {
 				branchPassed[l.Branch]++
 			}
 		}
@@ -517,7 +517,7 @@ func (e *Engine) Recommend(skills []SkillScore, branches map[string]float64, att
 	if t := e.Cat.Track(trackID); t != nil {
 		for _, id := range t.Labs {
 			if !passed[id] {
-				recs = append(recs, Recommendation{LabID: id, Title: e.Cat.Labs[id].Title, Reason: "next step in " + t.Title, Kind: "next"})
+				recs = append(recs, Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Reason: "next step in " + t.Title, Kind: "next"})
 				break
 			}
 		}
@@ -544,7 +544,7 @@ func (e *Engine) Recommend(skills []SkillScore, branches map[string]float64, att
 		}
 		var cands []string
 		for _, id := range e.Cat.LabOrder {
-			l := e.Cat.Labs[id]
+			l := e.Cat.Lab(id)
 			if l.Branch == b.id && !passed[id] && l.Type != "boss" {
 				cands = append(cands, id)
 			}
@@ -557,7 +557,7 @@ func (e *Engine) Recommend(skills []SkillScore, branches map[string]float64, att
 	}
 	// retests due: equivalent scenario 7 days after first pass
 	for _, id := range e.Cat.LabOrder {
-		l := e.Cat.Labs[id]
+		l := e.Cat.Lab(id)
 		if l.RetestOf == "" || passed[id] {
 			continue
 		}
@@ -567,7 +567,7 @@ func (e *Engine) Recommend(skills []SkillScore, branches map[string]float64, att
 	}
 	// mock scenario when ACE readiness is high
 	for _, id := range e.Cat.LabOrder {
-		l := e.Cat.Labs[id]
+		l := e.Cat.Lab(id)
 		if l.Type == "boss" && !passed[id] && branches["networking"] >= 60 && branches["iam"] >= 60 {
 			recs = append(recs, Recommendation{LabID: id, Title: l.Title, Reason: "ACE mock scenario / boss battle", Kind: "mock"})
 			break
@@ -648,7 +648,7 @@ func (e *Engine) Report(trackID string, attempts []Attempt) TrackReport {
 	inTrack := map[string]bool{}
 	for _, id := range t.Labs {
 		inTrack[id] = true
-		if l := e.Cat.Labs[id]; l != nil && (l.Type == "incident" || l.Type == "boss") {
+		if l := e.Cat.Lab(id); l != nil && (l.Type == "incident" || l.Type == "boss") {
 			r.IncidentsTotal++
 		}
 	}
@@ -672,7 +672,7 @@ func (e *Engine) Report(trackID string, attempts []Attempt) TrackReport {
 			if len(a.HintsUsed) == 0 && !a.SolutionShown {
 				r.NoHints++
 			}
-			if l := e.Cat.Labs[id]; l != nil && (l.Type == "incident" || l.Type == "boss") {
+			if l := e.Cat.Lab(id); l != nil && (l.Type == "incident" || l.Type == "boss") {
 				r.IncidentsSolved++
 				mttr = append(mttr, a.DurationSec())
 			}

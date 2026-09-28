@@ -33,6 +33,8 @@ type StartRequest struct {
 	Fidelity  string `json:"fidelity"`
 	Seed      int64  `json:"seed"`
 	AttemptID string `json:"attemptId"`
+	// Gen asks the lab plane to generate the lab from its failure library.
+	Gen *scenario.GenSpec `json:"gen,omitempty"`
 }
 
 // SessionInfo is the public view of a session.
@@ -65,6 +67,9 @@ type SessionInfo struct {
 	Evidence     *scenario.Evidence       `json:"evidence,omitempty"`
 	Quiz         []scenario.Question      `json:"quiz,omitempty"`
 	Live         map[string]any           `json:"live"`
+	Gen          *scenario.GenSpec        `json:"gen,omitempty"`
+	Mode         string                   `json:"mode,omitempty"`
+	Type         string                   `json:"type,omitempty"`
 }
 
 // LabPlane is implemented by the in-process Service and by the HTTP client
@@ -96,12 +101,14 @@ type Service struct {
 	Router    *fidelity.Router
 	Store     store.Store
 	TTL       time.Duration
-	GraderURL string // optional remote grader worker
+	GraderURL string            // optional remote grader worker
+	Lib       *scenario.Library // failure library for generated incidents
 	OnExpire  func(info SessionInfo)
 	Now       func() time.Time
 
 	mu       sync.Mutex
 	sessions map[string]*Session
+	extra    map[string]*scenario.Lab // generated labs
 	stop     chan struct{}
 }
 
@@ -126,9 +133,39 @@ func projectID(user, lab string, seed int64) string {
 	return fmt.Sprintf("gcplab-%06x-%d", h.Sum32()&0xffffff, seed%10000)
 }
 
+// Register adds a lab created at runtime (incident generator, company sim).
+func (s *Service) Register(l *scenario.Lab) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.extra == nil {
+		s.extra = map[string]*scenario.Lab{}
+	}
+	s.extra[l.ID] = l
+}
+
+func (s *Service) lab(id string) *scenario.Lab {
+	if l := s.Labs[id]; l != nil {
+		return l
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.extra[id]
+}
+
 // Start provisions a lab.
 func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
-	l := s.Labs[req.LabID]
+	l := s.lab(req.LabID)
+	if l == nil && req.Gen != nil && s.Lib != nil {
+		g, err := s.Lib.Generate(*req.Gen)
+		if err != nil {
+			return nil, err
+		}
+		if req.LabID != "" && g.ID != req.LabID {
+			return nil, fmt.Errorf("generated lab id mismatch")
+		}
+		s.Register(g)
+		l, req.LabID = g, g.ID
+	}
 	if l == nil {
 		return nil, fmt.Errorf("lab %s not found", req.LabID)
 	}
@@ -179,6 +216,7 @@ func (s *Service) fillStatic(se *Session) {
 		se.Info.Evidence = &ev
 	}
 	se.Info.Quiz = l.Quiz
+	se.Info.Gen, se.Info.Mode, se.Info.Type = l.Generated, l.Mode, l.Type
 }
 
 func (s *Service) get(id string) (*Session, error) {
@@ -318,6 +356,12 @@ func (s *Service) View(id, kind string, params map[string]string) (any, error) {
 		v := st.ProjectView(p)
 		delete(v, "findings")
 		return v, nil
+	case "desk":
+		sess := se.Env.World.Session
+		if sess.Desk == nil {
+			return map[string]any{}, nil
+		}
+		return sess.Desk, nil
 	case "topology":
 		nodes, edges := st.Topology(p)
 		return map[string]any{"mermaid": st.Mermaid(p), "nodes": nodes, "edges": edges}, nil
@@ -483,7 +527,13 @@ func (s *Service) restore(id string) (*Session, error) {
 	if err := s.Store.Get("labsessions", id, &snap); err != nil {
 		return nil, err
 	}
-	base := s.Labs[snap.Info.LabID]
+	base := s.lab(snap.Info.LabID)
+	if base == nil && snap.Info.Gen != nil && s.Lib != nil {
+		if g, err := s.Lib.Generate(*snap.Info.Gen); err == nil {
+			s.Register(g)
+			base = g
+		}
+	}
 	if base == nil {
 		return nil, ErrNotFound
 	}
@@ -499,6 +549,9 @@ func (s *Service) restore(id string) (*Session, error) {
 	_ = json.Unmarshal(snap.Session, sess)
 	sess.State = st
 	sess.Policy = l.Policy
+	if sess.Desk != nil {
+		sess.Desk.Actors = l.Actors // facts are not persisted with the session
+	}
 	w := &scenario.World{Lab: l, Params: params, Project: snap.Info.Project, State: st, Session: sess, Seed: snap.Info.Seed}
 	se := &Session{Info: snap.Info, Lab: l, Env: &fidelity.Env{Level: fidelity.Level(snap.Info.Fidelity), World: w}}
 	s.fillStatic(se)
@@ -518,6 +571,9 @@ type GradeRequest struct {
 	State      json.RawMessage   `json:"state"`
 	Session    json.RawMessage   `json:"session"`
 	Submission grader.Submission `json:"submission"`
+	// Gen identifies a generated incident; the worker regenerates it from its
+	// own failure library instead of trusting a lab definition from the lab plane.
+	Gen *scenario.GenSpec `json:"gen,omitempty"`
 }
 
 // RemoteGrade calls an isolated grader worker (it executes probes against
@@ -526,7 +582,7 @@ type GradeRequest struct {
 func RemoteGrade(url, labID string, seed int64, w *scenario.World, sub grader.Submission) (*grader.Result, error) {
 	st, _ := w.State.Marshal()
 	sb, _ := json.Marshal(w.Session)
-	body, _ := json.Marshal(GradeRequest{LabID: labID, Seed: seed, Project: w.Project, State: st, Session: sb, Submission: sub})
+	body, _ := json.Marshal(GradeRequest{LabID: labID, Seed: seed, Project: w.Project, State: st, Session: sb, Submission: sub, Gen: w.Lab.Generated})
 	resp, err := http.Post(strings.TrimSuffix(url, "/")+"/grade", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -541,7 +597,8 @@ func RemoteGrade(url, labID string, seed int64, w *scenario.World, sub grader.Su
 }
 
 // HandleGrade is the grader worker's HTTP handler.
-func HandleGrade(labs map[string]*scenario.Lab) http.HandlerFunc {
+// lib may be nil when the worker has no failure library.
+func HandleGrade(labs map[string]*scenario.Lab, lib ...*scenario.Library) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req GradeRequest
 		if err := json.NewDecoder(io.LimitReader(r.Body, 32<<20)).Decode(&req); err != nil {
@@ -549,6 +606,11 @@ func HandleGrade(labs map[string]*scenario.Lab) http.HandlerFunc {
 			return
 		}
 		base := labs[req.LabID]
+		if base == nil && req.Gen != nil && len(lib) > 0 && lib[0] != nil {
+			if g, err := lib[0].Generate(*req.Gen); err == nil && g.ID == req.LabID {
+				base = g
+			}
+		}
 		if base == nil {
 			http.Error(w, "unknown lab", 404)
 			return

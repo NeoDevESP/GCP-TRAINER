@@ -1,0 +1,55 @@
+# Symptom graph (Blueprint §11). A symptom lists the layers to investigate in
+# causal order; the failure library maps each layer to concrete causes.
+symptoms:
+  - id: http-502
+    name: HTTP 502 Bad Gateway
+    description: The load balancer or proxy could not get a valid response from any backend.
+    layers: [dns, load-balancer, backend-health, firewall, timeout, application, k8s-readiness]
+    vague:
+      - "The website shows an error page for everyone."
+      - "Customers see 'Bad Gateway' when they open the shop."
+    misleading:
+      firewall: "Looks like the application crashed after last night's deploy."
+      backend-health: "Probably a network outage — nothing loads."
+      load-balancer: "The app servers must be overloaded, please add more."
+      application: "Looks like a network problem, nothing reaches the servers."
+      tags: "Looks like the database is down."
+  - id: http-500
+    name: HTTP 500/503 on a business endpoint
+    description: The service answers but a business path fails because a dependency is unavailable or rejects the request.
+    layers: [application, configuration, identity, network-path, database, quota]
+    vague:
+      - "Checkout fails for some customers, other pages work."
+      - "Orders cannot be placed; the home page is fine."
+    misleading:
+      identity: "Looks like the network between the API and the database is broken."
+      firewall: "The database must be overloaded again."
+      database: "It's the new release, please roll it back."
+      configuration: "Looks like a network issue to the database."
+      release: "Seems to be a permissions problem."
+      network-path: "The database password probably expired."
+  - id: timeout
+    name: Timeouts / service unavailable under load
+    description: Requests hang or return 503 when load increases.
+    layers: [capacity, connection-pool, autoscaling, database, network-path]
+    vague:
+      - "Everything is very slow and sometimes fails."
+    misleading:
+      connection-pool: "Looks like the database server needs a bigger machine."
+      capacity: "Must be a bug in the new code."
+  - id: data-exposure
+    name: Data or service exposed publicly
+    description: An external party reports access to data or an admin surface.
+    layers: [storage-iam, service-iam, firewall, org-policy]
+    vague:
+      - "A researcher says our files are visible on the internet."
+    misleading:
+      storage-iam: "Probably a leaked password on a laptop."
+  - id: cost-spike
+    name: Unexpected cost increase
+    description: Finance reports a sudden rise in spend.
+    layers: [compute, storage, network-egress, data-processing, idle-resources]
+    vague:
+      - "The bill doubled this month, what happened?"
+    misleading:
+      compute: "Probably BigQuery queries from the analysts."
