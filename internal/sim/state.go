@@ -894,7 +894,7 @@ type LogEntry struct {
 	HTTP      *HTTPRequestLog   `json:"httpRequest,omitempty"`
 	Proto     map[string]string `json:"protoPayload,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty"`
-	Project   string            `json:"-"`
+	Project   string            `json:"project,omitempty"`
 }
 
 type LogResource struct {

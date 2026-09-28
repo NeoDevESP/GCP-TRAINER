@@ -1,0 +1,65 @@
+id: ace-d08-logs-alert
+title: "Day 8 · Find the 500s and alert on them"
+summary: Query Cloud Logging to find the failing endpoint, then create a log-based metric and an alert that notifies the on-call team.
+track: ace-30
+day: 8
+level: basic
+branch: observability
+type: challenge
+skills: [observability.logging, observability.monitoring]
+wellArchitected: [operations, reliability]
+certs: [ACE, PCDE]
+difficulty: 2
+minutes: 45
+params:
+  svc: [shop-api, storefront]
+baseline: [default-network]
+setup: |
+  gcloud run deploy {{.svc}} --image=europe-docker.pkg.dev/gcplab-public/apps/shop-api:1.3 --region={{.region}} --allow-unauthenticated
+traffic:
+  - {name: products, target: "run:{{.svc}}", path: /products, rps: 30}
+  - {name: search, target: "run:{{.svc}}", path: /search, rps: 8}
+  - {name: checkout, target: "run:{{.svc}}", path: /checkout, rps: 10}
+story: |
+  Customer support: *"Some users get 'Internal Server Error' on the shop, not all of them."*
+  Find which endpoint of **{{.svc}}** fails, then make sure the on-call team
+  (`oncall@gcplab.dev`) is paged automatically next time.
+objectives:
+  - Precise log query that isolates HTTP 5xx
+  - Identify the defective endpoint
+  - Log-based metric counting the errors
+  - Alert policy on that metric with an email notification channel
+hints:
+  - text: "`gcloud logging read 'httpRequest.status>=500' --limit=10 --format='value(httpRequest.requestUrl)'`"
+  - text: "`gcloud logging metrics create NAME --log-filter=...`, then `gcloud alpha monitoring policies create` with `--condition-filter='metric.type=\"logging.googleapis.com/user/NAME\"'`."
+solution: |
+  gcloud logging read 'httpRequest.status>=500 resource.type="cloud_run_revision"' --limit=5 --format='value(httpRequest.requestUrl)'
+  gcloud logging metrics create shop-5xx --description="5xx on {{.svc}}" --log-filter='resource.type="cloud_run_revision" AND httpRequest.status>=500'
+  gcloud monitoring channels create --display-name=oncall --type=email --channel-labels=email_address=oncall@gcplab.dev
+  gcloud alpha monitoring policies create --display-name="{{.svc}} 5xx" --condition-display-name="5xx > 0" --condition-filter='metric.type="logging.googleapis.com/user/shop-5xx"' --if='> 0' --duration=60s --notification-channels=$(gcloud monitoring channels list --format='value(name)')
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: The endpoint /search returns HTTP 500 while /products and /checkout return 200; I filtered httpRequest.status>=500.
+rubric:
+  - name: Log query
+    validator: diagnosis
+    points: 35
+    checks:
+      - {type: command, regex: "logging read.*(status|severity)", desc: "Query logs filtering by status or severity"}
+  - name: Diagnosis
+    validator: evidence
+    points: 30
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [["/search", search]], desc: "Name the failing endpoint"}
+  - name: Alerting
+    validator: state
+    points: 25
+    checks:
+      - {type: log_metric, matchesErrors: true, desc: "A log-based metric counts the 5xx responses"}
+      - {type: alert_policy, filterContains: "logging.googleapis.com/user/", channel: true, desc: "Alert on the metric with a notification channel"}
+  - name: Explanation
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [["500", "5xx"]], desc: "Mention the status code"}

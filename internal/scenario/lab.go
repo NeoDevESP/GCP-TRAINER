@@ -79,8 +79,9 @@ type F2Spec struct {
 
 // Student configures the lab identity.
 type Student struct {
-	Account string   `yaml:"account" json:"account"`
-	Roles   []string `yaml:"roles" json:"roles"`
+	Account      string   `yaml:"account" json:"account"`
+	Roles        []string `yaml:"roles" json:"roles"`
+	Unconfigured bool     `yaml:"unconfigured" json:"unconfigured"` // start with no gcloud project set
 }
 
 // Hint is a progressive hint with an XP cost.
@@ -260,17 +261,17 @@ func (l *Lab) Variant(seed int64, projectID string) (*Lab, map[string]string, er
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	x := uint64(seed)*6364136223846793005 + 1442695040888963407
 	for _, k := range keys {
 		vals := l.Params[k]
 		if len(vals) == 0 {
 			continue
 		}
-		x = x*6364136223846793005 + 1442695040888963407
-		params[k] = vals[int((x>>33)%uint64(len(vals)))]
+		params[k] = vals[int(mix(uint64(seed), k)%uint64(len(vals)))]
 	}
-	if r, ok := params["region"]; ok && r != l.Region {
-		params["zone"] = r + "-b"
+	if _, hasZone := l.Params["zone"]; !hasZone {
+		if r, ok := params["region"]; ok && r != l.Region {
+			params["zone"] = r + "-b"
+		}
 	}
 	render := func(s string) (string, error) {
 		if !strings.Contains(s, "{{") {
@@ -310,4 +311,16 @@ func (l *Lab) Variant(seed int64, projectID string) (*Lab, map[string]string, er
 	v.Region, v.Zone = params["region"], params["zone"]
 	v.defaults()
 	return &v, params, nil
+}
+
+// mix is splitmix64 over the seed and parameter name (well-spread variants).
+func mix(seed uint64, key string) uint64 {
+	h := seed
+	for _, c := range key {
+		h = h*31 + uint64(c)
+	}
+	h += 0x9e3779b97f4a7c15
+	h = (h ^ (h >> 30)) * 0xbf58476d1ce4e5b9
+	h = (h ^ (h >> 27)) * 0x94d049bb133111eb
+	return h ^ (h >> 31)
 }

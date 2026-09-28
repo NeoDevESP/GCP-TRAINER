@@ -1,0 +1,76 @@
+id: ace-d01-context
+title: "Day 1 · Where am I? Organisation, project, region and CLI context"
+summary: Find the right project among several, configure gcloud defaults and verify your identity before operating.
+track: ace-30
+day: 1
+level: basic
+branch: foundations
+type: guided
+skills: [foundations.hierarchy, foundations.cli]
+wellArchitected: [operations]
+certs: [CDL, ACE]
+difficulty: 1
+minutes: 45
+params:
+  region: [europe-west1, europe-west4, us-central1]
+baseline: [default-network, decoy-projects]
+student:
+  unconfigured: true
+story: |
+  You joined the platform team today. Your manager wrote in the onboarding ticket:
+
+  > "Your sandbox is the project labelled `purpose=training-lab`. Never operate on
+  > production. All our workloads run in **{{.region}}**, zone **{{.zone}}**."
+instructions: |
+  1. List the organisations and projects you can see (`gcloud organizations list`, `gcloud projects list --format="table(projectId,labels)"`).
+  2. Identify the project whose label is `purpose=training-lab` and set it as the default project.
+  3. Set the default compute region and zone requested in the ticket.
+  4. Verify the active account and configuration (`gcloud auth list`, `gcloud config list`).
+  5. Explain where your project lives in the resource hierarchy (organisation → folder → project).
+objectives:
+  - Select the correct project (not production)
+  - Configure default region and zone
+  - Verify identity and context before operating
+  - Explain the resource hierarchy of your project
+hints:
+  - text: "`gcloud projects list --format='table(projectId,labels.purpose)'` shows the labels."
+  - text: "`gcloud projects get-ancestors PROJECT_ID` shows the folder and organisation."
+solution: |
+  gcloud organizations list
+  gcloud projects list --format='table(projectId,labels.purpose)'
+  gcloud config set project {{.project}}
+  gcloud config set compute/region {{.region}}
+  gcloud config set compute/zone {{.zone}}
+  gcloud auth list
+  gcloud config list
+  gcloud projects get-ancestors {{.project}}
+evidence:
+  prompt: Describe the hierarchy of your project and how you verified the context.
+  fields: [explanation]
+  minWords: 12
+  sample:
+    explanation: The project {{.project}} is inside the folder lab-sandboxes of the organisation training.gcplab.dev; I verified with gcloud config list and gcloud auth list before operating.
+rubric:
+  - name: Correct project selected
+    validator: state
+    points: 40
+    critical: true
+    checks:
+      - {type: session_config, project: "{{.project}}", desc: "The default project must be the training lab project"}
+  - name: CLI defaults configured
+    validator: state
+    points: 30
+    checks:
+      - {type: session_config, region: "{{.region}}", desc: "Default compute region as requested"}
+      - {type: session_config, zone: "{{.zone}}", desc: "Default compute zone as requested"}
+  - name: Context verified before operating
+    validator: diagnosis
+    points: 20
+    checks:
+      - {type: command, regex: "gcloud (auth list|config list)", desc: "Verify identity/configuration"}
+      - {type: command, regex: "gcloud projects (list|get-ancestors|describe)", desc: "Inspect the projects you can access"}
+  - name: Explanation
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[folder, carpeta, lab-sandboxes], [organi]], desc: "Mention folder and organisation"}

@@ -175,7 +175,21 @@ func list(ch scenario.Check, k string) []string {
 	return out
 }
 
+// normalizeCheck converts nested YAML maps into plain map[string]any.
+func normalizeCheck(ch scenario.Check) scenario.Check {
+	b, err := json.Marshal(ch)
+	if err != nil {
+		return ch
+	}
+	var out map[string]any
+	if json.Unmarshal(b, &out) != nil {
+		return ch
+	}
+	return scenario.Check(out)
+}
+
 func (c *Context) run(ch scenario.Check) (res CheckResult) {
+	ch = normalizeCheck(ch)
 	res.Type = str(ch, "type")
 	res.Desc = str(ch, "desc")
 	defer func() {
@@ -250,6 +264,17 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		ok, detail = c.policy(ch)
 	case "rollout":
 		ok, detail = c.rollout(ch)
+	case "session_config":
+		ok, detail = true, fmt.Sprintf("project=%s region=%s zone=%s", c.Session.Project, c.Session.Region, c.Session.Zone)
+		if v := str(ch, "project"); v != "" && c.Session.Project != v {
+			ok = false
+		}
+		if v := str(ch, "region"); v != "" && c.Session.Region != v {
+			ok = false
+		}
+		if v := str(ch, "zone"); v != "" && c.Session.Zone != v {
+			ok = false
+		}
 	case "log_contains":
 		ok, detail = c.logContains(ch)
 	default:

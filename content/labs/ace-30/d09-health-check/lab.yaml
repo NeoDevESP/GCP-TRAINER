@@ -1,0 +1,76 @@
+id: ace-d09-health-check
+title: "Day 9 · INC: the VM 'is down' but nginx is running"
+summary: The load balancer returns 502 although the web server works. Find why health checks fail and fix only the necessary rule.
+track: ace-30
+day: 9
+level: basic
+branch: networking
+type: incident
+skills: [networking.lb, networking.firewall, observability.incident]
+wellArchitected: [reliability]
+certs: [ACE]
+difficulty: 2
+minutes: 45
+params:
+  rule: [allow-lb-health, fw-hc-probes, hc-ingress]
+baseline: [default-network]
+setup: |
+  gcloud compute instances create web-a --zone={{.zone}} --machine-type=e2-small --no-address --tags=web --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute firewall-rules create {{.rule}} --network=default --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=web
+  gcloud compute instance-groups unmanaged create web-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances web-ig --instances=web-a --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports web-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute health-checks create http web-hc --port=80 --request-path=/
+  gcloud compute backend-services create web-be --protocol=HTTP --port-name=http --health-checks=web-hc --global
+  gcloud compute backend-services add-backend web-be --instance-group=web-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create web-map --default-service=web-be
+  gcloud compute target-http-proxies create web-proxy --url-map=web-map
+  gcloud compute forwarding-rules create web-lb --global --target-http-proxy=web-proxy --ports=80
+faults:
+  - {type: firewall_source, rule: "{{.rule}}", sourceRanges: [35.235.240.0/20], targetTags: [web], actor: "netops-script@{{.project}}.iam.gserviceaccount.com"}
+  - {type: log_noise, severity: WARNING, resourceType: gce_instance, lines: ["disk usage on web-a is 71%", "ntp: time adjusted by 3ms"]}
+traffic:
+  - {name: site, target: "lb:web-lb", path: /, rps: 30}
+story: |
+  **INC-1893** — *"The website shows 502 Bad Gateway. The VM must be down."*
+  SSH works and `systemctl status nginx` says active. Find the real cause.
+objectives:
+  - Identify why the load balancer considers the backend unhealthy
+  - Restore the site without exposing port 80 to the whole internet on the VM
+  - Validate recovery and write a short postmortem
+hints:
+  - text: "`gcloud compute backend-services get-health web-be --global` tells you what the LB sees."
+  - text: "Health checks come from Google front-end ranges, not from IAP."
+solution: |
+  gcloud compute backend-services get-health web-be --global
+  gcloud compute firewall-rules list --format='table(name,sourceRanges.list(),targetTags.list(),allowStr)'
+  gcloud compute firewall-rules update {{.rule}} --source-ranges=35.191.0.0/16,130.211.0.0/22
+  curl -s http://$(gcloud compute forwarding-rules describe web-lb --format='value(IPAddress)')
+evidence:
+  fields: [rootCause, prevention]
+  sample:
+    rootCause: The firewall rule for health checks allowed only 35.235.240.0/20 (IAP) instead of the health check ranges 35.191.0.0/16 and 130.211.0.0/22, so the backend was unhealthy and the LB returned 502.
+    prevention: Validate firewall changes in CI with a policy test and alert on unhealthy backends.
+rubric:
+  - name: Root cause
+    validator: evidence
+    points: 30
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[health], [firewall, cortafuegos], ["35.191", "130.211", rango, range]], desc: "Explain which traffic was blocked"}
+  - name: Fix
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: http, target: "lb:web-lb", path: /, status: 200, desc: "The site answers 200 through the LB"}
+      - {type: count, collection: firewalls, where: {sourceRanges: {contains: "0.0.0.0/0"}, rules: {regex: "\"80\""}}, max: 0, desc: "Port 80 must not be opened to 0.0.0.0/0"}
+  - name: Validation
+    validator: functional
+    points: 25
+    checks:
+      - {type: command, regex: "get-health|curl", desc: "Verify backend health / response"}
+  - name: Postmortem
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [prevention], keywords: [[test, alert, alerta, review, revis, policy, ci]], desc: "Preventive action"}

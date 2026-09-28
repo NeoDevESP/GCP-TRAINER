@@ -63,6 +63,8 @@ func DefaultImages() map[string]*Behavior {
 		"inventory-api": {Name: "inventory-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/stock"}, Deps: pg, PoolEnv: "DB_POOL_SIZE", Public: true},
 		"admin-portal": {Name: "admin-portal", Port: 8080, Health: "/", Paths: []string{"/", "/admin", "/healthz"}, Public: true},
 		"model-server": {Name: "model-server", Port: 8080, Health: "/health", Paths: []string{"/health", "/predict"}, Public: true},
+		"shop-api":    {Name: "shop-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/products", "/checkout", "/search"}, ErrorPaths: []string{"/search"}, Public: true, CPUPerRPS: 0.01},
+		"shop-api:1.4": {Name: "shop-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/products", "/checkout", "/search"}, Public: true, CPUPerRPS: 0.01},
 		"cpu-burner":   {Name: "cpu-burner", Port: 8080, Health: "/", CPUPerRPS: 0.08, Public: true},
 		"egress-app":   {Name: "egress-app", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/fx"}, Deps: []Dep{{Kind: "egress", Paths: []string{"/fx"}}}, Public: true},
 	}

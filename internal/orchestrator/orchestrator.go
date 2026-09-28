@@ -147,8 +147,6 @@ func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
 		return nil, fmt.Errorf("provision %s at %s: %w", l.ID, d.Level, err)
 	}
 	w := env.World
-	sess := w.Session
-	sess.Project, sess.Region, sess.Zone = w.Project, "", ""
 	id := fmt.Sprintf("s-%s-%d", strings.TrimPrefix(proj, "gcplab-"), s.now().UnixNano()%1e6)
 	info := SessionInfo{ID: id, UserID: req.UserID, LabID: l.ID, AttemptID: req.AttemptID, Project: w.Project, Region: w.Lab.Region, Zone: w.Lab.Zone,
 		Fidelity: string(d.Level), Reason: d.Reason, Seed: seed, Params: w.Params, Started: s.now(), Expires: s.now().Add(s.ttlFor(l)), Status: "running",

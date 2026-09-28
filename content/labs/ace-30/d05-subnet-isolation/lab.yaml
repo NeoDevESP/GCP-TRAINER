@@ -1,0 +1,78 @@
+id: ace-d05-subnet-isolation
+title: "Day 5 · Isolate frontend and backend"
+summary: Build a custom VPC with two subnets and allow only the traffic the application needs.
+track: ace-30
+day: 5
+level: basic
+branch: networking
+type: challenge
+skills: [networking.vpc, networking.firewall]
+wellArchitected: [security]
+certs: [ACE, PCNE]
+difficulty: 2
+minutes: 60
+params:
+  vpc: [shop-vpc, store-net, retail-vpc]
+  port: ["8080", "9000"]
+baseline: [empty]
+story: |
+  Design for the new shop:
+
+  | Tier | Subnet | Range | Exposure |
+  |---|---|---|---|
+  | frontend | `frontend` | 10.20.1.0/24 | HTTP 80 from the internet |
+  | backend  | `backend`  | 10.20.2.0/24 | tcp:{{.port}} **only from the frontend**, no public IP |
+
+  Network **{{.vpc}}** (custom mode) in {{.region}}. Create `fe-1` (nginx, tag `frontend`) and
+  `be-1` (`python3 -m http.server {{.port}}`, tag `backend`). Administrators connect through IAP only.
+objectives:
+  - Custom VPC with non-overlapping subnets
+  - VMs in the right subnets; backend without external IP
+  - Only required traffic authorised (tags, not wide ranges)
+  - Evidence that frontend reaches backend
+hints:
+  - text: "`--subnet-mode=custom`, then `gcloud compute networks subnets create`."
+  - text: "Backend VMs need no external IP (`--no-address`). IAP uses 35.235.240.0/20 on tcp:22."
+  - text: "Use `--source-tags=frontend --target-tags=backend` for the internal rule."
+solution: |
+  gcloud compute networks create {{.vpc}} --subnet-mode=custom
+  gcloud compute networks subnets create frontend --network={{.vpc}} --range=10.20.1.0/24 --region={{.region}}
+  gcloud compute networks subnets create backend --network={{.vpc}} --range=10.20.2.0/24 --region={{.region}}
+  gcloud compute instances create fe-1 --zone={{.zone}} --subnet=frontend --tags=frontend --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create be-1 --zone={{.zone}} --subnet=backend --no-address --tags=backend --metadata=startup-script='python3 -m http.server {{.port}}'
+  gcloud compute firewall-rules create {{.vpc}}-web --network={{.vpc}} --allow=tcp:80 --target-tags=frontend --source-ranges=0.0.0.0/0
+  gcloud compute firewall-rules create {{.vpc}}-fe-to-be --network={{.vpc}} --allow=tcp:{{.port}} --source-tags=frontend --target-tags=backend
+  gcloud compute firewall-rules create {{.vpc}}-iap --network={{.vpc}} --allow=tcp:22 --source-ranges=35.235.240.0/20
+  gcloud compute ssh fe-1 --zone={{.zone}} --tunnel-through-iap --command='curl -s http://be-1:{{.port}}/'
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: fe-1 reached be-1 on port {{.port}} using curl through IAP ssh; the rule uses source tag frontend and target tag backend.
+rubric:
+  - name: Topology
+    validator: state
+    points: 35
+    checks:
+      - {type: exists, path: "networks[\"{{.vpc}}\"]", expect: {subnetMode: custom}, desc: "Custom-mode VPC"}
+      - {type: exists, path: "subnets.frontend", expect: {ipCidrRange: 10.20.1.0/24, network: "{{.vpc}}"}, desc: "frontend subnet"}
+      - {type: exists, path: "subnets.backend", expect: {ipCidrRange: 10.20.2.0/24, network: "{{.vpc}}"}, desc: "backend subnet"}
+      - {type: exists, path: "instances[\"be-1\"]", expect: {subnetwork: backend, natIP: {empty: true}}, desc: "Backend VM private in backend subnet"}
+  - name: Routing
+    validator: functional
+    points: 20
+    checks:
+      - {type: tcp, from: "vm:fe-1", to: "vm:be-1", port: "{{.port}}", desc: "Frontend reaches backend"}
+      - {type: http, target: "vm:fe-1:80", status: 200, desc: "Frontend serves HTTP"}
+  - name: Firewall
+    validator: security
+    points: 35
+    all: true
+    checks:
+      - {type: forbid_firewall, port: "{{.port}}", desc: "Backend port not open to the internet"}
+      - {type: forbid_firewall, port: 22, desc: "SSH only through IAP"}
+      - {type: count, collection: firewalls, where: {sourceTags: {contains: frontend}, targetTags: {contains: backend}}, min: 1, desc: "Internal rule uses tags"}
+  - name: Evidence
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[curl, nc, ssh], [tag, etiqueta]], desc: "How you verified the path"}

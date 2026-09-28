@@ -1,0 +1,59 @@
+id: ace-d04-web-vm
+title: "Day 4 · A minimal web VM"
+summary: Deploy a small VM that serves HTTP from a startup script, exposed only on port 80 by network tag.
+track: ace-30
+day: 4
+level: basic
+branch: compute
+type: challenge
+skills: [compute.vm, networking.firewall]
+wellArchitected: [cost, security]
+certs: [ACE]
+difficulty: 2
+minutes: 45
+params:
+  vm: [web-1, landing-web, promo-web]
+  zone: [europe-west1-c, europe-west1-d]
+baseline: [default-network]
+story: |
+  Marketing needs a landing page **today**. Requirements:
+
+  - VM **{{.vm}}** in zone **{{.zone}}**, the smallest general-purpose shared-core machine that can run nginx (e2-micro or e2-small)
+  - nginx installed automatically at boot (startup script)
+  - HTTP (80) reachable from the internet **only for this VM**, using the network tag `web`
+objectives:
+  - VM with the requested name, zone and a small machine type
+  - nginx installed by a startup script
+  - Firewall rule for tcp:80 targeting the `web` tag
+  - Positive HTTP health test from the internet
+hints:
+  - text: "`--metadata=startup-script='apt-get install -y nginx'` or `--metadata-from-file=startup-script=FILE`."
+  - text: "A firewall rule without target tags applies to every VM in the network."
+solution: |
+  gcloud compute instances create {{.vm}} --zone={{.zone}} --machine-type=e2-small --tags=web --metadata=startup-script='apt-get update && apt-get install -y nginx'
+  gcloud compute firewall-rules create allow-web-http --network=default --allow=tcp:80 --target-tags=web --source-ranges=0.0.0.0/0
+  curl -s http://$(gcloud compute instances describe {{.vm}} --zone={{.zone}} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
+rubric:
+  - name: VM
+    validator: state
+    points: 35
+    checks:
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {zone: "{{.zone}}", status: RUNNING}, desc: "VM in the requested zone"}
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {tags: {contains: web}}, desc: "VM tagged web"}
+  - name: Application
+    validator: functional
+    points: 30
+    checks:
+      - {type: http, target: "vm:{{.vm}}:80", path: /, status: 200, desc: "HTTP 200 from the internet"}
+  - name: Network scope
+    validator: security
+    points: 20
+    checks:
+      - {type: count, collection: firewalls, where: {targetTags: {contains: web}, action: ALLOW}, min: 1, desc: "A rule targets the web tag"}
+      - {type: count, collection: firewalls, where: {rules: {regex: "\"80\""}, targetTags: {empty: true}, action: ALLOW, sourceRanges: {contains: "0.0.0.0/0"}}, max: 0, desc: "Port 80 must not be opened to every VM"}
+  - name: Cost
+    validator: cost
+    points: 15
+    checks:
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {machineType: {in: [e2-micro, e2-small]}}, desc: "Small machine type"}
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {gpus: 0}, desc: "No accelerators"}

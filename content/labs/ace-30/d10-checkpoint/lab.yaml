@@ -1,0 +1,96 @@
+id: ace-d10-checkpoint
+title: "Day 10 · ACE checkpoint: build a mini-stack from scratch"
+summary: Quiz plus a practical build combining VPC, Cloud Run, Storage, IAM and logging.
+track: ace-30
+day: 10
+level: basic
+branch: foundations
+type: capstone
+skills: [compute.serverless, iam.serviceaccounts, storage.access, networking.vpc, observability.logging]
+wellArchitected: [security, operations]
+certs: [ACE]
+difficulty: 3
+minutes: 90
+baseline: [empty]
+files:
+  report.csv: |
+    quarter,revenue
+    q3,42
+story: |
+  Build the **reports** mini-stack:
+
+  1. Custom VPC `ace-vpc` with subnet `ace-subnet` 10.30.0.0/24 in {{.region}} (future VMs).
+  2. Bucket `assets-{{.project}}` in {{.region}} with UBLA; upload `report.csv` to `data/report.csv`.
+  3. Service account `reports-sa` that can **only read** that bucket.
+  4. Cloud Run service `reports` (image `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) running as `reports-sa`, env `BUCKET=assets-{{.project}}`, public.
+  5. A log-based metric `reports-errors` for severity>=ERROR on Cloud Run.
+
+  Then answer the checkpoint quiz.
+objectives:
+  - Working /reports endpoint
+  - Least-privilege identity for the service
+  - Network foundation ready
+  - Observability in place and quiz answered
+quiz:
+  - id: q1
+    question: A VM without an external IP must download packages. What is the recommended option?
+    options: ["Add an external IP", "Cloud NAT on the subnet's region", "VPC peering with a public VPC", "Private Google Access"]
+    answer: [1]
+  - id: q2
+    question: Which statement about budgets is true?
+    options: ["They stop resources when exceeded", "They only alert (optionally via Pub/Sub automation)", "They apply only to Compute Engine", "They require billing admin on every project"]
+    answer: [1]
+  - id: q3
+    question: Where should you grant a role for reading a single bucket?
+    options: ["Organisation", "Folder", "Project", "The bucket"]
+    answer: [3]
+  - id: q4
+    question: Which firewall rule wins between ALLOW priority 1000 and DENY priority 900 matching the same traffic?
+    options: ["ALLOW", "DENY", "The newest", "Both are evaluated and ALLOW wins"]
+    answer: [1]
+  - id: q5
+    question: Which command sets the default zone for gcloud?
+    options: ["gcloud config set compute/zone ZONE", "gcloud compute zones set ZONE", "gcloud init --zone", "export ZONE"]
+    answer: [0]
+hints:
+  - text: "Grant `roles/storage.objectViewer` on the bucket to `serviceAccount:reports-sa@...`."
+solution: |
+  gcloud compute networks create ace-vpc --subnet-mode=custom
+  gcloud compute networks subnets create ace-subnet --network=ace-vpc --range=10.30.0.0/24 --region={{.region}}
+  gcloud storage buckets create gs://assets-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  gcloud storage cp report.csv gs://assets-{{.project}}/data/report.csv
+  gcloud iam service-accounts create reports-sa
+  gcloud storage buckets add-iam-policy-binding gs://assets-{{.project}} --member=serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud run deploy reports --image=europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0 --region={{.region}} --service-account=reports-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BUCKET=assets-{{.project}} --allow-unauthenticated
+  gcloud logging metrics create reports-errors --log-filter='resource.type="cloud_run_revision" AND severity>=ERROR'
+rubric:
+  - name: Functional
+    validator: functional
+    points: 40
+    checks:
+      - {type: http, target: "run:reports", path: /reports, status: 200, desc: "/reports returns the report"}
+  - name: IAM
+    validator: security
+    points: 20
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: "run:reports", permission: storage.objects.get, resource: "bucket:assets-{{.project}}/data/report.csv", desc: "Service reads the bucket"}
+      - {type: iam, principal: "run:reports", permission: storage.objects.create, resource: "bucket:assets-{{.project}}/data/x", expect: false, desc: "Service cannot write"}
+      - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
+  - name: Network
+    validator: state
+    points: 20
+    checks:
+      - {type: exists, path: "networks[\"ace-vpc\"]", expect: {subnetMode: custom}, desc: "Custom VPC"}
+      - {type: exists, path: "subnets[\"ace-subnet\"]", expect: {ipCidrRange: 10.30.0.0/24, region: "{{.region}}"}, desc: "Subnet"}
+  - name: Observability
+    validator: state
+    points: 10
+    checks:
+      - {type: log_metric, name: reports-errors, filterContains: [severity>=ERROR], desc: "Error metric"}
+  - name: Checkpoint quiz
+    validator: quiz
+    points: 10
+    checks:
+      - {type: quiz, ratio: 0.8, desc: "At least 4 of 5 correct"}

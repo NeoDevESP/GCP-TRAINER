@@ -31,6 +31,15 @@ type World struct {
 var builtinBaselines = map[string]func(st *sim.State, p *sim.Project){
 	"empty":           func(st *sim.State, p *sim.Project) {},
 	"default-network": func(st *sim.State, p *sim.Project) { st.DefaultNetwork(p) },
+	"decoy-projects": func(st *sim.State, p *sim.Project) {
+		for _, suffix := range []string{"-prod", "-legacy"} {
+			d := st.NewProject(p.ID+suffix, "folders/771300")
+			d.Labels["purpose"] = "production"
+			d.IAM.AddBinding("roles/viewer", "user:student@gcplab.dev", nil)
+		}
+		st.Folders["folders/771300"] = &sim.Folder{ID: "771300", DisplayName: "production", Parent: "organizations/240158832107"}
+		p.Labels["purpose"] = "training-lab"
+	},
 	"restricted-org": func(st *sim.State, p *sim.Project) {
 		st.Org.OrgPolicies["iam.allowedPolicyMemberDomains"] = &sim.OrgPolicy{Constraint: "iam.allowedPolicyMemberDomains", Enforce: true}
 		st.Org.OrgPolicies["storage.publicAccessPrevention"] = &sim.OrgPolicy{Constraint: "storage.publicAccessPrevention", Enforce: true}
@@ -103,6 +112,9 @@ func Provision(base *Lab, seed int64, projectID string) (*World, error) {
 	st.Step(10)
 	sess := cli.NewSession(st, projectID, l.Student.Account)
 	sess.Policy = l.Policy
+	if l.Student.Unconfigured {
+		sess.Project = ""
+	}
 	for k, v := range l.Files {
 		sess.Files[k] = v
 	}
