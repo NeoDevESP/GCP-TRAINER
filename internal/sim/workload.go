@@ -37,7 +37,7 @@ type Dep struct {
 
 // DefaultImages is the built-in image catalogue.
 func DefaultImages() map[string]*Behavior {
-	pg := []Dep{{Kind: "postgres", Env: "DB_HOST", Port: 5432}}
+	pg := []Dep{{Kind: "postgres", Env: "DB_HOST", Port: 5432, Paths: []string{"/checkout", "/cart", "/orders", "/stock"}}}
 	return map[string]*Behavior{
 		"nginx":    {Name: "nginx", Port: 80, Health: "/", Public: true, CPUPerRPS: 0.002},
 		"httpd":    {Name: "httpd", Port: 80, Health: "/", Public: true, CPUPerRPS: 0.002},

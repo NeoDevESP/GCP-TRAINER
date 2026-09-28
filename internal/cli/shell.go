@@ -860,3 +860,20 @@ const helpText = `GCP Lab Simulator terminal (F0). Available tools:
 Tips: pipes (|), &&, ||, ;, > and >> redirections, heredocs (<<EOF) and
 $(command) substitution are supported. Use the Files tab to edit files.
 `
+
+// Clone copies a session onto another state (grading, what-if analysis).
+func (s *Session) Clone(st *sim.State) *Session {
+	c := *s
+	c.State = st
+	c.NoTick = true
+	c.Files = map[string]string{}
+	for k, v := range s.Files {
+		c.Files[k] = v
+	}
+	c.Env = map[string]string{}
+	for k, v := range s.Env {
+		c.Env[k] = v
+	}
+	c.Records = append([]ExecRecord{}, s.Records...)
+	return &c
+}

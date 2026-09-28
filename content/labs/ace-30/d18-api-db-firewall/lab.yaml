@@ -1,0 +1,122 @@
+id: ace-d18-api-db-firewall
+title: "INC-2048: checkout-api cannot reach PostgreSQL"
+summary: Customers get HTTP 503 on checkout. Find the conflicting firewall rule and restore traffic without opening the database.
+track: ace-30
+day: 18
+level: intermediate
+branch: networking
+type: incident
+skills: [networking.firewall, observability.logging, compute.troubleshooting]
+wellArchitected: [reliability, security, operations]
+certs: [ACE, PCNE]
+difficulty: 3
+minutes: 45
+fidelity:
+  default: F0
+  supported: [F0, F2]
+  f2:
+    apis: [compute.googleapis.com, logging.googleapis.com]
+    budgetEur: 0.4
+    ttlMinutes: 60
+    studentRoles: [roles/compute.networkAdmin, roles/compute.securityAdmin, roles/logging.viewer, roles/compute.viewer, roles/iap.tunnelResourceAccessor, roles/compute.osLogin]
+params:
+  denyRule: [deny-internal, block-legacy-ranges, sec-baseline-deny]
+  priority: ["900", "800", "950"]
+baseline: [three-tier-app]
+story: |
+  **INC-2048 · SEV-2 · opened 09:02 by PagerDuty**
+
+  `checkout-api cannot reach PostgreSQL. Customers report HTTP 503 on /checkout.`
+
+  The security team applied a "network hardening baseline" last night. Nobody
+  admits to having touched the database path.
+timeline:
+  - {at: "08:51", from: "audit log", text: "firewall change by deploy-bot"}
+  - {at: "09:02", from: "PagerDuty", text: "checkout 5xx ratio > 80%"}
+  - {at: "09:05", from: "Support", text: "Customers cannot pay"}
+objectives:
+  - Identify the root cause using logs, firewall rules and connectivity tests
+  - Restore /checkout through the load balancer
+  - Preserve least privilege (the database must never be reachable from 0.0.0.0/0)
+  - Provide evidence and a short postmortem
+faults:
+  - type: firewall_deny
+    name: "{{.denyRule}}"
+    network: prod-vpc
+    priority: "{{.priority}}"
+    sourceRanges: [10.10.0.0/16]
+    targetTags: [database]
+    ports: ["5432"]
+    description: network hardening baseline
+    actor: deploy-bot@{{.project}}.iam.gserviceaccount.com
+traffic:
+  - {name: checkout, target: "lb:checkout-lb", path: /checkout, rps: 40}
+  - {name: health, target: "lb:checkout-lb", path: /healthz, rps: 5}
+student:
+  roles: [roles/owner]
+policy:
+  allowGpus: false
+  maxInstances: 6
+hints:
+  - text: "The API VM is healthy for the load balancer (/healthz) but /checkout needs the database. Look at the application error in Cloud Logging."
+  - text: "Compare the firewall rules that target the `database` tag. Lower number = higher priority, and on equal priority DENY wins."
+  - text: "Partial solution: an INGRESS DENY rule with a priority lower than 1000 matches traffic from 10.10.0.0/16 to tcp:5432."
+    kind: partial
+solution: |
+  gcloud logging read 'severity>=ERROR' --limit=5 --format='value(textPayload)'
+  gcloud compute firewall-rules list --filter='network:prod-vpc' --format='table(name,priority,direction,denyStr,allowStr,sourceRanges.list(),targetTags.list())'
+  gcloud compute ssh api-1 --zone={{.zone}} --tunnel-through-iap --command='nc -zv 10.10.3.5 5432' || true
+  gcloud compute firewall-rules update allow-api-to-db --priority=800
+  !gcloud compute firewall-rules update allow-api-to-db --priority=700
+  gcloud compute firewall-rules delete {{.denyRule}} --quiet
+  gcloud compute ssh api-1 --zone={{.zone}} --tunnel-through-iap --command='nc -zv 10.10.3.5 5432'
+evidence:
+  prompt: Explain the root cause, the fix, how you verified recovery and how to prevent it.
+  fields: [rootCause, fix, verification, prevention]
+  minWords: 25
+  keywords:
+    - [firewall, cortafuegos]
+    - [priority, prioridad]
+    - [deny, denegar, bloque]
+    - ["5432", postgres]
+  sample:
+    rootCause: A deny firewall rule with priority 900 matched 10.10.0.0/16 to tcp 5432 on the database tag and overrode the allow rule with priority 1000.
+    fix: Deleted the conflicting deny rule; the allow rule from the api tag to the database tag on 5432 now applies.
+    verification: nc from api-1 to 10.10.3.5 5432 succeeds and /checkout through the load balancer returns 200; errors stopped in Cloud Logging.
+    prevention: Review firewall changes in CI with policy checks and alert on 5xx ratio; document rule priorities.
+rubric:
+  - name: Symptom detected
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: command, regex: "(logging read|firewall-rules (list|describe))", desc: "Inspect logs or firewall rules before changing things"}
+  - name: Root cause identified
+    validator: evidence
+    points: 30
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[firewall, cortafuegos], [priority, prioridad, "900", "800", "950"], [deny, denegar, bloque]], desc: "Root cause must name the conflicting rule mechanism"}
+  - name: Fixed without regressions
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: tcp, from: "vm:api-1", to: "vm:sql-1", port: 5432, desc: "api-1 must reach PostgreSQL on 5432"}
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "/checkout through the load balancer must return 200"}
+      - {type: forbid_firewall, port: 5432, network: prod-vpc, desc: "The database must not be exposed to 0.0.0.0/0", critical: true}
+      - {type: tcp, from: internet, to: "vm:sql-1", port: 5432, expect: false, desc: "Database must stay unreachable from the internet"}
+  - name: Least privilege preserved
+    validator: security
+    points: 10
+    critical: true
+    checks:
+      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT, DB_PUBLIC_IP], desc: "No administrative/database port open to the internet"}
+  - name: Recovery verified
+    validator: functional
+    points: 5
+    checks:
+      - {type: evidence, fields: [verification], keywords: [[nc, curl, "200", logs, logging, http]], desc: "Describe how you verified recovery"}
+  - name: Postmortem & prevention
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [prevention], keywords: [[review, revisar, ci, policy, politica, alert, alerta, test]], desc: "Propose a preventive control"}
