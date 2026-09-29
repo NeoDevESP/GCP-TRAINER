@@ -1,5 +1,6 @@
 "use client";
 
+import { Checklist, StepGuide, Tour, TypeTag } from "@/components/learn";
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Nav from "@/components/Nav";
 import Terminal, { type TerminalHandle } from "@/components/Terminal";
@@ -10,7 +11,7 @@ import Bar from "@/components/Bar";
 import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { useI18n } from "@/lib/i18n";
-import { constraint, evidenceField, factor, hintKind, label, labLevel, labMode, labType, role, ticketStatus, validator } from "@/lib/labels";
+import { constraint, evidenceField, factor, hintKind, label, labLevel, labMode, role, ticketStatus, validator } from "@/lib/labels";
 import { Icon } from "@/components/console/icons";
 import type { SessionInfo } from "@/lib/types";
 
@@ -47,12 +48,14 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
     <div className="card" style={{ maxWidth: 900, margin: "0 auto" }}>
       <div className="row small muted">
         <span>{lab.track}{lab.day ? ` · ${t("día {n}", { n: lab.day })}` : ""}</span>
-        <span className="pill">{label(labType, lab.type, t)}</span>
+        <TypeTag type={lab.type} />
         <span className="pill">{label(labLevel, lab.level, t)}</span>
         <span>{lab.minutes} min</span>
       </div>
       <h1>{lab.title}</h1>
-      <Markdown text={lab.story || lab.summary} />
+      <StepGuide />
+      <h3>{t("Tu misión")}</h3>
+      <Markdown text={String(lab.story || lab.summary).replace(/\{\{\s*\.(\w+)\s*\}\}/g, "‹$1›")} />
       {lab.objectives?.length ? (
         <>
           <h3>{t("Objetivos")}</h3>
@@ -66,8 +69,8 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
         </>
       ) : null}
       {lab.rubric?.length ? (
-        <>
-          <h3>{t("Cómo se te evaluará")}</h3>
+        <details>
+          <summary><strong>{t("Cómo se te evaluará")}</strong></summary>
           <table>
             <tbody>
               {lab.rubric.map((r: any) => (
@@ -79,9 +82,17 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
               ))}
             </tbody>
           </table>
-        </>
+        </details>
       ) : null}
-      <div className="row" style={{ marginTop: 16 }}>
+      <div className="row" style={{ marginTop: 20 }}>
+        <button className="btn" onClick={start} disabled={busy} style={{ height: 40, padding: "0 24px" }}>
+          {busy ? t("Preparando el entorno…") : t("Empezar laboratorio")}
+        </button>
+        <span className="muted small">{t("No puedes romper nada: es un proyecto de prácticas que se crea solo para ti.")}</span>
+      </div>
+      <details style={{ marginTop: 12 }}>
+        <summary className="small muted">{t("Opciones avanzadas")}</summary>
+      <div className="row" style={{ marginTop: 8 }}>
         <label htmlFor="fid" style={{ margin: 0 }}>{t("Fidelidad")}</label>
         <select id="fid" value={fidelity} onChange={(e) => setFidelity(e.target.value)} style={{ width: 200 }}>
           {(lab.fidelity ?? ["F0"]).map((f: string) => (
@@ -90,10 +101,8 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
             </option>
           ))}
         </select>
-        <button className="btn" onClick={start} disabled={busy}>
-          {busy ? t("Preparando el entorno…") : t("Empezar laboratorio")}
-        </button>
       </div>
+      </details>
       {err && <p className="error">{err}</p>}
     </div>
   );
@@ -450,6 +459,7 @@ function Workspace({ session }: { session: SessionInfo }) {
         {panel === "desk" && desk && <Desk data={desk} />}
         {panel === "guide" && (
           <>
+            <StepGuide compact />
             <Markdown text={session.story} />
             {session.timeline?.length ? (
               <>
@@ -462,7 +472,7 @@ function Workspace({ session }: { session: SessionInfo }) {
             {session.objectives?.length ? (
               <>
                 <h3>{tr("Objetivos")}</h3>
-                <ul className="lp-list">{session.objectives.map((o) => <li key={o}>{o}</li>)}</ul>
+                <Checklist items={session.objectives} storeKey={`gcplab.obj.${session.id}`} />
               </>
             ) : null}
             {session.constraints?.length ? (
@@ -595,6 +605,7 @@ function Workspace({ session }: { session: SessionInfo }) {
         }
         editor={<ShellEditor sessionId={session.id} tick={tick} />}
       />
+      <Tour />
     </>
   );
 }

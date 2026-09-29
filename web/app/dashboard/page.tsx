@@ -7,7 +7,8 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { useI18n } from "@/lib/i18n";
 import { dimension, label, recKind } from "@/lib/labels";
-import type { Profile, Recommendation } from "@/lib/types";
+import type { LabSummary, Profile, Recommendation } from "@/lib/types";
+import { PathMap, TrackIcon, TypeLegend, TypeTag, StepGuide, labHref, nextLab, useProgress } from "@/components/learn";
 
 async function startRec(r: Recommendation) {
   if (r.gen) {
@@ -48,11 +49,34 @@ export default function Dashboard() {
   const [p, setP] = useState<Profile | null>(null);
   const [attempts, setAttempts] = useState<any[]>([]);
   const [err, setErr] = useState("");
-  const [track, setTrack] = useState("ace-30");
-  const [tracks, setTracks] = useState<{ id: string; title: string }[]>([]);
+  const [track, setTrackState] = useState("ace-30");
+  const [tracks, setTracks] = useState<{ id: string; title: string; description?: string; labs: string[] }[]>([]);
+  const [labs, setLabs] = useState<Record<string, LabSummary>>({});
+  const [fullPath, setFullPath] = useState(false);
+  const { state, running: runningLab } = useProgress();
   useEffect(() => {
-    api<{ tracks: { id: string; title: string }[] }>("/api/catalog")
-      .then((c) => setTracks(c.tracks ?? []))
+    try {
+      const saved = localStorage.getItem("gcplab.track");
+      if (saved) setTrackState(saved);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const setTrack = (id: string) => {
+    setTrackState(id);
+    setFullPath(false);
+    try {
+      localStorage.setItem("gcplab.track", id);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  useEffect(() => {
+    api<{ tracks: { id: string; title: string; description?: string; labs: string[] }[]; labs: LabSummary[] }>("/api/catalog")
+      .then((c) => {
+        setTracks(c.tracks ?? []);
+        setLabs(Object.fromEntries((c.labs ?? []).map((l) => [l.id, l])));
+      })
       .catch(() => {});
   }, [lang]);
 
@@ -77,12 +101,99 @@ export default function Dashboard() {
 
   const running = attempts.filter((a) => a.status === "running");
   const date = (d: string) => new Date(d).toLocaleDateString(lang === "en" ? "en-GB" : "es-ES");
+  const cur = tracks.find((x) => x.id === track) ?? tracks[0];
+  const curIndex = Math.max(0, tracks.findIndex((x) => x.id === cur?.id));
+  const pathLabs = (cur?.labs ?? []).map((id) => labs[id]).filter(Boolean) as LabSummary[];
+  const doneN = pathLabs.filter((l) => state[l.id] === "done").length;
+  const nextId = nextLab(pathLabs.map((l) => l.id), state);
+  const next = nextId ? labs[nextId] : undefined;
+  const nextIdx = next ? pathLabs.indexOf(next) : pathLabs.length;
+  const shown = fullPath ? pathLabs : pathLabs.slice(Math.max(0, nextIdx - 2), Math.max(0, nextIdx - 2) + 6);
   return (
     <>
       <Nav active="/dashboard" />
       <main id="main" className="page">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h1>{t("Hola de nuevo, {name}", { name: p.user.name })}</h1>
+          <div className="lt-chips">
+            <span className="lt-stat">{t("Nivel")} <strong>{p.level}</strong></span>
+            <span className="lt-stat"><strong>{p.xp}</strong> XP</span>
+            <span className="lt-stat"><strong>{p.labsPassed ?? 0}</strong> {t("laboratorios superados")}</span>
+            <span className="lt-stat"><strong>{p.streak}</strong> {t("días seguidos")}</span>
+          </div>
+        </div>
+
+        {cur && (
+          <section className="lt-hero" aria-labelledby="next-title">
+            <TrackIcon id={cur.id} index={curIndex} size={64} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {next ? (
+                <>
+                  <div className="lt-hero-kicker">{state[next.id] === "doing" ? t("Continúa donde lo dejaste") : doneN === 0 ? t("Empieza aquí") : t("Tu siguiente paso")} · {t("paso {n} de {total}", { n: nextIdx + 1, total: pathLabs.length })}</div>
+                  <h2 id="next-title">{next.title}</h2>
+                  <p>{next.summary}</p>
+                  <div className="row">
+                    <a className="btn" href={labHref(next.id, runningLab[next.id])}>{runningLab[next.id] ? t("Continuar laboratorio") : t("Empezar laboratorio")}</a>
+                    <TypeTag type={next.type} />
+                    <span className="muted small">{t("{n} min", { n: next.minutes })}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="lt-hero-kicker">{cur.title}</div>
+                  <h2 id="next-title">{t("¡Ruta completada!")}</h2>
+                  <p>{t("Has superado todos los laboratorios de esta ruta. Elige otra abajo.")}</p>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        <section className="lt-section" aria-labelledby="route-title">
+          <h2 id="route-title">{t("Tu ruta")}</h2>
+          <div className="lt-chips" role="group" aria-label={t("Elige una ruta")}>
+            {tracks.map((x, i) => (
+              <button key={x.id} type="button" className="lt-chip" aria-pressed={x.id === cur?.id} onClick={() => setTrack(x.id)}>
+                <TrackIcon id={x.id} index={i} size={22} /> {x.title}
+              </button>
+            ))}
+          </div>
+          {cur && (
+            <div className="grid two" style={{ marginTop: 16, alignItems: "start" }}>
+              <div className="card">
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <strong>{cur.title}</strong>
+                  <span className="muted small">{t("{n} de {total} superados", { n: doneN, total: pathLabs.length })}</span>
+                </div>
+                <div className="lt-bar" style={{ margin: "8px 0 12px" }} aria-hidden="true"><span style={{ width: `${pathLabs.length ? (doneN / pathLabs.length) * 100 : 0}%` }} /></div>
+                <PathMap labs={shown} state={state} running={runningLab} />
+                {pathLabs.length > shown.length || fullPath ? (
+                  <button type="button" className="btn secondary" style={{ marginTop: 8 }} onClick={() => setFullPath(!fullPath)}>
+                    {fullPath ? t("Ver menos") : t("Ver la ruta completa ({n} pasos)", { n: pathLabs.length })}
+                  </button>
+                ) : null}
+              </div>
+              <div className="col" style={{ gap: 16 }}>
+                <div className="card">
+                  <h3>{t("Cómo funciona un laboratorio")}</h3>
+                  <StepGuide stack />
+                </div>
+                <div className="card">
+                  <h3>{t("Tipos de laboratorio")}</h3>
+                  <TypeLegend />
+                </div>
+                <div className="card">
+                  <h3>{t("Recomendado para ti")}</h3>
+                  <RecList items={[...(p.adaptive ?? []), ...(p.recommendations ?? [])].filter((r) => r.labId !== next?.id).slice(0, 3)} />
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <details className="lt-more lt-section">
+          <summary>{t("Estadísticas detalladas: nivel, competencias, certificaciones y más")}</summary>
+        <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}>
           <button className="btn secondary" onClick={downloadTranscript}>
             {t("Descargar expediente firmado")}
           </button>
@@ -245,6 +356,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+        </details>
       </main>
     </>
   );

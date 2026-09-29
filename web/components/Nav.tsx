@@ -34,6 +34,8 @@ export function LangSwitch() {
 }
 
 function sideOpen(): boolean {
+  // On narrow screens the menu overlays the page: start closed there.
+  if (typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)").matches) return false;
   try {
     return localStorage.getItem("gcplab.side") !== "closed";
   } catch {
