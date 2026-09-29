@@ -1022,8 +1022,8 @@ export function BigQueryStudio({ ctx }: { ctx: Ctx }) {
               <Section title={t("Resultados de la consulta")}>
                 {res ? (
                   <>
-                    <p className={`cc-help ${res.exit ? "error" : ""}`}>{res.exit ? t("La consulta ha fallado.") : t("Consulta completada.")}</p>
-                    <pre className="cc-output">{res.output}</pre>
+                    <p className={`cc-help ${res.exit ? "error" : ""}`}>{res.exit ? t("La consulta ha fallado.") : t("Consulta completada.")} {bytesLine(res.output)}</p>
+                    {!res.exit && parseGrid(res.output) ? <ResultGrid grid={parseGrid(res.output)!} /> : <pre className="cc-output">{res.output}</pre>}
                   </>
                 ) : (
                   <p className="cc-empty">{t("Escribe una consulta y pulsa Ejecutar (Ctrl+Intro). Se ejecuta con bq query en Cloud Shell. Usa Validar para ver cuántos datos procesará antes de pagar por ella.")}</p>
@@ -1035,5 +1035,40 @@ export function BigQueryStudio({ ctx }: { ctx: Ctx }) {
       </div>
       {h.node}
     </section>
+  );
+}
+
+/** parseGrid reads the boxed table printed by bq query. */
+export function parseGrid(out: string): { cols: string[]; rows: string[][] } | null {
+  const lines = out.split("\n").filter((l) => l.startsWith("|"));
+  if (!lines.length) return null;
+  const cells = lines.map((l) => l.slice(1, l.lastIndexOf("|")).split("|").map((c) => c.trim()));
+  return { cols: cells[0], rows: cells.slice(1) };
+}
+
+function bytesLine(out: string) {
+  const m = out.match(/Bytes processed: ([^(\n]+)/);
+  return m ? `· ${m[1].trim()}` : "";
+}
+
+function ResultGrid({ grid }: { grid: { cols: string[]; rows: string[][] } }) {
+  const { t } = useI18n();
+  return (
+    <div className="cc-table-wrap">
+      <div className="cc-table-scroll">
+        <table className="cc-table">
+          <caption className="sr-only">{t("Resultados de la consulta")}</caption>
+          <thead>
+            <tr><th scope="col">{t("Fila")}</th>{grid.cols.map((c, i) => <th key={i} scope="col">{c}</th>)}</tr>
+          </thead>
+          <tbody>
+            {grid.rows.map((r, i) => (
+              <tr key={i}><td className="cc-muted">{i + 1}</td>{r.map((v, j) => <td key={j}>{v === "NULL" ? <span className="cc-muted">null</span> : v}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+        {!grid.rows.length && <p className="cc-empty">{t("La consulta no ha devuelto filas.")}</p>}
+      </div>
+    </div>
   );
 }

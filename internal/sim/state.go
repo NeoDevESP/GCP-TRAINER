@@ -6,6 +6,7 @@ package sim
 
 import (
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/sqlengine"
 	"math/rand"
 	"sort"
 	"strings"
@@ -577,7 +578,9 @@ type SQLInstance struct {
 	Connections        int               `json:"activeConnections"`
 	CPU                float64           `json:"cpuUtilization"`
 	SlowQueries        []string          `json:"slowQueries,omitempty"`
-	Indexes            []string          `json:"indexes,omitempty"`
+	// Data holds the tables and rows of each database.
+	Data    map[string]*sqlengine.DB `json:"data,omitempty"`
+	Indexes []string                 `json:"indexes,omitempty"`
 }
 
 type SQLBackup struct {
@@ -805,7 +808,11 @@ type Table struct {
 	Clustering             []string `json:"clustering,omitempty"`
 	Query                  string   `json:"query,omitempty"`
 	RequirePartitionFilter bool     `json:"requirePartitionFilter"`
-	ModelType              string   `json:"modelType,omitempty"`
+	// Data holds the table rows (in schema order). Sample marks a synthetic
+	// sample of a larger modelled table (numRows keeps the modelled size).
+	Data      [][]any `json:"data,omitempty"`
+	Sample    bool    `json:"sampleData,omitempty"`
+	ModelType string  `json:"modelType,omitempty"`
 }
 
 type Field struct {

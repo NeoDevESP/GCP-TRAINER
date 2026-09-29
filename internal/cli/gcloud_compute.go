@@ -667,7 +667,14 @@ func init() {
 			cmd = strings.Join(c.Args[1:], " ")
 		}
 		if cmd == "" {
-			return fmt.Sprintf("Connected to %s. Interactive shells are not available in the simulator; use --command=\"...\".\n", n), nil
+			c.Audit("compute.googleapis.com", "ssh", "projects/"+p.ID+"/zones/"+vm.Zone+"/instances/"+n)
+			c.S.Remote = &Remote{Kind: "ssh", Project: p.ID, VM: n, Zone: vm.Zone}
+			c.S.RootShell = false
+			img := vm.Image
+			if img == "" {
+				img = "debian-12"
+			}
+			return fmt.Sprintf("Linux %s 6.1.0-cloud-amd64 #1 SMP Debian x86_64 (%s)\n\nThe programs included with the Debian GNU/Linux system are free software.\nType \"exit\" to return to Cloud Shell.\n", n, img), nil
 		}
 		c.Audit("compute.googleapis.com", "ssh", "projects/"+p.ID+"/zones/"+vm.Zone+"/instances/"+n)
 		return c.S.vmExec(p, vm, cmd)

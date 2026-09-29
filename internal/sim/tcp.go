@@ -133,7 +133,7 @@ func (s *State) NatCovers(project, network, region, subnet string) bool {
 }
 
 // ApplySQL executes simple statements against a Cloud SQL instance model.
-func (s *State) ApplySQL(in *SQLInstance, sql string) string {
+func (s *State) ApplySQL(in *SQLInstance, db, sql string) string {
 	q := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(sql), ";"))
 	l := strings.ToLower(q)
 	switch {
@@ -159,6 +159,7 @@ func (s *State) ApplySQL(in *SQLInstance, sql string) string {
 			keep = append(keep, sq)
 		}
 		in.SlowQueries = keep
+		s.RunSQL(in, db, q)
 		return "CREATE INDEX"
 	case strings.HasPrefix(l, "show max_connections"):
 		return fmt.Sprintf(" max_connections \n-----------------\n %d\n(1 row)", DBMaxConnections(in))
@@ -175,10 +176,6 @@ func (s *State) ApplySQL(in *SQLInstance, sql string) string {
 			}
 			return fmt.Sprintf("ERROR:  role \"%s\" does not exist", user)
 		}
-	case strings.HasPrefix(l, "create database"):
-		f := strings.Fields(q)
-		in.Databases = append(in.Databases, strings.Trim(f[len(f)-1], `"`))
-		return "CREATE DATABASE"
 	case strings.HasPrefix(l, "explain"):
 		for _, sq := range in.SlowQueries {
 			if strings.Contains(strings.ToLower(sq), strings.ToLower(strings.TrimPrefix(strings.TrimPrefix(q, "EXPLAIN"), "explain"))[1:min(30, len(q)-8)]) {
@@ -195,7 +192,7 @@ func (s *State) ApplySQL(in *SQLInstance, sql string) string {
 			}
 			return b.String() + fmt.Sprintf("(%d rows)", len(in.SlowQueries))
 		}
-		return " ?column? \n----------\n        1\n(1 row)"
 	}
-	return "OK"
+	out, _ := s.RunSQL(in, db, q)
+	return out
 }

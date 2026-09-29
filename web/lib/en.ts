@@ -1430,4 +1430,6 @@ export const en: Record<string, string> = {
   "Resultado": "Result",
   "(sin salida)": "(no output)",
   "Automatización": "Automation",
+  "Fila": "Row",
+  "La consulta no ha devuelto filas.": "The query returned no rows.",
 };

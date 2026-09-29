@@ -126,6 +126,16 @@ func (s *State) RunQuery(project, principal, sql string, dryRun bool, dest strin
 		if kind == "VIEW" || kind == "MATERIALIZED VIEW" {
 			t.Query = sel
 		}
+		if sel == "" && kind == "TABLE" {
+			t.Schema = ParseColumnDefs(rest)
+			for i := range t.Schema {
+				t.Schema[i].Bytes = typeBytes(t.Schema[i].Type)
+			}
+		}
+		if kind == "TABLE" && sel != "" {
+			t.Sample = src != nil && src.Sample
+			_ = s.FillFromSelect(project, sel, t)
+		}
 		d.Tables[tname] = t
 		res.Created = tname
 		s.recordJob(project, principal, sql, res.Bytes, false, m[2])
@@ -152,6 +162,7 @@ func (s *State) RunQuery(project, principal, sql string, dryRun bool, dest strin
 		if fm := reFrom.FindStringSubmatch(sql); fm != nil {
 			if _, src, _, _ := s.findTable(project, fm[1]); src != nil {
 				t.PartitionDays = max(src.PartitionDays, t.PartitionDays)
+				t.Sample = src.Sample
 				for _, f := range src.Schema {
 					if len(r.Columns) == 0 || contains(r.Columns, f.Name) {
 						t.Schema = append(t.Schema, f)
@@ -159,11 +170,25 @@ func (s *State) RunQuery(project, principal, sql string, dryRun bool, dest strin
 				}
 			}
 		}
+		_ = s.FillFromSelect(project, sql, t)
 		d.Tables[tname] = t
 		res.Created = tname
 	}
 	s.recordJob(project, principal, sql, res.Bytes, dryRun, dest)
 	return res, nil
+}
+
+// typeBytes is the modelled size of one value of a BigQuery type.
+func typeBytes(t string) int {
+	switch strings.ToUpper(t) {
+	case "BOOL", "BOOLEAN":
+		return 1
+	case "INT64", "INTEGER", "FLOAT64", "FLOAT", "TIMESTAMP", "DATETIME", "DATE":
+		return 8
+	case "NUMERIC":
+		return 16
+	}
+	return 16
 }
 
 func contains(l []string, v string) bool {

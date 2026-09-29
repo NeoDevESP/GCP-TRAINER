@@ -35,7 +35,7 @@ export type TerminalHandle = {
 
 export default function Terminal({
   sessionId,
-  prompt = "student@cloudshell:~$ ",
+  prompt: initialPrompt = "student@cloudshell:~$ ",
   onCommand,
   banner,
   screenReader = false,
@@ -90,6 +90,9 @@ export default function Terminal({
       let pending = ""; // accumulated multi-line command
       let busy = false;
 
+      // The server returns the prompt of the next line: Cloud Shell, a VM
+      // (gcloud compute ssh) or a database client (gcloud sql connect).
+      let prompt = initialPrompt;
       const curPrompt = () => (pending ? "> " : prompt);
       const redraw = () => {
         term.write("\r\x1b[2K" + curPrompt() + line);
@@ -101,9 +104,10 @@ export default function Terminal({
 
       const run = async (cmd: string) => {
         busy = true;
-        let res = { output: "", exit: 1 };
+        let res: { output: string; exit: number; prompt?: string } = { output: "", exit: 1 };
         try {
-          res = await api<{ output: string; exit: number }>(`/api/sessions/${sessionId}/exec`, { body: { line: cmd } });
+          res = await api<{ output: string; exit: number; prompt?: string }>(`/api/sessions/${sessionId}/exec`, { body: { line: cmd } });
+          if (res.prompt) prompt = res.prompt;
           if (res.output) {
             term.write(res.output.endsWith("\n") ? res.output : res.output + "\n");
           }
@@ -306,7 +310,7 @@ export default function Terminal({
       disposed = true;
       cleanup();
     };
-  }, [sessionId, prompt, banner, screenReader, controller]);
+  }, [sessionId, initialPrompt, banner, screenReader, controller]);
 
   return <div ref={host} role="application" aria-label={translate(getLang(), "Terminal de Cloud Shell. Escribe comandos y pulsa Intro.")} style={{ width: "100%", height: "100%" }} />;
 }

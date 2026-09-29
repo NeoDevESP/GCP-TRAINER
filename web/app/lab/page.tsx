@@ -589,6 +589,7 @@ function Workspace({ session }: { session: SessionInfo }) {
             onCommand={onCommand}
             screenReader={screenReader}
             controller={term}
+            prompt={`student@cloudshell:~ (${session.project})$ `}
             banner={`\x1b[1mWelcome to Cloud Shell! Type "help" to get started.\x1b[0m\r\n${tr("Tu proyecto de Cloud Platform en esta sesión es")} \x1b[1;33m${session.project}\x1b[0m.\r\n${tr("Lo que hagas en la consola de arriba también se ejecuta aquí.")}`}
           />
         }

@@ -174,6 +174,11 @@ func init() {
 		}
 		in := &sim.SQLInstance{Name: n, Version: c.Str("database-version", "POSTGRES_15"), Tier: "db-custom-1-3840", Availability: "ZONAL", State: "RUNNABLE",
 			Flags: map[string]string{}, Databases: []string{"postgres"}, Users: map[string]string{"postgres": c.Str("root-password", "")}}
+		if in.IsMySQL() {
+			in.Databases, in.Users = []string{"mysql"}, map[string]string{"root": c.Str("root-password", "")}
+		} else if strings.HasPrefix(in.Version, "SQLSERVER") {
+			in.Databases, in.Users = []string{"master"}, map[string]string{"sqlserver": c.Str("root-password", "")}
+		}
 		if m := c.Str("master-instance-name", ""); m != "" {
 			master := p.SQLInstances[m]
 			if master == nil {
@@ -559,8 +564,20 @@ func init() {
 		if _, ok := in.Users[user]; !ok {
 			return nil, fmt.Errorf("FATAL: password authentication failed for user %q", user)
 		}
-		db := c.Str("database", "postgres")
-		return fmt.Sprintf("Allowlisting your IP for incoming connection for 5 minutes...done.\nConnecting to database with SQL user [%s].\npsql (15.8)\n%s=> (interactive shell not available — run `psql \"host=%s user=%s dbname=%s\" -c \"SQL\"` with PGPASSWORD set)\n", user, db, in.PublicIP, user, db), nil
+		kind, def := "psql", "postgres"
+		if in.IsMySQL() {
+			kind, def = "mysql", "mysql"
+		}
+		db := c.Str("database", def)
+		if !contains(in.Databases, db) && db != def {
+			return nil, fmt.Errorf("FATAL: database %q does not exist", db)
+		}
+		c.S.Remote = &Remote{Kind: kind, Project: p.ID, Instance: n, Host: in.PublicIP, DB: db, User: user}
+		c.Audit("sqladmin.googleapis.com", "cloudsql.instances.connect", "projects/"+p.ID+"/instances/"+n)
+		if kind == "mysql" {
+			return fmt.Sprintf("Allowlisting your IP for incoming connection for 5 minutes...done.\nConnecting to database with SQL user [%s].\nWelcome to the MySQL monitor.  Commands end with ;\nServer version: 8.0.39-google (Google)\n\nType 'help;' for help. Type 'exit' to return to Cloud Shell.\n\n", user), nil
+		}
+		return fmt.Sprintf("Allowlisting your IP for incoming connection for 5 minutes...done.\nConnecting to database with SQL user [%s].\npsql (15.8)\nSSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)\nType \"help\" for help. Type \\q to return to Cloud Shell.\n\n", user), nil
 	})
 
 	// ---- Pub/Sub --------------------------------------------------------------

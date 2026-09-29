@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/neodevesp/gcp-trainer/internal/sim"
+	"github.com/neodevesp/gcp-trainer/internal/sqlengine"
 	"gopkg.in/yaml.v3"
 )
 
@@ -577,6 +580,16 @@ func (s *Session) bq(args []string, stdin string) (string, error) {
 		}
 		dry := c.Bool("dry_run") || c.Bool("dry-run")
 		dest := c.Str("destination_table", "")
+		if sim.IsDML(sql) {
+			if dry {
+				return "Query successfully validated. Assuming the tables are not modified, running this query will process 10485760 bytes of data.\n", nil
+			}
+			n, err := s.State.RunDML(p.ID, s.Principal(), strings.TrimSuffix(strings.TrimSpace(sql), ";"))
+			if err != nil {
+				return "", fail(1, "Error in query string: %v", err)
+			}
+			return fmt.Sprintf("Waiting on bqjob_r%s ... (1s) Current status: DONE\nNumber of affected rows: %d\n", s.State.ID(10), n), nil
+		}
 		res, err := s.State.RunQuery(p.ID, s.Principal(), sql, dry, strings.ReplaceAll(dest, ":", "."), c.Str("time_partitioning_field", ""), c.List("clustering_fields"))
 		if err != nil {
 			return "", fail(1, "Error in query string: %v", err)
@@ -595,27 +608,133 @@ func (s *Session) bq(args []string, stdin string) (string, error) {
 		if res.Created != "" {
 			return fmt.Sprintf("Waiting on bqjob_r%s ... (1s) Current status: DONE\nCreated %s (processed %s)\n", s.State.ID(10), res.Created, sim.FormatBytes(res.Bytes)), nil
 		}
-		var b strings.Builder
-		b.WriteString(fmt.Sprintf("Waiting on bqjob_r%s ... (2s) Current status: DONE\n", s.State.ID(10)))
-		cols := res.Columns
-		if len(cols) == 0 {
-			cols = []string{"f0_"}
+		head := fmt.Sprintf("Waiting on bqjob_r%s ... (2s) Current status: DONE\n", s.State.ID(10))
+		foot := fmt.Sprintf("Bytes processed: %s (%d)\n", sim.FormatBytes(res.Bytes), res.Bytes)
+		if regexp.MustCompile(`(?i)\bML\.|INFORMATION_SCHEMA`).MatchString(sql) {
+			return head + syntheticRows(s, res.Columns) + foot, nil
 		}
-		b.WriteString("+" + strings.Repeat("----------------+", len(cols)) + "\n|")
-		for _, cn := range cols {
-			b.WriteString(fmt.Sprintf(" %-14s |", cn))
-		}
-		b.WriteString("\n+" + strings.Repeat("----------------+", len(cols)) + "\n")
-		for i := 0; i < 3; i++ {
-			b.WriteString("|")
-			for range cols {
-				b.WriteString(fmt.Sprintf(" %-14s |", fmt.Sprint(s.State.Rand().Intn(9000)+100)))
+		data, err := s.State.QueryData(p.ID, sql)
+		if err != nil {
+			msg := err.Error()
+			if strings.HasPrefix(msg, "Unrecognized name") || strings.HasPrefix(msg, "Not found") || strings.HasPrefix(msg, "Function not found") || strings.Contains(msg, "not supported by the simulator") {
+				return "", fail(1, "Error in query string: %s", msg)
 			}
-			b.WriteString("\n")
+			return "", fail(1, "Error in query string: %s", msg)
 		}
-		b.WriteString("+" + strings.Repeat("----------------+", len(cols)) + "\n")
-		b.WriteString(fmt.Sprintf("Bytes processed: %s (%d)\n", sim.FormatBytes(res.Bytes), res.Bytes))
-		return b.String(), nil
+		return head + formatBQ(c, data) + foot, nil
+	case "head":
+		if len(c.Args) == 0 {
+			return "", fail(1, "BigQuery error in head operation: missing identifier")
+		}
+		dsn, tn := ref(c.Args[0])
+		ds := p.Datasets[dsn]
+		if ds == nil || ds.Tables[tn] == nil {
+			return "", fail(1, "BigQuery error in head operation: Not found: Table %s:%s.%s", p.ID, dsn, tn)
+		}
+		if !s.State.Allowed(s.Principal(), "bigquery.tables.getData", dsRes(ds)) {
+			return "", fail(1, "BigQuery error in head operation: Access Denied: Table %s:%s.%s", p.ID, dsn, tn)
+		}
+		n := c.Int("n", c.Int("max_rows", 100))
+		data, err := s.State.QueryData(p.ID, fmt.Sprintf("SELECT * FROM `%s.%s` LIMIT %d", dsn, tn, n))
+		if err != nil {
+			return "", fail(1, "BigQuery error in head operation: %v", err)
+		}
+		return formatBQ(c, data), nil
+	case "load", "insert":
+		if len(c.Args) < 2 {
+			return "", fail(1, "BigQuery error in %s operation: usage: bq %s DATASET.TABLE SOURCE [SCHEMA]", pos[0], pos[0])
+		}
+		dsn, tn := ref(c.Args[0])
+		ds := p.Datasets[dsn]
+		if ds == nil {
+			return "", fail(1, "BigQuery error in %s operation: Not found: Dataset %s:%s", pos[0], p.ID, dsn)
+		}
+		if err := c.Need("bigquery.tables.updateData", dsRes(ds)); err != nil {
+			return "", fail(1, "BigQuery error in %s operation: %v", pos[0], err)
+		}
+		content, err := s.readSource(c.Args[1], stdin)
+		if err != nil {
+			return "", fail(1, "BigQuery error in %s operation: %v", pos[0], err)
+		}
+		format := strings.ToUpper(c.Str("source_format", "CSV"))
+		if pos[0] == "insert" || strings.HasSuffix(strings.ToLower(c.Args[1]), ".json") && !c.Has("source_format") {
+			format = "NEWLINE_DELIMITED_JSON"
+		}
+		cols, rows, err := parseRecords(content, format, c.Int("skip_leading_rows", 0))
+		if err != nil {
+			return "", fail(1, "BigQuery error in %s operation: Error while reading data: %v", pos[0], err)
+		}
+		t := ds.Tables[tn]
+		if t == nil || c.Bool("replace") {
+			nt := &sim.Table{ID: tn, Kind: "TABLE"}
+			if len(c.Args) > 2 {
+				nt.Schema = schemaFromSpec(c.Args[2])
+			} else if t != nil {
+				nt.Schema = t.Schema
+			} else if c.Bool("autodetect") || format == "NEWLINE_DELIMITED_JSON" {
+				nt.Schema = autodetect(cols, rows)
+			} else {
+				return "", fail(1, "BigQuery error in load operation: No schema specified on job or table. (use --autodetect or pass SCHEMA)")
+			}
+			t = nt
+			ds.Tables[tn] = t
+		}
+		if format == "CSV" && len(cols) == 0 {
+			for _, f := range t.Schema {
+				cols = append(cols, f.Name)
+			}
+		}
+		if format == "CSV" && c.Int("skip_leading_rows", 0) == 0 && c.Bool("autodetect") && len(rows) > 0 {
+			rows = rows[1:]
+		}
+		t.AppendRows(cols, rows)
+		s.State.Audit(p.ID, s.Principal(), "bigquery.googleapis.com", "google.cloud.bigquery.v2.JobService.InsertJob", "projects/"+p.ID+"/datasets/"+dsn+"/tables/"+tn)
+		if pos[0] == "insert" {
+			return "", nil
+		}
+		return fmt.Sprintf("Waiting on bqjob_r%s ... (1s) Current status: DONE\nLoaded %d row(s) into %s:%s.%s.\n", s.State.ID(10), len(rows), p.ID, dsn, tn), nil
+	case "extract":
+		if len(c.Args) < 2 {
+			return "", fail(1, "BigQuery error in extract operation: usage: bq extract DATASET.TABLE gs://BUCKET/OBJECT")
+		}
+		dsn, tn := ref(c.Args[0])
+		ds := p.Datasets[dsn]
+		if ds == nil || ds.Tables[tn] == nil {
+			return "", fail(1, "BigQuery error in extract operation: Not found: Table %s:%s.%s", p.ID, dsn, tn)
+		}
+		data, err := s.State.QueryData(p.ID, fmt.Sprintf("SELECT * FROM `%s.%s`", dsn, tn))
+		if err != nil {
+			return "", fail(1, "BigQuery error in extract operation: %v", err)
+		}
+		var b strings.Builder
+		if strings.EqualFold(c.Str("destination_format", "CSV"), "NEWLINE_DELIMITED_JSON") {
+			for _, r := range data.Rows {
+				m := map[string]any{}
+				for i, cn := range data.Columns {
+					m[cn] = r[i]
+				}
+				j, _ := json.Marshal(m)
+				b.Write(j)
+				b.WriteString("\n")
+			}
+		} else {
+			w := csv.NewWriter(&b)
+			w.Write(data.Columns)
+			for _, r := range data.Rows {
+				rec := make([]string, len(r))
+				for i, v := range r {
+					if v != nil {
+						rec[i] = sqlengine.Display(v)
+					}
+				}
+				w.Write(rec)
+			}
+			w.Flush()
+		}
+		if _, err := s.writeGCS(c.Args[1], b.String()); err != nil {
+			return "", fail(1, "BigQuery error in extract operation: %v", err)
+		}
+		return fmt.Sprintf("Waiting on bqjob_r%s ... (1s) Current status: DONE\n", s.State.ID(10)), nil
 	case "add-iam-policy-binding", "remove-iam-policy-binding":
 		if len(c.Args) == 0 {
 			return "", fail(1, "missing dataset")
@@ -637,8 +756,6 @@ func (s *Session) bq(args []string, stdin string) (string, error) {
 		}
 		s.State.Audit(p.ID, s.Principal(), "bigquery.googleapis.com", "google.iam.v1.IAMPolicy.SetIamPolicy", "projects/"+p.ID+"/datasets/"+dsn)
 		return "Updated IAM policy for dataset " + dsn + ".\n", nil
-	case "head":
-		return "+-----+\n| ... |\n+-----+\n", nil
 	}
-	return "", fail(1, "FATAL Flags parsing error: Unknown command %q (supported: mk, ls, show, rm, query, head, add-iam-policy-binding)", pos[0])
+	return "", fail(1, "FATAL Flags parsing error: Unknown command %q (supported: mk, ls, show, rm, query, head, load, insert, extract, add-iam-policy-binding)", pos[0])
 }

@@ -58,6 +58,9 @@ type Session struct {
 	Interview   *Interview        `json:"interview,omitempty"` // interview mode state
 	Lang        string            `json:"lang,omitempty"`      // language of the platform's own commands (es primary, en)
 	vmRoot      bool              // current VM command runs with sudo
+	// Remote is the interactive SSH or database session open in the terminal.
+	Remote    *Remote `json:"remote,omitempty"`
+	RootShell bool    `json:"rootShell,omitempty"` // sudo -i inside an SSH session
 	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
 	// take over a command before the simulator handles it.
 	Interceptor func(s *Session, args []string, stdin string) (handled bool, out string, err error) `json:"-"`
@@ -97,9 +100,13 @@ func (s *Session) Principal() string {
 }
 
 // Result is the outcome of a command line.
+var reEnvAssign = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+
 type Result struct {
 	Output string `json:"output"`
 	Exit   int    `json:"exit"`
+	// Prompt is the prompt of the next line (Cloud Shell, a VM or a database client).
+	Prompt string `json:"prompt,omitempty"`
 }
 
 // exitErr carries a non-zero exit code and message.
@@ -122,10 +129,27 @@ func fail(code int, format string, a ...any) error {
 
 // Exec runs an input (possibly multi-line, with heredocs) and returns output.
 func (s *Session) Exec(input string) Result {
+	if s.Remote != nil {
+		return s.remoteExec(input)
+	}
+	r := s.exec(input)
+	if r.Prompt == "" {
+		r.Prompt = s.Prompt()
+	}
+	return r
+}
+
+func (s *Session) exec(input string) Result {
 	var out strings.Builder
 	exit := 0
 	lines := strings.Split(strings.ReplaceAll(input, "\r\n", "\n"), "\n")
 	for i := 0; i < len(lines); i++ {
+		if s.Remote != nil {
+			// An interactive session was opened: the remaining lines go to it.
+			r := s.remoteExec(strings.Join(lines[i:], "\n"))
+			out.WriteString(r.Output)
+			return Result{Output: out.String(), Exit: r.Exit, Prompt: r.Prompt}
+		}
 		line := lines[i]
 		for strings.HasSuffix(line, "\\") && i+1 < len(lines) {
 			i++
@@ -450,6 +474,40 @@ func (s *Session) execSimple(cmd, stdin string) Result {
 	_ = mergeErr
 	if len(args) == 0 {
 		return Result{}
+	}
+	// VAR=value prefixes: alone they set a shell variable; before a command
+	// they only apply to that command.
+	nAssign := 0
+	for nAssign < len(args) && reEnvAssign.MatchString(args[nAssign]) {
+		nAssign++
+	}
+	if nAssign > 0 {
+		saved := map[string]*string{}
+		for _, a := range args[:nAssign] {
+			kv := strings.SplitN(a, "=", 2)
+			if nAssign < len(args) {
+				if old, ok := s.Env[kv[0]]; ok {
+					o := old
+					saved[kv[0]] = &o
+				} else {
+					saved[kv[0]] = nil
+				}
+			}
+			s.Env[kv[0]] = kv[1]
+		}
+		if nAssign == len(args) {
+			return Result{}
+		}
+		defer func() {
+			for k, v := range saved {
+				if v == nil {
+					delete(s.Env, k)
+				} else {
+					s.Env[k] = *v
+				}
+			}
+		}()
+		args = args[nAssign:]
 	}
 	out, err := s.run(args, stdin)
 	res := Result{Output: out}

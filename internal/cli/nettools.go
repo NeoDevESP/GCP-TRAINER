@@ -241,6 +241,11 @@ func (s *Session) psql(args []string) (string, error) {
 
 func (s *Session) psqlFrom(args []string, from sim.Endpoint) (string, error) {
 	host, user, db, cmd := "", "postgres", "postgres", ""
+	isMy := args[0] == "mysql"
+	port := 5432
+	if isMy {
+		user, db, port = "root", "", 3306
+	}
 	for i := 1; i < len(args); i++ {
 		a := args[i]
 		next := func() string {
@@ -257,10 +262,26 @@ func (s *Session) psqlFrom(args []string, from sim.Endpoint) (string, error) {
 			user = next()
 		case a == "-d" || a == "--dbname":
 			db = next()
-		case a == "-c" || a == "--command":
+		case a == "-c" || a == "--command" || a == "-e" || a == "--execute":
 			cmd = next()
+		case a == "-u" || a == "--user":
+			user = next()
+		case a == "-D" || a == "--database":
+			db = next()
+		case strings.HasPrefix(a, "--user="):
+			user = strings.TrimPrefix(a, "--user=")
+		case strings.HasPrefix(a, "--database="):
+			db = strings.TrimPrefix(a, "--database=")
+		case strings.HasPrefix(a, "--password") || isMy && strings.HasPrefix(a, "-p"):
+			if isMy && len(a) > 2 && strings.HasPrefix(a, "-p") {
+				s.Env["MYSQL_PWD"] = a[2:]
+			}
+		case a == "-P" || a == "--port":
+			next()
 		case a == "-p":
 			next()
+		case !strings.HasPrefix(a, "-") && isMy && db == "":
+			db = a
 		case strings.HasPrefix(a, "host="):
 			for _, kv := range strings.Fields(a) {
 				k, v, _ := strings.Cut(kv, "=")
@@ -278,8 +299,11 @@ func (s *Session) psqlFrom(args []string, from sim.Endpoint) (string, error) {
 	if host == "" {
 		return "", fail(2, "psql: error: connection to server on socket \"/var/run/postgresql/.s.PGSQL.5432\" failed: No such file or directory")
 	}
-	ok, _, msg := s.State.TCPConnect(from, host, 5432)
+	ok, _, msg := s.State.TCPConnect(from, host, port)
 	if !ok {
+		if isMy {
+			return "", fail(1, "ERROR 2003 (HY000): Can't connect to MySQL server on '%s:3306' (%s)", host, strings.TrimPrefix(msg, "connect to "))
+		}
 		return "", fail(2, "psql: error: connection to server at \"%s\", port 5432 failed: %s", host, strings.TrimPrefix(msg, "connect to "))
 	}
 	ip, _ := s.State.ResolveHost(host, from)
@@ -294,13 +318,27 @@ func (s *Session) psqlFrom(args []string, from sim.Endpoint) (string, error) {
 	if pw := s.Env["PGPASSWORD"]; pw != "" && pw != in.Users[user] {
 		return "", fail(2, "psql: error: FATAL:  password authentication failed for user \"%s\"", user)
 	}
-	if !contains(in.Databases, db) && db != "postgres" {
+	if isMy && db == "" {
+		db = "mysql"
+	}
+	if !contains(in.Databases, db) && db != "postgres" && db != "mysql" {
 		return "", fail(2, "psql: error: FATAL:  database \"%s\" does not exist", db)
 	}
 	if cmd == "" {
-		return fmt.Sprintf("psql (15.8)\nSSL connection (protocol: TLSv1.3)\nType \"help\" for help.\n\n%s=> (interactive mode not available; use -c \"SQL\")\n", db), nil
+		kind := "psql"
+		if isMy {
+			kind = "mysql"
+		}
+		if from.Kind == "internet" || from.Kind == "" {
+			s.Remote = &Remote{Kind: kind, Project: ep.Project, Instance: ep.Name, Host: host, DB: db, User: user}
+			if isMy {
+				return "Welcome to the MySQL monitor.  Commands end with ;\nServer version: 8.0.39-google (Google)\n\n", nil
+			}
+			return "psql (15.8)\nSSL connection (protocol: TLSv1.3)\nType \"help\" for help.\n\n", nil
+		}
+		return fmt.Sprintf("psql (15.8)\n%s=> (interactive mode is only available from Cloud Shell; use -c \"SQL\")\n", db), nil
 	}
-	return s.State.ApplySQL(in, cmd) + "\n", nil
+	return s.State.ApplySQL(in, db, cmd) + "\n", nil
 }
 
 // vmExec runs a command line inside a VM (via gcloud compute ssh --command).
