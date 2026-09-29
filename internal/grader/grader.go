@@ -21,6 +21,7 @@ import (
 	"unicode"
 
 	"github.com/neodevesp/gcp-trainer/internal/cli"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"github.com/neodevesp/gcp-trainer/internal/scenario"
 	"github.com/neodevesp/gcp-trainer/internal/sim"
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -32,6 +33,7 @@ type Submission struct {
 	Answers        map[string][]int  `json:"answers"`        // quiz id -> selected options
 	Justifications map[string]string `json:"justifications"` // quiz id -> text
 	HintsUsed      int               `json:"hintsUsed"`      // set by the platform, never by the learner
+	Lang           string            `json:"lang,omitempty"` // feedback language (es primary, en); set by the platform
 }
 
 // CheckResult is the outcome of one assertion.
@@ -1060,7 +1062,8 @@ func (c *Context) evidence(ch scenario.Check) (bool, string) {
 	for _, g := range groups {
 		hit := false
 		for _, w := range g {
-			if strings.Contains(text, normalize(w)) {
+			// Spanish or English: the glossary accepts translations of each keyword
+			if i18n.ContainsAny(text, w) {
 				hit = true
 			}
 		}
@@ -1136,7 +1139,7 @@ func (c *Context) quiz(ch scenario.Check) (bool, string) {
 			hits := 0
 			for _, g := range q.Keywords {
 				for _, w := range g {
-					if strings.Contains(j, normalize(w)) {
+					if i18n.ContainsAny(j, w) {
 						hits++
 						break
 					}

@@ -70,6 +70,9 @@ type Lab struct {
 	FixedProject string   `yaml:"-" json:"-"`
 	Noise        []string `yaml:"noise" json:"-"`
 	Dir          string   `yaml:"-" json:"-"`
+	// EN is the English translation; the fields above are Spanish (the
+	// platform's primary language). See Localized.
+	EN *LabEN `yaml:"en,omitempty" json:"-"`
 }
 
 // Fidelity declares which layers a lab supports.

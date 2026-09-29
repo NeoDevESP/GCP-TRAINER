@@ -22,6 +22,7 @@ import (
 	"github.com/neodevesp/gcp-trainer/internal/cli"
 	"github.com/neodevesp/gcp-trainer/internal/fidelity"
 	"github.com/neodevesp/gcp-trainer/internal/grader"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"github.com/neodevesp/gcp-trainer/internal/scenario"
 	"github.com/neodevesp/gcp-trainer/internal/sim"
 	"github.com/neodevesp/gcp-trainer/internal/store"
@@ -38,6 +39,9 @@ type StartRequest struct {
 	Gen *scenario.GenSpec `json:"gen,omitempty"`
 	// Mission runs a company-simulation mission on a persisted world.
 	Mission *MissionStart `json:"mission,omitempty"`
+	// Lang is the learner's language (es primary, en); content and the
+	// platform's own terminal commands follow it.
+	Lang string `json:"lang,omitempty"`
 }
 
 // SessionInfo is the public view of a session.
@@ -74,6 +78,7 @@ type SessionInfo struct {
 	Mission      *MissionStart            `json:"mission,omitempty"` // without state
 	Mode         string                   `json:"mode,omitempty"`
 	Type         string                   `json:"type,omitempty"`
+	Lang         string                   `json:"lang"`
 }
 
 // LabPlane is implemented by the in-process Service and by the HTTP client
@@ -193,6 +198,8 @@ func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
 	if l == nil {
 		return nil, fmt.Errorf("lab %s not found", req.LabID)
 	}
+	lang := i18n.Norm(req.Lang)
+	l = l.Localized(lang)
 	d, err := s.Router.Choose(l, req.Fidelity, req.UserID)
 	if err != nil {
 		return nil, err
@@ -211,11 +218,13 @@ func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
 		return nil, fmt.Errorf("provision %s at %s: %w", l.ID, d.Level, err)
 	}
 	w := env.World
+	w.Session.Lang = lang
 	id := fmt.Sprintf("s-%s-%d", strings.TrimPrefix(proj, "gcplab-"), s.now().UnixNano()%1e6)
 	info := SessionInfo{ID: id, UserID: req.UserID, LabID: l.ID, AttemptID: req.AttemptID, Project: w.Project, Region: w.Lab.Region, Zone: w.Lab.Zone,
 		Fidelity: string(d.Level), Reason: d.Reason, Seed: seed, Params: w.Params, Started: s.now(), Expires: s.now().Add(s.ttlFor(l)), Status: "running",
 		ProvisionMs: time.Since(t0).Milliseconds()}
 	info.Mission = mission
+	info.Lang = lang
 	se := &Session{Info: info, Lab: w.Lab, Env: env}
 	s.fillStatic(se)
 	s.mu.Lock()
@@ -581,7 +590,7 @@ func (s *Service) restore(id string) (*Session, error) {
 	if base == nil {
 		return nil, ErrNotFound
 	}
-	l, params, err := base.Variant(snap.Info.Seed, snap.Info.Project)
+	l, params, err := base.Localized(snap.Info.Lang).Variant(snap.Info.Seed, snap.Info.Project)
 	if err != nil {
 		return nil, err
 	}
@@ -671,7 +680,8 @@ func HandleGrade(labs map[string]*scenario.Lab, lib *scenario.Library, co *compa
 			http.Error(w, "unknown lab", 404)
 			return
 		}
-		l, _, err := base.Variant(req.Seed, req.Project)
+		// feedback and check descriptions in the learner's language
+		l, _, err := base.Localized(req.Submission.Lang).Variant(req.Seed, req.Project)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return

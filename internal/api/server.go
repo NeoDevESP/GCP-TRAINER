@@ -19,6 +19,7 @@ import (
 
 	"github.com/neodevesp/gcp-trainer/internal/fidelity"
 	"github.com/neodevesp/gcp-trainer/internal/grader"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"github.com/neodevesp/gcp-trainer/internal/learning"
 	"github.com/neodevesp/gcp-trainer/internal/mentor"
 	"github.com/neodevesp/gcp-trainer/internal/orchestrator"
@@ -139,7 +140,7 @@ func (s *Server) Handler() http.Handler {
 	h("GET /api/me", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		u := userOf(r)
 		att, _ := s.attemptsOf(u.ID)
-		return s.Engine.Profile(*u, att, s.activeTrack(r)), nil
+		return s.eng(r).Profile(*u, att, s.activeTrack(r)), nil
 	})
 	h("POST /api/me/leaderboard", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		u := userOf(r)
@@ -147,6 +148,13 @@ func (s *Server) Handler() http.Handler {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		u.Leaderboard = req.OptIn
 		return map[string]bool{"optIn": u.Leaderboard}, s.Store.Put("users", u.ID, u)
+	})
+	h("POST /api/me/lang", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		u := userOf(r)
+		var req struct{ Lang string }
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		u.Lang = i18n.Norm(req.Lang)
+		return map[string]string{"lang": u.Lang}, s.Store.Put("users", u.ID, u)
 	})
 	h("GET /api/me/attempts", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		att, err := s.attemptsOf(userOf(r).ID)
@@ -159,7 +167,7 @@ func (s *Server) Handler() http.Handler {
 	h("GET /api/me/transcript", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		u := userOf(r)
 		att, _ := s.attemptsOf(u.ID)
-		p := s.Engine.Profile(*u, att, s.activeTrack(r))
+		p := s.eng(r).Profile(*u, att, s.activeTrack(r))
 		return learning.NewTranscript(p, att, s.Tokens.Secret, time.Now()), nil
 	})
 	h("POST /api/auth/verify-transcript", func(w http.ResponseWriter, r *http.Request) (any, error) {
@@ -170,39 +178,40 @@ func (s *Server) Handler() http.Handler {
 		return map[string]any{"valid": t.Verify(s.Tokens.Secret), "user": t.Name, "careerStage": t.Stage, "issued": t.Issued}, nil
 	})
 	h("GET /api/catalog/skills/graph", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		return s.Cat.Graph(), nil
+		return s.cat(r).Graph(), nil
 	})
 	h("GET /api/catalog/career", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		return s.Cat.Career, nil
+		return s.cat(r).Career, nil
 	})
 	h("GET /api/report/{track}", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		att, _ := s.attemptsOf(userOf(r).ID)
-		return s.Engine.Report(r.PathValue("track"), att), nil
+		return s.eng(r).Report(r.PathValue("track"), att), nil
 	})
 	h("GET /api/leaderboard", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		u := userOf(r)
 		users, _ := store.ListAs[learning.User](s.Store, "users")
 		all, _ := store.ListAs[learning.Attempt](s.Store, "attempts")
 		mine, _ := s.attemptsOf(u.ID)
-		prof := s.Engine.Profile(*u, mine, "")
+		prof := s.eng(r).Profile(*u, mine, "")
 		league := r.URL.Query().Get("league")
 		if league == "" {
 			league = prof.League
 		}
-		return map[string]any{"league": league, "optIn": u.Leaderboard, "entries": s.Engine.Leaderboard(users, all, league)}, nil
+		return map[string]any{"league": league, "optIn": u.Leaderboard, "entries": s.eng(r).Leaderboard(users, all, league)}, nil
 	})
 	// ---- catalog --------------------------------------------------------------
 	h("GET /api/catalog", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		cat := s.cat(r)
 		labs := []map[string]any{}
-		for _, id := range s.Cat.LabOrder {
-			labs = append(labs, labSummary(s.Cat.Lab(id)))
+		for _, id := range cat.LabOrder {
+			labs = append(labs, labSummary(cat.Lab(id)))
 		}
-		return map[string]any{"branches": s.Cat.Branches, "tracks": s.Cat.Tracks, "certs": s.Cat.Certs, "badges": s.Cat.Badges, "labs": labs, "levels": learning.Levels}, nil
+		return map[string]any{"branches": cat.Branches, "tracks": cat.Tracks, "certs": cat.Certs, "badges": cat.Badges, "labs": labs, "levels": learning.LevelNames(s.lang(r)), "lang": s.lang(r)}, nil
 	})
 	h("GET /api/labs/{id}", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		l := s.Cat.Lab(r.PathValue("id"))
+		l := s.cat(r).Lab(r.PathValue("id"))
 		if l == nil {
-			return nil, httpErr{404, "lab not found"}
+			return nil, httpErr{404, i18n.P(s.lang(r), "laboratorio no encontrado", "lab not found")}
 		}
 		m := labSummary(l)
 		m["story"], m["objectives"], m["instructions"], m["constraints"] = l.Story, l.Objectives, l.Instructions, l.Constraints
@@ -268,7 +277,7 @@ func (s *Server) Handler() http.Handler {
 		if err != nil {
 			return nil, err
 		}
-		res, err := s.Labs.Grade(info.ID, grader.Submission{})
+		res, err := s.Labs.Grade(info.ID, grader.Submission{Lang: info.Lang})
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +295,7 @@ func (s *Server) Handler() http.Handler {
 			}
 			items = append(items, map[string]any{"name": it.Name, "earned": it.Earned, "points": it.Points, "failing": failing})
 		}
-		return map[string]any{"items": items, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID), res)}, nil
+		return map[string]any{"items": items, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID).Localized(info.Lang), res, info.Lang)}, nil
 	})
 	h("POST /api/sessions/{id}/submit", s.submit)
 	h("POST /api/sessions/{id}/stop", func(w http.ResponseWriter, r *http.Request) (any, error) {
@@ -318,7 +327,7 @@ func (s *Server) Handler() http.Handler {
 			}
 			all = f
 		}
-		return s.Engine.ComputeKPIs(all), nil
+		return s.eng(r).ComputeKPIs(all), nil
 	}, "instructor", "admin")
 	h("POST /api/classes", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		var c Class
@@ -379,7 +388,7 @@ func (s *Server) Handler() http.Handler {
 				continue
 			}
 			att, _ := s.attemptsOf(id)
-			p := s.Engine.Profile(u, att, "")
+			p := s.eng(r).Profile(u, att, "")
 			rows = append(rows, row{User: u.Name, Email: u.Email, XP: p.XP, Level: p.Level, Branches: p.Branches, Readiness: p.Readiness})
 			for b, v := range p.Branches {
 				team[b] += v / float64(len(c.Members))
@@ -481,6 +490,20 @@ func contains(l []string, v string) bool {
 	}
 	return false
 }
+
+// lang is the request's language: X-Lang / ?lang=, then the user's saved
+// preference, then Accept-Language, then Spanish (the primary language).
+func (s *Server) lang(r *http.Request) string {
+	pref := ""
+	if u := userOf(r); u != nil {
+		pref = u.Lang
+	}
+	return i18n.FromRequest(r, pref)
+}
+
+// cat and eng are the catalog and analytics engine in the request's language.
+func (s *Server) cat(r *http.Request) *learning.Catalog { return s.Cat.ForLang(s.lang(r)) }
+func (s *Server) eng(r *http.Request) *learning.Engine  { return s.Engine.ForLang(s.lang(r)) }
 
 func userOf(r *http.Request) *learning.User {
 	u, _ := r.Context().Value(ctxKey("user")).(*learning.User)
@@ -638,11 +661,11 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request) (any, error) {
 		Fidelity string `json:"fidelity"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	return s.startLab(userOf(r), l, req.Fidelity)
+	return s.startLab(userOf(r), l, req.Fidelity, s.lang(r))
 }
 
 // startLab creates an attempt and provisions a session (catalog or generated lab).
-func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity string) (any, error) {
+func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity, lang string) (any, error) {
 	prior, _ := s.attemptsOf(u.ID)
 	running := 0
 	for _, a := range prior {
@@ -670,7 +693,7 @@ func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity string) (a
 		seed = l.Generated.Seed
 	}
 	att := learning.Attempt{ID: learning.NewID("a-"), UserID: u.ID, LabID: l.ID, Track: l.Track, Seed: seed, Started: time.Now(), Status: "running", HintsUsed: []int{}}
-	info, err := s.Labs.Start(orchestrator.StartRequest{UserID: u.ID, LabID: l.ID, Fidelity: fidelity, Seed: seed, AttemptID: att.ID, Gen: l.Generated})
+	info, err := s.Labs.Start(orchestrator.StartRequest{UserID: u.ID, LabID: l.ID, Fidelity: fidelity, Seed: seed, AttemptID: att.ID, Gen: l.Generated, Lang: lang})
 	if err != nil {
 		att.Status = "error"
 		now := time.Now()
@@ -703,7 +726,7 @@ func (s *Server) generateIncident(w http.ResponseWriter, r *http.Request) (any, 
 	}
 	s.Cat.AddGenerated(l)
 	_ = s.Store.Put("genlabs", l.ID, spec)
-	return s.startLab(userOf(r), l, "F0")
+	return s.startLab(userOf(r), l, "F0", s.lang(r))
 }
 
 // LoadGenerated re-registers generated labs persisted in the store (after a restart).
@@ -766,7 +789,7 @@ func (s *Server) hint(w http.ResponseWriter, r *http.Request) (any, error) {
 	if att == nil || att.Status != "running" {
 		return nil, fmt.Errorf("attempt not running")
 	}
-	l := s.Cat.Lab(info.LabID)
+	l := s.Cat.Lab(info.LabID).Localized(info.Lang)
 	if l.Type == "boss" {
 		return nil, httpErr{403, "boss battles have no hints"}
 	}
@@ -799,6 +822,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 		return nil, err
 	}
 	sub.HintsUsed = len(att.HintsUsed)
+	sub.Lang = info.Lang
 	res, err := s.Labs.Grade(info.ID, sub)
 	if err != nil {
 		return nil, err
@@ -808,7 +832,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	att.Score, att.Passed, att.Critical = res.Score, res.Passed, res.CriticalFailed
 	att.Commands, att.Errors = info.Commands, info.Errors
 	prior, _ := s.attemptsOf(att.UserID)
-	s.Engine.Award(att, prior)
+	s.Engine.ForLang(info.Lang).Award(att, prior)
 	var companyOut map[string]any
 	if l := s.Cat.Lab(info.LabID); l != nil && l.Company != nil && s.Company != nil {
 		companyOut = s.companyComplete(att.UserID, l.ID, info.ID, res)
@@ -819,15 +843,15 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	_ = s.Labs.Stop(info.ID, "submitted")
 	u := userOf(r)
 	all, _ := s.attemptsOf(u.ID)
-	prof := s.Engine.Profile(*u, all, att.Track)
-	out := map[string]any{"result": res, "xp": att.XP, "bonus": att.Bonus, "bonusReasons": att.BonusReasons, "profile": prof, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID), res)}
+	prof := s.eng(r).Profile(*u, all, att.Track)
+	out := map[string]any{"result": res, "xp": att.XP, "bonus": att.Bonus, "bonusReasons": att.BonusReasons, "profile": prof, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID).Localized(info.Lang), res, info.Lang)}
 	if companyOut != nil {
 		out["company"] = companyOut
 	}
 	if mentor.Enabled() && len(sub.Evidence) > 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()
-		if review, err := mentor.ReviewPostmortem(ctx, s.Cat.Lab(info.LabID), sub.Evidence); err == nil {
+		if review, err := mentor.ReviewPostmortem(ctx, s.Cat.Lab(info.LabID).Localized(info.Lang), sub.Evidence, info.Lang); err == nil {
 			out["postmortemReview"] = review
 		}
 	}

@@ -52,6 +52,7 @@ type client struct {
 	t     *testing.T
 	base  string
 	token string
+	lang  string // X-Lang header when set
 }
 
 func (c *client) do(method, path string, body any, out any) int {
@@ -62,6 +63,9 @@ func (c *client) do(method, path string, body any, out any) int {
 	}
 	req, _ := http.NewRequest(method, c.base+path, &buf)
 	req.Header.Set("Content-Type", "application/json")
+	if c.lang != "" {
+		req.Header.Set("X-Lang", c.lang)
+	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
@@ -197,5 +201,42 @@ func TestCompanyFlow(t *testing.T) {
 	c.do("GET", "/api/company", nil, &co)
 	if co["day"].(float64) != 2 {
 		t.Fatalf("company status should persist the day: %v", co["day"])
+	}
+}
+
+// Spanish is the default; English is chosen per request or saved per user.
+func TestLanguageSelection(t *testing.T) {
+	ts, _ := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+	var auth struct {
+		Token string `json:"token"`
+	}
+	c.do("POST", "/api/auth/register", map[string]string{"email": "lang@example.com", "name": "Lang", "password": "correct horse battery"}, &auth)
+	c.token = auth.Token
+	level := func() string {
+		var p struct {
+			Level string `json:"level"`
+		}
+		c.do("GET", "/api/me", nil, &p)
+		return p.Level
+	}
+	if got := level(); got != "Aprendiz" {
+		t.Fatalf("default level name %q, want Spanish", got)
+	}
+	c.lang = "en"
+	if got := level(); got != "Apprentice" {
+		t.Fatalf("X-Lang en gives %q", got)
+	}
+	c.lang = ""
+	var saved map[string]string
+	if code := c.do("POST", "/api/me/lang", map[string]string{"lang": "en-GB"}, &saved); code != 200 || saved["lang"] != "en" {
+		t.Fatalf("save preference: %d %v", code, saved)
+	}
+	if got := level(); got != "Apprentice" {
+		t.Fatalf("saved preference ignored: %q", got)
+	}
+	var info orchestrator.SessionInfo
+	if code := c.do("POST", "/api/labs/ace-d03-secure-bucket/start", map[string]string{}, &info); code != 200 || info.Lang != "en" {
+		t.Fatalf("session language: %d %q", code, info.Lang)
 	}
 }

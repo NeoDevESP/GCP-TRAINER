@@ -21,6 +21,7 @@ type Branch struct {
 	Name   string  `yaml:"name" json:"name"`
 	Block  string  `yaml:"block" json:"block,omitempty"` // master curriculum block (Blueprint §4)
 	Skills []Skill `yaml:"skills" json:"skills"`
+	EN     *TextEN `yaml:"en,omitempty" json:"-"`
 }
 
 // Skill is an observable competence.
@@ -29,6 +30,7 @@ type Skill struct {
 	Name       string   `yaml:"name" json:"name"`
 	Observable string   `yaml:"observable" json:"observable"`
 	Requires   []string `yaml:"requires" json:"requires,omitempty"` // prerequisite skills (skill graph edges)
+	EN         *TextEN  `yaml:"en,omitempty" json:"-"`
 }
 
 // Track is an ordered learning path aligned to a certification.
@@ -41,6 +43,7 @@ type Track struct {
 	Reference   string   `yaml:"reference" json:"reference"` // official Google learning path used for curriculum sync
 	Phase       string   `yaml:"phase" json:"phase"`         // MVP, V1, V2
 	Labs        []string `yaml:"labs" json:"labs"`
+	EN          *TextEN  `yaml:"en,omitempty" json:"-"`
 }
 
 // BadgeDef defines a badge.
@@ -54,6 +57,7 @@ type BadgeDef struct {
 	MinMastery  float64  `yaml:"minMastery" json:"minMastery,omitempty"`
 	MinLabs     int      `yaml:"minLabs" json:"minLabs,omitempty"`
 	Labs        []string `yaml:"labs" json:"labs,omitempty"`
+	EN          *TextEN  `yaml:"en,omitempty" json:"-"`
 }
 
 // CertBlueprint weights branches for readiness.
@@ -63,6 +67,7 @@ type CertBlueprint struct {
 	Level   string             `yaml:"level" json:"level"`
 	Weights map[string]float64 `yaml:"weights" json:"weights"`
 	Guide   string             `yaml:"guide" json:"guide"`
+	EN      *TextEN            `yaml:"en,omitempty" json:"-"`
 }
 
 // Catalog is the loaded curriculum.
@@ -76,8 +81,15 @@ type Catalog struct {
 	LabOrder    []string                 `json:"-"`
 	skillBranch map[string]string
 
-	genMu     sync.RWMutex
-	generated map[string]*scenario.Lab
+	gen  *genStore // generated labs, shared by every language view
+	lang string    // language of this view ("" = Spanish source)
+	base *Catalog  // source catalog of a language view
+}
+
+type genStore struct {
+	mu    sync.RWMutex
+	labs  map[string]*scenario.Lab
+	views map[string]*Catalog
 }
 
 // Lab returns a lab by id, including labs created at runtime by the incident
@@ -86,24 +98,22 @@ func (c *Catalog) Lab(id string) *scenario.Lab {
 	if l := c.Labs[id]; l != nil {
 		return l
 	}
-	c.genMu.RLock()
-	defer c.genMu.RUnlock()
-	return c.generated[id]
+	c.gen.mu.RLock()
+	l := c.gen.labs[id]
+	c.gen.mu.RUnlock()
+	return l.Localized(c.lang)
 }
 
-// AddGenerated registers a generated lab.
+// AddGenerated registers a generated lab (visible in every language view).
 func (c *Catalog) AddGenerated(l *scenario.Lab) {
-	c.genMu.Lock()
-	defer c.genMu.Unlock()
-	if c.generated == nil {
-		c.generated = map[string]*scenario.Lab{}
-	}
-	c.generated[l.ID] = l
+	c.gen.mu.Lock()
+	defer c.gen.mu.Unlock()
+	c.gen.labs[l.ID] = l
 }
 
 // LoadCatalog reads content/{skills,tracks,badges,certs}.yaml and all labs.
 func LoadCatalog(root string) (*Catalog, error) {
-	c := &Catalog{Labs: map[string]*scenario.Lab{}, skillBranch: map[string]string{}}
+	c := &Catalog{Labs: map[string]*scenario.Lab{}, skillBranch: map[string]string{}, gen: &genStore{labs: map[string]*scenario.Lab{}, views: map[string]*Catalog{}}}
 	var sk struct {
 		Branches []Branch `yaml:"branches"`
 	}

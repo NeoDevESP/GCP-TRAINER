@@ -294,7 +294,7 @@ func (e *Engine) Leaderboard(users []User, attempts []Attempt, league string) []
 			}
 			pts += float64(a.XP) * d / 3
 		}
-		name, _, _ := LevelFor(xp)
+		name, _, _ := LevelForLang(xp, e.Lang)
 		out = append(out, LeaderboardEntry{UserID: u.ID, Name: u.Name, Points: round1(pts), Level: name})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Points > out[j].Points })

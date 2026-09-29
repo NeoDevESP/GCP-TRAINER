@@ -2,6 +2,7 @@ package learning
 
 import (
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"hash/fnv"
 	"math"
 	"sort"
@@ -22,7 +23,8 @@ type User struct {
 	Created      time.Time `json:"created"`
 	Classes      []string  `json:"classes"`
 	Leaderboard  bool      `json:"leaderboardOptIn"`
-	Provider     string    `json:"provider"` // local, oidc
+	Provider     string    `json:"provider"`       // local, oidc
+	Lang         string    `json:"lang,omitempty"` // preferred language (es primary, en)
 }
 
 // Attempt is one execution of a lab by a user.
@@ -62,25 +64,39 @@ func (a *Attempt) DurationSec() float64 {
 	return a.Finished.Sub(a.Started).Seconds()
 }
 
-// Levels of the gamified progression.
+// Levels of the gamified progression (Name is Spanish, NameEN English).
 var Levels = []struct {
-	Name string
-	XP   int
-}{{"Apprentice", 0}, {"Operator", 500}, {"Engineer", 1500}, {"Senior", 3000}, {"Specialist", 5000}, {"Architect", 8000}}
+	Name   string
+	NameEN string
+	XP     int
+}{{"Aprendiz", "Apprentice", 0}, {"Operador", "Operator", 500}, {"Ingeniero", "Engineer", 1500}, {"Sénior", "Senior", 3000}, {"Especialista", "Specialist", 5000}, {"Arquitecto", "Architect", 8000}}
+
+// LevelNames lists the levels in a language, for the catalogue.
+func LevelNames(lang string) []map[string]any {
+	var out []map[string]any
+	for _, l := range Levels {
+		out = append(out, map[string]any{"name": i18n.P(lang, l.Name, l.NameEN), "xp": l.XP})
+	}
+	return out
+}
 
 // LevelFor returns the level for an XP total and progress to the next.
-func LevelFor(xp int) (string, int, float64) {
+func LevelFor(xp int) (string, int, float64) { return LevelForLang(xp, i18n.ES) }
+
+// LevelForLang is LevelFor with the level name in a language.
+func LevelForLang(xp int, lang string) (string, int, float64) {
 	idx := 0
 	for i, l := range Levels {
 		if xp >= l.XP {
 			idx = i
 		}
 	}
+	name := i18n.P(lang, Levels[idx].Name, Levels[idx].NameEN)
 	if idx == len(Levels)-1 {
-		return Levels[idx].Name, idx, 1
+		return name, idx, 1
 	}
 	span := float64(Levels[idx+1].XP - Levels[idx].XP)
-	return Levels[idx].Name, idx, float64(xp-Levels[idx].XP) / span
+	return name, idx, float64(xp-Levels[idx].XP) / span
 }
 
 // BonusCap is the maximum bonus XP per track (3,000 base + max 300 bonus).
@@ -164,6 +180,17 @@ type Engine struct {
 	Cat *Catalog
 	Now func() time.Time
 	Lib *scenario.Library // optional: enables generated/stealth recommendations
+	// Lang is the language of generated texts (reasons, explanations);
+	// Cat should be the catalog view in the same language (see ForLang).
+	Lang string
+}
+
+// ForLang returns an engine producing texts in a language.
+func (e *Engine) ForLang(lang string) *Engine {
+	c := *e
+	c.Lang = i18n.Norm(lang)
+	c.Cat = e.Cat.ForLang(lang)
+	return &c
 }
 
 // SkillScore is the mastery breakdown of a skill.
@@ -588,7 +615,7 @@ func League(userID string, levelIdx int, now time.Time) string {
 	y, w := now.ISOWeek()
 	h := fnv.New32a()
 	h.Write([]byte(fmt.Sprintf("%s-%d-%d", userID, y, w)))
-	return fmt.Sprintf("%s-%d-W%02d-%c", Levels[levelIdx].Name, y, w, 'A'+rune(h.Sum32()%6))
+	return fmt.Sprintf("%s-%d-W%02d-%c", Levels[levelIdx].NameEN, y, w, 'A'+rune(h.Sum32()%6))
 }
 
 // Profile builds the dashboard for a user.
@@ -609,7 +636,7 @@ func (e *Engine) Profile(u User, attempts []Attempt, trackID string) Profile {
 		}
 	}
 	p.LabsPassed = len(passed)
-	p.Level, p.LevelIndex, p.LevelProgress = LevelFor(p.XP)
+	p.Level, p.LevelIndex, p.LevelProgress = LevelForLang(p.XP, e.Lang)
 	p.Streak = e.Streak(attempts)
 	p.Readiness = e.ReadinessFor(skills, branches)
 	p.Badges = e.Badges(skills, branches, attempts)

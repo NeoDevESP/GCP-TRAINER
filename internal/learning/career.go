@@ -22,6 +22,7 @@ type CareerStage struct {
 	MinAutonomy int                `yaml:"minAutonomy" json:"minAutonomy"`
 	Branches    map[string]float64 `yaml:"branches" json:"branches"` // minimum branch mastery
 	Capstones   []string           `yaml:"capstones" json:"capstones"`
+	EN          *TextEN            `yaml:"en,omitempty" json:"-"`
 }
 
 // Specialization is a tree opened after the core.
@@ -33,6 +34,7 @@ type Specialization struct {
 	Skills    []string           `yaml:"skills" json:"skills"`
 	Capstones []string           `yaml:"capstones" json:"capstones"`
 	Certs     []string           `yaml:"certs" json:"certs"`
+	EN        *TextEN            `yaml:"en,omitempty" json:"-"`
 }
 
 // CareerDef is the career content.

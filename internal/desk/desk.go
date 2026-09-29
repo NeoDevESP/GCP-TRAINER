@@ -8,6 +8,7 @@ package desk
 
 import (
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"sort"
 	"strings"
 	"time"
@@ -159,7 +160,7 @@ func (d *Desk) Ask(who, question, at string) (string, string, string, error) {
 		for _, g := range f.Keywords {
 			hit := false
 			for _, k := range g {
-				if strings.Contains(q, normalize(k)) {
+				if i18n.ContainsAny(q, k) {
 					hit = true
 					break
 				}

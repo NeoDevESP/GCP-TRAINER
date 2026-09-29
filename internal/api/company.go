@@ -22,7 +22,7 @@ func (s *Server) stageIndex() map[string]int {
 
 func (s *Server) careerIndex(u *learning.User) int {
 	att, _ := s.attemptsOf(u.ID)
-	return s.Engine.Profile(*u, att, "").Career.StageIndex
+	return s.Engine.ForLang(u.Lang).Profile(*u, att, "").Career.StageIndex
 }
 
 func (s *Server) loadCompany(userID string) (*company.Company, error) {
@@ -102,7 +102,7 @@ func (s *Server) companyStart(w http.ResponseWriter, r *http.Request) (any, erro
 		}
 	}
 	att := learning.Attempt{ID: learning.NewID("a-"), UserID: u.ID, LabID: l.ID, Track: l.Track, Seed: int64(c.Day), Started: time.Now(), Status: "running", HintsUsed: []int{}}
-	info, err := s.Labs.Start(orchestrator.StartRequest{UserID: u.ID, LabID: l.ID, Fidelity: "F0", Seed: int64(c.Day), AttemptID: att.ID, Mission: &orchestrator.MissionStart{ID: id, Params: params, State: c.State}})
+	info, err := s.Labs.Start(orchestrator.StartRequest{UserID: u.ID, LabID: l.ID, Fidelity: "F0", Seed: int64(c.Day), AttemptID: att.ID, Mission: &orchestrator.MissionStart{ID: id, Params: params, State: c.State}, Lang: s.lang(r)})
 	if err != nil {
 		return nil, err
 	}

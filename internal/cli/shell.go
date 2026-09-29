@@ -56,6 +56,7 @@ type Session struct {
 	Desk        *desk.Desk        `json:"desk,omitempty"`      // ticket and simulated actors
 	Chaos       []ChaosRun        `json:"chaos,omitempty"`     // chaos experiments run in this session
 	Interview   *Interview        `json:"interview,omitempty"` // interview mode state
+	Lang        string            `json:"lang,omitempty"`      // language of the platform's own commands (es primary, en)
 	vmRoot      bool              // current VM command runs with sudo
 	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
 	// take over a command before the simulator handles it.
