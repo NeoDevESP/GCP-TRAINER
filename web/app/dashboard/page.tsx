@@ -45,6 +45,12 @@ export default function Dashboard() {
   const [attempts, setAttempts] = useState<any[]>([]);
   const [err, setErr] = useState("");
   const [track, setTrack] = useState("ace-30");
+  const [tracks, setTracks] = useState<{ id: string; title: string }[]>([]);
+  useEffect(() => {
+    api<{ tracks: { id: string; title: string }[] }>("/api/catalog")
+      .then((c) => setTracks(c.tracks ?? []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     api<Profile>(`/api/me?track=${track}`).then(setP).catch((e) => setErr(e.message));
@@ -62,14 +68,14 @@ export default function Dashboard() {
     a.click();
   };
 
-  if (err) return (<><Nav active="/dashboard" /><main className="page"><p className="error">{err}</p></main></>);
-  if (!p) return (<><Nav active="/dashboard" /><main className="page"><p className="muted">Loading…</p></main></>);
+  if (err) return (<><Nav active="/dashboard" /><main id="main" className="page"><p className="error">{err}</p></main></>);
+  if (!p) return (<><Nav active="/dashboard" /><main id="main" className="page"><p className="muted">Loading…</p></main></>);
 
   const running = attempts.filter((a) => a.status === "running");
   return (
     <>
       <Nav active="/dashboard" />
-      <main className="page">
+      <main id="main" className="page">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h1>Welcome back, {p.user.name}</h1>
           <button className="btn secondary" onClick={downloadTranscript}>
@@ -121,8 +127,10 @@ export default function Dashboard() {
             <div className="row small">
               <label htmlFor="track" style={{ margin: 0 }}>Track</label>
               <select id="track" value={track} onChange={(e) => setTrack(e.target.value)} style={{ width: "auto" }}>
-                {["ace-30", "foundations", "linux", "architect", "devops", "sre", "finops", "capstones", "career"].map((t) => (
-                  <option key={t}>{t}</option>
+                {(tracks.length ? tracks : [{ id: "ace-30", title: "Associate Cloud Engineer — 30 days" }]).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
                 ))}
               </select>
             </div>
@@ -215,7 +223,7 @@ export default function Dashboard() {
           <div className="card">
             <h2>Specializations</h2>
             {p.career.specializations?.map((s) => (
-              <div key={s.id} style={{ marginBottom: 10, opacity: s.unlocked ? 1 : 0.55 }}>
+              <div key={s.id} style={{ marginBottom: 10 }}>
                 <div className="row" style={{ justifyContent: "space-between" }}>
                   <strong>{s.name}</strong>
                   {s.done ? <span className="pill ok">complete</span> : !s.unlocked ? <span className="pill">locked</span> : <span>{Math.round(s.percent)}%</span>}

@@ -332,12 +332,21 @@ function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: n
     case "history":
       return (
         <table>
+          <caption className="sr-only">Commands you ran, with their output</caption>
           <thead><tr><th>Time</th><th>Command</th><th>Exit</th></tr></thead>
           <tbody>
             {(Array.isArray(data) ? data : []).map((r: any, i: number) => (
               <tr key={i}>
                 <td className="small muted" style={{ whiteSpace: "nowrap" }}>{String(r.at ?? "").replace("T", " ").replace(/Z$/, "")}</td>
-                <td className="small" style={{ fontFamily: "var(--mono)", whiteSpace: "pre-wrap" }}>{r.line}</td>
+                <td className="small" style={{ fontFamily: "var(--mono)", whiteSpace: "pre-wrap" }}>
+                  {r.line}
+                  {r.output ? (
+                    <details>
+                      <summary className="muted">output</summary>
+                      <pre style={{ margin: 0 }}>{r.output}</pre>
+                    </details>
+                  ) : null}
+                </td>
                 <td><span className={`pill ${r.exit ? "bad" : "ok"}`}>{r.exit}</span></td>
               </tr>
             ))}
@@ -429,6 +438,23 @@ function Workspace({ session }: { session: SessionInfo }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [hasDesk, setHasDesk] = useState(false);
+  const [screenReader, setScreenReader] = useState(false);
+  useEffect(() => {
+    try {
+      setScreenReader(localStorage.getItem("gcplab.screenReader") === "1");
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const toggleScreenReader = () => {
+    const next = !screenReader;
+    setScreenReader(next);
+    try {
+      localStorage.setItem("gcplab.screenReader", next ? "1" : "0");
+    } catch {
+      /* storage unavailable */
+    }
+  };
 
   useEffect(() => {
     api(`/api/sessions/${session.id}/views/desk`)
@@ -481,7 +507,7 @@ function Workspace({ session }: { session: SessionInfo }) {
 
   if (out) {
     return (
-      <main className="page" style={{ maxWidth: 900 }}>
+      <main id="main" className="page" style={{ maxWidth: 900 }}>
         <Result out={out} />
       </main>
     );
@@ -489,8 +515,8 @@ function Workspace({ session }: { session: SessionInfo }) {
 
   const tabs = TABS.filter((t) => t !== "desk" || hasDesk);
   return (
-    <div className="workspace">
-      <aside className="side card">
+    <main id="main" className="workspace">
+      <aside className="side card" aria-label="Lab briefing and submission">
         <div className="row small muted">
           <span className="pill">{session.fidelity}</span>
           {session.mode && <span className="pill warn">{session.mode}</span>}
@@ -593,26 +619,53 @@ function Workspace({ session }: { session: SessionInfo }) {
           <button className="btn danger" onClick={stop}>Abandon</button>
         </div>
         <p className="small muted">Session expires {new Date(session.expires).toLocaleTimeString()}.</p>
+        <label className="small" style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--text)" }}>
+          <input type="checkbox" style={{ width: "auto" }} checked={screenReader} onChange={toggleScreenReader} />
+          Screen reader mode for the terminal
+        </label>
       </aside>
       <section className="main">
         <div className="term">
-          <Terminal sessionId={session.id} onCommand={onCommand} banner={`\x1b[36mCloud Shell — project ${session.project} (${session.fidelity})\x1b[0m\r\nType 'help' to list commands.`} />
+          <Terminal sessionId={session.id} onCommand={onCommand} screenReader={screenReader} banner={`\x1b[36mCloud Shell — project ${session.project} (${session.fidelity})\x1b[0m\r\nType 'help' to list commands.`} />
         </div>
         <div className="card tabpanel" style={{ padding: "8px 12px" }}>
-          <div className="tabs">
+          <div className="row" style={{ gap: 0, flexWrap: "nowrap", alignItems: "stretch" }}>
+          <div className="tabs" role="tablist" aria-label="Environment views" style={{ flex: 1 }}>
             {tabs.map((t) => (
-              <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)} style={{ textTransform: "capitalize" }}>
+              <button
+                key={t}
+                id={`tab-${t}`}
+                role="tab"
+                aria-selected={tab === t}
+                aria-controls="view-panel"
+                tabIndex={tab === t ? 0 : -1}
+                className={tab === t ? "active" : ""}
+                onClick={() => setTab(t)}
+                onKeyDown={(e) => {
+                  const i = tabs.indexOf(t);
+                  const next = e.key === "ArrowRight" ? tabs[(i + 1) % tabs.length] : e.key === "ArrowLeft" ? tabs[(i - 1 + tabs.length) % tabs.length] : null;
+                  if (next) {
+                    e.preventDefault();
+                    setTab(next);
+                    document.getElementById(`tab-${next}`)?.focus();
+                  }
+                }}
+                style={{ textTransform: "capitalize" }}
+              >
                 {t}
               </button>
             ))}
-            <button onClick={() => setTick((x) => x + 1)} title="Refresh">↻</button>
           </div>
-          <div className="panel-body">
+          <button className="btn secondary" onClick={() => setTick((x) => x + 1)} title="Refresh views" aria-label="Refresh views" style={{ border: "none", borderBottom: "1px solid var(--border)", borderRadius: 0 }}>
+            ↻
+          </button>
+          </div>
+          <div className="panel-body" id="view-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} aria-live="polite">
             <View sessionId={session.id} kind={tab} tick={tick} />
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 }
 
@@ -643,7 +696,7 @@ function LabPage() {
       {session ? (
         <Workspace session={session} />
       ) : (
-        <main className="page">
+        <main id="main" className="page">
           {err && <p className="error">{err}</p>}
           {labId && !qs("session") ? <Briefing labId={labId} onStarted={started} /> : !err && <p className="muted">Loading…</p>}
           {err && labId && <a href={`/lab?id=${encodeURIComponent(labId)}`}>Start a new attempt →</a>}

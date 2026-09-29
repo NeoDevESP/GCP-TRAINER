@@ -21,17 +21,18 @@ export default function Nav({ active }: { active?: string }) {
       .catch(() => setUser(null));
   }, []);
   return (
-    <nav className="nav">
+    <nav className="nav" aria-label="Main">
+      <a className="skip-link" href="#main">Skip to content</a>
       <a className="brand" href="/dashboard">
         Cloud <span>Mastery</span>
       </a>
       {links.map(([href, label]) => (
-        <a key={href} href={href} className={active === href ? "active" : ""}>
+        <a key={href} href={href} className={active === href ? "active" : ""} aria-current={active === href ? "page" : undefined}>
           {label}
         </a>
       ))}
       {user && (user.role === "admin" || user.role === "instructor") && (
-        <a href="/admin" className={active === "/admin" ? "active" : ""}>
+        <a href="/admin" className={active === "/admin" ? "active" : ""} aria-current={active === "/admin" ? "page" : undefined}>
           Instructor
         </a>
       )}

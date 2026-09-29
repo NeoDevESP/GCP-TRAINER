@@ -75,7 +75,7 @@ export default function Incidents() {
   return (
     <>
       <Nav active="/incidents" />
-      <main className="page">
+      <main id="main" className="page">
         <h1>Incident generator</h1>
         <p className="muted">
           Incidents are composed from a failure library: a system, one or more failure modes, a business context and a

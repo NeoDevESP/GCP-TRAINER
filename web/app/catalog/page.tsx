@@ -41,7 +41,7 @@ export default function CatalogPage() {
   return (
     <>
       <Nav active="/catalog" />
-      <main className="page">
+      <main id="main" className="page">
         <h1>Lab catalog</h1>
         {err && <p className="error">{err}</p>}
         <div className="row" style={{ marginBottom: 16 }}>

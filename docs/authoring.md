@@ -57,6 +57,27 @@ rubric:                             # 100 points
 `desc` is what the learner sees in *Check work* when a check fails, so write
 it as the requirement, never as the answer.
 
+### Shortcuts: prove that wrong fixes fail
+
+A good rubric rewards the right change, not just any change that makes the
+symptom go away. Declare the tempting wrong fixes and CI will apply each one to
+a fresh environment and fail the build if the lab still passes:
+
+```yaml
+shortcuts:
+  - name: grant the bucket to the node identity
+    run: |
+      gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} \
+        --member=serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+```
+
+Every step must succeed (prefix a step with `!` if it is expected to fail), so
+a shortcut can't pass by accident. Typical shortcuts: disabling the control
+(delete the NetworkPolicy, remove the probe), over-granting (editor,
+project-wide roles, `0.0.0.0/0`), destroying evidence, restoring over live
+data, deploying straight to 100%. When a shortcut passes, fix the rubric —
+usually by making the guarding criterion `critical`.
+
 ### Checks
 
 | Family | Types |
@@ -133,6 +154,6 @@ risk before then cancels them.
 
 1. `go run ./cmd/labctl validate`
 2. `go run ./cmd/labctl test -lab <id> -seeds 1,7,42` — before < pass mark ≤ after
-3. `go run ./cmd/labctl play -lab <id>` and try the obvious wrong fixes: they
-   must not pass (e.g. opening a port to 0.0.0.0/0 must fail the security criterion)
+3. Declare the obvious wrong fixes as `shortcuts` (CI proves they fail), and
+   `go run ./cmd/labctl play -lab <id>` to try a few more by hand
 4. Hints go from a nudge to a near answer; the story never names the root cause

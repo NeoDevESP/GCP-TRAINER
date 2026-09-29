@@ -28,11 +28,13 @@ export default function Terminal({
   prompt = "student@cloudshell:~$ ",
   onCommand,
   banner,
+  screenReader = false,
 }: {
   sessionId: string;
   prompt?: string;
   onCommand?: (line: string, exit: number) => void;
   banner?: string;
+  screenReader?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const onCmd = useRef(onCommand);
@@ -46,8 +48,10 @@ export default function Terminal({
       const { Terminal: XTerm } = await import("@xterm/xterm");
       const { FitAddon } = await import("@xterm/addon-fit");
       if (disposed || !host.current) return;
+      const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       const term = new XTerm({
-        cursorBlink: true,
+        cursorBlink: !reduceMotion,
+        screenReaderMode: screenReader,
         convertEol: true,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 13,
@@ -232,7 +236,7 @@ export default function Terminal({
       disposed = true;
       cleanup();
     };
-  }, [sessionId, prompt, banner]);
+  }, [sessionId, prompt, banner, screenReader]);
 
-  return <div ref={host} style={{ width: "100%", height: "100%" }} />;
+  return <div ref={host} role="application" aria-label="Cloud Shell terminal. Type commands and press Enter." style={{ width: "100%", height: "100%" }} />;
 }

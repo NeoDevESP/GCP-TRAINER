@@ -73,7 +73,7 @@ export default function Admin() {
   return (
     <>
       <Nav active="/admin" />
-      <main className="page">
+      <main id="main" className="page">
         <h1>Instructor console</h1>
         {err && <p className="error">{err}</p>}
         <div className="row" style={{ marginBottom: 12 }}>

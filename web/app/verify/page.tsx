@@ -20,7 +20,7 @@ export default function Verify() {
     }
   };
   return (
-    <main className="page" style={{ maxWidth: 820 }}>
+    <main id="main" className="page" style={{ maxWidth: 820 }}>
       <h1>Verify a transcript</h1>
       <p className="muted">
         Learners can download a signed transcript of their competences, career stage and completed capstones. Paste it here

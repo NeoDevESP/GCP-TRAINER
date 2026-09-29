@@ -39,7 +39,7 @@ export default function Home() {
   };
 
   return (
-    <main className="page" style={{ maxWidth: 980 }}>
+    <main id="main" className="page" style={{ maxWidth: 980 }}>
       <div className="grid two" style={{ alignItems: "start", marginTop: 40 }}>
         <section>
           <h1 style={{ fontSize: 34 }}>

@@ -39,13 +39,13 @@ export default function CompanyPage() {
     }
   };
 
-  if (!c) return (<><Nav active="/company" /><main className="page">{err ? <p className="error">{err}</p> : <p className="muted">Loading…</p>}</main></>);
+  if (!c) return (<><Nav active="/company" /><main id="main" className="page">{err ? <p className="error">{err}</p> : <p className="muted">Loading…</p>}</main></>);
 
   if (c.exists === false) {
     return (
       <>
         <Nav active="/company" />
-        <main className="page" style={{ maxWidth: 800 }}>
+        <main id="main" className="page" style={{ maxWidth: 800 }}>
           <h1>Join {c.name}</h1>
           <p>
             You are the new cloud engineer at <strong>{c.name}</strong>. Its Google Cloud estate persists between missions:
@@ -65,7 +65,7 @@ export default function CompanyPage() {
   return (
     <>
       <Nav active="/company" />
-      <main className="page">
+      <main id="main" className="page">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h1>{c.name} — day {c.day}</h1>
           <button className="btn danger" onClick={() => create(true)}>Start over</button>
@@ -96,7 +96,7 @@ export default function CompanyPage() {
             <table>
               <tbody>
                 {(c.missions ?? []).map((ms: any) => (
-                  <tr key={ms.id} style={{ opacity: ms.available || ms.done ? 1 : 0.55 }}>
+                  <tr key={ms.id}>
                     <td>
                       <strong>{ms.title}</strong> {ms.incident && <span className="pill bad">incident</span>} <span className="pill">{ms.kind}</span>
                       <div className="small muted">{ms.summary}</div>

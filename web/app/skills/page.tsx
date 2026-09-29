@@ -59,7 +59,7 @@ export default function Skills() {
   return (
     <>
       <Nav active="/skills" />
-      <main className="page">
+      <main id="main" className="page">
         <h1>Skill graph</h1>
         <p className="muted">Skills unlock in dependency order. Green is mastered (≥80), amber is in progress.</p>
         {err && <p className="error">{err}</p>}

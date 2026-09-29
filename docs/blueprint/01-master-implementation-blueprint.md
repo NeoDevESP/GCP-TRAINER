@@ -97,7 +97,7 @@ provisioning, grading and CI with hand-written labs.
 | 3 — Lab DSL | Tickets, actors, modes, constraints, company block | ✅ | `internal/scenario/lab.go`, `labctl validate` |
 | 4 — GCP state | Resource model and simulated operations | ✅ (pre-existing, extended) | `internal/sim` |
 | 5 — Unified UI/CLI | Console views and terminal on the same state | ✅ | `/api/sessions/{id}/views/*`, `web/` (Next.js static export: xterm terminal, desk, console, topology, logs, metrics, IAM, cost, Monaco files) |
-| 6 — Incidents | Failure library, symptom graph, tickets, generator, P1 mode | ✅ | `TestGeneratedIncidents` (31 cases, incl. production mode → P1) |
+| 6 — Incidents | Failure library, symptom graph, tickets, generator, P1 mode | ✅ | `TestGeneratedIncidents` (47 cases across three systems, incl. production mode → P1), `TestDangerousShortcutsFail` |
 | 7 — Adaptive | Forgetting curve, spaced repetition, stealth assessment | ✅ | `TestAdaptiveStealthRetention` |
 | 8 — Company Sim | Nebula Corporation, missions, consequences | ✅ | `TestMissionsSolvable`, `TestConsequences`, `TestMitigationCancelsConsequence` |
 | 9 — Advanced | Architecture, FinOps, Security, DR, Terraform, Kubernetes, Chaos, Interview, Unknown problem, Teach-me-why, What-if | ✅ | labs under `content/labs/{architecture,devops,gke,finops,sre,career,linux,...}`; `internal/archsim` (`TestGoodDesignMeetsRequirements`, `TestNaiveDesignFailsWithReasons`); `chaos`, `interview`, `billing report`, `why`, `whatif` commands |
@@ -131,6 +131,8 @@ provisioning, grading and CI with hand-written labs.
 | 9 (cont.) | lab schema, grader | `Question` gained `after`/`when` (interview follow-ups); quiz merges interview answers | interview mode, chaos experiments, FinOps billing/recommender, architecture simulator (`archsim`), guest-OS model for VMs (files, permissions, disks, services, users), shell loops/conditionals, `jq select`, Cloud SQL import/export | `TestAllLabs`, archsim and cli tests |
 | 1 (cont.) | skill graph | — | foundations/linux/netfund/devtools/automation/containers/finops branches with labs | `labctl validate`, `TestAllLabs` |
 | 5 (cont.) | API | `Attempt` gained `sessionId` (resume running labs) | web client pages: dashboard, catalog, lab workspace, incidents, company, skill graph, leagues, instructor console, transcript verification | headless browser run (register → lab → terminal → views → check) |
+| 6 (cont.) | failure library | symptom graph gains k8s layers | `gke-shop` system with 7 Kubernetes failure modes; `TestDangerousShortcutsFail` | `TestGeneratedIncidents` (47 cases) |
+| Roadmap m7–m12 | Lab schema | `Lab` gained `shortcuts` (wrong fixes CI proves fail); SQL backups capture databases; Vertex AI traffic splits; node-pool workload metadata | GKE, security, network, data and ML tracks, data/ML professional capstone, WCAG 2 AA web client | `TestAllLabs`, `TestShortcutThatPassesIsReported`, axe audit |
 | Platform | fidelity, orchestrator | `Service.Close` idempotent; production-mode incidents escalate to P1 | Dockerfile, docker-compose (emulators), Terraform (sandbox folder + guardrails + Cloud Run platform), Cloud Build, GitHub Actions; fidelity, orchestrator, store and desk tests | CI |
 
 Rollback: every phase is a separate commit on the development branch; features

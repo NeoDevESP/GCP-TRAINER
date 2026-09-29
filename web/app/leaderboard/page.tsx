@@ -20,7 +20,7 @@ export default function Leaderboard() {
   return (
     <>
       <Nav active="/leaderboard" />
-      <main className="page" style={{ maxWidth: 800 }}>
+      <main id="main" className="page" style={{ maxWidth: 800 }}>
         <h1>Weekly league</h1>
         <p className="muted">
           Leagues are opt-in and rank this week&apos;s XP normalised by difficulty, so hard labs count more than grinding easy ones.

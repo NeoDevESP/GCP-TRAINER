@@ -24,12 +24,14 @@ and communication.
 | Advanced modes | `internal/archsim`, `internal/cli` | Architecture simulator, chaos experiments, FinOps billing and recommender, interviews, "teach me why" and "what if" |
 | Fidelity | `internal/fidelity` | F0 simulator, F1 emulators (Pub/Sub, GCS, kind), F2 real projects from a guarded sandbox pool with a janitor |
 | Planes | `internal/api`, `internal/orchestrator` | Learning plane (users, progress) separated from the lab plane (sessions) and an isolated grader worker |
-| Web | `web/` | Next.js static export served by the Go binary: dashboard, catalog, lab workspace (xterm, Monaco, Mermaid), incidents, company, skill graph, leagues, instructor console |
+| Web | `web/` | Next.js static export served by the Go binary: dashboard, catalog, lab workspace (xterm, Monaco, Mermaid), incidents, company, skill graph, leagues, instructor console; WCAG 2 AA (axe-audited, light and dark), terminal screen-reader mode |
 
-Content today: 48 labs in 9 tracks (a 30-day Associate Cloud Engineer
-programme, foundations, Linux, architect, DevOps, SRE, FinOps, capstones and
-career), 13 company missions and consequence incidents, 13 failure modes in 2
-systems, 16 badges, 6 career stages and 10 specialisations.
+Content today: 54 labs in 14 tracks (a 30-day Associate Cloud Engineer
+programme, foundations, Linux, GKE, security, network, data, ML, architect,
+DevOps, SRE, FinOps, capstones and career), 13 company missions and consequence
+incidents, 20 failure modes in 3 systems (three-tier, serverless shop, GKE
+shop), 16 badges, 6 career stages and 10 specialisations. Labs declare the
+tempting wrong fixes ("shortcuts") and CI proves they fail.
 
 ## Quick start
 
