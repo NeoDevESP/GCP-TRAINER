@@ -678,7 +678,7 @@ func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity string) (a
 		_ = s.Store.Put("attempts", att.ID, att)
 		return nil, err
 	}
-	att.Fidelity, att.Params, att.ProvisionMs = info.Fidelity, info.Params, info.ProvisionMs
+	att.Fidelity, att.Params, att.ProvisionMs, att.SessionID = info.Fidelity, info.Params, info.ProvisionMs, info.ID
 	if err := s.Store.Put("attempts", att.ID, att); err != nil {
 		return nil, err
 	}

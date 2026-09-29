@@ -51,6 +51,7 @@ type Attempt struct {
 	Errors        int               `json:"errors"`
 	ProvisionMs   int64             `json:"provisionMs"`
 	Status        string            `json:"status"` // running, submitted, expired, abandoned
+	SessionID     string            `json:"sessionId,omitempty"`
 }
 
 // DurationSec returns the attempt duration.

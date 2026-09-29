@@ -25,7 +25,7 @@ type GenSpec struct {
 	Symptom    string   `yaml:"symptom" json:"symptom,omitempty"`   // or pick by symptom
 	Context    string   `yaml:"context" json:"context,omitempty"`
 	Difficulty int      `yaml:"difficulty" json:"difficulty"` // 1..5
-	Mode       string   `yaml:"mode" json:"mode,omitempty"`   // "", production, unknown (only impact is given)
+	Mode       string   `yaml:"mode" json:"mode,omitempty"`   // "", production (P1 war room), unknown (only impact is given)
 	Seed       int64    `yaml:"seed" json:"seed"`
 	Focus      []string `yaml:"focus" json:"focus,omitempty"` // skills to embed (stealth retention checks)
 }
@@ -237,7 +237,7 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 	// Ticket: accurate → vague → misleading → impact only.
 	kind := firstNonEmpty(primary.Kind, "INC")
 	prio := firstNonEmpty(ctx.Priority, "P2")
-	if g.Difficulty >= 4 && kind == "INC" {
+	if (g.Difficulty >= 4 || g.Mode == "production") && kind == "INC" {
 		prio = "P1"
 	}
 	summary := primary.Summary

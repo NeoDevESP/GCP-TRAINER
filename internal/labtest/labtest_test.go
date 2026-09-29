@@ -70,6 +70,18 @@ func TestGeneratedIncidents(t *testing.T) {
 				t.Run(spec.ID(), func(t *testing.T) { verifySpec(t, lib, spec) })
 			}
 		}
+		// production mode escalates incidents to P1 (war room + postmortem) at any difficulty
+		spec := scenario.GenSpec{System: sys.ID, Difficulty: 2, Seed: 5, Mode: "production"}
+		t.Run("production-"+spec.ID(), func(t *testing.T) {
+			l, err := lib.Generate(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if l.Ticket.Kind == "INC" && l.Ticket.Priority != "P1" {
+				t.Errorf("production mode ticket priority = %s, want P1", l.Ticket.Priority)
+			}
+			verifySpec(t, lib, spec)
+		})
 	}
 }
 

@@ -106,7 +106,7 @@ func (s *Server) companyStart(w http.ResponseWriter, r *http.Request) (any, erro
 	if err != nil {
 		return nil, err
 	}
-	att.Fidelity, att.Params, att.ProvisionMs = info.Fidelity, info.Params, info.ProvisionMs
+	att.Fidelity, att.Params, att.ProvisionMs, att.SessionID = info.Fidelity, info.Params, info.ProvisionMs, info.ID
 	if err := s.Store.Put("attempts", att.ID, att); err != nil {
 		return nil, err
 	}
