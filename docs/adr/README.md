@@ -10,3 +10,4 @@
 | [0006](0006-persistent-company-world.md) | A persistent company world with consequences |
 | [0007](0007-static-web-client.md) | Static Next.js client served by the Go binary |
 | [0008](0008-optional-llm-mentor.md) | Deterministic help first, LLM mentor optional |
+| [0009](0009-spanish-first-i18n.md) | Español como idioma principal; inglés como traducción |

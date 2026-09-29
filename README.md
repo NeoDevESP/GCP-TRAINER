@@ -1,143 +1,168 @@
 # Cloud Mastery — GCP Lab Simulator
 
-Learn Google Cloud by doing the job: **Learn → Build → Break → Diagnose → Master**.
+**Español** · [English](README.en.md)
 
-Learners work in a deterministic simulated Google Cloud through a real-feeling
-terminal (`gcloud`, `gsutil`, `bq`, `kubectl`, `terraform`, Linux tools) and a
-console that reads the same state. They answer tickets from people who don't
-know the root cause, respond to generated incidents, run a persistent company,
-and graduate to emulators and real sandbox projects. Grading looks at both the
-outcome and how they got there: diagnosis before change, security, cost, risk
-and communication.
+Aprende Google Cloud haciendo el trabajo: **Aprende → Construye → Rompe → Diagnostica → Domina**.
 
-## What's inside
+El alumnado trabaja en un Google Cloud simulado y determinista a través de una
+terminal realista (`gcloud`, `gsutil`, `bq`, `kubectl`, `terraform`,
+herramientas de Linux) y de una consola que lee el mismo estado. Atiende
+tickets de personas que no conocen la causa raíz, responde a incidentes
+generados, gestiona una empresa persistente y da el salto a emuladores y a
+proyectos reales en sandbox. La evaluación mira tanto el resultado como el
+camino: diagnóstico antes del cambio, seguridad, coste, riesgo y comunicación.
 
-| Area | Where | Highlights |
+## Qué incluye
+
+| Área | Dónde | Lo más destacado |
 |---|---|---|
-| Simulator (F0) | `internal/sim`, `internal/cli` | IAM with conditions and org policies, VPC/firewalls/NAT/LB, Compute and MIGs, Cloud Run, Cloud SQL, GCS, Pub/Sub, BigQuery, GKE/`kubectl`, Terraform, logging/metrics, billing, a guest-OS model for VMs; request paths record causal chains (`why`) |
-| Scenarios | `internal/scenario`, `content/labs` | Declarative YAML labs with 45 fault types, templated variants per seed, hints, rubric validators, OPA/Rego policies |
-| Incidents | `content/failures`, `internal/scenario/generator.go` | Failure library (systems, failure modes, symptoms, business contexts) and a generator with vague/misleading tickets, stacked failures, P1 war rooms and "unknown problem" mode |
-| Service desk | `internal/desk` | INC/REQ/CHG/PRB/SEC/COST/MIG tickets, SLAs and simulated people who answer questions deterministically |
-| Company | `internal/company`, `content/company` | Nebula Corporation: six projects that persist between missions; latent risks come back as incidents |
-| Assessment | `internal/grader` | Rubric (100 pts) plus a process report: resolution, diagnosis, security, cost, efficiency, risk, communication, documentation, autonomy |
-| Learning | `internal/learning` | Skill graph with prerequisites (82 skills), 9-dimension student model, forgetting curve, autonomy ladder, adaptive plan, XP/levels/badges/leagues, career stages and signed transcripts |
-| Advanced modes | `internal/archsim`, `internal/cli` | Architecture simulator, chaos experiments, FinOps billing and recommender, interviews, "teach me why" and "what if" |
-| Fidelity | `internal/fidelity` | F0 simulator, F1 emulators (Pub/Sub, GCS, kind), F2 real projects from a guarded sandbox pool with a janitor |
-| Planes | `internal/api`, `internal/orchestrator` | Learning plane (users, progress) separated from the lab plane (sessions) and an isolated grader worker |
-| Web | `web/` | Next.js static export served by the Go binary: dashboard, catalog, lab workspace (xterm, Monaco, Mermaid), incidents, company, skill graph, leagues, instructor console; WCAG 2 AA (axe-audited, light and dark), terminal screen-reader mode |
+| Simulador (F0) | `internal/sim`, `internal/cli` | IAM con condiciones y políticas de organización, VPC/cortafuegos/NAT/balanceadores, Compute y MIG, Cloud Run, Cloud SQL, GCS, Pub/Sub, BigQuery, GKE/`kubectl`, Terraform, registros y métricas, facturación y un modelo del sistema operativo de las VM; los caminos de las peticiones registran cadenas causales (`why`) |
+| Escenarios | `internal/scenario`, `content/labs` | Laboratorios declarativos en YAML con 45 tipos de fallo, variantes por semilla, pistas, validadores de rúbrica y políticas OPA/Rego |
+| Incidentes | `content/failures`, `internal/scenario/generator.go` | Biblioteca de fallos (sistemas, modos de fallo, síntomas y contextos de negocio) y un generador con tickets vagos o engañosos, fallos acumulados, salas de crisis P1 y modo «problema desconocido» |
+| Mesa de servicio | `internal/desk` | Tickets INC/REQ/CHG/PRB/SEC/COST/MIG, SLA y personas simuladas que responden a las preguntas de forma determinista |
+| Empresa | `internal/company`, `content/company` | Nebula Corporation: seis proyectos que persisten entre misiones; los riesgos latentes vuelven como incidentes |
+| Evaluación | `internal/grader` | Rúbrica (100 puntos) más un informe del proceso: resolución, diagnóstico, seguridad, coste, eficiencia, riesgo, comunicación, documentación y autonomía |
+| Aprendizaje | `internal/learning` | Grafo de habilidades con prerrequisitos (82 habilidades), modelo del alumno en 9 dimensiones, curva del olvido, escalera de autonomía, plan adaptativo, XP/niveles/insignias/ligas, etapas profesionales y expedientes firmados |
+| Modos avanzados | `internal/archsim`, `internal/cli` | Simulador de arquitectura, experimentos de caos, facturación y recomendador de FinOps, entrevistas, «explícame por qué» (`why`) y «¿qué pasa si…?» (`whatif`) |
+| Fidelidad | `internal/fidelity` | F0 simulador, F1 emuladores (Pub/Sub, GCS, kind), F2 proyectos reales de un pool protegido con limpieza automática |
+| Planos | `internal/api`, `internal/orchestrator` | Plano de aprendizaje (usuarios, progreso) separado del plano de laboratorios (sesiones) y un evaluador aislado |
+| Web | `web/` | Exportación estática de Next.js servida por el binario de Go: panel, catálogo, espacio de trabajo del laboratorio (xterm, Monaco, Mermaid), incidentes, empresa, grafo de habilidades, ligas y consola del instructor; WCAG 2 AA (auditado con axe, modo claro y oscuro) y modo lector de pantalla en la terminal |
 
-Content today: 54 labs in 14 tracks (a 30-day Associate Cloud Engineer
-programme, foundations, Linux, GKE, security, network, data, ML, architect,
-DevOps, SRE, FinOps, capstones and career), 13 company missions and consequence
-incidents, 20 failure modes in 3 systems (three-tier, serverless shop, GKE
-shop), 16 badges, 6 career stages and 10 specialisations. Labs declare the
-tempting wrong fixes ("shortcuts") and CI proves they fail.
+Contenido actual: 54 laboratorios en 14 rutas (un programa de 30 días de
+Associate Cloud Engineer, fundamentos, Linux, GKE, seguridad, redes, datos, ML,
+arquitectura, DevOps, SRE, FinOps, proyectos finales y carrera), 13 misiones de
+empresa con sus incidentes por consecuencias, 20 modos de fallo en 3 sistemas
+(tres capas, tienda serverless y tienda en GKE), 16 insignias, 6 etapas
+profesionales y 10 especializaciones. Los laboratorios declaran las
+correcciones erróneas tentadoras («atajos») y CI demuestra que fallan.
 
-## Quick start
+## Idiomas
 
-Requirements: Go 1.25 and Node 22 (only to build the web client).
+El español es el idioma principal y el inglés una traducción
+([ADR 0009](docs/adr/0009-spanish-first-i18n.md)). Todo lo que dice la
+plataforma se escribe primero en español: la web, los mensajes del servidor,
+los comandos propios de la terminal (`help`, `ticket`, `why`, `whatif`,
+`chaos`, `interview`, `arch`), los laboratorios, las misiones, la biblioteca de
+fallos y el temario. El inglés vive en los bloques `en:` del contenido, en
+`i18n.P(lang, "es", "en")` en el código y en `web/lib/en.ts` en la web. La
+salida de las herramientas reales (`gcloud`, `kubectl`, `terraform`…) sigue en
+inglés, como en el trabajo.
+
+El alumnado cambia de idioma con los botones ES/EN y la elección se guarda en
+su cuenta. Una sesión de laboratorio conserva el idioma con el que empezó y se
+aceptan respuestas en cualquiera de los dos idiomas (las palabras clave se
+comparan con un glosario bilingüe). CI falla si falta una traducción
+(`labctl validate`, `npm run check:i18n`).
+
+## Puesta en marcha rápida
+
+Requisitos: Go 1.25 y Node 22 (solo para construir la web).
 
 ```sh
-# web client (static files in web/out)
+# cliente web (archivos estáticos en web/out)
 (cd web && npm ci && npm run build)
 
-# server: API + lab plane + grader in one process, JSON file store
+# servidor: API + plano de laboratorios + evaluador en un proceso, almacén en un archivo JSON
 go run ./cmd/gcplab
-# → http://localhost:8080  (create an account, open the catalog)
+# → http://localhost:8080  (crea una cuenta y abre el catálogo)
 ```
 
-Play a lab directly in your terminal:
+Juega un laboratorio directamente en tu terminal:
 
 ```sh
 go run ./cmd/labctl play -lab ace-d01-context
 go run ./cmd/labctl generate -system shop-platform -difficulty 4 -mode production -play
 ```
 
-Inside a lab, type `help`. Useful commands: `why <resource>` (causal chain of a
-request), `whatif <command>` (impact preview), `ticket show`, `team`,
-`ask <person> "question"`.
+Dentro de un laboratorio, escribe `help`. Comandos útiles: `why <recurso>`
+(cadena causal de una petición), `whatif <comando>` (vista previa del
+impacto), `ticket show`, `team` y `ask <persona> "pregunta"`.
 
-### Full local stack
+### Entorno local completo
 
 ```sh
 docker compose -f deploy/docker-compose.yml up --build
 ```
 
-This runs the API, lab plane and grader as separate services with PostgreSQL
-and the Pub/Sub and GCS emulators (F1).
+Ejecuta la API, el plano de laboratorios y el evaluador como servicios
+separados, con PostgreSQL y los emuladores de Pub/Sub y GCS (F1).
 
-## Configuration
+## Configuración
 
-| Variable | Default | Purpose |
+| Variable | Por defecto | Para qué sirve |
 |---|---|---|
-| `ADDR` | `:8080` | listen address |
-| `MODE` | `all` | `all`, `api` (learning plane) or `labplane` |
-| `CONTENT_DIR` | `content` | labs, skills, tracks, failures, company |
-| `WEB_DIR` | `web/out` | static web client |
-| `DATA_FILE` | `data/gcplab.json` | JSON store when `DATABASE_URL` is unset |
-| `DATABASE_URL` | — | PostgreSQL DSN |
-| `JWT_SECRET` | random per start | token signing and transcript signatures |
-| `LABPLANE_URL`, `LABPLANE_TOKEN` | — | API → lab plane (split mode) |
-| `GRADER_URL` | — | isolated grader worker (`cmd/grader-worker`) |
-| `PUBSUB_EMULATOR_HOST`, `STORAGE_EMULATOR_HOST`, `KIND_KUBECONFIG` | — | enable F1 |
-| `F2_PROJECTS` | — | comma-separated sandbox project ids (enables F2) |
-| `F2_DRIVER` | `sim` | `gcloud` to drive real projects |
-| `F2_ADMIN_SA`, `F2_LAB_SA` | — | pool administrator and learner identities (impersonated) |
-| `F2_DRY_RUN` | — | `1` logs gcloud commands instead of running them |
-| `F2_MONTHLY` | `10` | real-cloud sessions per learner per month |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URL` | — | Google Workspace / OIDC sign-in |
-| `MENTOR_LLM` | `off` | `on` enables the Claude post-mortem reviewer (needs `ANTHROPIC_API_KEY`) |
-| `CORS_ORIGIN` | — | allow a separately hosted web client |
+| `ADDR` | `:8080` | dirección de escucha |
+| `MODE` | `all` | `all`, `api` (plano de aprendizaje) o `labplane` |
+| `CONTENT_DIR` | `content` | laboratorios, habilidades, rutas, fallos y empresa |
+| `WEB_DIR` | `web/out` | cliente web estático |
+| `DATA_FILE` | `data/gcplab.json` | almacén JSON cuando no hay `DATABASE_URL` |
+| `DATABASE_URL` | — | DSN de PostgreSQL |
+| `JWT_SECRET` | aleatorio en cada arranque | firma de tokens y de expedientes |
+| `LABPLANE_URL`, `LABPLANE_TOKEN` | — | API → plano de laboratorios (modo separado) |
+| `GRADER_URL` | — | evaluador aislado (`cmd/grader-worker`) |
+| `PUBSUB_EMULATOR_HOST`, `STORAGE_EMULATOR_HOST`, `KIND_KUBECONFIG` | — | activan F1 |
+| `F2_PROJECTS` | — | ids de proyectos sandbox separados por comas (activa F2) |
+| `F2_DRIVER` | `sim` | `gcloud` para manejar proyectos reales |
+| `F2_ADMIN_SA`, `F2_LAB_SA` | — | identidades del administrador del pool y del alumnado (suplantadas) |
+| `F2_DRY_RUN` | — | `1` registra los comandos de gcloud en lugar de ejecutarlos |
+| `F2_MONTHLY` | `10` | sesiones en cloud real por persona y mes |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URL` | — | inicio de sesión con Google Workspace / OIDC |
+| `MENTOR_LLM` | `off` | `on` activa el revisor de post-mortems con Claude (necesita `ANTHROPIC_API_KEY`); responde en el idioma de la sesión |
+| `CORS_ORIGIN` | — | permite un cliente web alojado aparte |
 
-## Deploying to Google Cloud
+## Despliegue en Google Cloud
 
-`deploy/terraform` creates the sandbox folder with org-policy guardrails
-(allowed locations, no service-account keys, public access prevention, no VM
-external IPs, domain-restricted sharing), the pool projects with budgets, and
-the platform: Cloud Run services for the API (public), lab plane and grader
-(internal only), Cloud SQL, Secret Manager and Artifact Registry. See
-[docs/operations.md](docs/operations.md).
+`deploy/terraform` crea la carpeta de sandbox con barreras de políticas de
+organización (ubicaciones permitidas, sin claves de cuentas de servicio,
+prevención de acceso público, sin IP externas en las VM, uso compartido
+restringido al dominio), los proyectos del pool con presupuestos y la
+plataforma: servicios de Cloud Run para la API (pública), el plano de
+laboratorios y el evaluador (solo internos), Cloud SQL, Secret Manager y
+Artifact Registry. Consulta [docs/operations.md](docs/operations.md).
 
 ```sh
 cd deploy/terraform
-cp terraform.tfvars.example terraform.tfvars   # edit
+cp terraform.tfvars.example terraform.tfvars   # edítalo
 terraform init && terraform apply
 gcloud builds submit --config deploy/cloudbuild.yaml ..
 ```
 
-## Authoring content
+## Crear contenido
 
-Labs are content-as-code. Every lab must go from failing to passing when its
-reference solution is applied, for several seeds:
+Los laboratorios son contenido como código y se escriben en español con su
+bloque `en:`. Cada laboratorio debe pasar de suspenso a aprobado al aplicar su
+solución de referencia, con varias semillas:
 
 ```sh
-go run ./cmd/labctl validate          # schema and references
-go run ./cmd/labctl test              # all labs, several seeds
+go run ./cmd/labctl validate          # esquema, referencias y traducciones al inglés
+go run ./cmd/labctl i18n              # solo lo que falta por traducir
+go run ./cmd/labctl test              # todos los laboratorios, varias semillas
 go run ./cmd/labctl test -lab ace-d05-subnet-isolation -seeds 1,7,42
 go run ./cmd/labctl variants -lab ace-d05-subnet-isolation -n 3
 ```
 
-See [docs/authoring.md](docs/authoring.md) for the lab DSL, failure library
-and company missions.
+Consulta la [guía de autoría](docs/authoring.md) para el DSL de los
+laboratorios, la biblioteca de fallos, las misiones de empresa y las
+traducciones.
 
-## Development
+## Desarrollo
 
 ```sh
 go vet ./... && go test -race ./...
 go run ./cmd/labctl validate && go run ./cmd/labctl test
-(cd web && npm run build)
+(cd web && npm run build)             # incluye npm run check:i18n
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same checks plus `terraform validate`
-and an image build.
+CI (`.github/workflows/ci.yml`) ejecuta las mismas comprobaciones más
+`terraform validate` y la construcción de la imagen.
 
-## Documentation
+## Documentación
 
-- [Master implementation blueprint](docs/blueprint/01-master-implementation-blueprint.md): architecture, contracts, schema, DSL, phases, changelog
-- [Repository audit](docs/blueprint/00-repository-audit.md)
-- [Architecture decision records](docs/adr/)
-- [Fidelity matrix](docs/fidelity-matrix.md)
-- [Authoring guide](docs/authoring.md)
-- [Operations](docs/operations.md)
-- [Risk register](docs/risk-register.md)
-- [Roadmap](docs/roadmap.md)
+- [Blueprint maestro de implementación](docs/blueprint/01-master-implementation-blueprint.md): arquitectura, contratos, esquema, DSL, fases y registro de cambios
+- [Auditoría del repositorio](docs/blueprint/00-repository-audit.md)
+- [Registros de decisiones de arquitectura (ADR)](docs/adr/)
+- [Matriz de fidelidad](docs/fidelity-matrix.md)
+- [Guía de autoría](docs/authoring.md) ([English](docs/authoring.en.md))
+- [Operaciones](docs/operations.md)
+- [Registro de riesgos](docs/risk-register.md)
+- [Hoja de ruta](docs/roadmap.md)
