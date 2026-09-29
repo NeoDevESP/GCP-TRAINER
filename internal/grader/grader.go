@@ -333,6 +333,44 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 				detail = fmt.Sprintf("%s failed: %.2f%% < SLO %.1f%%", r.Experiment, r.Availability, r.SLO)
 			}
 		}
+	case "vm_file", "vm_disk":
+		vm := c.State.Projects[c.Project].Instances[str(ch, "vm")]
+		if vm == nil || vm.OS == nil {
+			ok, detail = false, "vm or guest OS not found"
+			break
+		}
+		o := vm.OS
+		if res.Type == "vm_disk" {
+			pct := 100 * o.UsedGB() / float64(max(1, o.DiskGB))
+			ok, detail = pct <= num(ch, "maxPct", 90), fmt.Sprintf("disk %.0f%% used of %d GB", pct, o.DiskGB)
+			break
+		}
+		f := o.Files[str(ch, "path")]
+		want := boolean(ch, "exists", true)
+		if f == nil {
+			ok, detail = !want, "file absent"
+			break
+		}
+		ok, detail = want, fmt.Sprintf("%s %s:%s %s", f.ModeString(), f.Owner, f.Group, str(ch, "path"))
+		if want {
+			if v := str(ch, "owner"); v != "" && f.Owner != v {
+				ok = false
+			}
+			if v := str(ch, "group"); v != "" && f.Group != v {
+				ok = false
+			}
+			if boolean(ch, "noWorld", false) && f.Mode&7 != 0 {
+				ok = false
+			}
+			if v := str(ch, "readableBy"); v != "" && !o.CanRead(v, str(ch, "path")) {
+				ok = false
+			}
+			if v := str(ch, "notReadableBy"); v != "" && o.CanRead(v, str(ch, "path")) {
+				ok = false
+			}
+		}
+	case "subnet_plan":
+		ok, detail = c.subnetPlan(ch)
 	case "design":
 		ok, detail = c.design(ch)
 	case "tf_state":
@@ -1548,4 +1586,65 @@ func (c *Context) design(ch scenario.Check) (bool, string) {
 		return false, "not met: " + strings.Join(failed, "; ")
 	}
 	return true, fmt.Sprintf("%d/%d requirements met, %.0f EUR/month", rep.Passed, rep.Total, rep.CostEur)
+}
+
+// subnetPlan checks an addressing plan: each named subnet exists in the
+// network with room for its minimum hosts (GCP reserves 4 addresses per
+// subnet), sits inside "within", and overlaps neither the others nor "avoid".
+func (c *Context) subnetPlan(ch scenario.Check) (bool, string) {
+	p := c.State.Projects[c.Project]
+	net := str(ch, "network")
+	want, _ := ch["subnets"].(map[string]any)
+	var ranges []string
+	var problems []string
+	for _, name := range sortedAnyKeys(want) {
+		sn := p.Subnets[name]
+		if sn == nil || (net != "" && sn.Network != net) {
+			problems = append(problems, name+" missing")
+			continue
+		}
+		minHosts, _ := strconv.Atoi(fmt.Sprint(want[name]))
+		ipn := sim.ParseCIDR(sn.Range)
+		ones, bits := ipn.Mask.Size()
+		usable := (1 << (bits - ones)) - 4
+		if usable < minHosts {
+			problems = append(problems, fmt.Sprintf("%s %s has %d usable addresses (needs %d)", name, sn.Range, usable, minHosts))
+		}
+		if w := str(ch, "within"); w != "" && !(sim.IPInCIDR(ipn.IP.String(), w) && ones >= prefixOf(w)) {
+			problems = append(problems, fmt.Sprintf("%s %s is outside %s", name, sn.Range, w))
+		}
+		for _, a := range list(ch, "avoid") {
+			if sim.CIDROverlap(sn.Range, a) {
+				problems = append(problems, fmt.Sprintf("%s %s overlaps reserved %s", name, sn.Range, a))
+			}
+		}
+		for _, r := range ranges {
+			if sim.CIDROverlap(sn.Range, r) {
+				problems = append(problems, fmt.Sprintf("%s %s overlaps %s", name, sn.Range, r))
+			}
+		}
+		ranges = append(ranges, sn.Range)
+		if mx := num(ch, "maxWasteFactor", 0); mx > 0 && float64(usable) > mx*float64(minHosts) {
+			problems = append(problems, fmt.Sprintf("%s %s wastes address space (%d usable for %d needed)", name, sn.Range, usable, minHosts))
+		}
+	}
+	if len(problems) > 0 {
+		return false, strings.Join(problems, "; ")
+	}
+	return true, fmt.Sprintf("plan valid: %s", strings.Join(ranges, ", "))
+}
+
+func prefixOf(cidr string) int {
+	ipn := sim.ParseCIDR(cidr)
+	ones, _ := ipn.Mask.Size()
+	return ones
+}
+
+func sortedAnyKeys(m map[string]any) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

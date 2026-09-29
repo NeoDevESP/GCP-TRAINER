@@ -233,6 +233,19 @@ func (s *State) VMListeners(project string, vm *Instance) ([]Listener, []string)
 	// Faults: stopped services or loopback-only bindings.
 	for i := range out {
 		key := fmt.Sprintf("svc:%s/%s/%s", project, vm.Name, out[i].Name)
+		if vm.OS != nil {
+			if why := vm.OS.serviceProblem(out[i].Name); why != "" {
+				// the service crashes and stays failed until someone restarts it
+				s.Extra[key] = "crashed"
+				s.Extra[key+":why"] = why
+				out[i].Running, out[i].Error = false, why
+				console = append(console, fmt.Sprintf("%s[%d]: %s", out[i].Name, 900+i, why), fmt.Sprintf("systemd[1]: %s.service: Main process exited, code=exited, status=1/FAILURE", out[i].Name))
+				continue
+			}
+			if s.Extra[key] == "crashed" && s.Extra[key+":why"] != "" {
+				console = append(console, fmt.Sprintf("%s[%d]: %s", out[i].Name, 900+i, s.Extra[key+":why"]), fmt.Sprintf("systemd[1]: %s.service: Failed with result 'exit-code'.", out[i].Name))
+			}
+		}
 		switch s.Extra[key] {
 		case "stopped":
 			out[i].Running = false

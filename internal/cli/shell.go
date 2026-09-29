@@ -56,6 +56,7 @@ type Session struct {
 	Desk        *desk.Desk        `json:"desk,omitempty"`      // ticket and simulated actors
 	Chaos       []ChaosRun        `json:"chaos,omitempty"`     // chaos experiments run in this session
 	Interview   *Interview        `json:"interview,omitempty"` // interview mode state
+	vmRoot      bool              // current VM command runs with sudo
 	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
 	// take over a command before the simulator handles it.
 	Interceptor func(s *Session, args []string, stdin string) (handled bool, out string, err error) `json:"-"`
@@ -131,6 +132,21 @@ func (s *Session) Exec(input string) Result {
 		}
 		trim := strings.TrimSpace(line)
 		if trim == "" || strings.HasPrefix(trim, "#") {
+			continue
+		}
+		if w := firstWord(trim); w == "for" || w == "if" {
+			block := line
+			for openBlocks(block) > 0 && i+1 < len(lines) {
+				i++
+				block += "\n" + lines[i]
+			}
+			r := s.runStatements(statements(block))
+			out.WriteString(r.Output)
+			exit = r.Exit
+			s.Records = append(s.Records, ExecRecord{Line: strings.TrimSpace(block), Exit: r.Exit, Tool: w, Output: truncate(r.Output, 400), At: s.State.Now()})
+			if !s.NoTick {
+				s.State.Step(1)
+			}
 			continue
 		}
 		stdin := ""

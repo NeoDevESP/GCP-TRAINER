@@ -107,3 +107,39 @@ output "vm_name" { value = google_compute_instance.web.name }
 	run(t, s, "terraform output -raw vm_name")
 	run(t, s, "terraform destroy -auto-approve")
 }
+
+func TestShellLoopsAndConditionals(t *testing.T) {
+	st := sim.New(1, "p1", "user:admin@gcplab.dev")
+	p := st.Projects["p1"]
+	st.DefaultNetwork(p)
+	st.Org.IAM.AddBinding("roles/owner", "user:admin@gcplab.dev", nil)
+	s := NewSession(st, "p1", "admin@gcplab.dev")
+	s.Zone, s.Region = "europe-west1-b", "europe-west1"
+	r := s.Exec("for n in a b c; do gcloud compute instances create vm-$n --zone=europe-west1-b --quiet; done")
+	if r.Exit != 0 || len(p.Instances) != 3 {
+		t.Fatalf("loop should create 3 VMs, got %d: %s", len(p.Instances), r.Output)
+	}
+	r = s.Exec("for vm in $(gcloud compute instances list --format='value(name)'); do\n  if gcloud compute instances describe $vm --zone=europe-west1-b --format='value(labels.owner)' | grep -q .; then\n    echo \"$vm has owner\"\n  else\n    gcloud compute instances update $vm --zone=europe-west1-b --update-labels=owner=unknown\n  fi\ndone")
+	for n, vm := range p.Instances {
+		if vm.Labels["owner"] != "unknown" {
+			t.Fatalf("%s should be labelled by the loop: %v\n%s", n, vm.Labels, r.Output)
+		}
+	}
+}
+
+func TestJqSelect(t *testing.T) {
+	in := `[{"name":"a","status":"RUNNING","n":3,"labels":{"env":"dev"}},{"name":"b","status":"TERMINATED","n":1}]`
+	cases := map[string]string{
+		`.[] | select(.status=="RUNNING") | .name`:   "a\n",
+		`.[] | select(.n > 2) | .name`:               "a\n",
+		`.[] | select(.name | test("^b")) | .name`:   "b\n",
+		`.[] | select(.labels.env == "dev") | .name`: "a\n",
+		`.[] | select(.status != "RUNNING") | .name`: "b\n",
+	}
+	for expr, want := range cases {
+		got, err := jq([]string{"-r", expr}, in)
+		if err != nil || got != want {
+			t.Errorf("jq %s = %q (%v), want %q", expr, got, err, want)
+		}
+	}
+}

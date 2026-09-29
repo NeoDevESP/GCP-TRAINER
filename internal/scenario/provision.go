@@ -216,6 +216,11 @@ func splitScript(script string) []string {
 				}
 			}
 		}
+		// keep for/if blocks together
+		for cli.OpenBlocks(chunk) > 0 && i+1 < len(lines) {
+			i++
+			chunk += "\n" + lines[i]
+		}
 		out = append(out, chunk)
 	}
 	return out

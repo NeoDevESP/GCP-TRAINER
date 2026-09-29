@@ -1,0 +1,57 @@
+id: devtools-t01-structured-output
+title: "Dev tooling: JSON, jq, formats and what HTTP status codes tell you"
+summary: Turn CLI output into data with --format, --filter and jq, and read API errors correctly.
+track: foundations
+day: 3
+level: basic
+branch: devtools
+type: challenge
+mode: learn
+skills: [devtools.formats, devtools.apis, foundations.cli]
+wellArchitected: [operations]
+certs: [ACE]
+difficulty: 1
+minutes: 25
+baseline: [default-network]
+setup: |
+  for n in web-1 web-2 batch-1; do gcloud compute instances create $n --zone={{.zone}} --machine-type=e2-small --labels=team=web; done
+  gcloud compute instances stop batch-1 --zone={{.zone}}
+story: |
+  The inventory team needs two files produced **from data, not by hand**:
+
+  1. `inventory.csv` with header `name,zone,status` for every VM (use `--format="csv(...)"`)
+  2. `running.txt` with the names of **RUNNING** VMs only, one per line, using `--format=json` and `jq`
+
+  Then answer the questions about API errors.
+objectives:
+  - Shape CLI output with --format
+  - Query JSON with jq
+  - Interpret HTTP status codes from APIs
+quiz:
+  - {id: q1, question: "An API returns 401. What does it mean?", options: ["You are authenticated but lack permission", "No valid credentials were presented", "The resource does not exist", "Rate limit exceeded"], answer: [1]}
+  - {id: q2, question: "An API returns 403 PERMISSION_DENIED. What do you check first?", options: ["The network", "The identity making the call and its IAM roles on the resource", "The DNS record", "The request body size"], answer: [1]}
+  - {id: q3, question: "An API returns 429 RESOURCE_EXHAUSTED. What is the right client behaviour?", options: ["Retry immediately in a tight loop", "Retry with exponential backoff and check quotas", "Give up permanently", "Switch region"], answer: [1]}
+solution: |
+  gcloud compute instances list --format="csv(name,zone.basename(),status)" > inventory.csv
+  gcloud compute instances list --format=json | jq -r '.[] | select(.status=="RUNNING") | .name' > running.txt
+  cat running.txt
+rubric:
+  - name: CSV inventory
+    validator: state
+    points: 30
+    all: true
+    checks:
+      - {type: file_contains, file: inventory.csv, regex: "^name,zone,status", desc: "Header row"}
+      - {type: file_contains, file: inventory.csv, regex: "batch-1,{{.zone}},TERMINATED", desc: "All VMs with zone and status"}
+  - name: jq query
+    validator: state
+    points: 30
+    all: true
+    checks:
+      - {type: file_contains, file: running.txt, regex: "web-1", desc: "Running VMs listed"}
+      - {type: file_contains, file: running.txt, regex: "batch-1", not: true, desc: "Stopped VM excluded"}
+  - name: API errors
+    validator: quiz
+    points: 40
+    checks:
+      - {type: quiz, ratio: 1, desc: "401 vs 403 vs 429"}

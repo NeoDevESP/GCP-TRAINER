@@ -1,0 +1,91 @@
+id: linux-l01-disk-full
+title: "Linux: the web server died — no space left on device"
+summary: Find what filled the disk from the shell, free space without destroying data, bring the service back and prevent recurrence.
+track: linux
+day: 1
+level: basic
+branch: linux
+type: incident
+mode: lab
+skills: [linux.disks, linux.processes, linux.troubleshooting, linux.shell]
+wellArchitected: [operations, reliability]
+certs: [ACE]
+difficulty: 2
+minutes: 30
+baseline: [default-network]
+setup: |
+  gcloud compute firewall-rules create allow-web --network=default --allow=tcp:80 --source-ranges=0.0.0.0/0 --target-tags=web
+  gcloud compute instances create web-1 --zone={{.zone}} --machine-type=e2-small --tags=web --metadata=startup-script='apt-get install -y nginx'
+faults:
+  - {type: os_user, vm: web-1, user: www-data, groups: [www-data, adm]}
+  - {type: os_disk, vm: web-1, sizeGB: 20, baseUsedGB: "3.2"}
+  - {type: os_service, vm: web-1, service: nginx, user: www-data, writes: /var/log/nginx}
+  - {type: os_file, vm: web-1, path: /var/log/nginx/access.log, sizeMB: "900", owner: www-data, group: adm, mode: "640"}
+  - {type: os_file, vm: web-1, path: /var/log/nginx/debug.log, sizeMB: "16300", owner: www-data, group: adm, mode: "640"}
+  - {type: os_file, vm: web-1, path: /var/lib/app/orders.db, sizeMB: "1200", owner: www-data, group: www-data, mode: "600"}
+  - {type: os_file, vm: web-1, path: /etc/logrotate.d/nginx, content: "/var/log/nginx/*.log { daily rotate 7 compress }", owner: root, group: root, mode: "644"}
+traffic:
+  - {name: web, target: "vm:web-1:80", rps: 10}
+ticket:
+  id: INC-310
+  kind: INC
+  priority: P2
+  summary: "The website on web-1 is down since this morning. Nobody deployed anything."
+  reporter: Customer Support
+actors:
+  - role: developer
+    name: Leo (web team)
+    facts:
+      - {keywords: [[debug, log, logging, verbose]], answer: "Oops — I enabled debug logging on Friday to chase a bug and forgot to turn it off. You can throw away debug.log."}
+      - {keywords: [[orders, db, database, data, app]], answer: "Never delete /var/lib/app/orders.db — that's the local order queue!"}
+story: |
+  `web-1` stopped serving. Connect with `gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='...'`
+  and use the usual tools (`systemctl status`, `journalctl`, `df -h`, `du -sh /var/*`, `find / -size +500M`,
+  `ls -l`). Free space **without losing data**, restart the service and make sure logs are rotated.
+objectives:
+  - Read the service error
+  - Find what is using the disk
+  - Free space safely and restart the service
+  - Prevent recurrence
+hints:
+  - text: "`journalctl` shows why nginx exits; `df -h` confirms it."
+  - text: "`du -sh /var/log/nginx/*` — and ask the developer before deleting anything."
+evidence:
+  fields: [rootCause]
+  sample:
+    rootCause: Debug logging left enabled wrote a 16 GB debug.log in /var/log/nginx and filled the 20 GB disk; nginx could not write its logs and exited. I truncated debug.log after confirming with the developer, kept orders.db, restarted nginx and forced a logrotate.
+solution: |
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo journalctl -u nginx'
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='df -h'
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo du -sh /var/*'
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo find / -size +500M'
+  ask developer "what is debug.log and can I delete it?"
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo truncate -s 0 /var/log/nginx/debug.log'
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo logrotate -f /etc/logrotate.d/nginx'
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
+  curl -s http://$(gcloud compute instances describe web-1 --zone={{.zone}} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')/
+rubric:
+  - name: Service back
+    validator: functional
+    points: 30
+    checks:
+      - {type: http, target: "vm:web-1:80", path: /, status: 200, desc: "web-1 serves again"}
+  - name: Space freed safely
+    validator: state
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: vm_disk, vm: web-1, maxPct: 80, desc: "Disk below 80%"}
+      - {type: vm_file, vm: web-1, path: /var/lib/app/orders.db, desc: "orders.db kept"}
+  - name: Diagnosis
+    validator: diagnosis
+    points: 20
+    checks:
+      - {type: command, regex: "df -h|du -sh|find / -size", min: 2, desc: "Measured before deleting"}
+  - name: Root cause & prevention
+    validator: evidence
+    points: 20
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[debug], [disk, disco, space, espacio], [logrotate, rotat]], desc: "Cause and prevention"}

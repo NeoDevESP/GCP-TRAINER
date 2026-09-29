@@ -278,6 +278,7 @@ type Instance struct {
 	CreatedBy          string            `json:"createdBy,omitempty"`
 	ShieldedVM         bool              `json:"shieldedVm"`
 	OSLogin            bool              `json:"osLogin"`
+	OS *VMOS `json:"os,omitempty"` // guest OS model (files, users, disk, services)
 }
 
 type InstanceTemplate struct {

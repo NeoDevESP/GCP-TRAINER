@@ -1,0 +1,83 @@
+id: linux-l02-permission-denied
+title: "Linux: a hardening script broke the reports service"
+summary: Read owners, groups and modes, restore access for the service account only — without chmod 777.
+track: linux
+day: 2
+level: basic
+branch: linux
+type: incident
+mode: lab
+skills: [linux.permissions, linux.processes, linux.troubleshooting]
+wellArchitected: [security, operations]
+certs: [ACE]
+difficulty: 2
+minutes: 25
+baseline: [default-network]
+setup: |
+  gcloud compute firewall-rules create allow-reports --network=default --allow=tcp:8000 --source-ranges=0.0.0.0/0 --target-tags=reports
+  gcloud compute instances create reports-1 --zone={{.zone}} --machine-type=e2-small --tags=reports --metadata=startup-script='python3 -m http.server 8000'
+faults:
+  - {type: os_user, vm: reports-1, user: reports, groups: [reports]}
+  - {type: os_service, vm: reports-1, service: python-http, user: reports, config: /etc/reports/app.yaml}
+  - {type: os_file, vm: reports-1, path: /etc/reports/app.yaml, content: "db_password: s3cr3t\nlisten: 0.0.0.0:8000\n", owner: root, group: root, mode: "600"}
+traffic:
+  - {name: reports, target: "vm:reports-1:8000", rps: 5}
+ticket:
+  id: INC-322
+  kind: INC
+  priority: P3
+  summary: "Reports are down after last night's CIS hardening run on reports-1."
+  reporter: Marta (FinOps)
+actors:
+  - role: security
+    name: Aisha (CISO office)
+    facts:
+      - {keywords: [[hardening, cis, script, change, cambio]], answer: "The hardening script set every file under /etc/reports to root:root 600 because it contains a password."}
+      - {keywords: [[777, everyone, todos, world, other]], answer: "That file has a database password: it must never be world-readable."}
+story: |
+  The reports service (runs as user **reports**) on `reports-1` fails to start after a hardening run.
+  Use `systemctl status`, `journalctl`, `ls -l`, `stat`, `id reports` over IAP SSH, then give the service
+  exactly the access it needs to its configuration file — nobody else may read it.
+objectives:
+  - Find the permission error
+  - Grant read access to the service account only
+  - Restart and verify
+hints:
+  - text: "`ls -l /etc/reports` shows owner, group and mode; the service runs as `reports`."
+  - text: "`chown root:reports` + `chmod 640` lets the group read without exposing the file."
+evidence:
+  fields: [rootCause]
+  sample:
+    rootCause: The hardening script set /etc/reports/app.yaml to root:root 600, so the service user reports could not read its configuration. I changed the group to reports and the mode to 640, which lets only root and the reports group read it, and restarted the service.
+solution: |
+  gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status python-http'
+  gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo journalctl -u python-http'
+  gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='ls -l /etc/reports'
+  gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='id reports'
+  gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo chown root:reports /etc/reports/app.yaml'
+  gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo chmod 640 /etc/reports/app.yaml'
+  gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart python-http'
+rubric:
+  - name: Service back
+    validator: functional
+    points: 35
+    checks:
+      - {type: http, target: "vm:reports-1:8000", path: /, status: 200, desc: "reports serves again"}
+  - name: Least privilege on the file
+    validator: security
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: vm_file, vm: reports-1, path: /etc/reports/app.yaml, readableBy: reports, noWorld: true, desc: "Readable by the service, not by everyone"}
+      - {type: vm_file, vm: reports-1, path: /etc/reports/app.yaml, notReadableBy: student, desc: "Other users cannot read the password"}
+  - name: Diagnosis
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "ls -l|stat |journalctl", desc: "Inspected permissions and logs"}
+  - name: Explanation
+    validator: evidence
+    points: 20
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[permission, permiso, 600, mode], [group, grupo, chown, 640]], desc: "Explain the permission model"}

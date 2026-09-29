@@ -1,0 +1,82 @@
+id: containers-c01-hardened-image
+title: "Containers: build, harden and publish an image"
+summary: Fix a Dockerfile that runs as root with a baked-in secret, publish it to Artifact Registry and run it on Cloud Run with the secret injected at runtime.
+track: foundations
+day: 4
+level: intermediate
+branch: containers
+type: challenge
+mode: lab
+skills: [containers.docker, containers.security, devops.artifacts, security.secrets]
+wellArchitected: [security]
+certs: [ACE, PCDE]
+difficulty: 2
+minutes: 40
+baseline: [empty]
+setup: |
+  gcloud artifacts repositories create apps --repository-format=docker --location={{.region}}
+files:
+  Dockerfile: |
+    FROM debian:12
+    LABEL sim.behavior=payments-api
+    ENV API_KEY=sk_live_hardcoded_123
+    COPY app /app
+    ENTRYPOINT ["/app"]
+  app: "(payments binary)"
+story: |
+  A developer's `Dockerfile` bakes an **API key** into the image and runs as **root** on a full OS base.
+  Fix it, then build and publish `{{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0`, and deploy
+  Cloud Run service `payments` injecting `API_KEY` from Secret Manager secret `payments-key`
+  (value `sk_live_rotated_{{.project}}`).
+
+  Requirements for the Dockerfile: minimal base (distroless), a non-root `USER`, no secrets in `ENV`.
+objectives:
+  - Remove secrets from the image
+  - Run as non-root on a minimal base
+  - Publish to a private registry
+  - Inject secrets at runtime
+hints:
+  - text: "`FROM gcr.io/distroless/static:nonroot` and `USER nonroot:nonroot`."
+  - text: "`gcloud auth configure-docker {{.region}}-docker.pkg.dev` before `docker push`."
+solution: |
+  cat > Dockerfile <<'DOCKER'
+  FROM gcr.io/distroless/static:nonroot
+  LABEL sim.behavior=payments-api
+  COPY app /app
+  USER nonroot:nonroot
+  ENTRYPOINT ["/app"]
+  DOCKER
+  docker build -t {{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0 .
+  gcloud auth configure-docker {{.region}}-docker.pkg.dev --quiet
+  docker push {{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0
+  echo -n "sk_live_rotated_{{.project}}" | gcloud secrets create payments-key --data-file=-
+  gcloud secrets add-iam-policy-binding payments-key --member=serviceAccount:$(gcloud projects describe {{.project}} --format='value(projectNumber)')-compute@developer.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy payments --image={{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0 --region={{.region}} --set-secrets=API_KEY=payments-key:latest --allow-unauthenticated
+rubric:
+  - name: Hardened Dockerfile
+    validator: security
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: file_contains, file: Dockerfile, regex: "(?m)^USER\\s+\\S+", desc: "Runs as a non-root user"}
+      - {type: file_contains, file: Dockerfile, regex: "distroless", desc: "Minimal base image"}
+      - {type: file_contains, file: Dockerfile, regex: "sk_live", not: true, desc: "No secret baked into the image"}
+  - name: Published
+    validator: state
+    points: 20
+    checks:
+      - {type: exists, path: "artifactRepos.apps.images", expect: {"": {regex: "payments"}}, desc: "Image in Artifact Registry"}
+  - name: Running with runtime secret
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: http, target: "run:payments", path: /pay, status: 200, desc: "Service works"}
+      - {type: exists, path: "runServices.payments.secrets.API_KEY", desc: "API_KEY injected from Secret Manager"}
+      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV], desc: "No plaintext secrets in the service"}
+  - name: Build workflow
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: command, regex: "docker (build|push)", min: 2, desc: "Built and pushed"}

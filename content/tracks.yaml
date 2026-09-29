@@ -3,6 +3,20 @@
 # `labctl curriculum` for the quarterly sync. Phases follow the roadmap
 # (MVP → V1 → V2 → V3).
 tracks:
+  - id: foundations
+    title: Foundations — IT, networking, tooling, automation, containers
+    description: The base of the skill graph (Blueprint §4) before GCP Core — compute models, CIDR, structured output and APIs, containers and scripting.
+    level: foundational
+    certs: [ACE]
+    phase: MVP
+    labs: [fundamentals-f01-compute-models, netfund-n01-address-plan, devtools-t01-structured-output, containers-c01-hardened-image, automation-a01-nightly-sweep]
+  - id: linux
+    title: Linux for cloud engineers
+    description: Disks, permissions, services and logs over IAP SSH.
+    level: foundational
+    certs: [ACE]
+    phase: MVP
+    labs: [linux-l01-disk-full, linux-l02-permission-denied]
   - id: ace-30
     title: Associate Cloud Engineer — 30 days
     description: One lab per day from context and IAM to incidents, capstone and boss battle. Builds the ACE competences through hands-on work.

@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/base64"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -325,7 +326,9 @@ func (s *Session) vmExec(p *sim.Project, vm *sim.Instance, line string) (string,
 			if err != nil || len(toks) == 0 {
 				continue
 			}
+			s.vmRoot = false
 			if toks[0] == "sudo" {
+				s.vmRoot = true
 				toks = toks[1:]
 				if len(toks) > 0 && toks[0] == "-u" {
 					toks = toks[2:]
@@ -416,6 +419,14 @@ func (s *Session) vmCommand(p *sim.Project, vm *sim.Instance, from sim.Endpoint,
 			return fmt.Sprintf("● %s.service\n     Loaded: loaded (/lib/systemd/system/%s.service; enabled)\n     Active: %s\n", svc, svc, st), nil
 		case "start", "restart":
 			delete(s.State.Extra, key)
+			delete(s.State.Extra, key+":why")
+			if ls2, _ := s.State.VMListeners(p.ID, vm); true {
+				for _, x := range ls2 {
+					if x.Name == l.Name && !x.Running {
+						return "", fail(1, "Job for %s.service failed because the control process exited with error code.\nSee \"systemctl status %s.service\" and \"journalctl -xeu %s.service\" for details.", svc, svc, svc)
+					}
+				}
+			}
 			return "", nil
 		case "stop":
 			s.State.Extra[key] = "stopped"
@@ -445,7 +456,27 @@ func (s *Session) vmCommand(p *sim.Project, vm *sim.Instance, from sim.Endpoint,
 	case "journalctl":
 		_, console := s.State.VMListeners(p.ID, vm)
 		return strings.Join(console, "\n") + "\n", nil
+	case "ls", "chmod", "chown", "chgrp", "df", "du", "rm", "truncate", "find", "stat", "id", "usermod", "groups", "logrotate":
+		return s.vmOSCommand(vm, toks)
 	case "cat", "grep", "head", "tail", "wc", "awk", "echo":
+		if toks[0] == "cat" && len(toks) > 1 && vm.OS != nil {
+			if f := vm.OS.Files[toks[1]]; f != nil {
+				user := "student"
+				if s.vmRoot {
+					user = "root"
+				}
+				if f.Dir {
+					return "", fail(1, "cat: %s: Is a directory", toks[1])
+				}
+				if !vm.OS.CanRead(user, toks[1]) {
+					return "", fail(1, "cat: %s: Permission denied", toks[1])
+				}
+				if f.Content == "" && f.SizeMB > 0 {
+					return fmt.Sprintf("(%.0f MB of %s data)\n", f.SizeMB, path.Base(toks[1])), nil
+				}
+				return f.Content, nil
+			}
+		}
 		if toks[0] == "cat" && len(toks) > 1 {
 			switch toks[1] {
 			case "/etc/hosts":

@@ -1,0 +1,58 @@
+id: netfund-n01-address-plan
+title: "Networking fundamentals: an address plan that will not collide"
+summary: Size subnets from host counts, keep them inside the allocation, avoid the on-premises range and leave room to grow.
+track: foundations
+day: 2
+level: basic
+branch: netfund
+type: challenge
+mode: learn
+skills: [netfund.cidr, netfund.tcpip, networking.vpc]
+wellArchitected: [reliability, operations]
+certs: [ACE, PCNE]
+difficulty: 2
+minutes: 30
+params:
+  # variants are coherent tuples chosen by index
+  block: ["10.40.0.0/16"]
+  onprem: ["10.40.0.0/21", "10.40.64.0/19"]
+  web: ["10.40.8.0/24"]
+  app: ["10.40.12.0/22"]
+  db: ["10.40.9.0/26"]
+baseline: [empty]
+story: |
+  Nebula's network team allocated **{{.block}}** to the new `corp-vpc` (custom mode, region {{.region}}).
+  The Madrid datacenter already uses **{{.onprem}}** — it will be connected by VPN, so it must never overlap.
+
+  | Subnet | Hosts needed |
+  |---|---|
+  | `web` | 200 |
+  | `app` | 900 |
+  | `db`  | 50 |
+
+  Remember that Google Cloud reserves **4 addresses** in every subnet. Pick the smallest prefix that fits
+  each subnet (no more than 4× the need), create them, and answer the questions.
+objectives:
+  - Convert host counts into prefixes
+  - Keep every subnet inside the allocation and away from on-prem
+  - Avoid overlaps and waste
+quiz:
+  - {id: q1, question: "How many usable addresses does a /26 subnet give you in Google Cloud?", options: ["64", "62", "60", "58"], answer: [2]}
+  - {id: q2, question: "Which prefix is the smallest that fits 900 hosts?", options: ["/23", "/22", "/21", "/24"], answer: [1]}
+  - {id: q3, question: "Why must the VPC ranges not overlap with on-prem when using VPN?", options: ["Routes would be ambiguous: the same destination would exist on both sides", "VPN only supports /8 ranges", "Firewall rules forbid it", "It costs more"], answer: [0]}
+solution: |
+  gcloud compute networks create corp-vpc --subnet-mode=custom
+  gcloud compute networks subnets create web --network=corp-vpc --region={{.region}} --range={{.web}}
+  gcloud compute networks subnets create app --network=corp-vpc --region={{.region}} --range={{.app}}
+  gcloud compute networks subnets create db --network=corp-vpc --region={{.region}} --range={{.db}}
+rubric:
+  - name: Address plan
+    validator: state
+    points: 60
+    checks:
+      - {type: subnet_plan, network: corp-vpc, subnets: {web: 200, app: 900, db: 50}, within: "{{.block}}", avoid: ["{{.onprem}}"], maxWasteFactor: 4, desc: "Right-sized, contained, non-overlapping subnets"}
+  - name: Fundamentals
+    validator: quiz
+    points: 40
+    checks:
+      - {type: quiz, ratio: 1, desc: "CIDR and routing questions"}

@@ -538,7 +538,24 @@ func jq(args []string, in string) (string, error) {
 		return "", fail(2, "jq: error (at <stdin>:0): Cannot parse input as JSON")
 	}
 	vals := []any{v}
-	pipes := strings.Split(expr, "|")
+	var pipes []string
+	depth, start := 0, 0
+	var inStr bool
+	for i := 0; i < len(expr); i++ {
+		switch c := expr[i]; {
+		case c == '"':
+			inStr = !inStr
+		case inStr:
+		case c == '(':
+			depth++
+		case c == ')':
+			depth--
+		case c == '|' && depth == 0:
+			pipes = append(pipes, expr[start:i])
+			start = i + 1
+		}
+	}
+	pipes = append(pipes, expr[start:])
 	for _, p := range pipes {
 		p = strings.TrimSpace(p)
 		if p == "length" {
@@ -551,6 +568,30 @@ func jq(args []string, in string) (string, error) {
 					out = append(out, float64(len(t)))
 				default:
 					out = append(out, float64(len(fmt.Sprint(t))))
+				}
+			}
+			vals = out
+			continue
+		}
+		if p == "keys" {
+			var out []any
+			for _, x := range vals {
+				if m, ok := x.(map[string]any); ok {
+					var ks []any
+					for _, k := range sortedAnyKeys(m) {
+						ks = append(ks, k)
+					}
+					out = append(out, ks)
+				}
+			}
+			vals = out
+			continue
+		}
+		if strings.HasPrefix(p, "select(") && strings.HasSuffix(p, ")") {
+			var out []any
+			for _, x := range vals {
+				if jqSelect(x, strings.TrimSuffix(strings.TrimPrefix(p, "select("), ")")) {
+					out = append(out, x)
 				}
 			}
 			vals = out
@@ -616,4 +657,93 @@ func sortedAnyKeys(m map[string]any) []string {
 	}
 	sort.Strings(k)
 	return k
+}
+
+var reJqCmp = regexp.MustCompile(`^\s*(\.[^=!<>\s]*)\s*(==|!=|>=|<=|>|<)\s*(.+?)\s*$`)
+var reJqFn = regexp.MustCompile(`^\s*(\.[^|\s]*)\s*\|\s*(test|contains|startswith|endswith)\((.+)\)\s*$`)
+
+// jqSelect evaluates a select() condition on one value.
+func jqSelect(x any, cond string) bool {
+	lit := func(s string) any {
+		s = strings.TrimSpace(s)
+		if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") {
+			return strings.Trim(s, "\"")
+		}
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f
+		}
+		switch s {
+		case "true":
+			return true
+		case "false":
+			return false
+		case "null":
+			return nil
+		}
+		return s
+	}
+	if m := reJqFn.FindStringSubmatch(cond); m != nil {
+		vals := jqPath(x, m[1])
+		arg := fmt.Sprint(lit(m[3]))
+		for _, v := range vals {
+			sv := fmt.Sprint(v)
+			switch m[2] {
+			case "test":
+				if re, err := regexp.Compile(arg); err == nil && re.MatchString(sv) {
+					return true
+				}
+			case "contains":
+				if strings.Contains(sv, arg) {
+					return true
+				}
+			case "startswith":
+				if strings.HasPrefix(sv, arg) {
+					return true
+				}
+			case "endswith":
+				if strings.HasSuffix(sv, arg) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if m := reJqCmp.FindStringSubmatch(cond); m != nil {
+		want := lit(m[3])
+		for _, v := range jqPath(x, m[1]) {
+			switch m[2] {
+			case "==":
+				if fmt.Sprint(v) == fmt.Sprint(want) {
+					return true
+				}
+			case "!=":
+				if fmt.Sprint(v) != fmt.Sprint(want) {
+					return true
+				}
+			default:
+				a, ok1 := v.(float64)
+				b, ok2 := want.(float64)
+				if !ok1 || !ok2 {
+					continue
+				}
+				switch m[2] {
+				case ">":
+					return a > b
+				case "<":
+					return a < b
+				case ">=":
+					return a >= b
+				case "<=":
+					return a <= b
+				}
+			}
+		}
+		return false
+	}
+	for _, v := range jqPath(x, strings.TrimSpace(cond)) {
+		if v != nil && v != false {
+			return true
+		}
+	}
+	return false
 }

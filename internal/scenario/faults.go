@@ -47,7 +47,7 @@ var FaultTypes = []string{
 	"run_iam_public", "sql_flag", "sql_slow_query", "sql_extra_connections", "vm_tag_remove", "vm_stop", "vm_metadata",
 	"health_check_path", "named_port_remove", "mig_autoscaler", "bucket_public", "api_disable", "k8s_image",
 	"k8s_remove_requests", "k8s_probe_port", "k8s_scale", "leaked_key_miner", "subnet_pga_off", "dns_record",
-	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource", "region_outage", "zone_outage", "bill_snapshot",
+	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource", "region_outage", "zone_outage", "bill_snapshot", "os_file", "os_service", "os_disk", "os_user",
 }
 
 // ApplyFault mutates the world. Faults mutate real resource state, so symptoms
@@ -353,6 +353,29 @@ func ApplyFault(st *sim.State, project string, l *Lab, f Fault) error {
 		// Irrelevant but alarming log lines (red herrings).
 		for _, line := range fl(f, "lines") {
 			st.Log(project, sim.LogEntry{Severity: fs(f, "severity"), LogName: "stderr", Resource: sim.LogResource{Type: fs(f, "resourceType"), Labels: map[string]string{}}, Text: line})
+		}
+	case "os_file", "os_service", "os_disk", "os_user":
+		vm := p.Instances[fs(f, "vm")]
+		if vm == nil {
+			return fmt.Errorf("vm %s not found", fs(f, "vm"))
+		}
+		o := vm.GuestOS()
+		switch t {
+		case "os_file":
+			mode, _ := strconv.ParseInt(firstNonEmpty(fs(f, "mode"), "644"), 8, 32)
+			size, _ := strconv.ParseFloat(firstNonEmpty(fs(f, "sizeMB"), "0"), 64)
+			o.Files[fs(f, "path")] = &sim.VFile{Content: fs(f, "content"), Mode: int(mode), Owner: firstNonEmpty(fs(f, "owner"), "root"), Group: firstNonEmpty(fs(f, "group"), "root"), SizeMB: size, Dir: fs(f, "dir") == "true"}
+		case "os_service":
+			o.Services[fs(f, "service")] = &sim.ServiceSpec{User: firstNonEmpty(fs(f, "user"), "root"), Config: fs(f, "config"), Writes: fs(f, "writes")}
+		case "os_disk":
+			if v := fi(f, "sizeGB", 0); v > 0 {
+				o.DiskGB = v
+			}
+			if v := fs(f, "baseUsedGB"); v != "" {
+				o.BaseUsedGB, _ = strconv.ParseFloat(v, 64)
+			}
+		case "os_user":
+			o.Users[fs(f, "user")] = fl(f, "groups")
 		}
 	case "bill_snapshot":
 		// Records the current estimate as last month's invoice (FinOps anomalies).

@@ -1,0 +1,96 @@
+id: automation-a01-nightly-sweep
+title: "Automation: the nightly cost sweep script"
+summary: Replace a manual chore with an idempotent script — loops, filters, conditionals and exit codes over the CLI.
+track: foundations
+day: 5
+level: basic
+branch: automation
+type: challenge
+mode: lab
+skills: [automation.bash, automation.sdk, devtools.formats, foundations.billing]
+wellArchitected: [operations, cost]
+certs: [ACE]
+difficulty: 2
+minutes: 35
+baseline: [default-network]
+setup: |
+  for n in dev-a dev-b dev-c; do gcloud compute instances create $n --zone={{.zone}} --machine-type=e2-standard-2 --labels=env=dev; done
+  for n in dev-d dev-e; do gcloud compute instances create $n --zone={{.zone}} --machine-type=e2-standard-2 --labels=env=dev,owner=web; done
+  for n in prod-a prod-b prod-c; do gcloud compute instances create $n --zone={{.zone}} --machine-type=e2-standard-2 --labels=env=prod,owner=platform; done
+story: |
+  Every evening someone stops the development VMs by hand and forgets half of them. Write `sweep.sh` that:
+
+  1. labels every VM that has **no owner** with `owner=unknown` (so FinOps can chase it), and
+  2. **stops every `env=dev` VM** — never a production one,
+
+  using a loop over `gcloud compute instances list --filter=... --format='value(name)'`. Run it, and make sure
+  running it twice is harmless (idempotent). The terminal supports `for …; do …; done` and `if …; then …; fi`.
+objectives:
+  - Select resources with filters instead of hard-coded names
+  - Loop and branch safely
+  - "Idempotent: a second run changes nothing"
+  - Production untouched
+hints:
+  - text: "`gcloud compute instances list --filter='labels.env=dev' --format='value(name)'`"
+  - text: "`if gcloud compute instances describe $vm --zone=... --format='value(labels.owner)' | grep -q .; then ...`"
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: The script selects VMs with filters, labels those without an owner as owner=unknown and stops only env=dev instances; running it again finds nothing to change, so it is idempotent and never touches production.
+solution: |
+  cat > sweep.sh <<'SH'
+  for vm in $(gcloud compute instances list --format='value(name)'); do
+    if gcloud compute instances describe $vm --zone={{.zone}} --format='value(labels.owner)' | grep -q .; then
+      echo "$vm has an owner"
+    else
+      gcloud compute instances update $vm --zone={{.zone}} --update-labels=owner=unknown
+    fi
+  done
+  for vm in $(gcloud compute instances list --filter='labels.env=dev AND status=RUNNING' --format='value(name)'); do
+    gcloud compute instances stop $vm --zone={{.zone}}
+  done
+  SH
+  for vm in $(gcloud compute instances list --format='value(name)'); do
+    if gcloud compute instances describe $vm --zone={{.zone}} --format='value(labels.owner)' | grep -q .; then
+      echo "$vm has an owner"
+    else
+      gcloud compute instances update $vm --zone={{.zone}} --update-labels=owner=unknown
+    fi
+  done
+  for vm in $(gcloud compute instances list --filter='labels.env=dev AND status=RUNNING' --format='value(name)'); do
+    gcloud compute instances stop $vm --zone={{.zone}}
+  done
+  for vm in $(gcloud compute instances list --filter='labels.env=dev AND status=RUNNING' --format='value(name)'); do
+    gcloud compute instances stop $vm --zone={{.zone}}
+  done
+rubric:
+  - name: Every VM owned
+    validator: state
+    points: 25
+    checks:
+      - {type: count, collection: instances, where: {labels: {regex: "owner"}}, min: 8, desc: "All 8 VMs carry an owner label"}
+  - name: Dev stopped
+    validator: cost
+    points: 25
+    checks:
+      - {type: count, collection: instances, where: {labels: {regex: "\"env\":\"dev\""}, status: RUNNING}, max: 0, desc: "No dev VM running"}
+  - name: Production untouched
+    validator: security
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: count, collection: instances, where: {labels: {regex: "\"env\":\"prod\""}, status: RUNNING}, min: 3, desc: "Production VMs still running"}
+      - {type: count, collection: instances, where: {labels: {regex: "\"owner\":\"platform\""}}, min: 3, desc: "Existing owners preserved"}
+  - name: Scripted, not manual
+    validator: diagnosis
+    points: 15
+    all: true
+    checks:
+      - {type: file_contains, file: sweep.sh, regex: "for .* in \\$\\(gcloud", desc: "sweep.sh loops over a gcloud query"}
+      - {type: file_contains, file: sweep.sh, regex: "--filter", desc: "sweep.sh selects with filters"}
+  - name: Explanation
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[filter, filtro], [idempot]], desc: "Explain the design"}
