@@ -674,7 +674,7 @@ function Workspace({ session }: { session: SessionInfo }) {
             ↻
           </button>
           </div>
-          <div className="panel-body" id="view-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} aria-live="polite">
+          <div className="panel-body" id="view-panel" role="tabpanel" tabIndex={0} aria-labelledby={`tab-${tab}`} aria-live="polite">
             <View sessionId={session.id} kind={tab} tick={tick} />
           </div>
         </div>
