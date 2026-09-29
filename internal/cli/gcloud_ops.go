@@ -615,6 +615,27 @@ func init() {
 		c.Audit("artifactregistry.googleapis.com", "google.devtools.artifactregistry.v1.ArtifactRegistry.CreateRepository", "projects/"+p.ID+"/locations/"+loc+"/repositories/"+n)
 		return "Created repository [" + n + "].\n", nil
 	})
+	reg("artifacts repositories delete", func(c *Cmd) (any, error) {
+		p, err := c.P()
+		if err != nil {
+			return nil, err
+		}
+		n, err := c.name0()
+		if err != nil {
+			return nil, err
+		}
+		r := p.ArtifactRepos[n]
+		loc := c.Str("location", "")
+		if r == nil || (loc != "" && loc != r.Location) {
+			return nil, fmt.Errorf("NOT_FOUND: Requested entity was not found.")
+		}
+		if err := c.NeedProject("artifactregistry.repositories.delete"); err != nil {
+			return nil, err
+		}
+		delete(p.ArtifactRepos, n)
+		c.Audit("artifactregistry.googleapis.com", "google.devtools.artifactregistry.v1.ArtifactRegistry.DeleteRepository", "projects/"+p.ID+"/locations/"+r.Location+"/repositories/"+n)
+		return "Deleted repository [" + n + "].\n", nil
+	})
 	reg("artifacts repositories list", func(c *Cmd) (any, error) {
 		p, err := c.P()
 		if err != nil {

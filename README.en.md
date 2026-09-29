@@ -77,7 +77,17 @@ console (product menu, project picker, search, filterable lists, creation
 forms with their "Equivalent code") with Cloud Shell below. Every button types
 and runs the equivalent `gcloud`, `gsutil` or `bq` command in Cloud Shell, so
 learners pick up the command line while clicking, and grading sees console
-and terminal work alike.
+and terminal work alike. It has details pages with tabs and editing for IAM,
+service accounts, roles, Compute Engine (VMs, templates, instance groups,
+health checks, disks and snapshots), GKE (clusters, node pools, workloads and
+services), Cloud Run (revisions, traffic and security), Cloud Storage (object
+upload and download, permissions), Cloud SQL (users, databases, authorized
+networks and backups), BigQuery Studio, Pub/Sub, VPC (subnets, IPs, routes,
+firewall), load balancing, Cloud DNS, Cloud NAT, Secret Manager, Cloud KMS,
+Artifact Registry, Cloud Build, Logging (explorer and metrics), Monitoring
+(metrics and alerting), billing, topology and the activity log. The lab
+instructions sit in a right-hand panel and Cloud Shell can be resized,
+maximized or switched to its editor.
 
 Inside a lab, type `help`. Useful commands: `why <resource>` (causal chain of a
 request), `whatif <command>` (impact preview), `ticket show`, `team`,

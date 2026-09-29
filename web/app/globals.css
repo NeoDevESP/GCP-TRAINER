@@ -469,3 +469,53 @@ tbody tr:hover td { background: color-mix(in srgb, var(--panel-2) 50%, transpare
   .cc-full .cc-side { display: none; }
   .cc-full .cc-body.with-aside .cc-aside { position: absolute; top: 0; right: 0; bottom: 0; width: min(400px, 100%); z-index: 25; box-shadow: var(--g-shadow); }
 }
+
+/* console: details pages, sections, dialogs */
+.cc-detail .cc-page-head { gap: 8px; }
+.cc-detail .cc-page-head h1 { margin-right: 16px; }
+.cc-tabs { display: flex; gap: 0; margin: -12px -24px 16px; padding: 0 16px; border-bottom: 1px solid var(--g-border); overflow-x: auto; }
+.cc-tabs button { flex: none; height: 48px; padding: 0 16px; border: 0; background: none; color: var(--g-text-2); font: 500 14px inherit; font-family: inherit; cursor: pointer; border-bottom: 2px solid transparent; }
+.cc-tabs button:hover { background: var(--g-hover); }
+.cc-tabs button.on { color: var(--g-blue-text); border-bottom-color: var(--g-blue); }
+.cc-section { margin: 0 0 24px; }
+.cc-section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.cc-section-head h2 { font-size: 16px; font-weight: 500; margin: 0; }
+.cc-props { width: auto; min-width: min(640px, 100%); border-collapse: collapse; font-size: 14px; }
+.cc .cc-props th { width: 260px; text-align: left; font-weight: 400; font-size: 14px; color: var(--g-text-2); padding: 8px 24px 8px 0; vertical-align: top; border: 0; background: none; white-space: normal; height: auto; }
+.cc .cc-props td { padding: 8px 0; border: 0; color: var(--g-text); vertical-align: top; height: auto; }
+.cc .cc-props tr:hover td { background: none; }
+.cc-props code { font-size: 13px; word-break: break-all; }
+.cc-muted { color: var(--g-text-2); }
+.cc-chip.plain { padding: 0 10px; }
+.cc-name { font-weight: 500; text-align: left; }
+.cc-crumbs { color: var(--g-text-2); font-size: 14px; }
+.cc-crumbs strong { color: var(--g-text); font-weight: 500; }
+.cc-obj { display: inline-flex; align-items: center; gap: 6px; }
+.cc-obj .cc-icon { color: var(--g-text-2); }
+.cc-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+.cc-radio { display: flex; flex-direction: column; gap: 12px; }
+.cc-link.danger { color: var(--g-red-text); }
+.cc-icon-btn.sm { width: 28px; height: 28px; font-size: 14px; }
+.cc-dialog.wide { width: min(760px, calc(100% - 32px)); }
+.cc-output { margin: 0; padding: 12px; max-height: 360px; overflow: auto; background: #1f1f1f; color: #e8eaed; border-radius: 4px; font-size: 12px; line-height: 18px; white-space: pre-wrap; word-break: break-word; }
+.cc-steps { margin: 0; padding-left: 20px; }
+.cc-steps li { margin: 6px 0; }
+
+/* BigQuery Studio */
+.bq-body { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 0; margin: 0 -24px; min-height: calc(100% - 60px); border-top: 0; }
+.bq-explorer { border-right: 1px solid var(--g-border); padding: 8px 0; background: var(--g-surface); }
+.bq-title { padding: 4px 16px 8px; font-weight: 500; }
+.bq-node { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--g-text); font: inherit; font-size: 13px; padding: 4px 16px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bq-node.root { font-weight: 500; cursor: default; }
+.bq-node.ds { padding-left: 28px; }
+.bq-node.tb { padding-left: 48px; color: var(--g-text-2); }
+.bq-node:hover:not(.root) { background: var(--g-hover); }
+.bq-node.on { background: var(--g-blue-bg); color: var(--g-blue-text); }
+.bq-main { padding: 12px 24px; min-width: 0; }
+.bq-main .cc-detail .cc-tabs { margin-left: -24px; margin-right: -24px; }
+.bq-editor { border: 1px solid var(--g-border); border-radius: 4px; background: var(--g-surface); margin-bottom: 16px; }
+.bq-editor-bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--g-border); }
+.bq-tab { padding: 8px 16px; border-bottom: 2px solid var(--g-blue); color: var(--g-blue-text); font-weight: 500; font-size: 13px; }
+.cc .bq-sql { min-height: 180px; }
+.cc-help.error { color: var(--g-red-text); }
+@media (max-width: 1100px) { .bq-body { grid-template-columns: 1fr; } .bq-explorer { border-right: 0; border-bottom: 1px solid var(--g-border); } }

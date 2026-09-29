@@ -127,6 +127,27 @@ func init() {
 			return "Enabled service account [" + sa.Email + "].\n", nil
 		}
 	}
+	reg("iam service-accounts update", func(c *Cmd) (any, error) {
+		ref, err := c.Arg(0, "SERVICE_ACCOUNT")
+		if err != nil {
+			return nil, err
+		}
+		p, sa, err := c.findSA(ref)
+		if err != nil {
+			return nil, err
+		}
+		if !c.Has("display-name") && !c.Has("description") {
+			return nil, fmt.Errorf("At least one of --display-name or --description must be specified.")
+		}
+		if err := c.Need("iam.serviceAccounts.update", saResource(p, sa)); err != nil {
+			return nil, err
+		}
+		if c.Has("display-name") {
+			sa.DisplayName = c.Str("display-name", "")
+		}
+		c.Audit("iam.googleapis.com", "google.iam.admin.v1.PatchServiceAccount", "projects/"+p.ID+"/serviceAccounts/"+sa.Email)
+		return fmt.Sprintf("Updated service account [%s].\ndisplayName: %s\nemail: %s\n", sa.Email, sa.DisplayName, sa.Email), nil
+	})
 	reg("iam service-accounts disable", toggle(true))
 	reg("iam service-accounts enable", toggle(false))
 	reg("iam service-accounts get-iam-policy", func(c *Cmd) (any, error) {

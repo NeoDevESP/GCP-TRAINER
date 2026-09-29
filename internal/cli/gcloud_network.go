@@ -1204,6 +1204,31 @@ func init() {
 		c.Audit("compute.googleapis.com", "v1.compute.urlMaps.insert", "projects/"+p.ID+"/global/urlMaps/"+n)
 		return created(p.ID, "urlMaps", "global", n), nil
 	})
+	reg("compute url-maps delete", func(c *Cmd) (any, error) {
+		p, err := c.P()
+		if err != nil {
+			return nil, err
+		}
+		if len(c.Args) == 0 {
+			return nil, fmt.Errorf("argument NAME: Must be specified.")
+		}
+		for _, n := range c.Args {
+			if p.URLMaps[n] == nil {
+				return nil, fmt.Errorf("Could not fetch resource:\n - The resource 'projects/%s/global/urlMaps/%s' was not found", p.ID, n)
+			}
+			for _, tp := range p.TargetProxies {
+				if tp.URLMap == n {
+					return nil, fmt.Errorf("The url_map resource 'projects/%s/global/urlMaps/%s' is already being used by 'projects/%s/global/targetHttpProxies/%s'", p.ID, n, p.ID, tp.Name)
+				}
+			}
+			if err := c.NeedProject("compute.urlMaps.delete"); err != nil {
+				return nil, err
+			}
+			delete(p.URLMaps, n)
+			c.Audit("compute.googleapis.com", "v1.compute.urlMaps.delete", "projects/"+p.ID+"/global/urlMaps/"+n)
+		}
+		return "Deleted.\n", nil
+	})
 	reg("compute url-maps add-path-matcher", func(c *Cmd) (any, error) {
 		p, err := c.P()
 		if err != nil {
@@ -1291,6 +1316,36 @@ func init() {
 			return created(p.ID, "target"+strings.Title(kind)+"Proxies", "global", n), nil
 		}
 	}
+	proxyDelete := func(kind string) handler {
+		return func(c *Cmd) (any, error) {
+			p, err := c.P()
+			if err != nil {
+				return nil, err
+			}
+			if len(c.Args) == 0 {
+				return nil, fmt.Errorf("argument NAME: Must be specified.")
+			}
+			for _, n := range c.Args {
+				tp := p.TargetProxies[n]
+				if tp == nil || tp.Kind != kind {
+					return nil, fmt.Errorf("Could not fetch resource:\n - The resource 'projects/%s/global/target%sProxies/%s' was not found", p.ID, strings.Title(kind), n)
+				}
+				for _, fr := range p.ForwardingRules {
+					if fr.Target == n {
+						return nil, fmt.Errorf("The target_%s_proxy resource 'projects/%s/global/target%sProxies/%s' is already being used by 'projects/%s/global/forwardingRules/%s'", kind, p.ID, strings.Title(kind), n, p.ID, fr.Name)
+					}
+				}
+				if err := c.NeedProject("compute.targetHttpProxies.delete"); err != nil {
+					return nil, err
+				}
+				delete(p.TargetProxies, n)
+				c.Audit("compute.googleapis.com", "v1.compute.target"+strings.Title(kind)+"Proxies.delete", "projects/"+p.ID+"/global/target"+strings.Title(kind)+"Proxies/"+n)
+			}
+			return "Deleted.\n", nil
+		}
+	}
+	reg("compute target-http-proxies delete", proxyDelete("http"))
+	reg("compute target-https-proxies delete", proxyDelete("https"))
 	reg("compute target-http-proxies create", proxyCreate("http"))
 	reg("compute target-https-proxies create", proxyCreate("https"))
 	reg("compute ssl-certificates create", func(c *Cmd) (any, error) {

@@ -437,6 +437,43 @@ func init() {
 		c.Audit("compute.googleapis.com", "v1.compute.instances.setTags", "projects/"+p.ID+"/zones/"+vm.Zone+"/instances/"+n)
 		return fmt.Sprintf("Updated [https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s].\n", p.ID, vm.Zone, n), nil
 	})
+	setLabels := func(add bool) func(c *Cmd) (any, error) {
+		return func(c *Cmd) (any, error) {
+			n, err := c.Arg(0, "INSTANCE_NAME")
+			if err != nil {
+				return nil, err
+			}
+			p, vm, err := c.instance(n)
+			if err != nil {
+				return nil, err
+			}
+			if err := c.Need("compute.instances.setLabels", vmRes(p, vm)); err != nil {
+				return nil, err
+			}
+			if vm.Labels == nil {
+				vm.Labels = map[string]string{}
+			}
+			if add {
+				kv := c.KV("labels")
+				if len(kv) == 0 {
+					return nil, fmt.Errorf("argument --labels: expected at least one KEY=VALUE")
+				}
+				for k, v := range kv {
+					vm.Labels[k] = v
+				}
+			} else if c.Bool("all") {
+				vm.Labels = map[string]string{}
+			} else {
+				for _, k := range c.List("labels") {
+					delete(vm.Labels, k)
+				}
+			}
+			c.Audit("compute.googleapis.com", "v1.compute.instances.setLabels", "projects/"+p.ID+"/zones/"+vm.Zone+"/instances/"+n)
+			return fmt.Sprintf("Updated [https://www.googleapis.com/compute/v1/projects/%s/zones/%s/instances/%s].\n", p.ID, vm.Zone, n), nil
+		}
+	}
+	reg("compute instances add-labels", setLabels(true))
+	reg("compute instances remove-labels", setLabels(false))
 	reg("compute instances add-metadata", func(c *Cmd) (any, error) {
 		n, err := c.Arg(0, "INSTANCE_NAME")
 		if err != nil {
@@ -1185,6 +1222,41 @@ func init() {
 		}
 		vm.Disks = append(vm.Disks, dn)
 		d.Users = append(d.Users, n)
+		return "Updated.\n", nil
+	})
+	reg("compute instances detach-disk", func(c *Cmd) (any, error) {
+		n, err := c.Arg(0, "INSTANCE_NAME")
+		if err != nil {
+			return nil, err
+		}
+		p, vm, err := c.instance(n)
+		if err != nil {
+			return nil, err
+		}
+		dn := c.Str("disk", "")
+		if dn == vm.BootDisk {
+			return nil, fmt.Errorf("disk %s is the boot disk of %s and cannot be detached", dn, n)
+		}
+		if !contains(vm.Disks, dn) {
+			return nil, fmt.Errorf("disk %s is not attached to instance %s", dn, n)
+		}
+		var keep []string
+		for _, x := range vm.Disks {
+			if x != dn {
+				keep = append(keep, x)
+			}
+		}
+		vm.Disks = keep
+		if d := p.Disks[dn]; d != nil {
+			var users []string
+			for _, u := range d.Users {
+				if u != n {
+					users = append(users, u)
+				}
+			}
+			d.Users = users
+		}
+		c.Audit("compute.googleapis.com", "v1.compute.instances.detachDisk", "projects/"+p.ID+"/zones/"+vm.Zone+"/instances/"+n)
 		return "Updated.\n", nil
 	})
 	reg("compute snapshots list", func(c *Cmd) (any, error) {

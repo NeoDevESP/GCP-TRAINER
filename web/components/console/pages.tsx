@@ -7,6 +7,7 @@
 import { useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Col, Confirm, CreatePage, Drawer, Field, Page, Pill, REGIONS, Status, Table, Tool, ZONES, locFlag, q } from "./ui";
+import * as D from "./details";
 
 export type Ctx = {
   sessionId: string;
@@ -17,6 +18,8 @@ export type Ctx = {
   zone: string;
   run: (cmd: string, note: string) => Promise<boolean>;
   runAll: (cmds: string[], note: string) => Promise<void>;
+  /** runOut runs a command and returns what it printed. */
+  runOut: (cmd: string, note: string) => Promise<{ output: string; exit: number }>;
   paste: (cmd: string) => void;
   go: (page: string) => void;
   openTab: (tab: string) => void;
@@ -39,7 +42,7 @@ type Action<T> = {
   single?: boolean;
 };
 
-type Create = { label: string; title: string; fields: Field[]; initial: Record<string, any>; build: (v: Record<string, any>) => string; submit: string; note: (v: Record<string, any>) => string };
+type Create = { label: string; title: string; fields: Field[]; initial: Record<string, any>; build: (v: Record<string, any>) => string; submit: string; note: (v: Record<string, any>) => string; before?: (v: Record<string, any>) => Promise<void> };
 
 /** Resource renders a list page with selection actions and a creation form. */
 function Resource<T>({
@@ -54,8 +57,13 @@ function Resource<T>({
   actions = [],
   empty,
   children,
+  detail,
+  link = "name",
 }: {
   ctx: Ctx;
+  detail?: (row: T, close: () => void) => ReactNode;
+  /** column whose cell opens the details page */
+  link?: string;
   title: string;
   intro?: ReactNode;
   caption: string;
@@ -70,7 +78,17 @@ function Resource<T>({
   const { t } = useI18n();
   const [sel, setSel] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<Action<T> | null>(null);
+  const [open, setOpen] = useState("");
   const chosen = rows.filter((r) => sel.includes(rowKey(r)));
+  const openRow = open ? rows.find((r) => rowKey(r) === open) : undefined;
+  if (detail && openRow) return <>{detail(openRow, () => setOpen(""))}</>;
+  const shownCols = detail
+    ? cols.map((c) =>
+        c.key === link
+          ? { ...c, render: (r: T) => <button type="button" className="cc-link cc-name" onClick={() => setOpen(rowKey(r))}>{c.render(r)}</button> }
+          : c,
+      )
+    : cols;
   const act = async (a: Action<T>) => {
     await ctx.runAll(a.cmds(chosen), a.note(chosen));
     setSel([]);
@@ -82,6 +100,7 @@ function Resource<T>({
         fields={create.fields}
         initial={create.initial}
         build={create.build}
+        before={create.before}
         submit={create.submit}
         onClose={() => ctx.setCreating("")}
         onRun={(cmd) => ctx.run(cmd, create.note({}))}
@@ -111,7 +130,7 @@ function Resource<T>({
         </>
       }
     >
-      <Table caption={caption} cols={cols} rows={rows} rowKey={rowKey} selected={actions.length ? sel : undefined} onSelect={actions.length ? setSel : undefined} empty={empty} />
+      <Table caption={caption} cols={shownCols} rows={rows} rowKey={rowKey} selected={actions.length ? sel : undefined} onSelect={actions.length ? setSel : undefined} empty={empty} />
       {children}
       {confirm && (
         <Confirm
@@ -216,7 +235,7 @@ const ROLES = ["roles/viewer", "roles/editor", "roles/owner", "roles/browser", "
 
 export function IAM({ ctx }: { ctx: Ctx }) {
   const { t } = useI18n();
-  const [drawer, setDrawer] = useState(false);
+  const [drawer, setDrawer] = useState<null | { kind: string; who: string }>(null);
   const [remove, setRemove] = useState<{ member: string; role: string } | null>(null);
   const byMember = new Map<string, { role: string; cond?: any }[]>();
   for (const b of ctx.data.iamPolicy?.bindings ?? []) {
@@ -232,7 +251,7 @@ export function IAM({ ctx }: { ctx: Ctx }) {
     <Page
       title={t("IAM")}
       intro={t("Permisos del proyecto {p}: quién (principal) tiene qué rol.", { p: ctx.project })}
-      actions={<Tool icon="＋" label={t("Conceder acceso")} onClick={() => setDrawer(true)} />}
+      actions={<Tool icon="＋" label={t("Conceder acceso")} onClick={() => setDrawer({ kind: "user", who: "" })} />}
     >
       <Table
         caption={t("Principales y roles del proyecto")}
@@ -240,6 +259,18 @@ export function IAM({ ctx }: { ctx: Ctx }) {
         rowKey={(r) => r.member}
         empty={t("La política del proyecto no tiene vinculaciones.")}
         cols={[
+          {
+            key: "edit",
+            label: "",
+            render: (r) => {
+              const [k0, ...rest] = r.member.split(":");
+              return (
+                <button type="button" className="cc-icon-btn sm" aria-label={t("Editar el acceso de {who}", { who: r.member })} title={t("Editar principal")} onClick={() => setDrawer({ kind: k0, who: rest.join(":") })}>
+                  ✎
+                </button>
+              );
+            },
+          },
           { key: "type", label: t("Tipo"), render: (r) => <span className="small">{kind(r.member)}</span> },
           { key: "member", label: t("Principal"), render: (r) => <code>{r.member.replace(/^[a-zA-Z]+:/, "")}</code> },
           {
@@ -264,9 +295,9 @@ export function IAM({ ctx }: { ctx: Ctx }) {
       />
       {drawer && (
         <Drawer
-          title={t("Conceder acceso a {p}", { p: ctx.project })}
+          title={drawer.who ? t("Editar el acceso a {p}", { p: ctx.project }) : t("Conceder acceso a {p}", { p: ctx.project })}
           submit={t("Guardar")}
-          initial={{ kind: "user", who: "", role: "roles/viewer", custom: "" }}
+          initial={{ kind: drawer.kind, who: drawer.who, role: "roles/viewer", custom: "" }}
           fields={[
             { id: "kind", label: t("Tipo de principal"), type: "select", options: [["user", t("Usuario")], ["serviceAccount", t("Cuenta de servicio")], ["group", t("Grupo")], ["domain", t("Dominio")]] },
             { id: "who", label: t("Principal"), required: true, placeholder: "ana@example.com" },
@@ -274,7 +305,7 @@ export function IAM({ ctx }: { ctx: Ctx }) {
             { id: "custom", label: t("Rol personalizado o predefinido"), placeholder: "roles/…", when: (v) => v.role === "custom", required: true },
           ]}
           build={(v) => `gcloud projects add-iam-policy-binding ${ctx.project} --member=${q(`${v.kind}:${v.who.trim()}`)} --role=${q(v.role === "custom" ? v.custom.trim() : v.role)}`}
-          onClose={() => setDrawer(false)}
+          onClose={() => setDrawer(null)}
           onRun={(cmd) => ctx.run(cmd, t("Conceder acceso"))}
           onPaste={ctx.paste}
         />
@@ -299,6 +330,8 @@ export function ServiceAccounts({ ctx }: { ctx: Ctx }) {
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.SADetail ctx={ctx} sa={r} close={close} />}
+      link="email"
       title={t("Cuentas de servicio")}
       intro={t("Identidades que usan las aplicaciones y las VM para llamar a las APIs de Google Cloud.")}
       caption={t("Cuentas de servicio")}
@@ -354,6 +387,7 @@ export function Instances({ ctx }: { ctx: Ctx }) {
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.VMDetail ctx={ctx} vm={r} close={close} />}
       title={t("Instancias de VM")}
       caption={t("Instancias de VM")}
       rows={rows}
@@ -382,7 +416,7 @@ export function Instances({ ctx }: { ctx: Ctx }) {
         title: t("Crear una instancia"),
         submit: t("Crear"),
         note: () => t("Crear instancia de VM"),
-        initial: { name: `instance-${n}`, zone: ctx.zone, machine: "e2-medium", image: "debian-12", network: nets.includes("default") ? "default" : nets[0] ?? "", subnet: "", tags: "", http: false, https: false, ext: true, spot: false, sa: "" },
+        initial: { name: `instance-${n}`, zone: ctx.zone, machine: "e2-medium", image: "debian-12", network: nets.includes("default") ? "default" : nets[0] ?? "", subnet: "", tags: "", http: false, https: false, ext: true, spot: false, sa: "", startup: "" },
         fields: [
           { id: "name", label: t("Nombre"), required: true, help: nameHelp(t) },
           { id: "zone", label: t("Zona"), type: "select", options: ZONES.includes(ctx.zone) ? ZONES : [ctx.zone, ...ZONES] },
@@ -396,10 +430,12 @@ export function Instances({ ctx }: { ctx: Ctx }) {
           { id: "ext", label: t("Asignar una IP externa"), type: "check", help: t("Sin IP externa la VM solo sale a internet a través de Cloud NAT.") },
           { id: "spot", label: t("VM Spot (más barata, puede detenerse en cualquier momento)"), type: "check" },
           { id: "sa", label: t("Cuenta de servicio"), type: "select", options: [["", t("Predeterminada de Compute Engine")], ...sas] },
+          { id: "startup", label: t("Secuencia de comandos de inicio"), type: "textarea", section: t("Automatización"), placeholder: "#!/bin/bash\napt-get update && apt-get install -y nginx" },
         ],
+        before: (v) => D.saveStartup(ctx, v.startup, v.name.trim()),
         build: (v) => {
           const tags = [...String(v.tags).split(",").map((x) => x.trim()).filter(Boolean), ...(v.http ? ["http-server"] : []), ...(v.https ? ["https-server"] : [])];
-          return [
+          const base = [
             `gcloud compute instances create ${q(v.name.trim())}`,
             `--zone=${v.zone}`,
             `--machine-type=${v.machine}`,
@@ -411,6 +447,7 @@ export function Instances({ ctx }: { ctx: Ctx }) {
             v.spot ? "--provisioning-model=SPOT" : "",
             v.sa ? `--service-account=${v.sa}` : "",
           ].filter(Boolean).join(" ");
+          return v.startup?.trim() ? D.startupFlag(base, v.startup, v.name.trim()) : base;
         },
       }}
       actions={[
@@ -436,6 +473,7 @@ export function Disks({ ctx }: { ctx: Ctx }) {
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.DiskDetail ctx={ctx} d={r} close={close} />}
       title={t("Discos")}
       caption={t("Discos persistentes")}
       rows={rows}
@@ -526,7 +564,8 @@ export function Networks({ ctx }: { ctx: Ctx }) {
       />
       <Resource
         ctx={ctx}
-        title={t("Subredes")}
+        detail={(r, close) => <D.SubnetDetail ctx={ctx} s={r} close={close} />}
+      title={t("Subredes")}
         intro={
           <label className="small" style={{ display: "inline-flex", gap: 6, alignItems: "center", color: "var(--text)" }}>
             <input type="checkbox" style={{ width: "auto" }} checked={showAuto} onChange={(e) => setShowAuto(e.target.checked)} />
@@ -585,6 +624,7 @@ export function Firewall({ ctx }: { ctx: Ctx }) {
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.FirewallDetail ctx={ctx} r={r} close={close} />}
       title={t("Reglas de cortafuegos")}
       intro={t("Se evalúan por prioridad: el número más bajo gana. Sin regla que lo permita, el tráfico entrante se bloquea.")}
       caption={t("Reglas de cortafuegos")}
@@ -655,18 +695,17 @@ const isPublic = (policy: any) => (policy?.bindings ?? []).some((b: any) => (b.m
 export function Buckets({ ctx }: { ctx: Ctx }) {
   const { t } = useI18n();
   const rows = vals(ctx.data.buckets).sort((a, b) => a.name.localeCompare(b.name));
-  const [open, setOpen] = useState("");
-  const b = rows.find((r) => r.name === open);
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.BucketDetail ctx={ctx} b={r} close={close} />}
       title={t("Buckets")}
       caption={t("Buckets de Cloud Storage")}
       rows={rows}
       rowKey={(r) => r.name}
       empty={t("No hay buckets en este proyecto.")}
       cols={[
-        { key: "name", label: t("Nombre"), render: (r) => <PageButton onClick={() => setOpen(open === r.name ? "" : r.name)}>{r.name}</PageButton> },
+        { key: "name", label: t("Nombre"), render: (r) => r.name },
         { key: "loc", label: t("Ubicación"), render: (r) => `${r.location} (${r.locationType === "region" ? t("región") : r.locationType === "dual-region" ? t("birregión") : t("multirregión")})` },
         { key: "class", label: t("Clase"), render: (r) => r.storageClass },
         { key: "pub", label: t("Acceso público"), render: (r) => (isPublic(r.iamPolicy) ? <Pill tone="bad">{t("Público en internet")}</Pill> : r.publicAccessPrevention === "enforced" ? t("Prevenido") : t("No público")) },
@@ -703,25 +742,6 @@ export function Buckets({ ctx }: { ctx: Ctx }) {
         },
       ]}
     >
-      {b && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0 }}>gs://{b.name}</h3>
-            <button type="button" className="btn secondary" onClick={() => ctx.paste(`gcloud storage cp ./archivo.txt gs://${b.name}/`)}>{t("Subir un archivo…")}</button>
-          </div>
-          <Table
-            caption={t("Objetos de {b}", { b: b.name })}
-            rows={Object.entries(b.objects ?? {}).map(([name, o]: [string, any]) => ({ name, ...o }))}
-            rowKey={(o: any) => o.name}
-            empty={t("El bucket está vacío.")}
-            cols={[
-              { key: "name", label: t("Nombre"), render: (o: any) => <code>{o.name}</code> },
-              { key: "size", label: t("Tamaño"), render: (o: any) => (o.size != null ? `${o.size} B` : "—") },
-              { key: "type", label: t("Tipo"), render: (o: any) => o.contentType ?? "—" },
-            ]}
-          />
-        </div>
-      )}
     </Resource>
   );
 }
@@ -734,6 +754,7 @@ export function CloudRun({ ctx }: { ctx: Ctx }) {
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.RunDetail ctx={ctx} s={r} close={close} />}
       title={t("Servicios de Cloud Run")}
       caption={t("Servicios de Cloud Run")}
       rows={rows}
@@ -788,6 +809,7 @@ export function CloudSQL({ ctx }: { ctx: Ctx }) {
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.SQLDetail ctx={ctx} i={r} close={close} />}
       title={t("Instancias de Cloud SQL")}
       caption={t("Instancias de Cloud SQL")}
       rows={rows}
@@ -844,7 +866,8 @@ export function PubSub({ ctx }: { ctx: Ctx }) {
     <>
       <Resource
         ctx={ctx}
-        title={t("Temas")}
+        detail={(r, close) => <D.TopicDetail ctx={ctx} tp={r} close={close} />}
+      title={t("Temas")}
         caption={t("Temas de Pub/Sub")}
         rows={topics}
         rowKey={(r) => r.name}
@@ -880,7 +903,8 @@ export function PubSub({ ctx }: { ctx: Ctx }) {
       />
       <Resource
         ctx={ctx}
-        title={t("Suscripciones")}
+        detail={(r, close) => <D.SubscriptionDetail ctx={ctx} s={r} close={close} />}
+      title={t("Suscripciones")}
         caption={t("Suscripciones de Pub/Sub")}
         rows={subs}
         rowKey={(r) => r.name}
@@ -1003,7 +1027,8 @@ export function GKE({ ctx }: { ctx: Ctx }) {
     <>
       <Resource
         ctx={ctx}
-        title={t("Clústeres de Kubernetes")}
+        detail={(r, close) => <D.ClusterDetail ctx={ctx} c={r} close={close} />}
+      title={t("Clústeres de Kubernetes")}
         caption={t("Clústeres de GKE")}
         rows={rows}
         rowKey={(r) => r.name}
@@ -1086,6 +1111,7 @@ export function Secrets({ ctx }: { ctx: Ctx }) {
   return (
     <Resource
       ctx={ctx}
+      detail={(r, close) => <D.SecretDetail ctx={ctx} s={r} close={close} />}
       title={t("Secret Manager")}
       intro={t("Guarda contraseñas y claves fuera del código. Las aplicaciones leen el valor con el rol secretAccessor.")}
       caption={t("Secretos")}

@@ -80,7 +80,18 @@ listas con filtro, formularios de creación con su «Código equivalente») con
 Cloud Shell debajo. Cada botón escribe y ejecuta en Cloud Shell el comando
 `gcloud`, `gsutil` o `bq` equivalente, así que aprendes la línea de comandos
 mientras haces clic, y la evaluación ve igual lo que haces en la consola y en
-la terminal.
+la terminal. Incluye páginas de detalle con pestañas y edición para IAM,
+cuentas de servicio, roles, Compute Engine (VM, plantillas, grupos de
+instancias, comprobaciones de estado, discos e instantáneas), GKE (clústeres,
+grupos de nodos, cargas de trabajo y servicios), Cloud Run (revisiones,
+tráfico y seguridad), Cloud Storage (subida y descarga de objetos, permisos),
+Cloud SQL (usuarios, bases de datos, redes autorizadas y copias), BigQuery
+Studio, Pub/Sub, VPC (subredes, IP, rutas, cortafuegos), balanceo de carga,
+Cloud DNS, Cloud NAT, Secret Manager, Cloud KMS, Artifact Registry, Cloud
+Build, Logging (explorador y métricas), Monitoring (métricas y alertas),
+facturación, topología y registro de actividad. Las instrucciones del
+laboratorio quedan en un panel a la derecha y Cloud Shell se puede
+redimensionar, maximizar o cambiar a su editor.
 
 Dentro de un laboratorio, escribe `help`. Comandos útiles: `why <recurso>`
 (cadena causal de una petición), `whatif <comando>` (vista previa del

@@ -13,6 +13,7 @@ import { k, useI18n } from "@/lib/i18n";
 import { Icon } from "./icons";
 import * as P from "./pages";
 import * as O from "./ops";
+import * as M from "./more";
 
 type Sub = { id: string; label: string; count?: (d: any) => number };
 type Product = { id: string; label: string; icon: string; group: string; pages: Sub[] };
@@ -20,21 +21,25 @@ type Product = { id: string; label: string; icon: string; group: string; pages: 
 const n = (m: any) => (m ? (Array.isArray(m) ? m.length : Object.keys(m).length) : 0);
 
 export const PRODUCTS: Product[] = [
-  { id: "iam", label: k("IAM y administración"), icon: "person", group: k("Gestión"), pages: [{ id: "iam", label: k("IAM") }, { id: "sa", label: k("Cuentas de servicio"), count: (d) => n(d.serviceAccounts) }] },
+  { id: "iam", label: k("IAM y administración"), icon: "person", group: k("Gestión"), pages: [{ id: "iam", label: k("IAM") }, { id: "sa", label: k("Cuentas de servicio"), count: (d) => n(d.serviceAccounts) }, { id: "roles", label: k("Roles"), count: (d) => n(d.customRoles) }, { id: "orgpolicies", label: k("Políticas de organización") }] },
   { id: "apis", label: k("APIs y servicios"), icon: "api", group: k("Gestión"), pages: [{ id: "apis", label: k("APIs y servicios habilitados") }] },
   { id: "billing", label: k("Facturación"), icon: "billing", group: k("Gestión"), pages: [{ id: "billing", label: k("Informes") }] },
-  { id: "compute", label: k("Compute Engine"), icon: "compute", group: k("Computación"), pages: [{ id: "vm", label: k("Instancias de VM"), count: (d) => n(d.instances) }, { id: "disks", label: k("Discos"), count: (d) => n(d.disks) }] },
-  { id: "gke", label: k("Kubernetes Engine"), icon: "gke", group: k("Computación"), pages: [{ id: "gke", label: k("Clústeres"), count: (d) => n(d.clusters) }] },
+  { id: "compute", label: k("Compute Engine"), icon: "compute", group: k("Computación"), pages: [{ id: "vm", label: k("Instancias de VM"), count: (d) => n(d.instances) }, { id: "templates", label: k("Plantillas de instancia"), count: (d) => n(d.instanceTemplates) }, { id: "groups", label: k("Grupos de instancias"), count: (d) => n(d.instanceGroups) }, { id: "healthchecks", label: k("Comprobaciones de estado"), count: (d) => n(d.healthChecks) }, { id: "disks", label: k("Discos"), count: (d) => n(d.disks) }, { id: "snapshots", label: k("Instantáneas"), count: (d) => n(d.snapshots) }] },
+  { id: "gke", label: k("Kubernetes Engine"), icon: "gke", group: k("Computación"), pages: [{ id: "gke", label: k("Clústeres"), count: (d) => n(d.clusters) }, { id: "workloads", label: k("Cargas de trabajo") }, { id: "k8sservices", label: k("Servicios e Ingress") }, { id: "k8sconfig", label: k("Secretos y ConfigMaps") }] },
   { id: "run", label: k("Cloud Run"), icon: "run", group: k("Sin servidor"), pages: [{ id: "run", label: k("Servicios"), count: (d) => n(d.runServices) }] },
   { id: "storage", label: k("Cloud Storage"), icon: "storage", group: k("Almacenamiento"), pages: [{ id: "buckets", label: k("Buckets"), count: (d) => n(d.buckets) }] },
   { id: "sql", label: k("SQL"), icon: "sql", group: k("Bases de datos"), pages: [{ id: "sql", label: k("Instancias"), count: (d) => n(d.sqlInstances) }] },
   { id: "bigquery", label: k("BigQuery"), icon: "bigquery", group: k("Analíticas"), pages: [{ id: "bigquery", label: k("Estudio de BigQuery"), count: (d) => n(d.datasets) }] },
   { id: "pubsub", label: k("Pub/Sub"), icon: "pubsub", group: k("Analíticas"), pages: [{ id: "pubsub", label: k("Temas y suscripciones"), count: (d) => n(d.topics) }] },
-  { id: "vpc", label: k("Red de VPC"), icon: "network", group: k("Redes"), pages: [{ id: "vpc", label: k("Redes de VPC"), count: (d) => n(d.networks) }, { id: "firewall", label: k("Cortafuegos"), count: (d) => n(d.firewalls) }] },
+  { id: "vpc", label: k("Red de VPC"), icon: "network", group: k("Redes"), pages: [{ id: "vpc", label: k("Redes de VPC"), count: (d) => n(d.networks) }, { id: "addresses", label: k("Direcciones IP"), count: (d) => n(d.addresses) }, { id: "firewall", label: k("Cortafuegos"), count: (d) => n(d.firewalls) }, { id: "routes", label: k("Rutas") }] },
+  { id: "netservices", label: k("Servicios de red"), icon: "network", group: k("Redes"), pages: [{ id: "lb", label: k("Balanceo de carga"), count: (d) => n(d.forwardingRules) }, { id: "dns", label: k("Cloud DNS"), count: (d) => n(d.dnsZones) }, { id: "nat", label: k("Cloud NAT") }] },
   { id: "nic", label: k("Network Intelligence Center"), icon: "network", group: k("Redes"), pages: [{ id: "topology", label: k("Topología de red") }] },
   { id: "secrets", label: k("Secret Manager"), icon: "lock", group: k("Seguridad"), pages: [{ id: "secrets", label: k("Secretos"), count: (d) => n(d.secrets) }] },
-  { id: "logging", label: k("Logging"), icon: "logs", group: k("Operaciones"), pages: [{ id: "logs", label: k("Explorador de registros") }] },
-  { id: "monitoring", label: k("Monitoring"), icon: "monitoring", group: k("Operaciones"), pages: [{ id: "metrics", label: k("Explorador de métricas") }] },
+  { id: "kms", label: k("Gestión de claves"), icon: "key", group: k("Seguridad"), pages: [{ id: "kms", label: k("Llaveros"), count: (d) => n(d.keyRings) }] },
+  { id: "artifacts", label: k("Artifact Registry"), icon: "storage", group: k("CI/CD"), pages: [{ id: "artifacts", label: k("Repositorios"), count: (d) => n(d.artifactRepos) }] },
+  { id: "build", label: k("Cloud Build"), icon: "refresh", group: k("CI/CD"), pages: [{ id: "build", label: k("Historial y activadores"), count: (d) => n(d.builds) }] },
+  { id: "logging", label: k("Logging"), icon: "logs", group: k("Operaciones"), pages: [{ id: "logs", label: k("Explorador de registros") }, { id: "logmetrics", label: k("Métricas basadas en registros"), count: (d) => n(d.logMetrics) }] },
+  { id: "monitoring", label: k("Monitoring"), icon: "monitoring", group: k("Operaciones"), pages: [{ id: "metrics", label: k("Explorador de métricas") }, { id: "alerting", label: k("Alertas"), count: (d) => n(d.alertPolicies) }] },
   { id: "activity", label: k("Registro de actividad"), icon: "logs", group: k("Operaciones"), pages: [{ id: "activity", label: k("Actividad") }] },
 ];
 
@@ -160,7 +165,7 @@ export default function CloudConsole({
     setTimeout(focusShell, 50);
   };
 
-  const exec = async (cmd: string, note: string) => {
+  const runOut = async (cmd: string, note: string) => {
     if (shell === "min") setShell("open");
     setShellMode("terminal");
     const r = await run(cmd, note);
@@ -168,8 +173,9 @@ export default function CloudConsole({
     const tt: Toast = r.exit === 0 ? { ok: true, text: note, cmd, at: new Date() } : { ok: false, text: note, cmd, at: new Date(), detail: errLine ?? r.output.trim().split("\n").pop() };
     setToast(tt);
     setNotes((x) => [tt, ...x].slice(0, 30));
-    return r.exit === 0;
+    return r;
   };
+  const exec = async (cmd: string, note: string) => (await runOut(cmd, note)).exit === 0;
   const runAll = async (cmds: string[], note: string) => {
     for (const c of cmds) {
       if (!(await exec(c, note))) break;
@@ -204,7 +210,7 @@ export default function CloudConsole({
   };
 
   const ctx: P.Ctx | null = data
-    ? { sessionId, tick: tick + reload, data, project, region, zone, run: exec, runAll, paste: pasteCmd, go, openTab: go, refresh: () => setReload((x) => x + 1), creating, setCreating }
+    ? { sessionId, tick: tick + reload, data, project, region, zone, run: exec, runAll, runOut, paste: pasteCmd, go, openTab: go, refresh: () => setReload((x) => x + 1), creating, setCreating }
     : null;
 
   const results = useMemo(() => {
@@ -233,7 +239,26 @@ export default function CloudConsole({
       case "run": return <P.CloudRun ctx={ctx} />;
       case "sql": return <P.CloudSQL ctx={ctx} />;
       case "pubsub": return <P.PubSub ctx={ctx} />;
-      case "bigquery": return <P.BigQuery ctx={ctx} />;
+      case "bigquery": return <M.BigQueryStudio ctx={ctx} />;
+      case "roles": return <M.Roles ctx={ctx} />;
+      case "orgpolicies": return <M.OrgPolicies ctx={ctx} />;
+      case "templates": return <M.InstanceTemplates ctx={ctx} />;
+      case "groups": return <M.InstanceGroups ctx={ctx} />;
+      case "healthchecks": return <M.HealthChecks ctx={ctx} />;
+      case "snapshots": return <M.Snapshots ctx={ctx} />;
+      case "workloads": return <M.Workloads ctx={ctx} />;
+      case "k8sservices": return <M.K8sServices ctx={ctx} />;
+      case "k8sconfig": return <M.K8sConfig ctx={ctx} />;
+      case "addresses": return <M.IPAddresses ctx={ctx} />;
+      case "routes": return <M.Routes ctx={ctx} />;
+      case "lb": return <M.LoadBalancing ctx={ctx} />;
+      case "dns": return <M.CloudDNS ctx={ctx} />;
+      case "nat": return <M.CloudNAT ctx={ctx} />;
+      case "kms": return <M.KMS ctx={ctx} />;
+      case "artifacts": return <M.ArtifactRegistry ctx={ctx} />;
+      case "build": return <M.CloudBuild ctx={ctx} />;
+      case "logmetrics": return <M.LogMetrics ctx={ctx} />;
+      case "alerting": return <M.Alerting ctx={ctx} />;
       case "gke": return <P.GKE ctx={ctx} />;
       case "secrets": return <P.Secrets ctx={ctx} />;
       case "apis": return <P.APIs ctx={ctx} />;

@@ -249,6 +249,8 @@ function Fields({ fields, v, set }: { fields: Field[]; v: Record<string, any>; s
 }
 
 export type FormProps = {
+  /** runs before the command, e.g. to save a file the command reads */
+  before?: (v: Record<string, any>) => Promise<void>;
   title: string;
   fields: Field[];
   initial: Record<string, any>;
@@ -259,16 +261,17 @@ export type FormProps = {
   onPaste: (cmd: string) => void;
 };
 
-function useForm({ fields, initial, build, onRun, onClose }: FormProps) {
+function useForm({ fields, initial, build, onRun, onClose, before }: FormProps) {
   const [v, setV] = useState<Record<string, any>>(initial);
   const [busy, setBusy] = useState(false);
   const shown = fields.filter((f) => !f.when || f.when(v));
-  const missing = shown.some((f) => f.required && !String(v[f.id] ?? "").trim());
   const cmd = build(v);
+  const missing = shown.some((f) => f.required && !String(v[f.id] ?? "").trim()) || !cmd.trim();
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (missing || busy) return;
     setBusy(true);
+    await before?.(v);
     const ok = await onRun(cmd);
     setBusy(false);
     if (ok) onClose();
@@ -378,4 +381,115 @@ export function Confirm({ title, text, cmds, confirm, onClose, onRun }: { title:
       </div>
     </div>
   );
+}
+
+/** Props is the key/value table of a details tab. */
+export function Props({ rows }: { rows: [string, ReactNode][] }) {
+  return (
+    <table className="cc-props">
+      <tbody>
+        {rows.map(([k, v]) => (
+          <tr key={k}>
+            <th scope="row">{k}</th>
+            <td>{v === "" || v == null || v === false ? <span className="cc-muted">—</span> : v}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export function Section({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="cc-section">
+      <div className="cc-section-head">
+        <h2>{title}</h2>
+        {actions && <div className="cc-toolbar">{actions}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export type DetailTab = { id: string; label: string; render: () => ReactNode };
+
+/** Detail is a resource details page: back arrow, name, toolbar and tabs. */
+export function Detail({ title, onBack, actions, tabs, status }: { title: string; onBack: () => void; actions?: ReactNode; tabs: DetailTab[]; status?: ReactNode }) {
+  const { t } = useI18n();
+  const [tab, setTab] = useState(tabs[0]?.id ?? "");
+  const cur = tabs.find((x) => x.id === tab) ?? tabs[0];
+  return (
+    <section className="cc-page cc-detail" aria-label={title}>
+      <div className="cc-page-head">
+        <button type="button" className="cc-icon-btn" onClick={onBack} aria-label={t("Volver")}><Icon name="back" /></button>
+        {status}
+        <h1>{title}</h1>
+        {actions && <div className="cc-toolbar">{actions}</div>}
+      </div>
+      {tabs.length > 1 && (
+        <div className="cc-tabs" role="tablist" aria-label={title}>
+          {tabs.map((x) => (
+            <button key={x.id} type="button" role="tab" id={`cc-tab-${x.id}`} aria-selected={cur?.id === x.id} aria-controls="cc-tabpanel" className={cur?.id === x.id ? "on" : ""} onClick={() => setTab(x.id)}>
+              {x.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="cc-tabpanel" id="cc-tabpanel" role={tabs.length > 1 ? "tabpanel" : undefined} aria-labelledby={tabs.length > 1 ? `cc-tab-${cur?.id}` : undefined}>
+        {cur?.render()}
+      </div>
+    </section>
+  );
+}
+
+/** OutputDialog shows what a command printed (e.g. a secret value or pulled messages). */
+export function OutputDialog({ title, cmd, output, onClose }: { title: string; cmd: string; output: string; onClose: () => void }) {
+  const { t } = useI18n();
+  const ref = useDialog(onClose);
+  return (
+    <div className="cc-overlay center" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="cc-dialog wide" role="dialog" aria-modal="true" aria-labelledby="cc-out-title" ref={ref}>
+        <h2 id="cc-out-title">{title}</h2>
+        <div className="cc-field-title">{t("Comando")}</div>
+        <CommandLine cmd={cmd} />
+        <div className="cc-field-title" style={{ marginTop: 12 }}>{t("Resultado")}</div>
+        <pre className="cc-output">{output || t("(sin salida)")}</pre>
+        <div className="cc-dialog-actions">
+          <button type="button" className="cc-btn text" onClick={onClose}>{t("Cerrar")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export type FormSpec = Omit<FormProps, "onClose" | "onRun" | "onPaste"> & { kind?: "page" | "drawer"; note: string };
+export type ConfirmSpec = { title: string; text: string; cmds: string[]; button: string; note: string };
+
+/** useHost manages the forms, confirmations and output dialogs of a page. */
+export function useHost(run: (cmd: string, note: string) => Promise<boolean>, runAll: (cmds: string[], note: string) => Promise<void>, paste: (cmd: string) => void, runOut: (cmd: string, note: string) => Promise<{ output: string; exit: number }>) {
+  const [form, setForm] = useState<FormSpec | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
+  const [out, setOut] = useState<{ title: string; cmd: string; output: string } | null>(null);
+  const node = (
+    <>
+      {form && form.kind === "drawer" && (
+        <Drawer {...form} onClose={() => setForm(null)} onRun={(cmd) => run(cmd, form.note)} onPaste={paste} />
+      )}
+      {confirm && (
+        <Confirm title={confirm.title} text={confirm.text} cmds={confirm.cmds} confirm={confirm.button} onClose={() => setConfirm(null)} onRun={() => runAll(confirm.cmds, confirm.note)} />
+      )}
+      {out && <OutputDialog {...out} onClose={() => setOut(null)} />}
+    </>
+  );
+  const page = form && form.kind !== "drawer" ? <CreatePage {...form} onClose={() => setForm(null)} onRun={(cmd) => run(cmd, form.note)} onPaste={paste} /> : null;
+  return {
+    node,
+    page,
+    form: (f: FormSpec) => setForm(f),
+    confirm: (c: ConfirmSpec) => setConfirm(c),
+    show: async (title: string, cmd: string, note: string) => {
+      const r = await runOut(cmd, note);
+      setOut({ title, cmd, output: r.output });
+    },
+  };
 }
