@@ -1,0 +1,167 @@
+id: cap-devops-platform
+title: "Capstone (DevOps): from Terraform to a rollback on GKE"
+summary: Build the delivery platform as code, a least-privilege supply chain from commit to image, deploy to GKE, detect a bad release and roll back.
+track: capstones
+day: 3
+level: professional
+branch: devops
+type: capstone
+mode: production
+skills: [devops.iac, devops.cicd, devops.artifacts, devops.delivery, security.supplychain, gke.workloads, gke.troubleshooting]
+wellArchitected: [operations, security, reliability]
+certs: [PCDE]
+difficulty: 5
+minutes: 150
+baseline: [default-network]
+setup: |
+  gcloud iam service-accounts create gke-nodes --display-name="GKE node identity"
+  gcloud container clusters create web-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-4 --service-account=gke-nodes@{{.project}}.iam.gserviceaccount.com
+  gcloud source repos create storefront
+files:
+  Dockerfile: |
+    FROM gcr.io/distroless/static
+    LABEL sim.behavior=web-frontend
+    COPY app /app
+    ENTRYPOINT ["/app"]
+  app: "(storefront binary v1)"
+  k8s.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata: {name: storefront}
+    spec:
+      replicas: 3
+      selector: {matchLabels: {app: storefront}}
+      template:
+        metadata: {labels: {app: storefront}}
+        spec:
+          containers:
+          - name: storefront
+            image: IMAGE_PLACEHOLDER
+            ports: [{containerPort: 8080}]
+            readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata: {name: storefront}
+    spec:
+      type: LoadBalancer
+      selector: {app: storefront}
+      ports: [{port: 80, targetPort: 8080}]
+ticket:
+  id: CHG-600
+  kind: CHG
+  priority: P3
+  summary: "Platform for the storefront team: infrastructure as code, CI from the repo, deployments to web-gke and a proven rollback."
+  reporter: Kai (platform team)
+actors:
+  - role: security
+    name: Aisha (CISO office)
+    facts:
+      - {keywords: [[build, cloud build, identity, service account, cuenta]], answer: "Builds run as a dedicated builder identity that can only push images — never the default Cloud Build account with editor."}
+      - {keywords: [[tag, latest, immutable, inmutable]], answer: "Deploy immutable, commit-tagged images. `latest` is not an audit trail."}
+story: |
+  Build the storefront delivery platform in `{{.project}}`:
+
+  1. **Terraform** (`main.tf`): Docker repository `releases` in {{.region}}, service account `builder`, and the
+     role that lets `builder` push images — nothing more.
+  2. **CI**: trigger `storefront-main` on repo `storefront` (branch `main`) running `cloudbuild.yaml` as `builder`,
+     producing `…/releases/storefront:$SHORT_SHA`.
+  3. **Deploy** the first commit's image to cluster `web-gke` with `k8s.yaml` (replace `IMAGE_PLACEHOLDER`).
+     The nodes run as `gke-nodes` — make sure they can pull.
+  4. Ship a second commit that turns out to be broken (`LABEL sim.behavior=payments-api:3.0-bad` in the
+     Dockerfile), deploy it, notice the failure and **roll back**.
+objectives:
+  - Infrastructure as code with a clean plan
+  - Least-privilege supply chain from commit to immutable image
+  - Deployment to GKE that pulls from the private registry
+  - Failed release detected and rolled back
+evidence:
+  fields: [postmortem]
+  sample:
+    postmortem: The second commit's image crashed on start (CrashLoopBackOff), so readiness failed; kubectl rollout undo returned storefront to the first commit's image. Terraform manages the registry, the builder identity and its artifactregistry.writer role; gke-nodes only has artifactregistry.reader.
+solution: |
+  cat > main.tf <<'HCL'
+  provider "google" {
+    project = "{{.project}}"
+    region  = "{{.region}}"
+  }
+  resource "google_artifact_registry_repository" "releases" {
+    repository_id = "releases"
+    location      = "{{.region}}"
+    format        = "DOCKER"
+  }
+  resource "google_service_account" "builder" {
+    account_id = "builder"
+  }
+  resource "google_project_iam_member" "builder_push" {
+    project = "{{.project}}"
+    role    = "roles/artifactregistry.writer"
+    member  = "serviceAccount:${google_service_account.builder.email}"
+  }
+  HCL
+  terraform init
+  terraform apply -auto-approve
+  terraform plan
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com --role=roles/artifactregistry.reader
+  cat > cloudbuild.yaml <<'YAML'
+  steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -t, {{.region}}-docker.pkg.dev/$PROJECT_ID/releases/storefront:$SHORT_SHA, .]
+  images:
+  - {{.region}}-docker.pkg.dev/$PROJECT_ID/releases/storefront:$SHORT_SHA
+  YAML
+  gcloud builds triggers create cloud-source-repositories --name=storefront-main --repo=storefront --branch-pattern='^main$' --build-config=cloudbuild.yaml --service-account=projects/{{.project}}/serviceAccounts/builder@{{.project}}.iam.gserviceaccount.com
+  git init
+  git add .
+  git commit -m "storefront v1"
+  git remote add origin https://source.developers.google.com/p/{{.project}}/r/storefront
+  git push origin main
+  gcloud builds list --limit=1
+  gcloud container clusters get-credentials web-gke --zone={{.zone}}
+  sed -i "s#IMAGE_PLACEHOLDER#{{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:$(git log | head -1 | cut -d' ' -f1)#" k8s.yaml
+  kubectl apply -f k8s.yaml
+  kubectl rollout status deployment/storefront
+  sed -i "s#sim.behavior=web-frontend#sim.behavior=payments-api:3.0-bad#" Dockerfile
+  git add .
+  git commit -m "storefront v2"
+  git push origin main
+  kubectl set image deployment/storefront storefront={{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:$(git log | head -1 | cut -d' ' -f1)
+  kubectl get pods
+  kubectl rollout undo deployment/storefront
+  kubectl get pods
+rubric:
+  - name: Infrastructure as code
+    validator: state
+    points: 15
+    all: true
+    checks:
+      - {type: terraform_clean, minResources: 3, desc: "Terraform manages registry, builder and its role with a clean plan"}
+      - {type: tf_state, address: google_project_iam_member.builder_push, desc: "Builder permissions in code"}
+  - name: Supply chain
+    validator: security
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: build, trigger: true, imageRegex: "{{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:", shaTag: true, desc: "Triggered build produced a commit-tagged image"}
+      - {type: exists, path: "buildTriggers[\"storefront-main\"]", expect: {serviceAccount: "builder@{{.project}}.iam.gserviceaccount.com"}, desc: "Builds run as builder"}
+      - {type: no_basic_roles, members: ["serviceAccount:builder@{{.project}}.iam.gserviceaccount.com", "serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles in the supply chain"}
+  - name: Deployed from the private registry
+    validator: functional
+    points: 20
+    all: true
+    checks:
+      - {type: k8s_ready, cluster: web-gke, deployment: storefront, min: 3, desc: "3 ready replicas"}
+      - {type: http, target: "k8s:web-gke/storefront", path: /shop, status: 502, not: true, desc: "Service answers through its load balancer"}
+  - name: Rollback proven
+    validator: functional
+    points: 20
+    all: true
+    checks:
+      - {type: exists, path: "clusters[\"web-gke\"].k8s.namespaces.default.deployments.storefront", expect: {revision: {gte: 3}}, desc: "Bad release rolled out and rolled back"}
+      - {type: command, regex: "rollout undo", desc: "Rolled back with kubectl rollout undo"}
+  - name: Postmortem
+    validator: evidence
+    points: 20
+    checks:
+      - {type: evidence, fields: [postmortem], keywords: [[rollback, rollout undo, revert], [crash, readiness, fail], [writer, reader, least privilege, minimo]], desc: "What failed, how it was detected and rolled back"}

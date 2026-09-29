@@ -1042,10 +1042,48 @@ func (c *Context) evidence(ch scenario.Check) (bool, string) {
 
 func (c *Context) quiz(ch scenario.Check) (bool, string) {
 	ids := list(ch, "ids")
+	// interview answers given in the terminal count as submitted answers
+	if iv := c.Session.Interview; iv != nil {
+		if c.Sub.Answers == nil {
+			c.Sub.Answers = map[string][]int{}
+		}
+		if c.Sub.Justifications == nil {
+			c.Sub.Justifications = map[string]string{}
+		}
+		for k, v := range iv.Answers {
+			if _, ok := c.Sub.Answers[k]; !ok {
+				c.Sub.Answers[k] = v
+			}
+		}
+		for k, v := range iv.Justifications {
+			if _, ok := c.Sub.Justifications[k]; !ok {
+				c.Sub.Justifications[k] = v
+			}
+		}
+	}
 	correct, total := 0, 0
+	answeredCorrectly := func(id string) (bool, bool) {
+		for _, q := range c.Lab.Quiz {
+			if q.ID == id {
+				got, ok := c.Sub.Answers[id]
+				g, w := append([]int{}, got...), append([]int{}, q.Answer...)
+				sort.Ints(g)
+				sort.Ints(w)
+				return ok, ok && fmt.Sprint(g) == fmt.Sprint(w)
+			}
+		}
+		return false, false
+	}
 	for _, q := range c.Lab.Quiz {
 		if len(ids) > 0 && !contains(ids, q.ID) {
 			continue
+		}
+		if q.After != "" {
+			// conditional follow-up: only counts when it was actually asked
+			answered, correct := answeredCorrectly(q.After)
+			if !answered || (q.When == "correct" && !correct) || (q.When == "incorrect" && correct) {
+				continue
+			}
 		}
 		total++
 		got := append([]int{}, c.Sub.Answers[q.ID]...)

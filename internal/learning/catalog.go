@@ -153,6 +153,20 @@ func LoadCatalog(root string) (*Catalog, error) {
 		c.Labs[l.ID] = l
 		c.LabOrder = append(c.LabOrder, l.ID)
 	}
+	// Company-simulation missions are labs played on a persistent world; they
+	// are resolvable (mastery, career capstones) but not listed in the catalogue.
+	if _, err := os.Stat(filepath.Join(root, "company", "missions")); err == nil {
+		missions, err := scenario.LoadAll(filepath.Join(root, "company", "missions"))
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range missions {
+			if c.Labs[m.ID] != nil {
+				return nil, fmt.Errorf("mission id %s collides with a lab", m.ID)
+			}
+			c.AddGenerated(m)
+		}
+	}
 	return c, nil
 }
 
@@ -185,7 +199,7 @@ func (c *Catalog) Validate() []string {
 			problems = append(problems, fmt.Sprintf("lab %s: unknown branch %q", l.ID, l.Branch))
 		}
 		switch l.Type {
-		case "guided", "challenge", "incident", "quiz", "capstone", "boss", "case-study":
+		case "guided", "challenge", "incident", "quiz", "capstone", "boss", "case-study", "interview":
 		default:
 			problems = append(problems, fmt.Sprintf("lab %s: invalid type %q", l.ID, l.Type))
 		}
@@ -201,7 +215,7 @@ func (c *Catalog) Validate() []string {
 	problems = append(problems, c.validateGraph()...)
 	for _, st := range c.Career.Stages {
 		for _, id := range st.Capstones {
-			if c.Labs[id] == nil {
+			if c.Lab(id) == nil {
 				problems = append(problems, fmt.Sprintf("career stage %s: unknown capstone %s", st.ID, id))
 			}
 		}
@@ -213,7 +227,7 @@ func (c *Catalog) Validate() []string {
 	}
 	for _, sp := range c.Career.Specializations {
 		for _, id := range sp.Capstones {
-			if c.Labs[id] == nil {
+			if c.Lab(id) == nil {
 				problems = append(problems, fmt.Sprintf("specialization %s: unknown capstone %s", sp.ID, id))
 			}
 		}

@@ -1,0 +1,82 @@
+id: cap-junior-secure-app
+title: "Capstone (Junior): ship a small app securely and observably"
+summary: Deploy a simple application with its own identity, private data, least privilege, logging-based alerting and a budget — the Junior Cloud Engineer rite of passage.
+track: capstones
+day: 1
+level: intermediate
+branch: compute
+type: capstone
+mode: lab
+skills: [compute.serverless, iam.serviceaccounts, storage.access, observability.logging, observability.monitoring, foundations.billing]
+wellArchitected: [security, operations, cost]
+certs: [ACE]
+difficulty: 3
+minutes: 90
+baseline: [empty]
+story: |
+  The marketing team needs a small **reports** service in `{{.project}}`:
+
+  - Cloud Run service `reports` (image `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) in {{.region}},
+    public, reading report files from a **private** bucket `gs://reports-{{.project}}` (env `BUCKET`)
+  - the service runs as its own service account `reports-sa` that can **only read** that bucket
+  - upload `q3.csv` to `gs://reports-{{.project}}/data/report.csv`
+  - observability: a log-based metric `reports-5xx` for its HTTP 5xx and an alert policy on it that notifies
+    an email channel `oncall@gcplab.dev`
+  - a budget of 50 EUR with alerts at 50/90/100%
+files:
+  q3.csv: |
+    region,revenue
+    EU,120000
+objectives:
+  - Deploy the service with its own identity
+  - Private data with read-only access for the service
+  - Alerting on errors with a notification channel
+  - Cost guardrail
+solution: |
+  gcloud storage buckets create gs://reports-{{.project}} --location={{.region}} --uniform-bucket-level-access --public-access-prevention
+  gcloud storage cp q3.csv gs://reports-{{.project}}/data/report.csv
+  gcloud iam service-accounts create reports-sa --display-name="reports service"
+  gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} --member=serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud run deploy reports --image=europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0 --region={{.region}} --service-account=reports-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BUCKET=reports-{{.project}} --allow-unauthenticated
+  curl -s $(gcloud run services describe reports --region={{.region}} --format='value(status.url)')/reports
+  gcloud logging metrics create reports-5xx --description="reports 5xx" --log-filter='resource.type="cloud_run_revision" AND resource.labels.service_name="reports" AND httpRequest.status>=500'
+  gcloud monitoring channels create --display-name=oncall --type=email --channel-labels=email_address=oncall@gcplab.dev
+  gcloud alpha monitoring policies create --display-name="reports 5xx" --condition-display-name="5xx > 0" --condition-filter='metric.type="logging.googleapis.com/user/reports-5xx"' --if='> 0' --duration=60s --notification-channels=$(gcloud monitoring channels list --format='value(name)')
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=reports-budget --budget-amount=50EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: reports runs on Cloud Run as reports-sa, which only has objectViewer on the private reports bucket; a log-based metric counts 5xx and an alert notifies the oncall email channel; a 50 EUR budget alerts at 50, 90 and 100 percent.
+rubric:
+  - name: Service works
+    validator: functional
+    points: 25
+    checks:
+      - {type: http, target: "run:reports", path: /reports, status: 200, desc: "/reports serves the data"}
+  - name: Identity and data
+    validator: security
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "runServices.reports", expect: {serviceAccount: "reports-sa@{{.project}}.iam.gserviceaccount.com"}, desc: "Runs as reports-sa"}
+      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.create, resource: "bucket:reports-{{.project}}/data/x.csv", expect: false, desc: "Read-only access"}
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "Data is private"}
+      - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
+  - name: Observability
+    validator: state
+    points: 25
+    all: true
+    checks:
+      - {type: log_metric, filterContains: ["httpRequest.status>=500"], desc: "5xx log-based metric"}
+      - {type: alert_policy, filterContains: "logging.googleapis.com/user/reports-5xx", channel: true, desc: "Alert with a notification channel"}
+  - name: Cost guardrail
+    validator: cost
+    points: 10
+    checks:
+      - {type: exists, path: "budgets[\"reports-budget\"]", expect: {amount: 50, thresholds: {minLen: 3}}, desc: "Budget with thresholds"}
+  - name: Explanation
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[service account, cuenta de servicio, identity], [alert, alerta], [budget, presupuesto]], desc: "Explain the setup"}

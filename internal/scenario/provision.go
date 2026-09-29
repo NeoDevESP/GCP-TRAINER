@@ -136,6 +136,7 @@ func Provision(base *Lab, seed int64, projectID string) (*World, error) {
 	st.Step(10)
 	sess := cli.NewSession(st, projectID, l.Student.Account)
 	sess.Policy = l.Policy
+	AttachInterview(sess, l)
 	if l.Ticket != nil || len(l.Actors) > 0 {
 		d := &desk.Desk{Actors: l.Actors}
 		if l.Ticket != nil {
@@ -275,4 +276,19 @@ func RunBaseline(st *sim.State, projectID, name string, extra map[string]string)
 	s.Region, s.Zone, s.NoTick = "europe-west1", "europe-west1-b", true
 	s.Policy = PlatformPolicy
 	return runScript(s, rendered, "baseline "+name)
+}
+
+// AttachInterview loads interview questions into a session (interview mode).
+// Answers already given (restored sessions) are preserved.
+func AttachInterview(sess *cli.Session, l *Lab) {
+	if l.Mode != "interview" || len(l.Quiz) == 0 {
+		return
+	}
+	if sess.Interview == nil {
+		sess.Interview = &cli.Interview{Answers: map[string][]int{}, Justifications: map[string]string{}}
+	}
+	sess.Interview.Questions = nil
+	for _, q := range l.Quiz {
+		sess.Interview.Questions = append(sess.Interview.Questions, cli.InterviewQuestion{ID: q.ID, Question: q.Question, Options: q.Options, Answer: q.Answer, After: q.After, When: q.When, Probe: q.Probe, Justify: q.Justify})
+	}
 }

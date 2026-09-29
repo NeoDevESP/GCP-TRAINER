@@ -1,0 +1,102 @@
+id: nb-boss-quarter-close
+title: "BOSS (Senior): quarter close across the whole organisation"
+summary: Simultaneous incidents in several projects, a governance deadline and a cost overrun — triage, fix in the right order, protect other teams' work and keep leadership informed.
+level: professional
+branch: architecture
+type: boss
+mode: career
+skills: [observability.incident, networking.firewall, storage.access, finops.optimization, iam.orgpolicy, architecture.governance, observability.postmortem]
+difficulty: 5
+minutes: 120
+company: {stage: senior, project: prod-web, kind: INC, after: [nb-m07-privilege-review]}
+setup: |
+  gcloud resource-manager folders add-iam-policy-binding {{.folder_production}} --member=user:student@gcplab.dev --role=roles/orgpolicy.policyAdmin
+faults:
+  - {type: firewall_delete, rule: allow-api-to-db, actor: "cleanup-bot@{{.prod_web}}.iam.gserviceaccount.com"}
+  - {type: command, actor: "etl-sa@{{.prod_data}}.iam.gserviceaccount.com", run: "gcloud storage buckets add-iam-policy-binding gs://datalake-{{.prod_data}} --member=allUsers --role=roles/storage.objectViewer --project={{.prod_data}}"}
+  - {type: command, run: "gcloud compute instances create abandoned-1 abandoned-2 abandoned-3 --zone=europe-west1-b --machine-type=n2-standard-16 --labels=owner=hackathon --image-family=debian-12 --image-project=debian-cloud --project={{.sandbox}}"}
+  - {type: command, run: "gcloud compute instances create finance-close --zone=europe-west1-b --machine-type=n2-standard-8 --labels=owner=finance,purpose=quarter-close --image-family=debian-12 --image-project=debian-cloud --project={{.sandbox}}"}
+ticket:
+  id: INC-9999
+  kind: INC
+  priority: P1
+  summary: "Quarter close, 08:50: checkout errors in production, an external report about the data lake, the sandbox bill exploded, and the auditors arrive at noon asking for the key-creation guardrail in Production."
+  reporter: Incident Commander
+actors:
+  - role: finance
+    name: Marta (FinOps)
+    facts:
+      - {keywords: [[sandbox, cost, coste, vm, abandoned, hackathon]], answer: "The abandoned-* VMs are from last month's hackathon — delete them. But finance-close is running our quarter close right now: do NOT touch it!"}
+  - role: security
+    name: Aisha (CISO office)
+    facts:
+      - {keywords: [[datalake, data lake, public, report, bucket]], answer: "The researcher could list gs://datalake-... anonymously. Close it first, we'll assess access afterwards."}
+      - {keywords: [[audit, auditor, key, clave, guardrail]], answer: "Auditors want constraints/iam.disableServiceAccountKeyCreation enforced on the Production folder — inherited by every prod project."}
+  - role: manager
+    name: Irene (engineering manager)
+    facts:
+      - {keywords: [[priority, prioridad, order, orden, first, primero]], answer: "Revenue first, then data exposure, then cost, then the audit — but tell me your plan on the ticket before you start."}
+story: |
+  Everything happens at once in **{{.company}}**. Work the P1 ticket like a senior engineer:
+
+  - **prod-web** (`{{.prod_web}}`): checkout returns errors since 08:50
+  - **prod-data** (`{{.prod_data}}`): a researcher reports the data lake is public
+  - **sandbox** (`{{.sandbox}}`): cost exploded overnight — but some workloads there belong to Finance
+  - **governance**: enforce `iam.disableServiceAccountKeyCreation` on the Production folder (`{{.folder_production}}`) before noon
+
+  Post your plan on the ticket first, fix everything with minimum privilege, don't destroy other teams'
+  work, post a final update and write the postmortem.
+objectives:
+  - Triage and communicate a plan
+  - Restore revenue, close the exposure, stop the waste, meet the audit
+  - Protect other teams' workloads
+  - Postmortem with prioritisation rationale
+evidence:
+  fields: [postmortem]
+  sample:
+    postmortem: "Timeline: 08:50 cleanup-bot deleted allow-api-to-db in prod-web (checkout down) while etl-sa made the data lake public; hackathon VMs inflated sandbox cost. Priorities: revenue first (restored the firewall rule), then exposure (removed allUsers), then cost (deleted abandoned VMs after confirming with Finance, kept finance-close), then audit (folder org policy). Impact: checkout errors for the duration; data lake listable. Action items: least privilege for bots, public access prevention, budgets on sandbox."
+solution: |
+  ticket update "Plan: 1) restore checkout in prod-web 2) close the public data lake 3) stop sandbox waste after confirming owners 4) enforce the key-creation guardrail on Production. Next update in 30 minutes."
+  gcloud logging read 'logName:cloudaudit' --limit=10 --format='value(protoPayload.methodName,protoPayload.authenticationInfo.principalEmail)'
+  gcloud compute firewall-rules create allow-api-to-db --network=prod-vpc --allow=tcp:5432 --source-tags=api --target-tags=database --project={{.prod_web}}
+  gcloud storage buckets remove-iam-policy-binding gs://datalake-{{.prod_data}} --member=allUsers --role=roles/storage.objectViewer
+  ask finance "which sandbox vms can we delete?"
+  gcloud compute instances delete abandoned-1 abandoned-2 abandoned-3 --zone=europe-west1-b --project={{.sandbox}} --quiet
+  gcloud resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --folder={{.folder_production}}
+  sleep 120
+  ticket update "Resolved: checkout restored, data lake private, hackathon VMs removed (finance-close untouched), key-creation guardrail enforced on Production. Postmortem to follow."
+rubric:
+  - name: Revenue restored
+    validator: functional
+    points: 20
+    checks:
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "Checkout works"}
+  - name: Exposure closed
+    validator: security
+    points: 20
+    critical: true
+    checks:
+      - {type: policy, on: "{{.prod_data}}", package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "Data lake private"}
+  - name: Waste removed, others protected
+    validator: cost
+    points: 15
+    all: true
+    checks:
+      - {type: count, on: "{{.sandbox}}", collection: instances, where: {labels: {regex: "hackathon"}}, max: 0, desc: "Abandoned VMs gone"}
+      - {type: exists, on: "{{.sandbox}}", path: "instances[\"finance-close\"]", expect: {status: RUNNING}, desc: "finance-close untouched"}
+  - name: Governance deadline
+    validator: security
+    points: 15
+    checks:
+      - {type: org_policy, on: "{{.prod_data}}", constraint: iam.disableServiceAccountKeyCreation, desc: "Production inherits the guardrail"}
+  - name: Leadership informed
+    validator: evidence
+    points: 15
+    checks:
+      - {type: ticket_update, min: 2, desc: "Plan and final update on the ticket"}
+      - {type: asked, actor: finance, desc: "Confirmed ownership before deleting"}
+  - name: Postmortem
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [priorit], [impact, impacto], [action, accion]], desc: "Postmortem with prioritisation"}

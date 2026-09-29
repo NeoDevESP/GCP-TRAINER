@@ -52,9 +52,10 @@ type Session struct {
 	DockerAuth  map[string]bool   `json:"dockerAuth"`
 	LocalImages map[string]string `json:"localImages"` // tag -> behaviour
 	NoTick      bool              `json:"-"`
-	Credentials map[string]string `json:"credentials"`     // activated SA key files
-	Desk        *desk.Desk        `json:"desk,omitempty"`  // ticket and simulated actors
-	Chaos       []ChaosRun        `json:"chaos,omitempty"` // chaos experiments run in this session
+	Credentials map[string]string `json:"credentials"`         // activated SA key files
+	Desk        *desk.Desk        `json:"desk,omitempty"`      // ticket and simulated actors
+	Chaos       []ChaosRun        `json:"chaos,omitempty"`     // chaos experiments run in this session
+	Interview   *Interview        `json:"interview,omitempty"` // interview mode state
 	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
 	// take over a command before the simulator handles it.
 	Interceptor func(s *Session, args []string, stdin string) (handled bool, out string, err error) `json:"-"`
@@ -651,6 +652,8 @@ func (s *Session) run(args []string, stdin string) (string, error) {
 			ls = ls[len(ls)-n:]
 		}
 		return joinLines(ls), nil
+	case "sed":
+		return s.sed(args, stdin)
 	case "wc":
 		ls := splitLines(stdin)
 		return fmt.Sprintf("%d\n", len(ls)), nil
@@ -708,6 +711,8 @@ func (s *Session) run(args []string, stdin string) (string, error) {
 		return s.archCmd(args)
 	case "chaos":
 		return s.chaosCmd(args)
+	case "interview", "answer":
+		return s.interviewCmd(args)
 	case "watch":
 		return s.run(args[1:], stdin)
 	case "uuidgen":
@@ -908,5 +913,16 @@ func (s *Session) Clone(st *sim.State) *Session {
 	c.Records = append([]ExecRecord{}, s.Records...)
 	c.Desk = s.Desk.Clone()
 	c.Chaos = append([]ChaosRun{}, s.Chaos...)
+	if s.Interview != nil {
+		iv := *s.Interview
+		iv.Answers, iv.Justifications = map[string][]int{}, map[string]string{}
+		for k, v := range s.Interview.Answers {
+			iv.Answers[k] = v
+		}
+		for k, v := range s.Interview.Justifications {
+			iv.Justifications[k] = v
+		}
+		c.Interview = &iv
+	}
 	return &c
 }

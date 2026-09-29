@@ -1,0 +1,114 @@
+id: career-i01-cloud-engineer-interview
+title: "Interview Mode: Cloud Engineer technical interview"
+summary: A progressive technical interview with follow-up questions that depend on your answers, plus a live exercise in a real (simulated) project.
+track: career
+day: 1
+level: intermediate
+branch: networking
+type: interview
+mode: interview
+skills: [iam.leastprivilege, iam.conditions, networking.nat, netfund.cidr, compute.troubleshooting]
+wellArchitected: [security, reliability]
+certs: [ACE]
+difficulty: 3
+minutes: 40
+baseline: [empty]
+setup: |
+  gcloud compute networks create interview-vpc --subnet-mode=custom
+  gcloud compute networks subnets create apps --network=interview-vpc --range=10.60.0.0/24 --region={{.region}}
+  gcloud compute firewall-rules create interview-iap --network=interview-vpc --allow=tcp:22 --source-ranges=35.235.240.0/20
+  gcloud compute routers create interview-router --network=interview-vpc --region={{.region}}
+  gcloud compute instances create app-1 --zone={{.zone}} --subnet=apps --no-address --metadata=startup-script='apt-get update && apt-get install -y nginx'
+story: |
+  You are interviewing for **Cloud Engineer** at Nebula. The interviewer asks one question at a time and digs
+  deeper depending on what you answer — run `interview` to get the next question and
+  `answer ID N "why"` to reply. Half-way through there is a live exercise:
+
+  > `app-1` in `{{.project}}` has no public IP and cannot install packages. Fix it **without** giving it a
+  > public IP, while I watch.
+objectives:
+  - Answer progressively harder questions and justify them
+  - Handle follow-up questions
+  - Solve the live exercise securely
+  - Explain your fix
+quiz:
+  - id: q1
+    question: "A /24 subnet: how many addresses can VMs use in Google Cloud?"
+    options: ["256", "254", "252", "250"]
+    answer: [2]
+    justify: true
+    keywords: [[reserved, reservad, network, broadcast, gateway, 4]]
+  - id: q2
+    question: "A developer needs to read objects in one bucket. Which grant do you give?"
+    options: ["roles/editor on the project", "roles/storage.objectViewer on the bucket", "roles/storage.admin on the project", "Make the bucket public"]
+    answer: [1]
+    justify: true
+    keywords: [[least privilege, minimo privilegio, minimum], [bucket]]
+  - id: q2b
+    after: q2
+    when: correct
+    probe: "Good. Let's make it harder."
+    question: "Now they need that access only until Friday. How?"
+    options: ["Remember to remove it on Friday", "An IAM Condition with request.time < Friday", "A custom role", "A service account key that expires"]
+    answer: [1]
+  - id: q2c
+    after: q2
+    when: incorrect
+    probe: "Hmm, let's step back."
+    question: "Which is the principle behind granting access in Google Cloud?"
+    options: ["Grant broad roles to avoid tickets", "Least privilege at the smallest scope", "Only use basic roles", "Share one admin account"]
+    answer: [1]
+  - id: q3
+    question: "A VM without an external IP must download OS updates. What do you configure?"
+    options: ["An external IP", "Cloud NAT on a Cloud Router for its subnet", "Private Google Access only", "A VPN"]
+    answer: [1]
+    justify: true
+    keywords: [[nat], [external ip, public ip, ip publica, egress]]
+  - id: q3b
+    after: q3
+    when: correct
+    probe: "Right — and a follow-up."
+    question: "And what does Private Google Access add on top?"
+    options: ["Internet access", "Access to Google APIs (e.g. Cloud Storage) without NAT or public IPs", "SSH access", "Nothing"]
+    answer: [1]
+hints:
+  - text: "The router already exists; NAT is configured on the router."
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: app-1 has no external IP and the network had no NAT, so it had no egress path to the internet. I configured Cloud NAT on interview-router for all subnet ranges, which gives outbound access without exposing the VM with a public IP.
+solution: |
+  interview
+  answer q1 3 "Google reserves four addresses per subnet: network, gateway, second-to-last and broadcast"
+  interview
+  answer q2 2 "Least privilege: objectViewer only on that bucket"
+  interview
+  answer q2b 2
+  interview
+  answer q3 2 "Cloud NAT gives egress without a public IP"
+  interview
+  answer q3b 2
+  interview
+  gcloud compute routers nats create interview-nat --router=interview-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+rubric:
+  - name: Technical answers
+    validator: quiz
+    points: 40
+    checks:
+      - {type: quiz, ratio: 0.8, desc: "Progressive questions and follow-ups"}
+  - name: Live exercise
+    validator: functional
+    points: 30
+    checks:
+      - {type: egress, from: "vm:app-1", desc: "app-1 reaches the internet"}
+  - name: Secure solution
+    validator: security
+    points: 15
+    critical: true
+    checks:
+      - {type: exists, path: "instances[\"app-1\"]", expect: {natIP: {empty: true}}, desc: "Still no public IP"}
+  - name: Explanation
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[nat], [external ip, public ip, ip publica], [egress, salida, outbound]], desc: "Explain the fix"}

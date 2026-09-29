@@ -120,6 +120,11 @@ type Question struct {
 	Points      int        `yaml:"points" json:"points"`
 	Justify     bool       `yaml:"justify" json:"justify"`
 	Keywords    [][]string `yaml:"keywords" json:"-"`
+	// Interview mode: a follow-up is asked only after `after` was answered,
+	// and only when that answer was correct/incorrect (`when`).
+	After string `yaml:"after" json:"after,omitempty"`
+	When  string `yaml:"when" json:"when,omitempty"` // correct, incorrect, "" = always
+	Probe string `yaml:"probe" json:"-"`             // interviewer's reaction before asking
 }
 
 // RubricItem is one scored criterion.

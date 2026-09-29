@@ -1,0 +1,106 @@
+id: cap-architect-global
+title: "Capstone (Architect/SRE): a global platform that survives losing a region"
+summary: Design, build and prove a two-continent service — requirements met on paper, WAF at the edge, SLO monitoring, and a regional disaster survived in a chaos experiment.
+track: capstones
+day: 5
+level: professional
+branch: architecture
+type: capstone
+mode: architecture
+skills: [architecture.design, architecture.reliability, architecture.dr, observability.slo, observability.chaos, networking.lb, security.armor]
+wellArchitected: [reliability, security, performance, operations, cost]
+certs: [PCA, PCDE]
+difficulty: 5
+minutes: 180
+baseline: [empty]
+files:
+  requirements.yaml: |
+    availability: 99.95
+    rpoMinutes: 5
+    rtoMinutes: 30
+    peakRps: 4000
+    userRegions: [europe, us]
+    latencyMs: 100
+    budgetEur: 1000
+    waf: true
+story: |
+  Nebula's **product catalog** (`europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0`, stateless, serves
+  `/products`) goes global. Deliver:
+
+  1. `design.yaml` meeting `requirements.yaml` (check with `arch evaluate design.yaml requirements.yaml`).
+  2. The platform: Cloud Run in **europe-west1** and **us-central1** behind one global HTTP load balancer
+     `catalog-lb` (serverless NEGs), reachable only through it, with a Cloud Armor policy `edge-waf` on the
+     backend service.
+  3. SLO monitoring: an uptime check on `/products` and an alert when it fails.
+  4. Proof: `chaos run region-outage --region=europe-west1 --target=lb:catalog-lb --path=/products --slo=99.9 --duration=10`
+     must hold. Write the SLO document (SLI, SLO, error budget, what happens when it is burnt).
+objectives:
+  - A design that meets every requirement, with trade-offs
+  - Multi-region serving behind a single global endpoint and WAF
+  - SLO monitoring and alerting
+  - Regional disaster survived and documented
+evidence:
+  fields: [slo]
+  sample:
+    slo: "SLI: share of /products requests answered with 2xx/3xx at the load balancer. SLO: 99.95% over 30 days, error budget 21.6 minutes per month. Fast burn (14x in 1 hour) pages on-call; when the budget is exhausted releases are frozen until reliability work restores it. The region-outage chaos experiment held at 100% because the global load balancer routed to us-central1."
+solution: |
+  cat > design.yaml <<'YAML'
+  name: catalog-global
+  components:
+    - {name: lb, type: global-lb, armor: true}
+    - {name: web, type: cloud-run, regions: [europe-west1, us-central1], minInstances: 1, maxInstances: 30}
+  path: [lb, web]
+  YAML
+  arch evaluate design.yaml requirements.yaml
+  gcloud run deploy catalog-ew1 --image=europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0 --region=europe-west1 --ingress=internal-and-cloud-load-balancing --min-instances=1 --allow-unauthenticated
+  gcloud run deploy catalog-uc1 --image=europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0 --region=us-central1 --ingress=internal-and-cloud-load-balancing --min-instances=1 --allow-unauthenticated
+  gcloud compute network-endpoint-groups create catalog-neg-ew1 --region=europe-west1 --network-endpoint-type=serverless --cloud-run-service=catalog-ew1
+  gcloud compute network-endpoint-groups create catalog-neg-uc1 --region=us-central1 --network-endpoint-type=serverless --cloud-run-service=catalog-uc1
+  gcloud compute backend-services create catalog-be --global --load-balancing-scheme=EXTERNAL_MANAGED
+  gcloud compute backend-services add-backend catalog-be --global --network-endpoint-group=catalog-neg-ew1 --network-endpoint-group-region=europe-west1
+  gcloud compute backend-services add-backend catalog-be --global --network-endpoint-group=catalog-neg-uc1 --network-endpoint-group-region=us-central1
+  gcloud compute security-policies create edge-waf --description="OWASP and rate limiting"
+  gcloud compute security-policies rules create 1000 --security-policy=edge-waf --action=deny-403 --expression="evaluatePreconfiguredWaf('sqli-v33-stable')"
+  gcloud compute backend-services update catalog-be --global --security-policy=edge-waf
+  gcloud compute url-maps create catalog-map --default-service=catalog-be
+  gcloud compute target-http-proxies create catalog-proxy --url-map=catalog-map
+  gcloud compute forwarding-rules create catalog-lb --global --target-http-proxy=catalog-proxy --ports=80 --load-balancing-scheme=EXTERNAL_MANAGED
+  gcloud monitoring uptime create catalog-uptime --resource-type=uptime-url --resource-labels=host=$(gcloud compute forwarding-rules describe catalog-lb --global --format='value(IPAddress)') --path=/products
+  gcloud alpha monitoring policies create --display-name="catalog SLO" --condition-display-name=uptime --condition-filter='metric.type="monitoring.googleapis.com/uptime_check/check_passed"' --if='< 1' --duration=120s
+  chaos run region-outage --region=europe-west1 --target=lb:catalog-lb --path=/products --slo=99.9 --duration=10
+rubric:
+  - name: Design meets requirements
+    validator: reliability
+    points: 20
+    checks:
+      - {type: design, requirements: {availability: 99.95, rpoMinutes: 5, rtoMinutes: 30, peakRps: 4000, userRegions: [europe, us], latencyMs: 100, budgetEur: 1000, waf: true}, desc: "All requirements met by design.yaml"}
+  - name: Global platform
+    validator: functional
+    points: 20
+    all: true
+    checks:
+      - {type: http, target: "lb:catalog-lb", path: /products, status: 200, desc: "Served through the global endpoint"}
+      - {type: count, collection: runServices, min: 2, desc: "Serving from two regions"}
+      - {type: http, target: "run:catalog-ew1", path: /products, status: 404, desc: "Direct run.app access closed"}
+  - name: Edge security
+    validator: security
+    points: 10
+    checks:
+      - {type: exists, path: "backendServices[\"catalog-be\"]", expect: {securityPolicy: edge-waf}, desc: "Cloud Armor attached"}
+  - name: SLO monitoring
+    validator: state
+    points: 10
+    all: true
+    checks:
+      - {type: count, collection: uptimeChecks, min: 1, desc: "Uptime check"}
+      - {type: alert_policy, filterContains: uptime_check, desc: "Alert on the SLI"}
+  - name: Regional disaster survived
+    validator: functional
+    points: 25
+    checks:
+      - {type: chaos, experiment: region-outage, minSlo: 99.9, minMinutes: 5, desc: "Region-outage experiment held at ≥99.9%"}
+  - name: SLO document
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [slo], keywords: [[sli], [slo], [error budget, presupuesto de error], [burn, freeze, congel]], desc: "SLI, SLO, error budget and policy"}

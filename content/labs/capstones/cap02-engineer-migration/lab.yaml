@@ -1,0 +1,118 @@
+id: cap-engineer-migration
+title: "Capstone (Cloud Engineer): migrate checkout from VMs to managed services"
+summary: Migrate an application and its database — managed database with HA and backups, data import, serverless runtime with least privilege and secrets, zero-downtime cutover behind the same load balancer, monitoring and decommissioning.
+track: capstones
+day: 2
+level: advanced
+branch: architecture
+type: capstone
+mode: production
+skills: [databases.cloudsql, databases.ha, compute.serverless, iam.serviceaccounts, security.secrets, networking.lb, observability.monitoring]
+wellArchitected: [reliability, security, operations, cost]
+certs: [ACE, PCA]
+difficulty: 5
+minutes: 150
+baseline: [three-tier-app]
+setup: |
+  gcloud storage buckets create gs://migration-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  echo "-- pg_dump checkout (orders, carts, customers)" > checkout.sql
+  gcloud storage cp checkout.sql gs://migration-{{.project}}/checkout.sql
+  gcloud iam service-accounts create checkout-run --display-name="checkout on Cloud Run"
+traffic:
+  - {name: checkout, target: "lb:checkout-lb", path: /checkout, rps: 30}
+ticket:
+  id: MIG-7
+  kind: MIG
+  priority: P3
+  summary: "Retire the checkout VMs (api-1, sql-1). Target: Cloud Run + Cloud SQL, same public endpoint, no downtime for customers."
+  reporter: Irene (engineering manager)
+actors:
+  - role: dba
+    name: Olga (DBA)
+    fallback: "The dump is ready in the migration bucket."
+    facts:
+      - {keywords: [[dump, data, datos, import, where, donde]], answer: "gs://migration-{{.project}}/checkout.sql — plain SQL dump of database checkout. Import it into a database called checkout."}
+      - {keywords: [[rpo, backup, ha, availability]], answer: "The business wants RPO ≤ 5 minutes and survival of a zone failure."}
+  - role: security
+    name: Aisha (CISO office)
+    facts:
+      - {keywords: [[password, secret, credential, contrase]], answer: "Passwords live in Secret Manager, never in environment variables. The service gets only the roles it needs."}
+      - {keywords: [[public, internet, ingress, direct]], answer: "The Cloud Run service must only be reachable through the load balancer, not directly on its run.app URL."}
+story: |
+  Checkout runs on two VMs behind `checkout-lb`: `api-1` (container `checkout-api:1.4`, needs `DB_HOST`, `DB_USER`,
+  `DB_PASSWORD`, `DB_NAME`) and `sql-1` (PostgreSQL). Migrate to:
+
+  - **Cloud SQL** `orders-db` (PostgreSQL 15) surviving a zone failure with RPO ≤ 5 min; database `checkout`,
+    user `app`; data from `gs://migration-{{.project}}/checkout.sql`
+  - **Cloud Run** `checkout` running as `checkout-run` with the password from Secret Manager, reachable **only**
+    through the load balancer
+  - the **same** `checkout-lb` endpoint, switched without downtime; then stop `api-1` and `sql-1`
+  - an uptime check and an alert for the new service; a short runbook
+objectives:
+  - Build the managed database and import the data
+  - Deploy the service with least privilege and secrets
+  - Cut over behind the same load balancer without downtime
+  - Decommission the VMs, add monitoring, write the runbook
+hints:
+  - text: "Cloud SQL imports are performed by the instance's service account (`serviceAccountEmailAddress`) — it needs read access to the bucket."
+  - text: "Serverless NEG + `--ingress=internal-and-cloud-load-balancing` keeps the run.app URL closed."
+evidence:
+  fields: [runbook]
+  sample:
+    runbook: "1. Create orders-db regional with backups and PITR, database checkout and user app. 2. Grant the Cloud SQL service agent objectViewer on the migration bucket and import checkout.sql. 3. Store the password in Secret Manager; checkout-run gets cloudsql.client and secretAccessor on that secret only. 4. Deploy Cloud Run with ingress internal-and-cloud-load-balancing. 5. Add a serverless NEG to checkout-be, verify, then remove api-ig (no downtime). 6. Stop api-1 and sql-1. Rollback: re-add api-ig and start the VMs."
+solution: |
+  ask dba "where is the dump?"
+  gcloud sql instances create orders-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --availability-type=REGIONAL --backup-start-time=02:00 --enable-point-in-time-recovery
+  gcloud sql databases create checkout --instance=orders-db
+  gcloud sql users create app --instance=orders-db --password=Migr4te-{{.project}}
+  gcloud storage buckets add-iam-policy-binding gs://migration-{{.project}} --member=serviceAccount:$(gcloud sql instances describe orders-db --format='value(serviceAccountEmailAddress)') --role=roles/storage.objectViewer
+  gcloud sql import sql orders-db gs://migration-{{.project}}/checkout.sql --database=checkout
+  echo -n "Migr4te-{{.project}}" | gcloud secrets create checkout-db-password --data-file=-
+  gcloud secrets add-iam-policy-binding checkout-db-password --member=serviceAccount:checkout-run@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:checkout-run@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud run deploy checkout --image=europe-docker.pkg.dev/gcplab-public/apps/checkout-api:1.4 --region={{.region}} --service-account=checkout-run@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:orders-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:orders-db,DB_USER=app,DB_NAME=checkout --set-secrets=DB_PASSWORD=checkout-db-password:latest --ingress=internal-and-cloud-load-balancing --allow-unauthenticated
+  gcloud compute network-endpoint-groups create checkout-neg --region={{.region}} --network-endpoint-type=serverless --cloud-run-service=checkout
+  gcloud compute backend-services add-backend checkout-be --global --network-endpoint-group=checkout-neg --network-endpoint-group-region={{.region}}
+  curl -s http://$(gcloud compute forwarding-rules describe checkout-lb --global --format='value(IPAddress)')/checkout
+  gcloud compute backend-services remove-backend checkout-be --global --instance-group=api-ig --instance-group-zone={{.zone}}
+  gcloud compute instances stop api-1 sql-1 --zone={{.zone}}
+  gcloud monitoring uptime create checkout-uptime --resource-type=uptime-url --resource-labels=host=$(gcloud compute forwarding-rules describe checkout-lb --global --format='value(IPAddress)') --path=/checkout
+  gcloud alpha monitoring policies create --display-name="checkout uptime" --condition-display-name=uptime --condition-filter='metric.type="monitoring.googleapis.com/uptime_check/check_passed"' --if='< 1' --duration=300s
+rubric:
+  - name: Same endpoint, new platform
+    validator: functional
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "checkout-lb serves /checkout"}
+      - {type: exists, path: "instances[\"api-1\"]", expect: {status: TERMINATED}, desc: "api-1 decommissioned (served by Cloud Run)"}
+      - {type: exists, path: "instances[\"sql-1\"]", expect: {status: TERMINATED}, desc: "sql-1 decommissioned"}
+  - name: Data migrated, database resilient
+    validator: reliability
+    points: 20
+    all: true
+    checks:
+      - {type: exists, path: "sqlInstances[\"orders-db\"].databaseFlags", expect: {"": {regex: "sim-imported-checkout"}}, desc: "checkout.sql imported into database checkout"}
+      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db]}, desc: "Regional HA with backups"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "PITR for RPO ≤ 5 min"}
+  - name: Least privilege and secrets
+    validator: security
+    points: 20
+    all: true
+    checks:
+      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV, BASIC_ROLE_SERVICE_ACCOUNT, PUBLIC_SQL], desc: "No plaintext secrets, basic roles or open database"}
+      - {type: http, target: "run:checkout", path: /checkout, status: 404, desc: "run.app URL closed (load balancer only)"}
+      - {type: iam, principal: "serviceAccount:checkout-run@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:checkout-db-password", desc: "Service reads its own secret"}
+  - name: Monitoring
+    validator: state
+    points: 15
+    all: true
+    checks:
+      - {type: count, collection: uptimeChecks, min: 1, desc: "Uptime check"}
+      - {type: alert_policy, filterContains: uptime_check, desc: "Alert on the uptime check"}
+  - name: Runbook
+    validator: evidence
+    points: 20
+    checks:
+      - {type: evidence, fields: [runbook], keywords: [[import], [secret], [neg, load balancer, balanceador], [rollback, revert]], desc: "Runbook with cutover and rollback"}

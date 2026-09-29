@@ -148,7 +148,12 @@ func sqlView(p *sim.Project, in *sim.SQLInstance) map[string]any {
 		"settings": map[string]any{"tier": in.Tier, "availabilityType": in.Availability, "databaseFlags": flags, "deletionProtectionEnabled": in.DeletionProtection,
 			"backupConfiguration": map[string]any{"enabled": in.BackupsEnabled, "startTime": in.BackupStart, "pointInTimeRecoveryEnabled": in.PITR},
 			"ipConfiguration":     map[string]any{"ipv4Enabled": in.PublicIP != "", "privateNetwork": in.Network, "authorizedNetworks": an, "requireSsl": in.RequireSSL}},
-		"primaryAddress": in.PublicIP, "privateAddress": in.PrivateIP}
+		"primaryAddress": in.PublicIP, "privateAddress": in.PrivateIP, "serviceAccountEmailAddress": sqlAgent(p)}
+}
+
+// sqlAgent is the Cloud SQL service agent that reads/writes import/export files.
+func sqlAgent(p *sim.Project) string {
+	return "p" + p.Number + "-sql@gcp-sa-cloud-sql.iam.gserviceaccount.com"
 }
 
 func init() {
@@ -364,6 +369,59 @@ func init() {
 		c.Audit("cloudsql.googleapis.com", "cloudsql.databases.delete", "projects/"+p.ID+"/instances/"+in.Name+"/databases/"+n)
 		return "Deleted database [" + n + "].\n", nil
 	})
+	// sql import / export: the Cloud SQL service agent (not the caller) reads or
+	// writes the file, so it needs access to the bucket.
+	for _, verb := range []string{"import", "export"} {
+		verb := verb
+		reg("sql "+verb+" sql", func(c *Cmd) (any, error) {
+			n, err := c.Arg(0, "INSTANCE")
+			if err != nil {
+				return nil, err
+			}
+			uri, err := c.Arg(1, "URI")
+			if err != nil {
+				return nil, err
+			}
+			p, in, err := c.sqlInstance(n)
+			if err != nil {
+				return nil, err
+			}
+			db := c.Str("database", "")
+			if db == "" {
+				return nil, fmt.Errorf("argument --database: Must be specified.")
+			}
+			if !contains(in.Databases, db) {
+				return nil, fmt.Errorf("HTTPError 400: database %q does not exist on %s", db, n)
+			}
+			perm := "cloudsql.instances." + verb
+			if err := c.Need(perm, sqlRes(p, n)); err != nil {
+				return nil, err
+			}
+			bn, obj, _ := strings.Cut(strings.TrimPrefix(uri, "gs://"), "/")
+			b, _ := c.S.State.FindBucket(bn)
+			if b == nil {
+				return nil, fmt.Errorf("HTTPError 400: bucket %s not found", bn)
+			}
+			agent := "serviceAccount:" + sqlAgent(p)
+			if verb == "import" {
+				if b.Objects[obj] == nil {
+					return nil, fmt.Errorf("HTTPError 400: file %s not found", uri)
+				}
+				if !c.S.State.Allowed(agent, "storage.objects.get", c.S.State.BucketResource(b, obj)) {
+					return nil, fmt.Errorf("HTTPError 403: The service account %s does not have the required permissions for the bucket. Grant it roles/storage.objectViewer on gs://%s.", sqlAgent(p), bn)
+				}
+				in.Flags["sim-imported-"+db] = uri
+				c.Audit("cloudsql.googleapis.com", "cloudsql.instances.import", "projects/"+p.ID+"/instances/"+n)
+				return "Importing data into Cloud SQL instance...done.\nImported data from [" + uri + "] into [" + n + "].\n", nil
+			}
+			if !c.S.State.Allowed(agent, "storage.objects.create", c.S.State.BucketResource(b, obj)) {
+				return nil, fmt.Errorf("HTTPError 403: The service account %s does not have the required permissions for the bucket. Grant it roles/storage.objectCreator on gs://%s.", sqlAgent(p), bn)
+			}
+			b.Objects[obj] = &sim.Object{Name: obj, Content: "-- pg_dump of " + db, Size: 1 << 20, StorageClass: b.StorageClass, Updated: c.S.State.Now()}
+			c.Audit("cloudsql.googleapis.com", "cloudsql.instances.export", "projects/"+p.ID+"/instances/"+n)
+			return "Exporting Cloud SQL instance...done.\nExported [" + n + "] to [" + uri + "].\n", nil
+		})
+	}
 	reg("sql databases list", func(c *Cmd) (any, error) {
 		_, in, err := c.sqlInstance(c.Str("instance", ""))
 		if err != nil {

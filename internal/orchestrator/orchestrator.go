@@ -592,6 +592,7 @@ func (s *Service) restore(id string) (*Session, error) {
 	_ = json.Unmarshal(snap.Session, sess)
 	sess.State = st
 	sess.Policy = l.Policy
+	scenario.AttachInterview(sess, l)
 	if sess.Desk != nil {
 		sess.Desk.Actors = l.Actors // facts are not persisted with the session
 	}

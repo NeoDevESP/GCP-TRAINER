@@ -11,3 +11,47 @@ tracks:
     phase: MVP
     reference: https://cloud.google.com/learn/certification/cloud-engineer
     labs: [ace-d01-context, ace-d02-iam-storage-read, ace-d03-secure-bucket, ace-d04-web-vm, ace-d05-subnet-isolation, ace-d06-cloud-run, ace-d07-cloud-sql, ace-d08-logs-alert, ace-d09-health-check, ace-d10-checkpoint, ace-d11-app-403, ace-d12-private-egress, ace-d13-lb-dns, ace-d14-terraform, ace-d15-cloud-build, ace-d16-gke-two-services, ace-d17-gke-hpa, ace-d18-api-db-firewall, ace-d19-secret-env, ace-d20-sql-saturated, ace-d21-bigquery-cost, ace-d22-pubsub-ingestion, ace-d23-ml-endpoint, ace-d24-cmek, ace-d25-public-exposure, ace-d26-hybrid-design, ace-d27-deploy-rollback, ace-d28-architecture-review, ace-d29-capstone-orders, ace-d30-boss-incident]
+  - id: capstones
+    title: Career capstones
+    description: One capstone per career stage (Blueprint §22) — Junior, Cloud Engineer, DevOps, Senior (company boss) and Architect/SRE.
+    level: professional
+    certs: [ACE, PCA, PCDE]
+    phase: V1
+    labs: [cap-junior-secure-app, cap-engineer-migration, cap-devops-platform, cap-architect-global]
+  - id: architect
+    title: Architecture & disaster recovery
+    description: Architecture Simulator case studies and a real regional failover.
+    level: professional
+    certs: [PCA]
+    phase: V1
+    reference: https://cloud.google.com/learn/certification/cloud-architect
+    labs: [arch-a01-global-expansion, arch-dr01-regional-failover, cap-architect-global]
+  - id: devops
+    title: DevOps — infrastructure as code and delivery
+    description: Terraform operations under pressure and a full delivery platform.
+    level: professional
+    certs: [PCDE]
+    phase: V1
+    reference: https://cloud.google.com/learn/certification/cloud-devops-engineer
+    labs: [devops-tf01-drift-import, cap-devops-platform]
+  - id: sre
+    title: SRE — reliability under failure
+    description: Kubernetes Nightmare and chaos engineering with SLOs.
+    level: professional
+    certs: [PCDE]
+    phase: V1
+    labs: [gke-k01-nightmare, sre-c01-zone-chaos]
+  - id: finops
+    title: FinOps
+    description: Read the bill, find anomalies, act on recommendations with the owners, add guardrails.
+    level: associate
+    certs: [ACE, PCA]
+    phase: V1
+    labs: [finops-f01-bill-shock]
+  - id: career
+    title: Career — interviews
+    description: Interview Mode with progressive questions, follow-ups and a live exercise.
+    level: associate
+    certs: [ACE]
+    phase: V1
+    labs: [career-i01-cloud-engineer-interview]
