@@ -32,7 +32,17 @@ fi
 
 echo "==> Compilando gcplab.exe (Windows x64)"
 rm -rf "$WORK" && mkdir -p "$STAGE" dist
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$STAGE/gcplab.exe" ./cmd/gcplab
+# Icon, version details and manifest: an exe without them (and with stripped
+# symbols) is what antivirus heuristics most often flag as suspicious.
+SYSO=cmd/gcplab/rsrc_windows_amd64.syso
+trap 'rm -f "$SYSO"' EXIT
+go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --out cmd/gcplab/rsrc \
+  --icon deploy/windows/icon.png --manifest cli \
+  --product-name "Cloud Mastery" --file-description "Cloud Mastery - simulador de Google Cloud" \
+  --product-version "$VERSION.0" --file-version "$VERSION.0" \
+  --copyright "NeoDevESP" --original-filename gcplab.exe
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$STAGE/gcplab.exe" ./cmd/gcplab
+rm -f "$SYSO"
 cp -r content "$STAGE/content"
 cp -r web/out "$STAGE/web"
 

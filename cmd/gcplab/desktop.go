@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -150,8 +151,15 @@ func (d *desktop) logger() *slog.Logger {
 // announce waits for the server, prints how to use it and opens the browser.
 func (d *desktop) announce(port string) {
 	p, _ := strconv.Atoi(port)
-	for i := 0; i < 100 && !runningInstance(p); i++ {
-		time.Sleep(100 * time.Millisecond)
+	up := false
+	for i := 0; i < 300 && !up; i++ {
+		if up = runningInstance(p); !up {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	if !up {
+		fmt.Println("Cloud Mastery tarda en responder. Prueba a abrir", d.url, "en el navegador;")
+		fmt.Println("si no carga, revisa", filepath.Join(d.dataDir, "gcplab.log"))
 	}
 	fmt.Println()
 	fmt.Println("  Cloud Mastery está en marcha")
@@ -169,16 +177,18 @@ func openBrowser(url string) {
 	if os.Getenv("DESKTOP_NO_BROWSER") != "" {
 		return
 	}
-	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		// rundll32 opens the default browser; `start` is the fallback when
+		// it is missing or blocked by a security policy.
+		if exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Run() != nil {
+			_ = exec.Command("cmd", "/c", "start", "", url).Run()
+		}
 	case "darwin":
-		cmd = exec.Command("open", url)
+		_ = exec.Command("open", url).Start()
 	default:
-		cmd = exec.Command("xdg-open", url)
+		_ = exec.Command("xdg-open", url).Start()
 	}
-	_ = cmd.Start()
 }
 
 // pauseOnError keeps the console open on Windows so the message can be read.
@@ -195,5 +205,15 @@ func (d *desktop) fail(what string, err error) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "Cloud Mastery no ha podido arrancar (%s): %v\n", what, err)
+	fmt.Fprintln(os.Stderr, "Registro técnico:", filepath.Join(d.dataDir, "gcplab.log"))
 	pauseOnError()
+}
+
+// recoverPanic shows an unexpected crash instead of closing the window.
+func (d *desktop) recoverPanic() {
+	if r := recover(); r != nil {
+		slog.Error("panic", "err", r, "stack", string(debug.Stack()))
+		d.fail("error inesperado", fmt.Errorf("%v", r))
+		os.Exit(2)
+	}
 }

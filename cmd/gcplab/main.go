@@ -53,6 +53,8 @@ func main() {
 		log = desk.logger()
 		slog.SetDefault(log)
 		defer desk.logFile.Close()
+		defer desk.recoverPanic()
+		fmt.Println("Arrancando Cloud Mastery…")
 	}
 	content := env("CONTENT_DIR", "content")
 	scenario.BaselineDir = filepath.Join(content, "baselines")

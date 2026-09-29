@@ -26,7 +26,8 @@ Firefox).
    `C:\Program Files\Cloud Mastery`).
 
 Se crean los accesos directos **Cloud Mastery** en el menú Inicio y en el
-escritorio.
+escritorio. El instalador **no abre el programa al terminar**: ábrelo tú desde
+uno de esos accesos directos.
 
 ## Usar
 
@@ -67,6 +68,30 @@ conserva tus datos. Cierra antes la ventana de Cloud Mastery si está abierta.
 Desinstalar*. Si además quieres borrar tu progreso, borra la carpeta
 `%LOCALAPPDATA%\CloudMastery`.
 
+## Si no se abre
+
+1. Ábrelo desde PowerShell para ver el mensaje (pulsa Inicio, escribe
+   *PowerShell* y pega):
+
+   ```powershell
+   & "C:\Program Files\Cloud Mastery\gcplab.exe" -desktop
+   ```
+
+   - Si dice *Cloud Mastery está en marcha*, abre **http://127.0.0.1:8765**
+     en el navegador y deja PowerShell abierto.
+   - Si dice que **no se encuentra** `gcplab.exe`, el antivirus lo ha puesto en
+     cuarentena: *Seguridad de Windows → Protección contra virus y amenazas →
+     Historial de protección*, elige Cloud Mastery y pulsa **Acciones →
+     Restaurar** (o *Permitir en el dispositivo*). Después reinstala el MSI.
+   - Si muestra otro error, cópialo junto con el final del registro:
+
+     ```powershell
+     Get-Content "$env:LOCALAPPDATA\CloudMastery\gcplab.log" -Tail 20
+     ```
+
+2. Comprueba que tu Windows es 10 u 11 de 64 bits (*Configuración → Sistema →
+   Información*). Windows 7 y 8.1 no son compatibles.
+
 ## Problemas frecuentes
 
 | Síntoma | Solución |
@@ -75,7 +100,8 @@ Desinstalar*. Si además quieres borrar tu progreso, borra la carpeta
 | La ventana se cierra enseguida | Ábrela otra vez; si falla al arrancar, la ventana muestra el motivo y espera a que pulses Intro. Revisa también `%LOCALAPPDATA%\CloudMastery\gcplab.log`. |
 | El navegador no se abre | Abre tú **http://127.0.0.1:8765**. |
 | Otro programa usa el puerto 8765 | Cloud Mastery prueba automáticamente los puertos 8766 a 8774; la ventana muestra la dirección que ha usado. |
-| El antivirus avisa | Es un falso positivo habitual con programas nuevos sin firma. El código fuente está en este repositorio. |
+| El antivirus avisa o borra `gcplab.exe` | Es un falso positivo habitual con programas nuevos sin firma. Restáuralo desde el *Historial de protección* (ver arriba). El código fuente está en este repositorio. |
+| No pasa nada al terminar de instalar | Es normal: abre **Cloud Mastery** desde el menú Inicio o el escritorio. |
 
 ## Para desarrolladores: construir el MSI
 
