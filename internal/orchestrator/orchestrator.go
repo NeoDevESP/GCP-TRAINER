@@ -392,6 +392,19 @@ func (s *Service) View(id, kind string, params map[string]string) (any, error) {
 	case "console":
 		v := st.ProjectView(p)
 		delete(v, "findings")
+		// The console lists database users but, like Cloud SQL, never shows
+		// their passwords.
+		if sql, ok := v["sqlInstances"].(map[string]any); ok {
+			for _, inst := range sql {
+				if m, ok := inst.(map[string]any); ok {
+					if users, ok := m["users"].(map[string]any); ok {
+						for u := range users {
+							users[u] = ""
+						}
+					}
+				}
+			}
+		}
 		return v, nil
 	case "desk":
 		sess := se.Env.World.Session

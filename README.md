@@ -26,7 +26,7 @@ camino: diagnóstico antes del cambio, seguridad, coste, riesgo y comunicación.
 | Modos avanzados | `internal/archsim`, `internal/cli` | Simulador de arquitectura, experimentos de caos, facturación y recomendador de FinOps, entrevistas, «explícame por qué» (`why`) y «¿qué pasa si…?» (`whatif`) |
 | Fidelidad | `internal/fidelity` | F0 simulador, F1 emuladores (Pub/Sub, GCS, kind), F2 proyectos reales de un pool protegido con limpieza automática |
 | Planos | `internal/api`, `internal/orchestrator` | Plano de aprendizaje (usuarios, progreso) separado del plano de laboratorios (sesiones) y un evaluador aislado |
-| Web | `web/` | Exportación estática de Next.js servida por el binario de Go: panel, catálogo, espacio de trabajo del laboratorio (xterm, Monaco, Mermaid), incidentes, empresa, grafo de habilidades, ligas y consola del instructor; WCAG 2 AA (auditado con axe, modo claro y oscuro) y modo lector de pantalla en la terminal |
+| Web | `web/` | Exportación estática de Next.js servida por el binario de Go: panel, catálogo, espacio de trabajo del laboratorio con una consola gráfica al estilo de la de Google Cloud y Cloud Shell acoplado debajo (cada clic ejecuta y muestra el comando `gcloud` equivalente), xterm, Monaco, Mermaid, incidentes, empresa, grafo de habilidades, ligas y consola del instructor; WCAG 2 AA (auditado con axe, modo claro y oscuro) y modo lector de pantalla en la terminal |
 
 Contenido actual: 54 laboratorios en 14 rutas (un programa de 30 días de
 Associate Cloud Engineer, fundamentos, Linux, GKE, seguridad, redes, datos, ML,
@@ -73,6 +73,14 @@ Juega un laboratorio directamente en tu terminal:
 go run ./cmd/labctl play -lab ace-d01-context
 go run ./cmd/labctl generate -system shop-platform -difficulty 4 -mode production -play
 ```
+
+En la web, el laboratorio se abre en la **consola**: una réplica de la
+consola de Google Cloud (menú de productos, selector de proyecto, buscador,
+listas con filtro, formularios de creación con su «Código equivalente») con
+Cloud Shell debajo. Cada botón escribe y ejecuta en Cloud Shell el comando
+`gcloud`, `gsutil` o `bq` equivalente, así que aprendes la línea de comandos
+mientras haces clic, y la evaluación ve igual lo que haces en la consola y en
+la terminal.
 
 Dentro de un laboratorio, escribe `help`. Comandos útiles: `why <recurso>`
 (cadena causal de una petición), `whatif <comando>` (vista previa del

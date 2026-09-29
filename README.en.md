@@ -26,7 +26,7 @@ and communication.
 | Advanced modes | `internal/archsim`, `internal/cli` | Architecture simulator, chaos experiments, FinOps billing and recommender, interviews, "teach me why" and "what if" |
 | Fidelity | `internal/fidelity` | F0 simulator, F1 emulators (Pub/Sub, GCS, kind), F2 real projects from a guarded sandbox pool with a janitor |
 | Planes | `internal/api`, `internal/orchestrator` | Learning plane (users, progress) separated from the lab plane (sessions) and an isolated grader worker |
-| Web | `web/` | Next.js static export served by the Go binary: dashboard, catalog, lab workspace (xterm, Monaco, Mermaid), incidents, company, skill graph, leagues, instructor console; WCAG 2 AA (axe-audited, light and dark), terminal screen-reader mode |
+| Web | `web/` | Next.js static export served by the Go binary: dashboard, catalog, lab workspace with a graphical console modelled on the Google Cloud console and Cloud Shell docked below (every click runs and shows the equivalent `gcloud` command), xterm, Monaco, Mermaid, incidents, company, skill graph, leagues, instructor console; WCAG 2 AA (axe-audited, light and dark), terminal screen-reader mode |
 
 Content today: 54 labs in 14 tracks (a 30-day Associate Cloud Engineer
 programme, foundations, Linux, GKE, security, network, data, ML, architect,
@@ -71,6 +71,13 @@ Play a lab directly in your terminal:
 go run ./cmd/labctl play -lab ace-d01-context
 go run ./cmd/labctl generate -system shop-platform -difficulty 4 -mode production -play
 ```
+
+On the web, a lab opens in the **console**: a replica of the Google Cloud
+console (product menu, project picker, search, filterable lists, creation
+forms with their "Equivalent code") with Cloud Shell below. Every button types
+and runs the equivalent `gcloud`, `gsutil` or `bq` command in Cloud Shell, so
+learners pick up the command line while clicking, and grading sees console
+and terminal work alike.
 
 Inside a lab, type `help`. Useful commands: `why <resource>` (causal chain of a
 request), `whatif <command>` (impact preview), `ticket show`, `team`,

@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Nav from "@/components/Nav";
-import Terminal from "@/components/Terminal";
+import Terminal, { type TerminalHandle } from "@/components/Terminal";
+import CloudConsole from "@/components/console/CloudConsole";
 import Mermaid from "@/components/Mermaid";
 import CodeEditor from "@/components/CodeEditor";
 import Markdown from "@/components/Markdown";
@@ -273,14 +274,15 @@ function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
   );
 }
 
-function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: number }) {
+function View({ session, kind, tick, term, openTab }: { session: SessionInfo; kind: Tab; tick: number; term: React.MutableRefObject<TerminalHandle | null>; openTab: (t: Tab) => void }) {
   const { t } = useI18n();
+  const sessionId = session.id;
   // Data is tagged with the view it belongs to so a tab switch never renders
   // one view's payload with another view's renderer.
   const [loaded, setLoaded] = useState<{ kind: Tab; data: any } | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    if (kind === "logs" || kind === "files") return;
+    if (kind === "logs" || kind === "files" || kind === "console") return;
     let live = true;
     api(`/api/sessions/${sessionId}/views/${kind}`)
       .then((d) => {
@@ -295,6 +297,21 @@ function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: n
   }, [sessionId, kind, tick]);
   if (kind === "logs") return <Logs sessionId={sessionId} tick={tick} />;
   if (kind === "files") return <Files sessionId={sessionId} tick={tick} />;
+  if (kind === "console") {
+    return (
+      <CloudConsole
+        sessionId={sessionId}
+        project={session.project}
+        region={session.region || "europe-west1"}
+        zone={session.zone || "europe-west1-b"}
+        tick={tick}
+        run={(cmd, note) => term.current?.run(cmd, note) ?? Promise.resolve({ output: t("La terminal no está lista."), exit: 1 })}
+        paste={(cmd) => term.current?.paste(cmd)}
+        focusShell={() => term.current?.focus()}
+        openTab={(x) => (TABS as readonly string[]).includes(x) && openTab(x as Tab)}
+      />
+    );
+  }
   if (err) return <p className="error small">{err}</p>;
   if (!loaded || loaded.kind !== kind) return <p className="muted">{t("Cargando…")}</p>;
   const data = loaded.data;
@@ -453,6 +470,8 @@ function Workspace({ session }: { session: SessionInfo }) {
   const [busy, setBusy] = useState(false);
   const [hasDesk, setHasDesk] = useState(false);
   const [screenReader, setScreenReader] = useState(false);
+  const [sideOpen, setSideOpen] = useState(true);
+  const term = useRef<TerminalHandle | null>(null);
   useEffect(() => {
     try {
       setScreenReader(localStorage.getItem("gcplab.screenReader") === "1");
@@ -529,8 +548,12 @@ function Workspace({ session }: { session: SessionInfo }) {
 
   const tabs = TABS.filter((t) => t !== "desk" || hasDesk);
   return (
-    <main id="main" className="workspace">
-      <aside className="side card" aria-label={tr("Enunciado y entrega")}>
+    <main id="main" className={`workspace ${sideOpen ? "" : "side-closed"}`}>
+      <button type="button" className="side-toggle" onClick={() => setSideOpen(!sideOpen)} aria-expanded={sideOpen} aria-controls="lab-side" title={sideOpen ? tr("Ocultar el enunciado") : tr("Mostrar el enunciado")}>
+        {sideOpen ? "«" : "»"}
+        <span className="sr-only">{sideOpen ? tr("Ocultar el enunciado") : tr("Mostrar el enunciado")}</span>
+      </button>
+      <aside id="lab-side" className="side card" aria-label={tr("Enunciado y entrega")} hidden={!sideOpen}>
         <div className="row small muted">
           <span className="pill">{session.fidelity}</span>
           {session.mode && <span className="pill warn">{label(labMode, session.mode, tr)}</span>}
@@ -639,9 +662,6 @@ function Workspace({ session }: { session: SessionInfo }) {
         </label>
       </aside>
       <section className="main">
-        <div className="term">
-          <Terminal sessionId={session.id} onCommand={onCommand} screenReader={screenReader} banner={`\x1b[36mCloud Shell — ${tr("proyecto")} ${session.project} (${session.fidelity})\x1b[0m\r\n${tr("Escribe 'help' para ver los comandos.")}`} />
-        </div>
         <div className="card tabpanel" style={{ padding: "8px 12px" }}>
           <div className="row" style={{ gap: 0, flexWrap: "nowrap", alignItems: "stretch" }}>
           <div className="tabs" role="tablist" aria-label={tr("Vistas del entorno")} style={{ flex: 1 }}>
@@ -675,7 +695,13 @@ function Workspace({ session }: { session: SessionInfo }) {
           </button>
           </div>
           <div className="panel-body" id="view-panel" role="tabpanel" tabIndex={0} aria-labelledby={`tab-${tab}`} aria-live="polite">
-            <View sessionId={session.id} kind={tab} tick={tick} />
+            <View session={session} kind={tab} tick={tick} term={term} openTab={setTab} />
+          </div>
+        </div>
+        <div className="term">
+          <div className="term-title" aria-hidden="true"><span className="term-brand">CLOUD SHELL</span><span className="term-tab">Terminal <span className="term-proj">({session.project})</span></span></div>
+          <div className="term-host">
+            <Terminal sessionId={session.id} onCommand={onCommand} screenReader={screenReader} controller={term} banner={`\x1b[36mCloud Shell — ${tr("proyecto")} ${session.project} (${session.fidelity})\x1b[0m\r\n${tr("Escribe 'help' para ver los comandos. Lo que hagas en la consola de arriba también se ejecuta aquí.")}`} />
           </div>
         </div>
       </section>

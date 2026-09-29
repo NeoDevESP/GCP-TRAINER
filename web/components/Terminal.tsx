@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { api } from "@/lib/api";
 import { getLang, translate } from "@/lib/i18n";
 
@@ -24,18 +24,29 @@ function needsMore(buf: string): boolean {
   return depth > 0;
 }
 
+/** TerminalHandle lets other panels (the graphical console) drive the shell. */
+export type TerminalHandle = {
+  /** run types the command at the prompt, runs it and resolves with its result. */
+  run: (cmd: string, note?: string) => Promise<{ output: string; exit: number }>;
+  /** paste leaves the command at the prompt for the learner to edit and run. */
+  paste: (cmd: string) => void;
+  focus: () => void;
+};
+
 export default function Terminal({
   sessionId,
   prompt = "student@cloudshell:~$ ",
   onCommand,
   banner,
   screenReader = false,
+  controller,
 }: {
   sessionId: string;
   prompt?: string;
   onCommand?: (line: string, exit: number) => void;
   banner?: string;
   screenReader?: boolean;
+  controller?: MutableRefObject<TerminalHandle | null>;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const onCmd = useRef(onCommand);
@@ -90,19 +101,76 @@ export default function Terminal({
 
       const run = async (cmd: string) => {
         busy = true;
+        let res = { output: "", exit: 1 };
         try {
-          const res = await api<{ output: string; exit: number }>(`/api/sessions/${sessionId}/exec`, { body: { line: cmd } });
+          res = await api<{ output: string; exit: number }>(`/api/sessions/${sessionId}/exec`, { body: { line: cmd } });
           if (res.output) {
             term.write(res.output.endsWith("\n") ? res.output : res.output + "\n");
           }
           onCmd.current?.(cmd, res.exit);
         } catch (e: any) {
-          term.write(`\x1b[31m${e.message ?? e}\x1b[0m\n`);
+          res = { output: String(e.message ?? e), exit: 1 };
+          term.write(`\x1b[31m${res.output}\x1b[0m\n`);
         } finally {
           busy = false;
-          term.write(prompt);
+          term.write(curPrompt());
+          if (line) redraw();
         }
+        return res;
       };
+
+      // Commands sent by the graphical console wait for the shell to be free
+      // and are typed out at the prompt, so the learner sees what each click
+      // does. A line the learner was typing is kept and shown again after.
+      let queue: Promise<unknown> = Promise.resolve();
+      const idle = () => new Promise<void>((ok) => {
+        const wait = () => (busy ? setTimeout(wait, 50) : ok());
+        wait();
+      });
+      if (controller) {
+        controller.current = {
+          run: (cmd, note) => {
+            const next = queue.then(async () => {
+              await idle();
+              if (disposed) return { output: "", exit: 1 };
+              busy = true;
+              term.write("\r\x1b[2K");
+              if (pending) {
+                term.write("^C\r\n");
+                pending = "";
+              }
+              if (note) term.write(`\x1b[90m# ${translate(getLang(), "Consola")}: ${note}\x1b[0m\r\n`);
+              term.write(prompt);
+              if (reduceMotion || cmd.length > 400) {
+                term.write(cmd);
+              } else {
+                const step = Math.max(1, Math.ceil(cmd.length / 40));
+                for (let i = 0; i < cmd.length; i += step) {
+                  term.write(cmd.slice(i, i + step));
+                  await new Promise((ok) => setTimeout(ok, 12));
+                }
+              }
+              term.write("\r\n");
+              history.push(cmd);
+              hIdx = history.length;
+              return run(cmd);
+            });
+            queue = next.catch(() => {});
+            return next;
+          },
+          paste: (cmd) => {
+            if (busy) return;
+            line = cmd.replace(/\n/g, " ");
+            cursor = line.length;
+            redraw();
+            term.focus();
+          },
+          focus: () => {
+            host.current?.scrollIntoView?.({ block: "nearest" });
+            term.focus();
+          },
+        };
+      }
 
       const submit = () => {
         term.write("\r\n");
@@ -228,6 +296,7 @@ export default function Terminal({
       });
       term.focus();
       cleanup = () => {
+        if (controller) controller.current = null;
         sub.dispose();
         ro.disconnect();
         term.dispose();
@@ -237,7 +306,7 @@ export default function Terminal({
       disposed = true;
       cleanup();
     };
-  }, [sessionId, prompt, banner, screenReader]);
+  }, [sessionId, prompt, banner, screenReader, controller]);
 
   return <div ref={host} role="application" aria-label={translate(getLang(), "Terminal de Cloud Shell. Escribe comandos y pulsa Intro.")} style={{ width: "100%", height: "100%" }} />;
 }
