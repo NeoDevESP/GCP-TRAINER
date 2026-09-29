@@ -1,5 +1,7 @@
+import { getLang, translate } from "@/lib/i18n";
+
 export default function Sparkline({ points, width = 220, height = 40 }: { points: { t: string; v: number }[]; width?: number; height?: number }) {
-  if (!points?.length) return <span className="muted small">no data</span>;
+  if (!points?.length) return <span className="muted small">{translate(getLang(), "sin datos")}</span>;
   const vs = points.map((p) => p.v);
   const min = Math.min(...vs);
   const max = Math.max(...vs);

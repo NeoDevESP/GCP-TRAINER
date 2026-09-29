@@ -1,6 +1,8 @@
 // JsonTree renders nested JSON as collapsible sections; leaves are shown
 // inline. Top-level keys with empty values are hidden to reduce noise.
 
+import { getLang, translate } from "@/lib/i18n";
+
 function isEmpty(v: any): boolean {
   return v == null || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && Object.keys(v).length === 0);
 }
@@ -39,7 +41,7 @@ function Node({ k, v, depth }: { k: string; v: any; depth: number }) {
 export default function JsonTree({ data, hideEmpty = true }: { data: any; hideEmpty?: boolean }) {
   if (data == null || typeof data !== "object") return <Leaf v={data} />;
   const entries = Object.entries(data).filter(([, v]) => !hideEmpty || !isEmpty(v));
-  if (!entries.length) return <p className="muted">Nothing here yet.</p>;
+  if (!entries.length) return <p className="muted">{translate(getLang(), "Aún no hay nada aquí.")}</p>;
   return (
     <div>
       {entries.map(([k, v]) => (

@@ -11,12 +11,15 @@ import Sparkline from "@/components/Sparkline";
 import Bar from "@/components/Bar";
 import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
+import { useI18n } from "@/lib/i18n";
+import { constraint, evidenceField, factor, hintKind, label, labLevel, labMode, labType, role, tab as tabLabel, ticketStatus, validator } from "@/lib/labels";
 import type { SessionInfo } from "@/lib/types";
 
 const TABS = ["desk", "console", "topology", "logs", "metrics", "iam", "cost", "files", "history"] as const;
 type Tab = (typeof TABS)[number];
 
 function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionInfo) => void }) {
+  const { t, lang } = useI18n();
   const [lab, setLab] = useState<any>(null);
   const [fidelity, setFidelity] = useState("");
   const [err, setErr] = useState("");
@@ -28,7 +31,7 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
         setFidelity(l.defaultFidelity || "F0");
       })
       .catch((e) => setErr(e.message));
-  }, [labId]);
+  }, [labId, lang]);
   const start = async () => {
     setBusy(true);
     setErr("");
@@ -42,39 +45,39 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
     }
   };
   if (err && !lab) return <p className="error">{err}</p>;
-  if (!lab) return <p className="muted">Loading…</p>;
+  if (!lab) return <p className="muted">{t("Cargando…")}</p>;
   return (
     <div className="card" style={{ maxWidth: 900, margin: "0 auto" }}>
       <div className="row small muted">
-        <span>{lab.track}{lab.day ? ` · day ${lab.day}` : ""}</span>
-        <span className="pill">{lab.type}</span>
-        <span className="pill">{lab.level}</span>
+        <span>{lab.track}{lab.day ? ` · ${t("día {n}", { n: lab.day })}` : ""}</span>
+        <span className="pill">{label(labType, lab.type, t)}</span>
+        <span className="pill">{label(labLevel, lab.level, t)}</span>
         <span>{lab.minutes} min</span>
       </div>
       <h1>{lab.title}</h1>
       <Markdown text={lab.story || lab.summary} />
       {lab.objectives?.length ? (
         <>
-          <h3>Objectives</h3>
+          <h3>{t("Objetivos")}</h3>
           <ul>{lab.objectives.map((o: string) => <li key={o}>{o}</li>)}</ul>
         </>
       ) : null}
       {lab.constraints?.length ? (
         <>
-          <h3>Constraints</h3>
-          <ul>{lab.constraints.map((o: string) => <li key={o}>{o}</li>)}</ul>
+          <h3>{t("Restricciones")}</h3>
+          <ul>{lab.constraints.map((o: string) => <li key={o}>{constraint(o, t)}</li>)}</ul>
         </>
       ) : null}
       {lab.rubric?.length ? (
         <>
-          <h3>How you will be assessed</h3>
+          <h3>{t("Cómo se te evaluará")}</h3>
           <table>
             <tbody>
               {lab.rubric.map((r: any) => (
                 <tr key={r.name}>
-                  <td>{r.name} {r.critical && <span className="pill bad">critical</span>}</td>
-                  <td className="muted small">{r.validator}</td>
-                  <td>{r.points} pts</td>
+                  <td>{r.name} {r.critical && <span className="pill bad">{t("crítico")}</span>}</td>
+                  <td className="muted small">{label(validator, r.validator, t)}</td>
+                  <td>{t("{n} ptos.", { n: r.points })}</td>
                 </tr>
               ))}
             </tbody>
@@ -82,16 +85,16 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
         </>
       ) : null}
       <div className="row" style={{ marginTop: 16 }}>
-        <label htmlFor="fid" style={{ margin: 0 }}>Fidelity</label>
+        <label htmlFor="fid" style={{ margin: 0 }}>{t("Fidelidad")}</label>
         <select id="fid" value={fidelity} onChange={(e) => setFidelity(e.target.value)} style={{ width: 200 }}>
           {(lab.fidelity ?? ["F0"]).map((f: string) => (
             <option key={f} value={f}>
-              {f === "F0" ? "F0 — simulator" : f === "F1" ? "F1 — emulators" : "F2 — real GCP sandbox"}
+              {f === "F0" ? t("F0 — simulador") : f === "F1" ? t("F1 — emuladores") : t("F2 — proyecto real de GCP")}
             </option>
           ))}
         </select>
         <button className="btn" onClick={start} disabled={busy}>
-          {busy ? "Provisioning…" : "Start lab"}
+          {busy ? t("Preparando el entorno…") : t("Empezar laboratorio")}
         </button>
       </div>
       {err && <p className="error">{err}</p>}
@@ -100,7 +103,8 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
 }
 
 function Desk({ data }: { data: any }) {
-  if (!data?.ticket && !data?.actors?.length) return <p className="muted">No ticket for this lab. Use the terminal and the objectives on the left.</p>;
+  const { t: tr } = useI18n();
+  if (!data?.ticket && !data?.actors?.length) return <p className="muted">{tr("Este laboratorio no tiene ticket. Usa la terminal y los objetivos de la izquierda.")}</p>;
   const t = data.ticket;
   return (
     <div className="col">
@@ -110,15 +114,15 @@ function Desk({ data }: { data: any }) {
             <strong>{t.id}</strong>
             <span className={`pill ${t.priority === "P1" ? "bad" : t.priority === "P2" ? "warn" : ""}`}>{t.priority}</span>
             <span className="pill">{t.kind}</span>
-            <span className="pill">{t.status}</span>
+            <span className="pill">{label(ticketStatus, t.status, tr)}</span>
             {t.sla && <span className="muted small">SLA {t.sla}</span>}
           </div>
           <h3>{t.summary}</h3>
-          {t.impact && <p className="small"><strong>Impact:</strong> {t.impact}</p>}
-          <p className="small muted">Reported by {t.reporter}{t.service ? ` · service ${t.service}` : ""}</p>
+          {t.impact && <p className="small"><strong>{tr("Impacto:")}</strong> {t.impact}</p>}
+          <p className="small muted">{tr("Abierto por {who}", { who: t.reporter })}{t.service ? ` · ${tr("servicio {name}", { name: t.service })}` : ""}</p>
           {t.comments?.map((c: any, i: number) => (
             <div key={i} className="small" style={{ borderTop: "1px solid var(--border)", padding: "6px 0" }}>
-              <strong>{c.from}</strong> <span className="muted">{c.at}{c.public ? " · public" : ""}</span>
+              <strong>{c.from}</strong> <span className="muted">{c.at}{c.public ? ` · ${tr("público")}` : ""}</span>
               <div style={{ whiteSpace: "pre-wrap" }}>{c.text}</div>
             </div>
           ))}
@@ -129,19 +133,19 @@ function Desk({ data }: { data: any }) {
             </details>
           ))}
           <p className="small muted">
-            Work the ticket from the terminal: <code>ticket show</code>, <code>ticket comment &quot;…&quot;</code>, <code>ticket resolve --resolution &quot;…&quot;</code>, <code>team</code>, <code>ask &lt;name&gt; &quot;question&quot;</code>.
+            {tr("Trabaja el ticket desde la terminal:")} <code>ticket show</code>, <code>ticket comment &quot;…&quot;</code>, <code>ticket resolve &quot;…&quot;</code>, <code>team</code>, <code>ask &lt;{tr("nombre")}&gt; &quot;{tr("pregunta")}&quot;</code>.
           </p>
         </div>
       )}
       {data.actors?.length ? (
         <div className="card">
-          <h3>People</h3>
+          <h3>{tr("Personas")}</h3>
           <table>
             <tbody>
               {data.actors.map((a: any) => (
                 <tr key={a.name}>
                   <td><strong>{a.name}</strong></td>
-                  <td className="muted small">{a.role}</td>
+                  <td className="muted small">{label(role, a.role, tr)}</td>
                   <td className="small">{a.persona}</td>
                 </tr>
               ))}
@@ -151,10 +155,10 @@ function Desk({ data }: { data: any }) {
       ) : null}
       {data.questions?.length ? (
         <div className="card">
-          <h3>Conversation log</h3>
+          <h3>{tr("Conversaciones")}</h3>
           {data.questions.map((q: any, i: number) => (
             <div key={i} className="small" style={{ marginBottom: 6 }}>
-              <strong>You → {q.actor}:</strong> {q.question}
+              <strong>{tr("Tú → {who}:", { who: q.actor })}</strong> {q.question}
               <div className="muted">{q.answer}</div>
             </div>
           ))}
@@ -165,6 +169,7 @@ function Desk({ data }: { data: any }) {
 }
 
 function Logs({ sessionId, tick }: { sessionId: string; tick: number }) {
+  const { t } = useI18n();
   const [filter, setFilter] = useState("");
   const [applied, setApplied] = useState("");
   const [rows, setRows] = useState<any[]>([]);
@@ -180,12 +185,12 @@ function Logs({ sessionId, tick }: { sessionId: string; tick: number }) {
   return (
     <div className="col">
       <form className="row" onSubmit={(e) => { e.preventDefault(); setApplied(filter); }}>
-        <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder='Logging query, e.g. severity>=ERROR resource.type="cloud_run_revision"' style={{ flex: 1, width: "auto" }} />
-        <button className="btn secondary">Run query</button>
+        <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('Consulta de registros, p. ej. severity>=ERROR resource.type="cloud_run_revision"')} aria-label={t("Consulta de registros")} style={{ flex: 1, width: "auto" }} />
+        <button className="btn secondary">{t("Ejecutar consulta")}</button>
       </form>
       {err && <p className="error small">{err}</p>}
       <table>
-        <thead><tr><th>Time</th><th>Severity</th><th>Resource</th><th>Message</th></tr></thead>
+        <thead><tr><th>{t("Hora")}</th><th>{t("Gravedad")}</th><th>{t("Recurso")}</th><th>{t("Mensaje")}</th></tr></thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i}>
@@ -193,18 +198,19 @@ function Logs({ sessionId, tick }: { sessionId: string; tick: number }) {
               <td><span className={`pill ${/ERROR|CRITICAL|ALERT|EMERGENCY/.test(r.severity) ? "bad" : r.severity === "WARNING" ? "warn" : ""}`}>{r.severity}</span></td>
               <td className="small">{r.resource?.type}<div className="muted">{Object.values(r.resource?.labels ?? {}).join(" ")}</div></td>
               <td className="small" style={{ fontFamily: "var(--mono)", wordBreak: "break-word" }}>
-                {r.textPayload ?? (r.httpRequest ? `${r.httpRequest.requestMethod ?? ""} ${r.httpRequest.requestUrl ?? ""} → ${r.httpRequest.status ?? ""}` : r.protoPayload ? `${r.protoPayload.methodName ?? ""} ${r.protoPayload.resourceName ?? ""} by ${r.protoPayload["authenticationInfo.principalEmail"] ?? "?"}` : JSON.stringify(r.labels ?? {}))}
+                {r.textPayload ?? (r.httpRequest ? `${r.httpRequest.requestMethod ?? ""} ${r.httpRequest.requestUrl ?? ""} → ${r.httpRequest.status ?? ""}` : r.protoPayload ? `${r.protoPayload.methodName ?? ""} ${r.protoPayload.resourceName ?? ""} ${t("por")} ${r.protoPayload["authenticationInfo.principalEmail"] ?? "?"}` : JSON.stringify(r.labels ?? {}))}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {!rows.length && <p className="muted">No log entries match.</p>}
+      {!rows.length && <p className="muted">{t("Ninguna entrada coincide.")}</p>}
     </div>
   );
 }
 
 function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
+  const { t } = useI18n();
   const [files, setFiles] = useState<Record<string, string>>({});
   const [sel, setSel] = useState("");
   const [draft, setDraft] = useState("");
@@ -230,7 +236,7 @@ function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
     await api(`/api/sessions/${sessionId}/files`, { method: "PUT", body: { path: sel, content: draft } });
     setFiles({ ...files, [sel]: draft });
     setDirty(false);
-    setMsg(`Saved ${sel}`);
+    setMsg(t("Guardado {file}", { file: sel }));
     setTimeout(() => setMsg(""), 2000);
   };
   return (
@@ -242,7 +248,7 @@ function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
           </a>
         ))}
         <form onSubmit={(e) => { e.preventDefault(); if (newName) { setFiles({ ...files, [newName]: "" }); open(newName); setNewName(""); } }}>
-          <input placeholder="new file (e.g. main.tf)" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <input placeholder={t("archivo nuevo (p. ej. main.tf)")} aria-label={t("Nombre del archivo nuevo")} value={newName} onChange={(e) => setNewName(e.target.value)} />
         </form>
       </div>
       <div style={{ display: "grid", gridTemplateRows: "auto 1fr", minHeight: 300 }}>
@@ -250,7 +256,7 @@ function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
           <>
             <div className="row small" style={{ marginBottom: 6 }}>
               <strong>{sel}</strong>
-              <button className="btn secondary" onClick={save} disabled={!dirty}>Save</button>
+              <button className="btn secondary" onClick={save} disabled={!dirty}>{t("Guardar")}</button>
               <span className="muted">{msg}</span>
             </div>
             <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", minHeight: 280 }}>
@@ -258,7 +264,9 @@ function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
             </div>
           </>
         ) : (
-          <p className="muted">Select a file, or create one. Files are shared with the terminal (<code>cat</code>, <code>terraform apply</code>, <code>kubectl apply -f</code>, <code>docker build</code>…).</p>
+          <p className="muted">
+            {t("Elige un archivo o crea uno. Los archivos se comparten con la terminal")} (<code>cat</code>, <code>terraform apply</code>, <code>kubectl apply -f</code>, <code>docker build</code>…).
+          </p>
         )}
       </div>
     </div>
@@ -266,6 +274,7 @@ function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
 }
 
 function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: number }) {
+  const { t } = useI18n();
   // Data is tagged with the view it belongs to so a tab switch never renders
   // one view's payload with another view's renderer.
   const [loaded, setLoaded] = useState<{ kind: Tab; data: any } | null>(null);
@@ -287,17 +296,17 @@ function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: n
   if (kind === "logs") return <Logs sessionId={sessionId} tick={tick} />;
   if (kind === "files") return <Files sessionId={sessionId} tick={tick} />;
   if (err) return <p className="error small">{err}</p>;
-  if (!loaded || loaded.kind !== kind) return <p className="muted">Loading…</p>;
+  if (!loaded || loaded.kind !== kind) return <p className="muted">{t("Cargando…")}</p>;
   const data = loaded.data;
-  if (data == null) return <p className="muted">Nothing here yet.</p>;
+  if (data == null) return <p className="muted">{t("Aún no hay nada aquí.")}</p>;
   switch (kind) {
     case "desk":
       return <Desk data={data} />;
     case "topology":
-      return data.mermaid ? <Mermaid chart={data.mermaid} /> : <p className="muted">No resources yet.</p>;
+      return data.mermaid ? <Mermaid chart={data.mermaid} /> : <p className="muted">{t("Todavía no hay recursos.")}</p>;
     case "metrics": {
       const keys = Object.keys(data);
-      if (!keys.length) return <p className="muted">No metrics yet. Metrics appear as simulated time advances.</p>;
+      if (!keys.length) return <p className="muted">{t("Aún no hay métricas. Aparecen a medida que avanza el tiempo simulado.")}</p>;
       return (
         <table>
           <tbody>
@@ -318,9 +327,9 @@ function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: n
     case "cost":
       return (
         <div>
-          <div className="kpi">€{(data.monthlyEur ?? 0).toFixed(2)} <span className="muted small">/ month (estimate)</span></div>
+          <div className="kpi">€{(data.monthlyEur ?? 0).toFixed(2)} <span className="muted small">{t("/ mes (estimación)")}</span></div>
           <table>
-            <thead><tr><th>Resource</th><th>SKU</th><th>€/month</th></tr></thead>
+            <thead><tr><th>{t("Recurso")}</th><th>SKU</th><th>{t("€/mes")}</th></tr></thead>
             <tbody>
               {(data.lines ?? []).map((l: any, i: number) => (
                 <tr key={i}><td>{l.resource}</td><td className="small muted">{l.sku}</td><td>{l.monthlyEur.toFixed(2)}</td></tr>
@@ -332,8 +341,8 @@ function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: n
     case "history":
       return (
         <table>
-          <caption className="sr-only">Commands you ran, with their output</caption>
-          <thead><tr><th>Time</th><th>Command</th><th>Exit</th></tr></thead>
+          <caption className="sr-only">{t("Comandos que has ejecutado, con su salida")}</caption>
+          <thead><tr><th>{t("Hora")}</th><th>{t("Comando")}</th><th>{t("Código")}</th></tr></thead>
           <tbody>
             {(Array.isArray(data) ? data : []).map((r: any, i: number) => (
               <tr key={i}>
@@ -342,7 +351,7 @@ function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: n
                   {r.line}
                   {r.output ? (
                     <details>
-                      <summary className="muted">output</summary>
+                      <summary className="muted">{t("salida")}</summary>
                       <pre style={{ margin: 0 }}>{r.output}</pre>
                     </details>
                   ) : null}
@@ -359,18 +368,19 @@ function View({ sessionId, kind, tick }: { sessionId: string; kind: Tab; tick: n
 }
 
 function Result({ out }: { out: any }) {
+  const { t } = useI18n();
   const r = out.result;
   return (
     <div className="card" style={{ borderColor: r.passed ? "var(--ok)" : "var(--bad)" }}>
-      <h2>{r.passed ? "Passed" : "Not passed yet"} — {r.score}/{r.max}</h2>
-      {r.criticalFailed && <p className="error">A critical criterion failed.</p>}
-      <p className="small">+{out.xp} XP{out.bonus ? ` (+${out.bonus} bonus: ${out.bonusReasons?.join(", ")})` : ""}</p>
+      <h2>{r.passed ? t("Superado") : t("Aún no superado")} — {r.score}/{r.max}</h2>
+      {r.criticalFailed && <p className="error">{t("Ha fallado un criterio crítico.")}</p>}
+      <p className="small">+{out.xp} XP{out.bonus ? ` (+${out.bonus} ${t("de bonificación")}: ${out.bonusReasons?.join(", ")})` : ""}</p>
       <table>
         <tbody>
           {r.items.map((it: any) => (
             <tr key={it.name}>
               <td>
-                {it.name} {it.critical && <span className="pill">critical</span>}
+                {it.name} {it.critical && <span className="pill">{t("crítico")}</span>}
                 {it.checks?.filter((c: any) => !c.pass && c.desc).map((c: any, i: number) => (
                   <div key={i} className="small error">✗ {c.desc}</div>
                 ))}
@@ -382,51 +392,55 @@ function Result({ out }: { out: any }) {
       </table>
       {r.process && (
         <>
-          <h3>How you worked</h3>
+          <h3>{t("Cómo has trabajado")}</h3>
           <table>
             <tbody>
               {r.process.factors.map((f: any) => (
                 <tr key={f.name}>
-                  <td style={{ textTransform: "capitalize", width: 120 }}>{f.name}</td>
-                  <td><Bar value={f.score * 100} /></td>
+                  <td style={{ width: 140 }}>{label(factor, f.name, t)}</td>
+                  <td><Bar value={f.score * 100} label={label(factor, f.name, t)} /></td>
                   <td className="small muted">{f.signals?.join("; ")}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {r.process.blindFixes?.length ? <p className="small warn">Changes before gathering evidence: {r.process.blindFixes.join(", ")}</p> : null}
-          {r.process.constraintViolations?.length ? <p className="small error">Constraint violations: {r.process.constraintViolations.join(", ")}</p> : null}
+          {r.process.blindFixes?.length ? <p className="small warn">{t("Cambios antes de reunir evidencias:")} {r.process.blindFixes.join(", ")}</p> : null}
+          {r.process.constraintViolations?.length ? <p className="small error">{t("Restricciones incumplidas:")} {r.process.constraintViolations.join(", ")}</p> : null}
         </>
       )}
       {r.feedback?.length ? <ul className="small">{r.feedback.map((f: string, i: number) => <li key={i}>{f}</li>)}</ul> : null}
       {out.mentor?.length ? (
         <>
-          <h3>Mentor</h3>
+          <h3>{t("Mentor")}</h3>
           <ul className="small">{out.mentor.map((m: string, i: number) => <li key={i}>{m}</li>)}</ul>
         </>
       ) : null}
       {out.postmortemReview && (
         <>
-          <h3>Post-mortem review</h3>
+          <h3>{t("Revisión del post-mortem")}</h3>
           <Markdown text={out.postmortemReview} />
         </>
       )}
       {out.company && (
         <>
           <h3>Nebula Corporation</h3>
-          <p className="small">Day {out.company.day}. {out.company.latentRisks ? `${out.company.latentRisks} latent risk(s) left in the environment…` : "No new latent risks."}</p>
-          <a href="/company">Back to the company →</a>
+          <p className="small">
+            {t("Día {n}.", { n: out.company.day })}{" "}
+            {out.company.latentRisks ? t("Quedan {n} riesgo(s) latente(s) en el entorno…", { n: out.company.latentRisks }) : t("Ningún riesgo latente nuevo.")}
+          </p>
+          <a href="/company">{t("Volver a la empresa →")}</a>
         </>
       )}
       <div className="row" style={{ marginTop: 10 }}>
-        <a className="btn secondary" href="/dashboard">Dashboard</a>
-        <a className="btn secondary" href="/catalog">More labs</a>
+        <a className="btn secondary" href="/dashboard">{t("Panel")}</a>
+        <a className="btn secondary" href="/catalog">{t("Más laboratorios")}</a>
       </div>
     </div>
   );
 }
 
 function Workspace({ session }: { session: SessionInfo }) {
+  const { t: tr } = useI18n();
   const [tab, setTab] = useState<Tab>("console");
   const [tick, setTick] = useState(0);
   const [hints, setHints] = useState<any[]>([]);
@@ -488,7 +502,7 @@ function Workspace({ session }: { session: SessionInfo }) {
     }
   };
   const submit = async () => {
-    if (!confirm("Submit for grading? The environment will be closed.")) return;
+    if (!confirm(tr("¿Enviar para evaluar? El entorno se cerrará."))) return;
     setBusy(true);
     setErr("");
     try {
@@ -500,7 +514,7 @@ function Workspace({ session }: { session: SessionInfo }) {
     }
   };
   const stop = async () => {
-    if (!confirm("Abandon this lab?")) return;
+    if (!confirm(tr("¿Abandonar este laboratorio?"))) return;
     await api(`/api/sessions/${session.id}/stop`, { body: {} }).catch(() => {});
     window.location.href = "/dashboard";
   };
@@ -516,17 +530,17 @@ function Workspace({ session }: { session: SessionInfo }) {
   const tabs = TABS.filter((t) => t !== "desk" || hasDesk);
   return (
     <main id="main" className="workspace">
-      <aside className="side card" aria-label="Lab briefing and submission">
+      <aside className="side card" aria-label={tr("Enunciado y entrega")}>
         <div className="row small muted">
           <span className="pill">{session.fidelity}</span>
-          {session.mode && <span className="pill warn">{session.mode}</span>}
-          <span>project <code>{session.project}</code></span>
+          {session.mode && <span className="pill warn">{label(labMode, session.mode, tr)}</span>}
+          <span>{tr("proyecto")} <code>{session.project}</code></span>
         </div>
         <h2>{session.title}</h2>
         <Markdown text={session.story} />
         {session.timeline?.length ? (
           <>
-            <h3>Timeline</h3>
+            <h3>{tr("Cronología")}</h3>
             {session.timeline.map((t, i) => (
               <div key={i} className="small"><span className="muted">{t.at}</span> <strong>{t.from}:</strong> {t.text}</div>
             ))}
@@ -534,36 +548,36 @@ function Workspace({ session }: { session: SessionInfo }) {
         ) : null}
         {session.objectives?.length ? (
           <>
-            <h3>Objectives</h3>
+            <h3>{tr("Objetivos")}</h3>
             <ul className="small">{session.objectives.map((o) => <li key={o}>{o}</li>)}</ul>
           </>
         ) : null}
         {session.constraints?.length ? (
           <>
-            <h3>Constraints</h3>
-            <ul className="small">{session.constraints.map((o) => <li key={o}>{o}</li>)}</ul>
+            <h3>{tr("Restricciones")}</h3>
+            <ul className="small">{session.constraints.map((o) => <li key={o}>{constraint(o, tr)}</li>)}</ul>
           </>
         ) : null}
         {session.instructions && (
           <details>
-            <summary><strong>Instructions</strong></summary>
+            <summary><strong>{tr("Instrucciones")}</strong></summary>
             <Markdown text={session.instructions} />
           </details>
         )}
-        <h3>Help</h3>
+        <h3>{tr("Ayuda")}</h3>
         <p className="small muted">
-          Try <code>why &lt;resource&gt;</code> for a causal chain, <code>whatif …</code> to explore consequences, and <code>help</code> for commands.
+          {tr("Prueba")} <code>why &lt;{tr("recurso")}&gt;</code> {tr("para ver la cadena causal,")} <code>whatif …</code> {tr("para explorar consecuencias y")} <code>help</code> {tr("para ver los comandos.")}
         </p>
         {hints.map((h) => (
           <div key={h.index} className="small card" style={{ padding: 8, marginBottom: 6 }}>
-            <span className="pill">{h.kind} · −{h.cost}</span> {h.text}
+            <span className="pill">{label(hintKind, h.kind, tr)} · −{h.cost}</span> {h.text}
           </div>
         ))}
         <div className="row">
           <button className="btn secondary" onClick={hint} disabled={session.hintCount === 0 || (hints.length > 0 && hints[hints.length - 1].remaining <= 0)}>
-            Hint ({Math.max(0, session.hintCount - hints.length)} left)
+            {tr("Pista (quedan {n})", { n: Math.max(0, session.hintCount - hints.length) })}
           </button>
-          <button className="btn secondary" onClick={doCheck} disabled={busy}>Check work</button>
+          <button className="btn secondary" onClick={doCheck} disabled={busy}>{tr("Comprobar")}</button>
         </div>
         {check && (
           <div className="small" style={{ marginTop: 8 }}>
@@ -578,11 +592,11 @@ function Workspace({ session }: { session: SessionInfo }) {
         )}
         {session.evidence && (
           <>
-            <h3>Evidence</h3>
+            <h3>{tr("Evidencias")}</h3>
             <p className="small muted">{session.evidence.prompt}</p>
             {session.evidence.fields.map((f) => (
               <div key={f}>
-                <label htmlFor={`ev-${f}`}>{f}</label>
+                <label htmlFor={`ev-${f}`}>{label(evidenceField, f, tr)}</label>
                 <textarea id={`ev-${f}`} value={evidence[f] ?? ""} onChange={(e) => setEvidence({ ...evidence, [f]: e.target.value })} />
               </div>
             ))}
@@ -590,7 +604,7 @@ function Workspace({ session }: { session: SessionInfo }) {
         )}
         {session.quiz?.filter((q) => !q.after).length ? (
           <>
-            <h3>Questions</h3>
+            <h3>{tr("Preguntas")}</h3>
             {session.quiz.filter((q) => !q.after).map((q) => (
               <div key={q.id} style={{ marginBottom: 10 }}>
                 <div className="small"><strong>{q.question}</strong></div>
@@ -608,29 +622,29 @@ function Workspace({ session }: { session: SessionInfo }) {
                     {o}
                   </label>
                 ))}
-                {q.justify && <textarea placeholder="Justify your choice" value={just[q.id] ?? ""} onChange={(e) => setJust({ ...just, [q.id]: e.target.value })} />}
+                {q.justify && <textarea placeholder={tr("Justifica tu elección")} aria-label={tr("Justifica tu elección")} value={just[q.id] ?? ""} onChange={(e) => setJust({ ...just, [q.id]: e.target.value })} />}
               </div>
             ))}
           </>
         ) : null}
         {err && <p className="error small">{err}</p>}
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn" onClick={submit} disabled={busy}>Submit</button>
-          <button className="btn danger" onClick={stop}>Abandon</button>
+          <button className="btn" onClick={submit} disabled={busy}>{tr("Enviar")}</button>
+          <button className="btn danger" onClick={stop}>{tr("Abandonar")}</button>
         </div>
-        <p className="small muted">Session expires {new Date(session.expires).toLocaleTimeString()}.</p>
+        <p className="small muted">{tr("La sesión caduca a las {time}.", { time: new Date(session.expires).toLocaleTimeString() })}</p>
         <label className="small" style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--text)" }}>
           <input type="checkbox" style={{ width: "auto" }} checked={screenReader} onChange={toggleScreenReader} />
-          Screen reader mode for the terminal
+          {tr("Modo lector de pantalla para la terminal")}
         </label>
       </aside>
       <section className="main">
         <div className="term">
-          <Terminal sessionId={session.id} onCommand={onCommand} screenReader={screenReader} banner={`\x1b[36mCloud Shell — project ${session.project} (${session.fidelity})\x1b[0m\r\nType 'help' to list commands.`} />
+          <Terminal sessionId={session.id} onCommand={onCommand} screenReader={screenReader} banner={`\x1b[36mCloud Shell — ${tr("proyecto")} ${session.project} (${session.fidelity})\x1b[0m\r\n${tr("Escribe 'help' para ver los comandos.")}`} />
         </div>
         <div className="card tabpanel" style={{ padding: "8px 12px" }}>
           <div className="row" style={{ gap: 0, flexWrap: "nowrap", alignItems: "stretch" }}>
-          <div className="tabs" role="tablist" aria-label="Environment views" style={{ flex: 1 }}>
+          <div className="tabs" role="tablist" aria-label={tr("Vistas del entorno")} style={{ flex: 1 }}>
             {tabs.map((t) => (
               <button
                 key={t}
@@ -652,11 +666,11 @@ function Workspace({ session }: { session: SessionInfo }) {
                 }}
                 style={{ textTransform: "capitalize" }}
               >
-                {t}
+                {label(tabLabel, t, tr)}
               </button>
             ))}
           </div>
-          <button className="btn secondary" onClick={() => setTick((x) => x + 1)} title="Refresh views" aria-label="Refresh views" style={{ border: "none", borderBottom: "1px solid var(--border)", borderRadius: 0 }}>
+          <button className="btn secondary" onClick={() => setTick((x) => x + 1)} title={tr("Actualizar vistas")} aria-label={tr("Actualizar vistas")} style={{ border: "none", borderBottom: "1px solid var(--border)", borderRadius: 0 }}>
             ↻
           </button>
           </div>
@@ -671,6 +685,7 @@ function Workspace({ session }: { session: SessionInfo }) {
 
 function LabPage() {
   useAuth();
+  const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [labId, setLabId] = useState("");
   const [err, setErr] = useState("");
@@ -680,7 +695,7 @@ function LabPage() {
     if (sid) {
       api<SessionInfo>(`/api/sessions/${sid}`)
         .then((s) => {
-          if (s.status && s.status !== "running" && s.status !== "ready") setErr(`This session is ${s.status}.`);
+          if (s.status && s.status !== "running" && s.status !== "ready") setErr(t("Esta sesión está en estado «{status}».", { status: s.status }));
           else setSession(s);
         })
         .catch((e) => setErr(e.message));
@@ -698,8 +713,8 @@ function LabPage() {
       ) : (
         <main id="main" className="page">
           {err && <p className="error">{err}</p>}
-          {labId && !qs("session") ? <Briefing labId={labId} onStarted={started} /> : !err && <p className="muted">Loading…</p>}
-          {err && labId && <a href={`/lab?id=${encodeURIComponent(labId)}`}>Start a new attempt →</a>}
+          {labId && !qs("session") ? <Briefing labId={labId} onStarted={started} /> : !err && <p className="muted">{t("Cargando…")}</p>}
+          {err && labId && <a href={`/lab?id=${encodeURIComponent(labId)}`}>{t("Empezar un intento nuevo →")}</a>}
         </main>
       )}
     </>

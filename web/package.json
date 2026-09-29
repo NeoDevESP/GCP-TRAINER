@@ -5,8 +5,10 @@
   "description": "GCP Lab Simulator / Cloud Mastery web client (static export served by the Go API)",
   "scripts": {
     "dev": "next dev",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "prebuild": "node scripts/check-i18n.mjs",
     "build": "next build",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && node scripts/check-i18n.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "4.7.0",

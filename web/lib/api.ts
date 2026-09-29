@@ -1,6 +1,8 @@
 // Thin client for the Go API. The token is a per-browser convenience kept in
 // localStorage; every call degrades gracefully when storage is unavailable.
 
+import { getLang } from "./i18n";
+
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 export function getToken(): string {
@@ -27,7 +29,7 @@ export class ApiError extends Error {
 }
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = { "Content-Type": "application/json", "X-Lang": getLang() };
   const t = getToken();
   if (t) headers.Authorization = `Bearer ${t}`;
   const res = await fetch(BASE + path, {

@@ -5,11 +5,13 @@ import Nav from "@/components/Nav";
 import Bar from "@/components/Bar";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
+import { k, useI18n } from "@/lib/i18n";
 
 const pct = (v: number) => `${Math.round((v ?? 0) * 100)}%`;
 
 export default function Admin() {
   useAuth();
+  const { t, lang } = useI18n();
   const [kpis, setKpis] = useState<any>(null);
   const [classes, setClasses] = useState<any[]>([]);
   const [sel, setSel] = useState("");
@@ -25,12 +27,12 @@ export default function Admin() {
     loadClasses();
     api("/api/admin/pool").then(setPool).catch(() => {});
     api("/api/admin/content").then(setContent).catch(() => {});
-  }, []);
+  }, [lang]);
   useEffect(() => {
     api(`/api/admin/kpis${sel ? `?class=${sel}` : ""}`).then(setKpis).catch((e) => setErr(e.message));
     if (sel) api(`/api/classes/${sel}/analytics`).then(setAnalytics).catch((e) => setErr(e.message));
     else setAnalytics(null);
-  }, [sel]);
+  }, [sel, lang]);
 
   const create = async () => {
     if (!newClass) return;
@@ -55,18 +57,18 @@ export default function Admin() {
 
   const rows: [string, string, any][] = kpis
     ? [
-        ["First-attempt success", "firstAttemptSuccess", pct(kpis.firstAttemptSuccess)],
-        ["Hint dependency", "hintDependency", pct(kpis.hintDependency)],
-        ["Retries to mastery", "retryToMastery", (kpis.retryToMastery ?? 0).toFixed(1)],
-        ["Retention 7d", "retention7d", pct(kpis.retention7d)],
-        ["Retention 30d", "retention30d", pct(kpis.retention30d)],
-        ["Incident root-cause rate", "incidentRootCauseRate", pct(kpis.incidentRootCauseRate)],
-        ["Capstone pass rate", "capstonePassRate", pct(kpis.capstonePassRate)],
-        ["Skill coverage", "skillCoverage", pct(kpis.skillCoverage)],
-        ["Provisioning p95", "provisionP95Ms", `${kpis.provisionP95Ms} ms`],
-        ["Grader error rate", "graderErrorRate", pct(kpis.graderErrorRate)],
-        ["Auto-graded labs", "autoGradedLabs", pct(kpis.autoGradedLabs)],
-        ["Infra failure rate", "infraFailureRate", pct(kpis.infraFailureRate)],
+        [k("Éxito al primer intento"), "firstAttemptSuccess", pct(kpis.firstAttemptSuccess)],
+        [k("Dependencia de pistas"), "hintDependency", pct(kpis.hintDependency)],
+        [k("Intentos hasta el dominio"), "retryToMastery", (kpis.retryToMastery ?? 0).toFixed(1)],
+        [k("Retención a 7 días"), "retention7d", pct(kpis.retention7d)],
+        [k("Retención a 30 días"), "retention30d", pct(kpis.retention30d)],
+        [k("Tasa de causa raíz en incidentes"), "incidentRootCauseRate", pct(kpis.incidentRootCauseRate)],
+        [k("Tasa de aprobado en proyectos finales"), "capstonePassRate", pct(kpis.capstonePassRate)],
+        [k("Cobertura de habilidades"), "skillCoverage", pct(kpis.skillCoverage)],
+        [k("Aprovisionamiento p95"), "provisionP95Ms", `${kpis.provisionP95Ms} ms`],
+        [k("Tasa de error del evaluador"), "graderErrorRate", pct(kpis.graderErrorRate)],
+        [k("Laboratorios con corrección automática"), "autoGradedLabs", pct(kpis.autoGradedLabs)],
+        [k("Tasa de fallos de infraestructura"), "infraFailureRate", pct(kpis.infraFailureRate)],
       ]
     : [];
 
@@ -74,27 +76,27 @@ export default function Admin() {
     <>
       <Nav active="/admin" />
       <main id="main" className="page">
-        <h1>Instructor console</h1>
+        <h1>{t("Consola del instructor")}</h1>
         {err && <p className="error">{err}</p>}
         <div className="row" style={{ marginBottom: 12 }}>
-          <select value={sel} onChange={(e) => setSel(e.target.value)} style={{ width: 260 }} aria-label="Class">
-            <option value="">All learners</option>
+          <select value={sel} onChange={(e) => setSel(e.target.value)} style={{ width: 260 }} aria-label={t("Clase")}>
+            <option value="">{t("Todo el alumnado")}</option>
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.members?.length ?? 0})</option>)}
           </select>
-          <input placeholder="New class name" value={newClass} onChange={(e) => setNewClass(e.target.value)} style={{ width: 200 }} />
-          <button className="btn secondary" onClick={create}>Create class</button>
+          <input placeholder={t("Nombre de la nueva clase")} value={newClass} onChange={(e) => setNewClass(e.target.value)} style={{ width: 200 }} />
+          <button className="btn secondary" onClick={create}>{t("Crear clase")}</button>
         </div>
         <div className="grid two">
           <div className="card">
-            <h2>Learning KPIs</h2>
+            <h2>{t("KPI de aprendizaje")}</h2>
             {kpis && (
               <>
-                <p className="small muted">{kpis.activeUsers} active learners · {kpis.attempts} attempts</p>
+                <p className="small muted">{t("{n} alumnos activos · {a} intentos", { n: kpis.activeUsers, a: kpis.attempts })}</p>
                 <table>
-                  <thead><tr><th>KPI</th><th>Value</th><th>Target</th></tr></thead>
+                  <thead><tr><th>KPI</th><th>{t("Valor")}</th><th>{t("Objetivo")}</th></tr></thead>
                   <tbody>
-                    {rows.map(([label, key, v]) => (
-                      <tr key={key}><td>{label}</td><td>{v}</td><td className="small muted">{kpis.targets?.[key]}</td></tr>
+                    {rows.map(([name, key, v]) => (
+                      <tr key={key}><td>{t(name)}</td><td>{v}</td><td className="small muted">{kpis.targets?.[key]}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -102,14 +104,14 @@ export default function Admin() {
             )}
           </div>
           <div className="card">
-            <h2>{analytics ? analytics.class.name : "Class analytics"}</h2>
+            <h2>{analytics ? analytics.class.name : t("Analítica de la clase")}</h2>
             {analytics ? (
               <>
                 <div className="row">
-                  <input placeholder="learner email" value={member} onChange={(e) => setMember(e.target.value)} style={{ width: 240 }} />
-                  <button className="btn secondary" onClick={add}>Add learner</button>
+                  <input placeholder={t("correo del alumno")} value={member} onChange={(e) => setMember(e.target.value)} style={{ width: 240 }} />
+                  <button className="btn secondary" onClick={add}>{t("Añadir alumno")}</button>
                 </div>
-                <h3>Team branch mastery</h3>
+                <h3>{t("Dominio del equipo por rama")}</h3>
                 <table>
                   <tbody>
                     {Object.entries(analytics.teamBranches ?? {}).sort().map(([b, v]: any) => (
@@ -117,9 +119,9 @@ export default function Admin() {
                     ))}
                   </tbody>
                 </table>
-                <h3>Learners</h3>
+                <h3>{t("Alumnado")}</h3>
                 <table>
-                  <thead><tr><th>Name</th><th>Level</th><th>XP</th><th>Best readiness</th></tr></thead>
+                  <thead><tr><th>{t("Nombre")}</th><th>{t("Nivel")}</th><th>XP</th><th>{t("Mejor preparación")}</th></tr></thead>
                   <tbody>
                     {(analytics.members ?? []).map((m: any) => {
                       const best = [...(m.readiness ?? [])].sort((a: any, b: any) => b.percent - a.percent)[0];
@@ -131,13 +133,13 @@ export default function Admin() {
                 </table>
               </>
             ) : (
-              <p className="muted">Select a class to see its learners and team skill heatmap.</p>
+              <p className="muted">{t("Selecciona una clase para ver su alumnado y el mapa de calor de habilidades del equipo.")}</p>
             )}
           </div>
         </div>
         {kpis?.perLab?.length ? (
           <div className="card" style={{ marginTop: 16 }}>
-            <h2>Per-lab difficulty calibration</h2>
+            <h2>{t("Calibración de dificultad por laboratorio")}</h2>
             <table>
               <thead><tr>{Object.keys(kpis.perLab[0]).map((k) => <th key={k}>{k}</th>)}</tr></thead>
               <tbody>
@@ -150,24 +152,24 @@ export default function Admin() {
         ) : null}
         <div className="grid two" style={{ marginTop: 16 }}>
           <div className="card">
-            <h2>Real-GCP project pool (F2)</h2>
+            <h2>{t("Pool de proyectos reales de GCP (F2)")}</h2>
             {pool?.enabled ? (
               <>
-                <p className="small">Driver: <code>{pool.driver}</code></p>
+                <p className="small">{t("Controlador:")} <code>{pool.driver}</code></p>
                 <pre>{JSON.stringify(pool.stats, null, 2)}</pre>
-                <button className="btn secondary" onClick={janitor}>Run janitor now</button>
+                <button className="btn secondary" onClick={janitor}>{t("Ejecutar la limpieza ahora")}</button>
               </>
             ) : (
-              <p className="muted">No sandbox pool configured; labs run on the simulator and emulators.</p>
+              <p className="muted">{t("No hay pool de sandboxes configurado; los laboratorios se ejecutan en el simulador y los emuladores.")}</p>
             )}
           </div>
           <div className="card">
-            <h2>Content health</h2>
+            <h2>{t("Salud del contenido")}</h2>
             {content && (
               <>
-                <p>{content.labs} labs loaded · {content.problems?.length ?? 0} problems</p>
-                {content.problems?.length ? <ul className="small error">{content.problems.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul> : <p className="small ok">All content validates.</p>}
-                <p className="small muted">Fault types: {content.faultTypes?.join(", ")}</p>
+                <p>{t("{n} laboratorios cargados · {p} problemas", { n: content.labs, p: content.problems?.length ?? 0 })}</p>
+                {content.problems?.length ? <ul className="small error">{content.problems.map((p: string, i: number) => <li key={i}>{p}</li>)}</ul> : <p className="small ok">{t("Todo el contenido es válido.")}</p>}
+                <p className="small muted">{t("Tipos de fallo: {list}", { list: content.faultTypes?.join(", ") ?? "" })}</p>
               </>
             )}
           </div>

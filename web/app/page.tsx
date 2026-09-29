@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { api, getToken, setToken } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
+import { LangSwitch } from "@/components/Nav";
 
 export default function Home() {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -40,44 +43,48 @@ export default function Home() {
 
   return (
     <main id="main" className="page" style={{ maxWidth: 980 }}>
-      <div className="grid two" style={{ alignItems: "start", marginTop: 40 }}>
+      <div className="row" style={{ justifyContent: "flex-end" }}>
+        <LangSwitch />
+      </div>
+      <div className="grid two" style={{ alignItems: "start", marginTop: 24 }}>
         <section>
           <h1 style={{ fontSize: 34 }}>
             Cloud <span style={{ color: "var(--accent)" }}>Mastery</span>
           </h1>
           <p className="muted" style={{ fontSize: 17 }}>
-            Learn Google Cloud by doing the job: build, break, diagnose and repair systems in a deterministic simulator,
-            run a persistent company, answer tickets from people who don't know the root cause, and graduate to real sandboxes.
+            {t(
+              "Aprende Google Cloud haciendo el trabajo: construye, rompe, diagnostica y repara sistemas en un simulador determinista, gestiona una empresa persistente, atiende tickets de personas que no conocen la causa raíz y da el salto a entornos reales.",
+            )}
           </p>
           <ul className="muted">
-            <li>Real <code>gcloud</code>, <code>gsutil</code>, <code>bq</code>, <code>kubectl</code> and <code>terraform</code> workflows</li>
-            <li>Incidents generated from a failure library, P1 war rooms and chaos experiments</li>
-            <li>Process-aware assessment: diagnosis, security, cost, risk and communication</li>
-            <li>Nine competence dimensions, spaced retention and an autonomy ladder</li>
-            <li>Career stages from intern to architect with verifiable transcripts</li>
+            <li>{t("Flujos reales con gcloud, gsutil, bq, kubectl y terraform")}</li>
+            <li>{t("Incidentes generados a partir de una biblioteca de fallos, salas de crisis P1 y experimentos de caos")}</li>
+            <li>{t("Evaluación del proceso: diagnóstico, seguridad, coste, riesgo y comunicación")}</li>
+            <li>{t("Nueve dimensiones de competencia, retención espaciada y una escalera de autonomía")}</li>
+            <li>{t("Etapas de carrera de becario a arquitecto con expedientes verificables")}</li>
           </ul>
         </section>
         <form className="card col" onSubmit={submit}>
           <div className="tabs">
             <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-              Sign in
+              {t("Iniciar sesión")}
             </button>
             <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
-              Create account
+              {t("Crear cuenta")}
             </button>
           </div>
           <div>
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">{t("Correo electrónico")}</label>
             <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           {mode === "register" && (
             <div>
-              <label htmlFor="name">Display name</label>
+              <label htmlFor="name">{t("Nombre visible")}</label>
               <input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
           )}
           <div>
-            <label htmlFor="pw">Password</label>
+            <label htmlFor="pw">{t("Contraseña")}</label>
             <input
               id="pw"
               type="password"
@@ -89,13 +96,13 @@ export default function Home() {
           </div>
           {err && <p className="error small">{err}</p>}
           <button className="btn" disabled={busy}>
-            {mode === "login" ? "Sign in" : "Create account"}
+            {mode === "login" ? t("Iniciar sesión") : t("Crear cuenta")}
           </button>
           <a className="small" href="/api/auth/oidc/login">
-            Sign in with Google Workspace (if configured)
+            {t("Entrar con Google Workspace (si está configurado)")}
           </a>
           <a className="small" href="/verify">
-            Verify a learner transcript
+            {t("Verificar el expediente de un alumno")}
           </a>
         </form>
       </div>

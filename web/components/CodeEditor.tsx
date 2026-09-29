@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { getLang, translate } from "@/lib/i18n";
 
-const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <p className="muted">Loading editor…</p> });
+const Monaco = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => <p className="muted">{translate(getLang(), "Cargando el editor…")}</p> });
 
 function language(path: string): string {
   if (/\.(tf|hcl)$/.test(path)) return "hcl";

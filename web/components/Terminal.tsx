@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { api } from "@/lib/api";
+import { getLang, translate } from "@/lib/i18n";
 
 // Terminal is an xterm.js front-end with local line editing. Complete lines
 // (including heredocs and for/if blocks) are sent to the session's exec API,
@@ -238,5 +239,5 @@ export default function Terminal({
     };
   }, [sessionId, prompt, banner, screenReader]);
 
-  return <div ref={host} role="application" aria-label="Cloud Shell terminal. Type commands and press Enter." style={{ width: "100%", height: "100%" }} />;
+  return <div ref={host} role="application" aria-label={translate(getLang(), "Terminal de Cloud Shell. Escribe comandos y pulsa Intro.")} style={{ width: "100%", height: "100%" }} />;
 }
