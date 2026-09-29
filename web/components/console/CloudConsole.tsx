@@ -1,26 +1,28 @@
 "use client";
 
-// CloudConsole reproduces the layout of the Google Cloud console: a top bar
-// with the project picker and search, a navigation menu of products, a
-// sidebar with the pages of the current product and list pages with their
-// toolbar. It reads the simulated project and every button runs the
-// equivalent command in Cloud Shell (docked below), where the learner sees
-// it typed out with its output: clicking teaches the command line.
+// CloudConsole reproduces the Google Cloud console for a lab session: top
+// bar with project picker and search, product navigation menu, per-product
+// sidebar, pages, a right-hand panel (the lab instructions, like an in-console
+// tutorial) and Cloud Shell docked at the bottom, with its terminal and
+// editor. Every button runs the equivalent command in Cloud Shell, where the
+// learner sees it typed out with its output.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { k, useI18n } from "@/lib/i18n";
 import { Icon } from "./icons";
 import * as P from "./pages";
+import * as O from "./ops";
 
 type Sub = { id: string; label: string; count?: (d: any) => number };
-type Product = { id: string; label: string; icon: string; group: string; pages: Sub[]; tab?: string };
+type Product = { id: string; label: string; icon: string; group: string; pages: Sub[] };
 
-const n = (m: any) => (m ? Object.keys(m).length : 0);
+const n = (m: any) => (m ? (Array.isArray(m) ? m.length : Object.keys(m).length) : 0);
 
-const PRODUCTS: Product[] = [
+export const PRODUCTS: Product[] = [
   { id: "iam", label: k("IAM y administración"), icon: "person", group: k("Gestión"), pages: [{ id: "iam", label: k("IAM") }, { id: "sa", label: k("Cuentas de servicio"), count: (d) => n(d.serviceAccounts) }] },
   { id: "apis", label: k("APIs y servicios"), icon: "api", group: k("Gestión"), pages: [{ id: "apis", label: k("APIs y servicios habilitados") }] },
+  { id: "billing", label: k("Facturación"), icon: "billing", group: k("Gestión"), pages: [{ id: "billing", label: k("Informes") }] },
   { id: "compute", label: k("Compute Engine"), icon: "compute", group: k("Computación"), pages: [{ id: "vm", label: k("Instancias de VM"), count: (d) => n(d.instances) }, { id: "disks", label: k("Discos"), count: (d) => n(d.disks) }] },
   { id: "gke", label: k("Kubernetes Engine"), icon: "gke", group: k("Computación"), pages: [{ id: "gke", label: k("Clústeres"), count: (d) => n(d.clusters) }] },
   { id: "run", label: k("Cloud Run"), icon: "run", group: k("Sin servidor"), pages: [{ id: "run", label: k("Servicios"), count: (d) => n(d.runServices) }] },
@@ -29,13 +31,14 @@ const PRODUCTS: Product[] = [
   { id: "bigquery", label: k("BigQuery"), icon: "bigquery", group: k("Analíticas"), pages: [{ id: "bigquery", label: k("Estudio de BigQuery"), count: (d) => n(d.datasets) }] },
   { id: "pubsub", label: k("Pub/Sub"), icon: "pubsub", group: k("Analíticas"), pages: [{ id: "pubsub", label: k("Temas y suscripciones"), count: (d) => n(d.topics) }] },
   { id: "vpc", label: k("Red de VPC"), icon: "network", group: k("Redes"), pages: [{ id: "vpc", label: k("Redes de VPC"), count: (d) => n(d.networks) }, { id: "firewall", label: k("Cortafuegos"), count: (d) => n(d.firewalls) }] },
+  { id: "nic", label: k("Network Intelligence Center"), icon: "network", group: k("Redes"), pages: [{ id: "topology", label: k("Topología de red") }] },
   { id: "secrets", label: k("Secret Manager"), icon: "lock", group: k("Seguridad"), pages: [{ id: "secrets", label: k("Secretos"), count: (d) => n(d.secrets) }] },
-  { id: "logging", label: k("Logging"), icon: "logs", group: k("Operaciones"), pages: [], tab: "logs" },
-  { id: "monitoring", label: k("Monitoring"), icon: "monitoring", group: k("Operaciones"), pages: [], tab: "metrics" },
-  { id: "billing", label: k("Facturación"), icon: "billing", group: k("Operaciones"), pages: [], tab: "cost" },
+  { id: "logging", label: k("Logging"), icon: "logs", group: k("Operaciones"), pages: [{ id: "logs", label: k("Explorador de registros") }] },
+  { id: "monitoring", label: k("Monitoring"), icon: "monitoring", group: k("Operaciones"), pages: [{ id: "metrics", label: k("Explorador de métricas") }] },
+  { id: "activity", label: k("Registro de actividad"), icon: "logs", group: k("Operaciones"), pages: [{ id: "activity", label: k("Actividad") }] },
 ];
 
-const productOf = (page: string) => PRODUCTS.find((p) => p.pages.some((s) => s.id === page));
+export const productOf = (page: string) => PRODUCTS.find((p) => p.pages.some((s) => s.id === page));
 
 type Toast = { ok: boolean; text: string; detail?: string; cmd: string; at: Date };
 
@@ -48,7 +51,11 @@ export default function CloudConsole({
   run,
   paste,
   focusShell,
-  openTab,
+  aside,
+  asideOpen,
+  onAside,
+  terminal,
+  editor,
 }: {
   sessionId: string;
   project: string;
@@ -58,16 +65,17 @@ export default function CloudConsole({
   run: (cmd: string, note: string) => Promise<{ output: string; exit: number }>;
   paste: (cmd: string) => void;
   focusShell: () => void;
-  openTab: (tab: string) => void;
+  /** right-hand panel (lab instructions) */
+  aside: ReactNode;
+  asideOpen: boolean;
+  onAside: (open: boolean) => void;
+  /** Cloud Shell terminal and editor, kept mounted */
+  terminal: ReactNode;
+  editor: ReactNode;
 }) {
   const { t } = useI18n();
-  const [page, setPage] = useState(() => {
-    try {
-      return sessionStorage.getItem(`gcplab.console.${sessionId}`) || "home";
-    } catch {
-      return "home";
-    }
-  });
+  const key = `gcplab.console.${sessionId}`;
+  const [page, setPage] = useState("home");
   const [data, setData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [err, setErr] = useState("");
@@ -78,7 +86,21 @@ export default function CloudConsole({
   const [popup, setPopup] = useState<"" | "bell" | "help" | "project">("");
   const [creating, setCreating] = useState("");
   const [reload, setReload] = useState(0);
+  const [shell, setShell] = useState<"open" | "min" | "max">("open");
+  const [shellMode, setShellMode] = useState<"terminal" | "editor">("terminal");
+  const [shellH, setShellH] = useState(300);
   const menuRef = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      setPage(sessionStorage.getItem(key) || "home");
+      const h = Number(localStorage.getItem("gcplab.shellHeight"));
+      if (h > 120) setShellH(h);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [key]);
 
   useEffect(() => {
     let live = true;
@@ -107,41 +129,45 @@ export default function CloudConsole({
 
   useEffect(() => {
     if (!menu && !popup) return;
-    const key = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setMenu(false);
         setPopup("");
       }
     };
-    window.addEventListener("keydown", key);
+    window.addEventListener("keydown", onKey);
     if (menu) menuRef.current?.querySelector<HTMLElement>("button")?.focus();
-    return () => window.removeEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", onKey);
   }, [menu, popup]);
 
   const go = (id: string) => {
-    const prod = PRODUCTS.find((p) => p.id === id || p.pages.some((s) => s.id === id));
+    const prod = PRODUCTS.find((p) => p.id === id);
+    const target = prod ? prod.pages[0].id : id;
     setMenu(false);
     setPopup("");
     setCreating("");
-    if (prod?.tab) {
-      openTab(prod.tab);
-      return;
-    }
-    const target = prod && prod.id === id ? prod.pages[0].id : id;
     setPage(target);
     try {
-      sessionStorage.setItem(`gcplab.console.${sessionId}`, target);
+      sessionStorage.setItem(key, target);
     } catch {
       /* storage unavailable */
     }
   };
 
+  const openShell = () => {
+    if (shell === "min") setShell("open");
+    setShellMode("terminal");
+    setTimeout(focusShell, 50);
+  };
+
   const exec = async (cmd: string, note: string) => {
+    if (shell === "min") setShell("open");
+    setShellMode("terminal");
     const r = await run(cmd, note);
     const errLine = r.output.split("\n").find((l) => /^ERROR|error:/i.test(l.trim()));
     const tt: Toast = r.exit === 0 ? { ok: true, text: note, cmd, at: new Date() } : { ok: false, text: note, cmd, at: new Date(), detail: errLine ?? r.output.trim().split("\n").pop() };
     setToast(tt);
-    setNotes((x) => [tt, ...x].slice(0, 20));
+    setNotes((x) => [tt, ...x].slice(0, 30));
     return r.exit === 0;
   };
   const runAll = async (cmds: string[], note: string) => {
@@ -149,9 +175,36 @@ export default function CloudConsole({
       if (!(await exec(c, note))) break;
     }
   };
+  const pasteCmd = (cmd: string) => {
+    if (shell === "min") setShell("open");
+    setShellMode("terminal");
+    setTimeout(() => paste(cmd), 50);
+  };
+
+  // Keyboard-free resize of Cloud Shell by dragging its top edge.
+  const drag = (e: React.PointerEvent) => {
+    const startY = e.clientY;
+    const startH = shellH;
+    const total = root.current?.clientHeight ?? 800;
+    const move = (ev: PointerEvent) => setShellH(Math.min(total - 160, Math.max(140, startH + startY - ev.clientY)));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setShellH((h) => {
+        try {
+          localStorage.setItem("gcplab.shellHeight", String(h));
+        } catch {
+          /* storage unavailable */
+        }
+        return h;
+      });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   const ctx: P.Ctx | null = data
-    ? { data, project, region, zone, run: exec, runAll, paste, go, openTab, refresh: () => setReload((x) => x + 1), creating, setCreating }
+    ? { sessionId, tick: tick + reload, data, project, region, zone, run: exec, runAll, paste: pasteCmd, go, openTab: go, refresh: () => setReload((x) => x + 1), creating, setCreating }
     : null;
 
   const results = useMemo(() => {
@@ -160,7 +213,7 @@ export default function CloudConsole({
     const out: { id: string; label: string; icon: string; sub?: string }[] = [];
     for (const p of PRODUCTS) {
       if (t(p.label).toLowerCase().includes(s)) out.push({ id: p.id, label: t(p.label), icon: p.icon });
-      for (const sp of p.pages) if (t(sp.label).toLowerCase().includes(s) && !t(p.label).toLowerCase().includes(s)) out.push({ id: sp.id, label: t(sp.label), sub: t(p.label), icon: p.icon });
+      else for (const sp of p.pages) if (t(sp.label).toLowerCase().includes(s)) out.push({ id: sp.id, label: t(sp.label), sub: t(p.label), icon: p.icon });
     }
     return out;
   }, [search, t]);
@@ -170,51 +223,42 @@ export default function CloudConsole({
   const body = () => {
     if (!ctx) return <p className="cc-empty">{err || t("Cargando…")}</p>;
     switch (page) {
-      case "iam":
-        return <P.IAM ctx={ctx} />;
-      case "sa":
-        return <P.ServiceAccounts ctx={ctx} />;
-      case "vm":
-        return <P.Instances ctx={ctx} />;
-      case "disks":
-        return <P.Disks ctx={ctx} />;
-      case "vpc":
-        return <P.Networks ctx={ctx} />;
-      case "firewall":
-        return <P.Firewall ctx={ctx} />;
-      case "buckets":
-        return <P.Buckets ctx={ctx} />;
-      case "run":
-        return <P.CloudRun ctx={ctx} />;
-      case "sql":
-        return <P.CloudSQL ctx={ctx} />;
-      case "pubsub":
-        return <P.PubSub ctx={ctx} />;
-      case "bigquery":
-        return <P.BigQuery ctx={ctx} />;
-      case "gke":
-        return <P.GKE ctx={ctx} />;
-      case "secrets":
-        return <P.Secrets ctx={ctx} />;
-      case "apis":
-        return <P.APIs ctx={ctx} />;
-      default:
-        return <P.Home ctx={ctx} history={history} />;
+      case "iam": return <P.IAM ctx={ctx} />;
+      case "sa": return <P.ServiceAccounts ctx={ctx} />;
+      case "vm": return <P.Instances ctx={ctx} />;
+      case "disks": return <P.Disks ctx={ctx} />;
+      case "vpc": return <P.Networks ctx={ctx} />;
+      case "firewall": return <P.Firewall ctx={ctx} />;
+      case "buckets": return <P.Buckets ctx={ctx} />;
+      case "run": return <P.CloudRun ctx={ctx} />;
+      case "sql": return <P.CloudSQL ctx={ctx} />;
+      case "pubsub": return <P.PubSub ctx={ctx} />;
+      case "bigquery": return <P.BigQuery ctx={ctx} />;
+      case "gke": return <P.GKE ctx={ctx} />;
+      case "secrets": return <P.Secrets ctx={ctx} />;
+      case "apis": return <P.APIs ctx={ctx} />;
+      case "logs": return <O.LogsExplorer ctx={ctx} />;
+      case "metrics": return <O.MetricsExplorer ctx={ctx} />;
+      case "billing": return <O.Billing ctx={ctx} />;
+      case "topology": return <O.Topology ctx={ctx} />;
+      case "activity": return <O.Activity ctx={ctx} />;
+      default: return <P.Home ctx={ctx} history={history} />;
     }
   };
 
   const groups = [...new Set(PRODUCTS.map((p) => p.group))];
+  const rows = shell === "min" ? "48px 1fr 36px" : shell === "max" ? "48px 0 1fr" : `48px 1fr ${shellH}px`;
 
   return (
-    <div className="cc">
+    <div className="cc cc-full" ref={root} style={{ gridTemplateRows: rows }}>
       <header className="cc-top">
         <button type="button" className="cc-icon-btn" aria-label={t("Menú de navegación")} aria-expanded={menu} onClick={() => setMenu(!menu)}>
           <Icon name="menu" />
         </button>
-        <button type="button" className="cc-brand" onClick={() => go("home")}>
+        <a className="cc-brand" href="/dashboard" title={t("Volver al panel de Cloud Mastery")}>
           <span className="cc-brand-mark" aria-hidden="true" />
           Cloud Mastery
-        </button>
+        </a>
         <div className="cc-popwrap">
           <button type="button" className="cc-project" aria-haspopup="dialog" aria-expanded={popup === "project"} onClick={() => setPopup(popup === "project" ? "" : "project")}>
             <Icon name="project" size={18} />
@@ -262,7 +306,7 @@ export default function CloudConsole({
           )}
         </form>
         <div className="cc-top-actions">
-          <button type="button" className="cc-icon-btn" title={t("Activar Cloud Shell")} aria-label={t("Activar Cloud Shell")} onClick={focusShell}>
+          <button type="button" className="cc-icon-btn" title={t("Activar Cloud Shell")} aria-label={t("Activar Cloud Shell")} onClick={openShell}>
             <Icon name="shell" />
           </button>
           <div className="cc-popwrap">
@@ -307,11 +351,14 @@ export default function CloudConsole({
               </div>
             )}
           </div>
+          <button type="button" className={`cc-icon-btn ${asideOpen ? "on" : ""}`} title={t("Instrucciones del laboratorio")} aria-label={t("Instrucciones del laboratorio")} aria-pressed={asideOpen} onClick={() => onAside(!asideOpen)}>
+            <Icon name="book" />
+          </button>
           <span className="cc-avatar" title="student@gcplab.dev" aria-label="student@gcplab.dev">S</span>
         </div>
       </header>
 
-      <div className={`cc-body ${prod ? "" : "no-side"}`}>
+      <div className={`cc-body ${prod ? "" : "no-side"} ${asideOpen ? "with-aside" : ""}`}>
         {prod && (
           <nav className="cc-side" aria-label={t(prod.label)}>
             <div className="cc-side-head">
@@ -329,8 +376,48 @@ export default function CloudConsole({
             })}
           </nav>
         )}
-        <main className="cc-main" aria-label={t("Contenido de la consola")}>{body()}</main>
+        <main id="main" className="cc-main" aria-label={t("Contenido de la consola")}>{body()}</main>
+        {asideOpen && <aside className="cc-aside" aria-label={t("Instrucciones del laboratorio")}>{aside}</aside>}
+        <div className="cc-toast-area" aria-live="polite">
+          {toast && (
+            <div className={`cc-toast ${toast.ok ? "ok" : "bad"}`}>
+              <span>
+                {toast.ok ? "✓" : "✗"} {toast.text}
+                {toast.detail && <span className="cc-toast-detail">{toast.detail}</span>}
+              </span>
+              <button type="button" className="cc-toast-btn" onClick={openShell}>{t("Ver en Cloud Shell")}</button>
+              <button type="button" className="cc-toast-btn" aria-label={t("Cerrar")} onClick={() => setToast(null)}>
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      <section className={`cc-shell ${shell}`} aria-label="Cloud Shell">
+        {shell === "open" && <div className="cc-shell-drag" onPointerDown={drag} aria-hidden="true" title={t("Arrastra para cambiar el tamaño")} />}
+        <div className="cc-shell-head">
+          <span className="cc-shell-brand">CLOUD SHELL</span>
+          <span className="cc-shell-tab">
+            {shellMode === "terminal" ? "Terminal" : t("Editor")} <span className="cc-shell-proj">({project})</span>
+          </span>
+          <span className="cc-shell-spacer" />
+          <button type="button" className="cc-shell-btn" onClick={() => { setShellMode(shellMode === "terminal" ? "editor" : "terminal"); if (shell === "min") setShell("open"); }}>
+            <Icon name={shellMode === "terminal" ? "edit" : "shell"} size={18} />
+            {shellMode === "terminal" ? t("Abrir editor") : t("Abrir terminal")}
+          </button>
+          <button type="button" className="cc-shell-icon" aria-label={shell === "min" ? t("Restaurar") : t("Minimizar")} title={shell === "min" ? t("Restaurar") : t("Minimizar")} onClick={() => setShell(shell === "min" ? "open" : "min")}>
+            <Icon name={shell === "min" ? "expand" : "minimize"} size={18} />
+          </button>
+          <button type="button" className="cc-shell-icon" aria-label={shell === "max" ? t("Restaurar") : t("Maximizar")} title={shell === "max" ? t("Restaurar") : t("Maximizar")} onClick={() => setShell(shell === "max" ? "open" : "max")}>
+            <Icon name={shell === "max" ? "fullscreenExit" : "fullscreen"} size={18} />
+          </button>
+        </div>
+        <div className="cc-shell-body" hidden={shell === "min"}>
+          <div className="cc-shell-pane" hidden={shellMode !== "terminal"}>{terminal}</div>
+          <div className="cc-shell-pane editor" hidden={shellMode !== "editor"}>{editor}</div>
+        </div>
+      </section>
 
       {menu && (
         <div className="cc-overlay left" onMouseDown={(e) => e.target === e.currentTarget && setMenu(false)}>
@@ -344,7 +431,6 @@ export default function CloudConsole({
                 {PRODUCTS.filter((p) => p.group === g).map((p) => (
                   <button key={p.id} type="button" className={`cc-menu-item ${prod?.id === p.id ? "active" : ""}`} onClick={() => go(p.id)}>
                     <Icon name={p.icon} /> {t(p.label)}
-                    {p.tab && <span className="cc-help" style={{ marginLeft: "auto" }}>↗</span>}
                   </button>
                 ))}
               </div>
@@ -352,21 +438,6 @@ export default function CloudConsole({
           </div>
         </div>
       )}
-
-      <div className="cc-toast-area" aria-live="polite">
-        {toast && (
-          <div className={`cc-toast ${toast.ok ? "ok" : "bad"}`}>
-            <span>
-              {toast.ok ? "✓" : "✗"} {toast.text}
-              {toast.detail && <span className="cc-toast-detail">{toast.detail}</span>}
-            </span>
-            <button type="button" className="cc-toast-btn" onClick={focusShell}>{t("Ver en Cloud Shell")}</button>
-            <button type="button" className="cc-toast-btn" aria-label={t("Cerrar")} onClick={() => setToast(null)}>
-              <Icon name="close" size={18} />
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

@@ -4,20 +4,16 @@ import React, { Suspense, useCallback, useEffect, useRef, useState } from "react
 import Nav from "@/components/Nav";
 import Terminal, { type TerminalHandle } from "@/components/Terminal";
 import CloudConsole from "@/components/console/CloudConsole";
-import Mermaid from "@/components/Mermaid";
 import CodeEditor from "@/components/CodeEditor";
 import Markdown from "@/components/Markdown";
-import JsonTree from "@/components/JsonTree";
-import Sparkline from "@/components/Sparkline";
 import Bar from "@/components/Bar";
 import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { useI18n } from "@/lib/i18n";
-import { constraint, evidenceField, factor, hintKind, label, labLevel, labMode, labType, role, tab as tabLabel, ticketStatus, validator } from "@/lib/labels";
+import { constraint, evidenceField, factor, hintKind, label, labLevel, labMode, labType, role, ticketStatus, validator } from "@/lib/labels";
+import { Icon } from "@/components/console/icons";
 import type { SessionInfo } from "@/lib/types";
 
-const TABS = ["desk", "console", "topology", "logs", "metrics", "iam", "cost", "files", "history"] as const;
-type Tab = (typeof TABS)[number];
 
 function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionInfo) => void }) {
   const { t, lang } = useI18n();
@@ -169,48 +165,9 @@ function Desk({ data }: { data: any }) {
   );
 }
 
-function Logs({ sessionId, tick }: { sessionId: string; tick: number }) {
-  const { t } = useI18n();
-  const [filter, setFilter] = useState("");
-  const [applied, setApplied] = useState("");
-  const [rows, setRows] = useState<any[]>([]);
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    api<any[]>(`/api/sessions/${sessionId}/views/logs?limit=200&filter=${encodeURIComponent(applied)}`)
-      .then((r) => {
-        setRows(r ?? []);
-        setErr("");
-      })
-      .catch((e) => setErr(e.message));
-  }, [sessionId, applied, tick]);
-  return (
-    <div className="col">
-      <form className="row" onSubmit={(e) => { e.preventDefault(); setApplied(filter); }}>
-        <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('Consulta de registros, p. ej. severity>=ERROR resource.type="cloud_run_revision"')} aria-label={t("Consulta de registros")} style={{ flex: 1, width: "auto" }} />
-        <button className="btn secondary">{t("Ejecutar consulta")}</button>
-      </form>
-      {err && <p className="error small">{err}</p>}
-      <table>
-        <thead><tr><th>{t("Hora")}</th><th>{t("Gravedad")}</th><th>{t("Recurso")}</th><th>{t("Mensaje")}</th></tr></thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              <td className="small muted" style={{ whiteSpace: "nowrap" }}>{r.timestamp?.replace("T", " ").replace(/\..*|Z$/, "")}</td>
-              <td><span className={`pill ${/ERROR|CRITICAL|ALERT|EMERGENCY/.test(r.severity) ? "bad" : r.severity === "WARNING" ? "warn" : ""}`}>{r.severity}</span></td>
-              <td className="small">{r.resource?.type}<div className="muted">{Object.values(r.resource?.labels ?? {}).join(" ")}</div></td>
-              <td className="small" style={{ fontFamily: "var(--mono)", wordBreak: "break-word" }}>
-                {r.textPayload ?? (r.httpRequest ? `${r.httpRequest.requestMethod ?? ""} ${r.httpRequest.requestUrl ?? ""} → ${r.httpRequest.status ?? ""}` : r.protoPayload ? `${r.protoPayload.methodName ?? ""} ${r.protoPayload.resourceName ?? ""} ${t("por")} ${r.protoPayload["authenticationInfo.principalEmail"] ?? "?"}` : JSON.stringify(r.labels ?? {}))}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!rows.length && <p className="muted">{t("Ninguna entrada coincide.")}</p>}
-    </div>
-  );
-}
 
-function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
+/** ShellEditor is the Cloud Shell Editor: an explorer of the shell's files and a code editor. */
+function ShellEditor({ sessionId, tick }: { sessionId: string; tick: number }) {
   const { t } = useI18n();
   const [files, setFiles] = useState<Record<string, string>>({});
   const [sel, setSel] = useState("");
@@ -241,147 +198,46 @@ function Files({ sessionId, tick }: { sessionId: string; tick: number }) {
     setTimeout(() => setMsg(""), 2000);
   };
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 10, height: "100%", minHeight: 300 }}>
-      <div className="col small" style={{ overflow: "auto" }}>
-        {Object.keys(files).sort().map((p) => (
-          <a key={p} href="#" onClick={(e) => { e.preventDefault(); open(p); }} style={{ fontWeight: p === sel ? 600 : 400, wordBreak: "break-all" }}>
-            {p}
-          </a>
-        ))}
-        <form onSubmit={(e) => { e.preventDefault(); if (newName) { setFiles({ ...files, [newName]: "" }); open(newName); setNewName(""); } }}>
+    <div className="se">
+      <div className="se-explorer">
+        <div className="se-title">{t("Explorador")}</div>
+        <div className="se-root"><Icon name="folder" size={16} /> ~</div>
+        <ul>
+          {Object.keys(files).sort().map((p) => (
+            <li key={p}>
+              <button type="button" className={p === sel ? "on" : ""} onClick={() => open(p)}>
+                <Icon name="file" size={16} /> <span>{p}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={(e) => { e.preventDefault(); const n = newName.trim(); if (n) { setFiles({ ...files, [n]: files[n] ?? "" }); open(n); setNewName(""); } }}>
           <input placeholder={t("archivo nuevo (p. ej. main.tf)")} aria-label={t("Nombre del archivo nuevo")} value={newName} onChange={(e) => setNewName(e.target.value)} />
         </form>
       </div>
-      <div style={{ display: "grid", gridTemplateRows: "auto 1fr", minHeight: 300 }}>
+      <div className="se-main">
         {sel ? (
           <>
-            <div className="row small" style={{ marginBottom: 6 }}>
-              <strong>{sel}</strong>
-              <button className="btn secondary" onClick={save} disabled={!dirty}>{t("Guardar")}</button>
-              <span className="muted">{msg}</span>
+            <div className="se-tabs">
+              <span className="se-tab">{sel}{dirty ? " ●" : ""}</span>
+              <span className="se-spacer" />
+              <span className="se-msg">{msg}</span>
+              <button type="button" className="se-btn" onClick={save} disabled={!dirty}>
+                <Icon name="save" size={16} /> {t("Guardar")}
+              </button>
             </div>
-            <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", minHeight: 280 }}>
+            <div className="se-code">
               <CodeEditor path={sel} value={draft} onChange={(v) => { setDraft(v); setDirty(true); }} />
             </div>
           </>
         ) : (
-          <p className="muted">
+          <p className="se-empty">
             {t("Elige un archivo o crea uno. Los archivos se comparten con la terminal")} (<code>cat</code>, <code>terraform apply</code>, <code>kubectl apply -f</code>, <code>docker build</code>…).
           </p>
         )}
       </div>
     </div>
   );
-}
-
-function View({ session, kind, tick, term, openTab }: { session: SessionInfo; kind: Tab; tick: number; term: React.MutableRefObject<TerminalHandle | null>; openTab: (t: Tab) => void }) {
-  const { t } = useI18n();
-  const sessionId = session.id;
-  // Data is tagged with the view it belongs to so a tab switch never renders
-  // one view's payload with another view's renderer.
-  const [loaded, setLoaded] = useState<{ kind: Tab; data: any } | null>(null);
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    if (kind === "logs" || kind === "files" || kind === "console") return;
-    let live = true;
-    api(`/api/sessions/${sessionId}/views/${kind}`)
-      .then((d) => {
-        if (!live) return;
-        setLoaded({ kind, data: d });
-        setErr("");
-      })
-      .catch((e) => live && setErr(e.message));
-    return () => {
-      live = false;
-    };
-  }, [sessionId, kind, tick]);
-  if (kind === "logs") return <Logs sessionId={sessionId} tick={tick} />;
-  if (kind === "files") return <Files sessionId={sessionId} tick={tick} />;
-  if (kind === "console") {
-    return (
-      <CloudConsole
-        sessionId={sessionId}
-        project={session.project}
-        region={session.region || "europe-west1"}
-        zone={session.zone || "europe-west1-b"}
-        tick={tick}
-        run={(cmd, note) => term.current?.run(cmd, note) ?? Promise.resolve({ output: t("La terminal no está lista."), exit: 1 })}
-        paste={(cmd) => term.current?.paste(cmd)}
-        focusShell={() => term.current?.focus()}
-        openTab={(x) => (TABS as readonly string[]).includes(x) && openTab(x as Tab)}
-      />
-    );
-  }
-  if (err) return <p className="error small">{err}</p>;
-  if (!loaded || loaded.kind !== kind) return <p className="muted">{t("Cargando…")}</p>;
-  const data = loaded.data;
-  if (data == null) return <p className="muted">{t("Aún no hay nada aquí.")}</p>;
-  switch (kind) {
-    case "desk":
-      return <Desk data={data} />;
-    case "topology":
-      return data.mermaid ? <Mermaid chart={data.mermaid} /> : <p className="muted">{t("Todavía no hay recursos.")}</p>;
-    case "metrics": {
-      const keys = Object.keys(data);
-      if (!keys.length) return <p className="muted">{t("Aún no hay métricas. Aparecen a medida que avanza el tiempo simulado.")}</p>;
-      return (
-        <table>
-          <tbody>
-            {keys.map((k) => {
-              const pts = data[k] ?? [];
-              return (
-                <tr key={k}>
-                  <td className="small" style={{ fontFamily: "var(--mono)", wordBreak: "break-all" }}>{k}</td>
-                  <td><Sparkline points={pts.slice(-60)} /></td>
-                  <td className="small">{pts.length ? Math.round(pts[pts.length - 1].v * 100) / 100 : ""}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      );
-    }
-    case "cost":
-      return (
-        <div>
-          <div className="kpi">€{(data.monthlyEur ?? 0).toFixed(2)} <span className="muted small">{t("/ mes (estimación)")}</span></div>
-          <table>
-            <thead><tr><th>{t("Recurso")}</th><th>SKU</th><th>{t("€/mes")}</th></tr></thead>
-            <tbody>
-              {(data.lines ?? []).map((l: any, i: number) => (
-                <tr key={i}><td>{l.resource}</td><td className="small muted">{l.sku}</td><td>{l.monthlyEur.toFixed(2)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    case "history":
-      return (
-        <table>
-          <caption className="sr-only">{t("Comandos que has ejecutado, con su salida")}</caption>
-          <thead><tr><th>{t("Hora")}</th><th>{t("Comando")}</th><th>{t("Código")}</th></tr></thead>
-          <tbody>
-            {(Array.isArray(data) ? data : []).map((r: any, i: number) => (
-              <tr key={i}>
-                <td className="small muted" style={{ whiteSpace: "nowrap" }}>{String(r.at ?? "").replace("T", " ").replace(/Z$/, "")}</td>
-                <td className="small" style={{ fontFamily: "var(--mono)", whiteSpace: "pre-wrap" }}>
-                  {r.line}
-                  {r.output ? (
-                    <details>
-                      <summary className="muted">{t("salida")}</summary>
-                      <pre style={{ margin: 0 }}>{r.output}</pre>
-                    </details>
-                  ) : null}
-                </td>
-                <td><span className={`pill ${r.exit ? "bad" : "ok"}`}>{r.exit}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      );
-    default:
-      return <JsonTree data={data} />;
-  }
 }
 
 function Result({ out }: { out: any }) {
@@ -456,10 +312,11 @@ function Result({ out }: { out: any }) {
   );
 }
 
+
 function Workspace({ session }: { session: SessionInfo }) {
   const { t: tr } = useI18n();
-  const [tab, setTab] = useState<Tab>("console");
   const [tick, setTick] = useState(0);
+  const [panel, setPanel] = useState<"guide" | "desk" | "submit">("guide");
   const [hints, setHints] = useState<any[]>([]);
   const [check, setCheck] = useState<any>(null);
   const [evidence, setEvidence] = useState<Record<string, string>>({});
@@ -468,13 +325,14 @@ function Workspace({ session }: { session: SessionInfo }) {
   const [out, setOut] = useState<any>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [hasDesk, setHasDesk] = useState(false);
+  const [desk, setDesk] = useState<any>(null);
   const [screenReader, setScreenReader] = useState(false);
-  const [sideOpen, setSideOpen] = useState(true);
+  const [asideOpen, setAsideOpen] = useState(true);
   const term = useRef<TerminalHandle | null>(null);
   useEffect(() => {
     try {
       setScreenReader(localStorage.getItem("gcplab.screenReader") === "1");
+      setAsideOpen(localStorage.getItem("gcplab.aside") !== "closed");
     } catch {
       /* storage unavailable */
     }
@@ -488,17 +346,28 @@ function Workspace({ session }: { session: SessionInfo }) {
       /* storage unavailable */
     }
   };
+  const onAside = (open: boolean) => {
+    setAsideOpen(open);
+    try {
+      localStorage.setItem("gcplab.aside", open ? "open" : "closed");
+    } catch {
+      /* storage unavailable */
+    }
+  };
 
   useEffect(() => {
     api(`/api/sessions/${session.id}/views/desk`)
       .then((d) => {
         if (d?.ticket || d?.actors?.length) {
-          setHasDesk(true);
-          setTab("desk");
+          setDesk(d);
         }
       })
       .catch(() => {});
-  }, [session.id]);
+  }, [session.id, tick]);
+  const hasDesk = !!desk;
+  useEffect(() => {
+    if (hasDesk) setPanel((p) => (p === "guide" ? "desk" : p));
+  }, [hasDesk]);
 
   const onCommand = useCallback(() => setTick((t) => t + 1), []);
 
@@ -540,172 +409,192 @@ function Workspace({ session }: { session: SessionInfo }) {
 
   if (out) {
     return (
-      <main id="main" className="page" style={{ maxWidth: 900 }}>
-        <Result out={out} />
-      </main>
+      <>
+        <Nav />
+        <main id="main" className="page" style={{ maxWidth: 900 }}>
+          <Result out={out} />
+        </main>
+      </>
     );
   }
 
-  const tabs = TABS.filter((t) => t !== "desk" || hasDesk);
-  return (
-    <main id="main" className={`workspace ${sideOpen ? "" : "side-closed"}`}>
-      <button type="button" className="side-toggle" onClick={() => setSideOpen(!sideOpen)} aria-expanded={sideOpen} aria-controls="lab-side" title={sideOpen ? tr("Ocultar el enunciado") : tr("Mostrar el enunciado")}>
-        {sideOpen ? "«" : "»"}
-        <span className="sr-only">{sideOpen ? tr("Ocultar el enunciado") : tr("Mostrar el enunciado")}</span>
-      </button>
-      <aside id="lab-side" className="side card" aria-label={tr("Enunciado y entrega")} hidden={!sideOpen}>
-        <div className="row small muted">
-          <span className="pill">{session.fidelity}</span>
-          {session.mode && <span className="pill warn">{label(labMode, session.mode, tr)}</span>}
-          <span>{tr("proyecto")} <code>{session.project}</code></span>
-        </div>
-        <h2>{session.title}</h2>
-        <Markdown text={session.story} />
-        {session.timeline?.length ? (
-          <>
-            <h3>{tr("Cronología")}</h3>
-            {session.timeline.map((t, i) => (
-              <div key={i} className="small"><span className="muted">{t.at}</span> <strong>{t.from}:</strong> {t.text}</div>
-            ))}
-          </>
-        ) : null}
-        {session.objectives?.length ? (
-          <>
-            <h3>{tr("Objetivos")}</h3>
-            <ul className="small">{session.objectives.map((o) => <li key={o}>{o}</li>)}</ul>
-          </>
-        ) : null}
-        {session.constraints?.length ? (
-          <>
-            <h3>{tr("Restricciones")}</h3>
-            <ul className="small">{session.constraints.map((o) => <li key={o}>{constraint(o, tr)}</li>)}</ul>
-          </>
-        ) : null}
-        {session.instructions && (
-          <details>
-            <summary><strong>{tr("Instrucciones")}</strong></summary>
-            <Markdown text={session.instructions} />
-          </details>
-        )}
-        <h3>{tr("Ayuda")}</h3>
-        <p className="small muted">
-          {tr("Prueba")} <code>why &lt;{tr("recurso")}&gt;</code> {tr("para ver la cadena causal,")} <code>whatif …</code> {tr("para explorar consecuencias y")} <code>help</code> {tr("para ver los comandos.")}
-        </p>
-        {hints.map((h) => (
-          <div key={h.index} className="small card" style={{ padding: 8, marginBottom: 6 }}>
-            <span className="pill">{label(hintKind, h.kind, tr)} · −{h.cost}</span> {h.text}
-          </div>
-        ))}
-        <div className="row">
-          <button className="btn secondary" onClick={hint} disabled={session.hintCount === 0 || (hints.length > 0 && hints[hints.length - 1].remaining <= 0)}>
-            {tr("Pista (quedan {n})", { n: Math.max(0, session.hintCount - hints.length) })}
+  const tabs: ["guide" | "desk" | "submit", string][] = [
+    ...(hasDesk ? ([["desk", tr("Ticket")]] as ["desk", string][]) : []),
+    ["guide", tr("Instrucciones")],
+    ["submit", tr("Entrega")],
+  ];
+
+  const aside = (
+    <div className="lp">
+      <div className="lp-head">
+        <div className="lp-meta">
+          <span className="cc-pill">{session.fidelity}</span>
+          {session.mode && <span className="cc-pill warn">{label(labMode, session.mode, tr)}</span>}
+          <span className="lp-timer" title={tr("La sesión caduca a las {time}.", { time: new Date(session.expires).toLocaleTimeString() })}>
+            <Icon name="timer" size={16} /> {new Date(session.expires).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <button type="button" className="cc-icon-btn" aria-label={tr("Ocultar las instrucciones")} onClick={() => onAside(false)}>
+            <Icon name="close" size={18} />
           </button>
-          <button className="btn secondary" onClick={doCheck} disabled={busy}>{tr("Comprobar")}</button>
         </div>
-        {check && (
-          <div className="small" style={{ marginTop: 8 }}>
-            {check.items?.map((it: any) => (
-              <div key={it.name}>
-                {it.earned >= it.points ? "✓" : "○"} {it.name} <span className="muted">({Math.round(it.earned * 10) / 10}/{it.points})</span>
-                {it.failing?.map((f: string, i: number) => <div key={i} className="muted" style={{ marginLeft: 16 }}>– {f}</div>)}
-              </div>
-            ))}
-            {check.mentor?.length ? <ul>{check.mentor.map((m: string, i: number) => <li key={i}>{m}</li>)}</ul> : null}
-          </div>
-        )}
-        {session.evidence && (
+        <h2 className="lp-title">{session.title}</h2>
+        <div className="lp-tabs" role="tablist" aria-label={tr("Panel del laboratorio")}>
+          {tabs.map(([id, name]) => (
+            <button key={id} id={`lp-tab-${id}`} role="tab" aria-selected={panel === id} aria-controls="lp-body" className={panel === id ? "on" : ""} onClick={() => setPanel(id)}>
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="lp-body" id="lp-body" role="tabpanel" aria-labelledby={`lp-tab-${panel}`}>
+        {panel === "desk" && desk && <Desk data={desk} />}
+        {panel === "guide" && (
           <>
-            <h3>{tr("Evidencias")}</h3>
-            <p className="small muted">{session.evidence.prompt}</p>
-            {session.evidence.fields.map((f) => (
-              <div key={f}>
-                <label htmlFor={`ev-${f}`}>{label(evidenceField, f, tr)}</label>
-                <textarea id={`ev-${f}`} value={evidence[f] ?? ""} onChange={(e) => setEvidence({ ...evidence, [f]: e.target.value })} />
-              </div>
-            ))}
-          </>
-        )}
-        {session.quiz?.filter((q) => !q.after).length ? (
-          <>
-            <h3>{tr("Preguntas")}</h3>
-            {session.quiz.filter((q) => !q.after).map((q) => (
-              <div key={q.id} style={{ marginBottom: 10 }}>
-                <div className="small"><strong>{q.question}</strong></div>
-                {q.options.map((o, i) => (
-                  <label key={i} className="small" style={{ display: "flex", gap: 6, color: "var(--text)" }}>
-                    <input
-                      type="checkbox"
-                      style={{ width: "auto" }}
-                      checked={answers[q.id]?.includes(i) ?? false}
-                      onChange={(e) => {
-                        const cur = answers[q.id] ?? [];
-                        setAnswers({ ...answers, [q.id]: e.target.checked ? [...cur, i] : cur.filter((x) => x !== i) });
-                      }}
-                    />
-                    {o}
-                  </label>
+            <Markdown text={session.story} />
+            {session.timeline?.length ? (
+              <>
+                <h3>{tr("Cronología")}</h3>
+                {session.timeline.map((t, i) => (
+                  <div key={i} className="small"><span className="muted">{t.at}</span> <strong>{t.from}:</strong> {t.text}</div>
                 ))}
-                {q.justify && <textarea placeholder={tr("Justifica tu elección")} aria-label={tr("Justifica tu elección")} value={just[q.id] ?? ""} onChange={(e) => setJust({ ...just, [q.id]: e.target.value })} />}
+              </>
+            ) : null}
+            {session.objectives?.length ? (
+              <>
+                <h3>{tr("Objetivos")}</h3>
+                <ul className="lp-list">{session.objectives.map((o) => <li key={o}>{o}</li>)}</ul>
+              </>
+            ) : null}
+            {session.constraints?.length ? (
+              <>
+                <h3>{tr("Restricciones")}</h3>
+                <ul className="lp-list">{session.constraints.map((o) => <li key={o}>{constraint(o, tr)}</li>)}</ul>
+              </>
+            ) : null}
+            {session.instructions && (
+              <details>
+                <summary><strong>{tr("Instrucciones")}</strong></summary>
+                <Markdown text={session.instructions} />
+              </details>
+            )}
+            <div className="lp-note">
+              <Icon name="info" size={18} />
+              <span>
+                {tr("Trabaja en la consola o en Cloud Shell: cada botón de la consola ejecuta su comando abajo. Prueba")} <code>why &lt;{tr("recurso")}&gt;</code>, <code>whatif …</code> {tr("y")} <code>help</code>.
+              </span>
+            </div>
+            {hints.map((h) => (
+              <div key={h.index} className="lp-hint">
+                <Icon name="bulb" size={18} />
+                <span><span className="cc-pill">{label(hintKind, h.kind, tr)} · −{h.cost}</span> {h.text}</span>
               </div>
             ))}
-          </>
-        ) : null}
-        {err && <p className="error small">{err}</p>}
-        <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn" onClick={submit} disabled={busy}>{tr("Enviar")}</button>
-          <button className="btn danger" onClick={stop}>{tr("Abandonar")}</button>
-        </div>
-        <p className="small muted">{tr("La sesión caduca a las {time}.", { time: new Date(session.expires).toLocaleTimeString() })}</p>
-        <label className="small" style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--text)" }}>
-          <input type="checkbox" style={{ width: "auto" }} checked={screenReader} onChange={toggleScreenReader} />
-          {tr("Modo lector de pantalla para la terminal")}
-        </label>
-      </aside>
-      <section className="main">
-        <div className="card tabpanel" style={{ padding: "8px 12px" }}>
-          <div className="row" style={{ gap: 0, flexWrap: "nowrap", alignItems: "stretch" }}>
-          <div className="tabs" role="tablist" aria-label={tr("Vistas del entorno")} style={{ flex: 1 }}>
-            {tabs.map((t) => (
-              <button
-                key={t}
-                id={`tab-${t}`}
-                role="tab"
-                aria-selected={tab === t}
-                aria-controls="view-panel"
-                tabIndex={tab === t ? 0 : -1}
-                className={tab === t ? "active" : ""}
-                onClick={() => setTab(t)}
-                onKeyDown={(e) => {
-                  const i = tabs.indexOf(t);
-                  const next = e.key === "ArrowRight" ? tabs[(i + 1) % tabs.length] : e.key === "ArrowLeft" ? tabs[(i - 1 + tabs.length) % tabs.length] : null;
-                  if (next) {
-                    e.preventDefault();
-                    setTab(next);
-                    document.getElementById(`tab-${next}`)?.focus();
-                  }
-                }}
-                style={{ textTransform: "capitalize" }}
-              >
-                {label(tabLabel, t, tr)}
+            <div className="lp-actions">
+              <button className="cc-btn" onClick={hint} disabled={session.hintCount === 0 || (hints.length > 0 && hints[hints.length - 1].remaining <= 0)}>
+                <Icon name="bulb" size={18} /> {tr("Pista (quedan {n})", { n: Math.max(0, session.hintCount - hints.length) })}
               </button>
-            ))}
-          </div>
-          <button className="btn secondary" onClick={() => setTick((x) => x + 1)} title={tr("Actualizar vistas")} aria-label={tr("Actualizar vistas")} style={{ border: "none", borderBottom: "1px solid var(--border)", borderRadius: 0 }}>
-            ↻
-          </button>
-          </div>
-          <div className="panel-body" id="view-panel" role="tabpanel" tabIndex={0} aria-labelledby={`tab-${tab}`} aria-live="polite">
-            <View session={session} kind={tab} tick={tick} term={term} openTab={setTab} />
-          </div>
-        </div>
-        <div className="term">
-          <div className="term-title" aria-hidden="true"><span className="term-brand">CLOUD SHELL</span><span className="term-tab">Terminal <span className="term-proj">({session.project})</span></span></div>
-          <div className="term-host">
-            <Terminal sessionId={session.id} onCommand={onCommand} screenReader={screenReader} controller={term} banner={`\x1b[36mCloud Shell — ${tr("proyecto")} ${session.project} (${session.fidelity})\x1b[0m\r\n${tr("Escribe 'help' para ver los comandos. Lo que hagas en la consola de arriba también se ejecuta aquí.")}`} />
-          </div>
-        </div>
-      </section>
-    </main>
+              <button className="cc-btn" onClick={doCheck} disabled={busy}>
+                <Icon name="check" size={18} /> {tr("Comprobar")}
+              </button>
+            </div>
+            {check && (
+              <div className="lp-check">
+                {check.items?.map((it: any) => (
+                  <div key={it.name} className="lp-check-item">
+                    <span className={`cc-status ${it.earned >= it.points ? "ok" : "off"}`} aria-hidden="true">{it.earned >= it.points ? "✓" : ""}</span>
+                    <span>
+                      {it.name} <span className="muted">({Math.round(it.earned * 10) / 10}/{it.points})</span>
+                      {it.failing?.map((f: string, i: number) => <div key={i} className="cc-help">– {f}</div>)}
+                    </span>
+                  </div>
+                ))}
+                {check.mentor?.length ? <ul className="lp-list">{check.mentor.map((m: string, i: number) => <li key={i}>{m}</li>)}</ul> : null}
+              </div>
+            )}
+          </>
+        )}
+        {panel === "submit" && (
+          <>
+            {session.evidence && (
+              <>
+                <h3>{tr("Evidencias")}</h3>
+                <p className="cc-help">{session.evidence.prompt}</p>
+                {session.evidence.fields.map((f) => (
+                  <div key={f} className="cc-field" style={{ marginBottom: 12 }}>
+                    <label htmlFor={`ev-${f}`}>{label(evidenceField, f, tr)}</label>
+                    <textarea id={`ev-${f}`} value={evidence[f] ?? ""} onChange={(e) => setEvidence({ ...evidence, [f]: e.target.value })} />
+                  </div>
+                ))}
+              </>
+            )}
+            {session.quiz?.filter((q) => !q.after).length ? (
+              <>
+                <h3>{tr("Preguntas")}</h3>
+                {session.quiz.filter((q) => !q.after).map((q) => (
+                  <fieldset key={q.id} className="lp-quiz">
+                    <legend>{q.question}</legend>
+                    {q.options.map((o, i) => (
+                      <label key={i} className="cc-check">
+                        <input
+                          type="checkbox"
+                          checked={answers[q.id]?.includes(i) ?? false}
+                          onChange={(e) => {
+                            const cur = answers[q.id] ?? [];
+                            setAnswers({ ...answers, [q.id]: e.target.checked ? [...cur, i] : cur.filter((x) => x !== i) });
+                          }}
+                        />
+                        <span>{o}</span>
+                      </label>
+                    ))}
+                    {q.justify && <textarea placeholder={tr("Justifica tu elección")} aria-label={tr("Justifica tu elección")} value={just[q.id] ?? ""} onChange={(e) => setJust({ ...just, [q.id]: e.target.value })} />}
+                  </fieldset>
+                ))}
+              </>
+            ) : null}
+            {!session.evidence && !session.quiz?.filter((q) => !q.after).length && <p className="cc-help">{tr("Cuando termines, envía el laboratorio para que se evalúe.")}</p>}
+            {err && <p className="error">{err}</p>}
+            <div className="lp-actions">
+              <button className="cc-btn primary" onClick={submit} disabled={busy}>{tr("Enviar")}</button>
+              <button className="cc-btn danger" onClick={stop}>{tr("Abandonar")}</button>
+            </div>
+            <label className="cc-check" style={{ marginTop: 16 }}>
+              <input type="checkbox" checked={screenReader} onChange={toggleScreenReader} />
+              <span>{tr("Modo lector de pantalla para la terminal")}</span>
+            </label>
+          </>
+        )}
+        {err && panel !== "submit" && <p className="error">{err}</p>}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <a className="skip-link" href="#main">{tr("Saltar al contenido")}</a>
+      <CloudConsole
+        sessionId={session.id}
+        project={session.project}
+        region={session.region || "europe-west1"}
+        zone={session.zone || "europe-west1-b"}
+        tick={tick}
+        run={(cmd, note) => term.current?.run(cmd, note) ?? Promise.resolve({ output: tr("La terminal no está lista."), exit: 1 })}
+        paste={(cmd) => term.current?.paste(cmd)}
+        focusShell={() => term.current?.focus()}
+        aside={aside}
+        asideOpen={asideOpen}
+        onAside={onAside}
+        terminal={
+          <Terminal
+            sessionId={session.id}
+            onCommand={onCommand}
+            screenReader={screenReader}
+            controller={term}
+            banner={`\x1b[1mWelcome to Cloud Shell! Type "help" to get started.\x1b[0m\r\n${tr("Tu proyecto de Cloud Platform en esta sesión es")} \x1b[1;33m${session.project}\x1b[0m.\r\n${tr("Lo que hagas en la consola de arriba también se ejecuta aquí.")}`}
+          />
+        }
+        editor={<ShellEditor sessionId={session.id} tick={tick} />}
+      />
+    </>
   );
 }
 
@@ -731,12 +620,11 @@ function LabPage() {
     window.history.replaceState(null, "", `/lab?session=${s.id}&id=${encodeURIComponent(s.labId)}`);
     setSession(s);
   };
+  if (session) return <Workspace session={session} />;
   return (
     <>
       <Nav />
-      {session ? (
-        <Workspace session={session} />
-      ) : (
+      {(
         <main id="main" className="page">
           {err && <p className="error">{err}</p>}
           {labId && !qs("session") ? <Briefing labId={labId} onStarted={started} /> : !err && <p className="muted">{t("Cargando…")}</p>}

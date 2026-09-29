@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Nav from "@/components/Nav";
-import { api } from "@/lib/api";
+import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { useI18n } from "@/lib/i18n";
 import { label, labLevel, labType } from "@/lib/labels";
@@ -20,6 +20,7 @@ export default function CatalogPage() {
   const [track, setTrack] = useState("");
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
+  useEffect(() => setQ(qs("q")), []);
   useEffect(() => {
     api<Catalog>("/api/catalog").then(setCat).catch((e) => setErr(e.message));
   }, [lang]);

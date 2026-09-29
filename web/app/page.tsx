@@ -42,14 +42,21 @@ export default function Home() {
   };
 
   return (
-    <main id="main" className="page" style={{ maxWidth: 980 }}>
-      <div className="row" style={{ justifyContent: "flex-end" }}>
+    <>
+    <header className="gtop">
+      <span className="gbrand">
+        <span className="gbrand-mark" aria-hidden="true" />
+        Cloud Mastery
+      </span>
+      <div className="gtop-actions">
         <LangSwitch />
       </div>
-      <div className="grid two" style={{ alignItems: "start", marginTop: 24 }}>
+    </header>
+    <main id="main" className="page" style={{ maxWidth: 1080, margin: "0 auto" }}>
+      <div className="grid two" style={{ alignItems: "start", marginTop: 40 }}>
         <section>
-          <h1 style={{ fontSize: 34 }}>
-            Cloud <span style={{ color: "var(--accent)" }}>Mastery</span>
+          <h1 style={{ fontSize: 36, lineHeight: "44px" }}>
+            {t("Aprende Google Cloud en su propia consola")}
           </h1>
           <p className="muted" style={{ fontSize: 17 }}>
             {t(
@@ -107,5 +114,6 @@ export default function Home() {
         </form>
       </div>
     </main>
+    </>
   );
 }

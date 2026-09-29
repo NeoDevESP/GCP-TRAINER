@@ -9,6 +9,8 @@ import { useI18n } from "@/lib/i18n";
 import { Col, Confirm, CreatePage, Drawer, Field, Page, Pill, REGIONS, Status, Table, Tool, ZONES, locFlag, q } from "./ui";
 
 export type Ctx = {
+  sessionId: string;
+  tick: number;
   data: any;
   project: string;
   region: string;

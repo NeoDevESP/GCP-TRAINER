@@ -67,7 +67,7 @@ export default function Terminal({
         convertEol: true,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 13,
-        theme: { background: "#0f1419", foreground: "#d7dde6" },
+        theme: { background: "#1f1f1f", foreground: "#e8eaed" },
         scrollback: 5000,
       });
       const fit = new FitAddon();
