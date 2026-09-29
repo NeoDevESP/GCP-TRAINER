@@ -16,7 +16,7 @@ and communication.
 
 | Area | Where | Highlights |
 |---|---|---|
-| Simulator (F0) | `internal/sim`, `internal/cli` | IAM with conditions and org policies, VPC/firewalls/NAT/LB, Compute and MIGs, Cloud Run, Cloud SQL, GCS, Pub/Sub, BigQuery, GKE/`kubectl`, Terraform, logging/metrics, billing, a guest-OS model for VMs; request paths record causal chains (`why`) |
+| Simulator (F0) | `internal/sim`, `internal/cli` | IAM with conditions and org policies, VPC/firewalls/NAT/LB, Compute and MIGs, Cloud Run, Cloud Functions, App Engine, Cloud Scheduler, Cloud Tasks, Cloud SQL, Spanner, Firestore, Memorystore, Filestore, GCS, Pub/Sub, BigQuery, Dataflow, Dataproc, Composer, GKE/`kubectl`, Terraform, logging/metrics, billing, a guest-OS model for VMs; request paths record causal chains (`why`) |
 | Scenarios | `internal/scenario`, `content/labs` | Declarative YAML labs with 45 fault types, templated variants per seed, hints, rubric validators, OPA/Rego policies |
 | Incidents | `content/failures`, `internal/scenario/generator.go` | Failure library (systems, failure modes, symptoms, business contexts) and a generator with vague/misleading tickets, stacked failures, P1 war rooms and "unknown problem" mode |
 | Service desk | `internal/desk` | INC/REQ/CHG/PRB/SEC/COST/MIG tickets, SLAs and simulated people who answer questions deterministically |
@@ -28,8 +28,8 @@ and communication.
 | Planes | `internal/api`, `internal/orchestrator` | Learning plane (users, progress) separated from the lab plane (sessions) and an isolated grader worker |
 | Web | `web/` | Next.js static export served by the Go binary: dashboard, catalog, lab workspace with a graphical console modelled on the Google Cloud console and Cloud Shell docked below (every click runs and shows the equivalent `gcloud` command), xterm, Monaco, Mermaid, incidents, company, skill graph, leagues, instructor console; WCAG 2 AA (axe-audited, light and dark), terminal screen-reader mode |
 
-Content today: 54 labs in 14 tracks (a 30-day Associate Cloud Engineer
-programme, foundations, Linux, GKE, security, network, data, ML, architect,
+Content today: 60 labs in 15 tracks (a 30-day Associate Cloud Engineer
+programme, foundations, Linux, GKE, security, network, data, serverless and big data, ML, architect,
 DevOps, SRE, FinOps, capstones and career), 13 company missions and consequence
 incidents, 20 failure modes in 3 systems (three-tier, serverless shop, GKE
 shop), 16 badges, 6 career stages and 10 specialisations. Labs declare the
@@ -84,10 +84,23 @@ services), Cloud Run (revisions, traffic and security), Cloud Storage (object
 upload and download, permissions), Cloud SQL (users, databases, authorized
 networks and backups), BigQuery Studio, Pub/Sub, VPC (subnets, IPs, routes,
 firewall), load balancing, Cloud DNS, Cloud NAT, Secret Manager, Cloud KMS,
-Artifact Registry, Cloud Build, Logging (explorer and metrics), Monitoring
-(metrics and alerting), billing, topology and the activity log. The lab
+Artifact Registry, Cloud Build, Cloud Deploy, Source Repositories, Logging
+(explorer, metrics and log router), Monitoring (metrics, alerting and uptime
+checks), Cloud Functions, App Engine, Cloud Scheduler, Cloud Tasks, Spanner
+(with Spanner Studio), Firestore (data and indexes), Memorystore, Filestore,
+Dataflow, Dataproc, Composer, Cloud Armor, VPC peering, Cloud VPN, Vertex AI,
+Security Command Center, budgets, billing, topology and the activity log. The lab
 instructions sit in a right-hand panel and Cloud Shell can be resized,
 maximized or switched to its editor.
+
+Data is real: BigQuery and Cloud SQL run actual SQL on an embedded SQLite
+engine (public sample tables, `INSERT`/`UPDATE`, `bq load`/`extract`, `psql`
+and `mysql`), and so does Spanner. `gcloud compute ssh`, `gcloud sql connect`,
+`psql`, `mysql` and `redis-cli` open interactive sessions with their own
+prompt. Services behave as in Google Cloud: a Pub/Sub message or a bucket
+upload triggers functions, Cloud Scheduler runs its jobs as simulated time
+passes, Dataflow streaming jobs move messages into BigQuery, App Engine splits
+traffic between versions and Firestore answers its REST API through `curl`.
 
 Inside a lab, type `help`. Useful commands: `why <resource>` (causal chain of a
 request), `whatif <command>` (impact preview), `ticket show`, `team`,

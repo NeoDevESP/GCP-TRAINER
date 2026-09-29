@@ -16,7 +16,7 @@ camino: diagnóstico antes del cambio, seguridad, coste, riesgo y comunicación.
 
 | Área | Dónde | Lo más destacado |
 |---|---|---|
-| Simulador (F0) | `internal/sim`, `internal/cli` | IAM con condiciones y políticas de organización, VPC/cortafuegos/NAT/balanceadores, Compute y MIG, Cloud Run, Cloud SQL, GCS, Pub/Sub, BigQuery, GKE/`kubectl`, Terraform, registros y métricas, facturación y un modelo del sistema operativo de las VM; los caminos de las peticiones registran cadenas causales (`why`) |
+| Simulador (F0) | `internal/sim`, `internal/cli` | IAM con condiciones y políticas de organización, VPC/cortafuegos/NAT/balanceadores, Compute y MIG, Cloud Run, Cloud Functions, App Engine, Cloud Scheduler, Cloud Tasks, Cloud SQL, Spanner, Firestore, Memorystore, Filestore, GCS, Pub/Sub, BigQuery, Dataflow, Dataproc, Composer, GKE/`kubectl`, Terraform, registros y métricas, facturación y un modelo del sistema operativo de las VM; los caminos de las peticiones registran cadenas causales (`why`) |
 | Escenarios | `internal/scenario`, `content/labs` | Laboratorios declarativos en YAML con 45 tipos de fallo, variantes por semilla, pistas, validadores de rúbrica y políticas OPA/Rego |
 | Incidentes | `content/failures`, `internal/scenario/generator.go` | Biblioteca de fallos (sistemas, modos de fallo, síntomas y contextos de negocio) y un generador con tickets vagos o engañosos, fallos acumulados, salas de crisis P1 y modo «problema desconocido» |
 | Mesa de servicio | `internal/desk` | Tickets INC/REQ/CHG/PRB/SEC/COST/MIG, SLA y personas simuladas que responden a las preguntas de forma determinista |
@@ -28,8 +28,8 @@ camino: diagnóstico antes del cambio, seguridad, coste, riesgo y comunicación.
 | Planos | `internal/api`, `internal/orchestrator` | Plano de aprendizaje (usuarios, progreso) separado del plano de laboratorios (sesiones) y un evaluador aislado |
 | Web | `web/` | Exportación estática de Next.js servida por el binario de Go: panel, catálogo, espacio de trabajo del laboratorio con una consola gráfica al estilo de la de Google Cloud y Cloud Shell acoplado debajo (cada clic ejecuta y muestra el comando `gcloud` equivalente), xterm, Monaco, Mermaid, incidentes, empresa, grafo de habilidades, ligas y consola del instructor; WCAG 2 AA (auditado con axe, modo claro y oscuro) y modo lector de pantalla en la terminal |
 
-Contenido actual: 54 laboratorios en 14 rutas (un programa de 30 días de
-Associate Cloud Engineer, fundamentos, Linux, GKE, seguridad, redes, datos, ML,
+Contenido actual: 60 laboratorios en 15 rutas (un programa de 30 días de
+Associate Cloud Engineer, fundamentos, Linux, GKE, seguridad, redes, datos, sin servidor y big data, ML,
 arquitectura, DevOps, SRE, FinOps, proyectos finales y carrera), 13 misiones de
 empresa con sus incidentes por consecuencias, 20 modos de fallo en 3 sistemas
 (tres capas, tienda serverless y tienda en GKE), 16 insignias, 6 etapas
@@ -88,10 +88,26 @@ tráfico y seguridad), Cloud Storage (subida y descarga de objetos, permisos),
 Cloud SQL (usuarios, bases de datos, redes autorizadas y copias), BigQuery
 Studio, Pub/Sub, VPC (subredes, IP, rutas, cortafuegos), balanceo de carga,
 Cloud DNS, Cloud NAT, Secret Manager, Cloud KMS, Artifact Registry, Cloud
-Build, Logging (explorador y métricas), Monitoring (métricas y alertas),
-facturación, topología y registro de actividad. Las instrucciones del
+Build, Cloud Deploy, Source Repositories, Logging (explorador, métricas y
+enrutador de registros), Monitoring (métricas, alertas y comprobaciones de
+disponibilidad), Cloud Functions, App Engine, Cloud Scheduler, Cloud Tasks,
+Spanner (con Spanner Studio), Firestore (datos e índices), Memorystore,
+Filestore, Dataflow, Dataproc, Composer, Cloud Armor, emparejamiento de VPC,
+Cloud VPN, Vertex AI, Security Command Center, presupuestos, facturación,
+topología y registro de actividad. Las instrucciones del
 laboratorio quedan en un panel a la derecha y Cloud Shell se puede
 redimensionar, maximizar o cambiar a su editor.
+
+Los datos son reales: BigQuery y Cloud SQL ejecutan SQL de verdad sobre un
+motor SQLite integrado (tablas públicas de ejemplo, `INSERT`/`UPDATE`,
+`bq load`/`extract`, `psql` y `mysql`), igual que Spanner. `gcloud compute ssh`,
+`gcloud sql connect`, `psql`, `mysql` y `redis-cli` abren sesiones
+interactivas con su propio prompt. Los servicios se comportan como en Google
+Cloud: un mensaje de Pub/Sub o una subida a un bucket activan funciones,
+Cloud Scheduler ejecuta sus trabajos según pasa el tiempo simulado, los
+trabajos de streaming de Dataflow llevan mensajes a BigQuery, App Engine
+reparte el tráfico entre versiones y Firestore responde a su API REST con
+`curl`.
 
 Dentro de un laboratorio, escribe `help`. Comandos útiles: `why <recurso>`
 (cadena causal de una petición), `whatif <comando>` (vista previa del
