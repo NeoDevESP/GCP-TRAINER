@@ -27,6 +27,95 @@ type Namespace struct {
 	Ingresses       map[string]*Ingress          `json:"ingresses"`
 	Pods            map[string]*Pod              `json:"pods"` // standalone pods (kubectl run)
 	NetworkPolicies map[string]*NetworkPolicy    `json:"networkPolicies"`
+	PVCs            map[string]*PVC              `json:"persistentVolumeClaims,omitempty"`
+	Roles           map[string]*K8sRole          `json:"roles,omitempty"`
+	RoleBindings    map[string]*RoleBinding      `json:"roleBindings,omitempty"`
+}
+
+// PVC is a PersistentVolumeClaim; it binds only with an existing StorageClass.
+type PVC struct {
+	Name         string `json:"name"`
+	StorageClass string `json:"storageClassName"`
+	Size         string `json:"size"`
+	Phase        string `json:"status"` // Bound, Pending
+	Reason       string `json:"reason,omitempty"`
+}
+
+// K8sRole is a namespaced RBAC role.
+type K8sRole struct {
+	Name  string       `json:"name"`
+	Rules []PolicyRule `json:"rules"`
+}
+
+// PolicyRule grants verbs on resources.
+type PolicyRule struct {
+	Resources []string `json:"resources"`
+	Verbs     []string `json:"verbs"`
+}
+
+// RoleBinding binds a role to Kubernetes service accounts.
+type RoleBinding struct {
+	Name     string   `json:"name"`
+	Role     string   `json:"roleRef"`
+	Subjects []string `json:"subjects"` // service account names in the namespace (ns:name for other namespaces)
+}
+
+// StorageClasses available on GKE.
+var StorageClasses = map[string]bool{"standard": true, "standard-rwo": true, "premium-rwo": true}
+
+func (ns *Namespace) ensure() {
+	if ns.PVCs == nil {
+		ns.PVCs = map[string]*PVC{}
+	}
+	if ns.Roles == nil {
+		ns.Roles = map[string]*K8sRole{}
+	}
+	if ns.RoleBindings == nil {
+		ns.RoleBindings = map[string]*RoleBinding{}
+	}
+}
+
+// RBACAllows checks whether a Kubernetes service account may perform verb on resource.
+func (ns *Namespace) RBACAllows(nsName, sa, verb, resource string) bool {
+	ns.ensure()
+	for _, rb := range ns.RoleBindings {
+		bound := false
+		for _, sub := range rb.Subjects {
+			if sub == sa || sub == nsName+":"+sa {
+				bound = true
+			}
+		}
+		if !bound {
+			continue
+		}
+		r := ns.Roles[rb.Role]
+		if r == nil {
+			continue
+		}
+		for _, rule := range r.Rules {
+			if (contains(rule.Resources, resource) || contains(rule.Resources, "*")) && (contains(rule.Verbs, verb) || contains(rule.Verbs, "*")) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ParseMemMi parses Kubernetes memory quantities into MiB.
+func ParseMemMi(v string) int {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+	mult := map[string]float64{"Ki": 1.0 / 1024, "Mi": 1, "Gi": 1024, "K": 1.0 / 1000 / 1.048576, "M": 1 / 1.048576, "G": 1000 / 1.048576}
+	for _, suf := range []string{"Ki", "Mi", "Gi", "K", "M", "G"} {
+		if strings.HasSuffix(v, suf) {
+			n, _ := strconv.ParseFloat(strings.TrimSuffix(v, suf), 64)
+			return int(n * mult[suf])
+		}
+	}
+	n, _ := strconv.ParseFloat(v, 64)
+	return int(n / 1024 / 1024)
 }
 
 type Deployment struct {
@@ -44,6 +133,7 @@ type PodTemplate struct {
 	Labels         map[string]string `json:"labels"`
 	Containers     []Container       `json:"containers"`
 	ServiceAccount string            `json:"serviceAccountName"`
+	Claims         []string          `json:"persistentVolumeClaims,omitempty"`
 }
 
 type Container struct {
@@ -140,6 +230,7 @@ type Pod struct {
 	SA       string            `json:"serviceAccountName"`
 	CPUm     int               `json:"cpuMillicores"`
 	Command  string            `json:"command,omitempty"`
+	Claims   []string          `json:"persistentVolumeClaims,omitempty"`
 }
 
 // NewK8s creates an empty API state with default namespaces.
@@ -163,6 +254,7 @@ func (k *K8sState) NS(name string) *Namespace {
 			Pods: map[string]*Pod{}, NetworkPolicies: map[string]*NetworkPolicy{}}
 		k.Namespaces[name] = ns
 	}
+	ns.ensure()
 	return ns
 }
 
@@ -239,7 +331,7 @@ func (s *State) ComputePods(project string, c *Cluster) map[string][]*Pod {
 			avail := 0
 			for i := 0; i < d.Replicas; i++ {
 				pod := &Pod{Name: fmt.Sprintf("%s-%s%d-%s", d.Name, hash, d.Revision, string(rune('a'+i%26))+fmt.Sprint(i/26)), Owner: d.Name,
-					Labels: d.Template.Labels, Spec: ct, SA: d.Template.ServiceAccount, Node: fmt.Sprintf("gke-%s-default-pool-%d", c.Name, i%max(1, len(c.NodePools)+1)),
+					Labels: d.Template.Labels, Spec: ct, SA: d.Template.ServiceAccount, Claims: d.Template.Claims, Node: fmt.Sprintf("gke-%s-default-pool-%d", c.Name, i%max(1, len(c.NodePools)+1)),
 					IP: fmt.Sprintf("10.108.%d.%d", 1+i/200, 10+i%200)}
 				req := ParseCPU(ct.Requests.CPU)
 				if req == 0 {
@@ -306,9 +398,27 @@ func (s *State) evalPod(project string, c *Cluster, ns *Namespace, pod *Pod, nod
 			return
 		}
 	}
+	ns.ensure()
+	for _, claim := range pod.Claims {
+		pvc := ns.PVCs[claim]
+		if pvc == nil {
+			pod.Phase, pod.Reason = "Pending", fmt.Sprintf("FailedScheduling: persistentvolumeclaim %q not found", claim)
+			return
+		}
+		if pvc.Phase != "Bound" {
+			pod.Phase, pod.Reason = "Pending", fmt.Sprintf("FailedScheduling: 0/3 nodes are available: pod has unbound immediate PersistentVolumeClaims (%s: %s)", claim, pvc.Reason)
+			return
+		}
+	}
 	if b != nil && b.Mode == "crash" {
 		pod.Phase, pod.Reason, pod.Restarts = "Running", "CrashLoopBackOff", 5
 		return
+	}
+	if b != nil && b.MemMB > 0 {
+		if lim := ParseMemMi(ct.Limits.Memory); lim > 0 && lim < b.MemMB {
+			pod.Phase, pod.Reason, pod.Restarts = "Running", fmt.Sprintf("CrashLoopBackOff (last state: OOMKilled, exit code 137 — memory limit %s, working set ~%dMi)", ct.Limits.Memory, b.MemMB), 7
+			return
+		}
 	}
 	pod.Phase = "Running"
 	listen := 8080
@@ -367,7 +477,7 @@ func (s *State) PodWorkload(project string, c *Cluster, nsName string, pod *Pod)
 	b, _ := s.LookupImage(pod.Spec.Image)
 	principal, scopes := s.podPrincipal(project, c, nsName, pod.SA)
 	tags := []string{"gke-" + c.Name + "-node"}
-	return &Workload{Kind: "pod", Project: project, Name: pod.Name, Env: env, Behavior: b, Principal: principal, Scopes: scopes,
+	return &Workload{Kind: "pod", Project: project, Name: pod.Name, Env: env, Behavior: b, Principal: principal, Scopes: scopes, K8sNS: ns, K8sNSName: nsName, K8sSA: firstNonEmptyS(pod.SA, "default"),
 		Endpoint: Endpoint{Kind: "pod", Project: project, Network: c.Network, Subnet: c.Subnet, Region: RegionOf(c.Location), Name: pod.Name, IP: pod.IP, Tags: tags, SA: s.clusterNodeSA(project, c)}}
 }
 
@@ -688,6 +798,13 @@ func (s *State) applyObject(c *Cluster, defaultNS string, m map[string]any) (str
 			d.Replicas = atoi(r)
 		}
 		pt := PodTemplate{Labels: strMap(sub(tpl, "metadata", "labels")), ServiceAccount: str(tpl, "spec", "serviceAccountName")}
+		for _, v := range list(tpl, "spec", "volumes") {
+			if vm, ok := v.(map[string]any); ok {
+				if c := str(vm, "persistentVolumeClaim", "claimName"); c != "" {
+					pt.Claims = append(pt.Claims, c)
+				}
+			}
+		}
 		for _, cc := range list(tpl, "spec", "containers") {
 			if cm, ok := cc.(map[string]any); ok {
 				pt.Containers = append(pt.Containers, parseContainer(cm))
@@ -791,6 +908,53 @@ func (s *State) applyObject(c *Cluster, defaultNS string, m map[string]any) (str
 		}
 		ns.Ingresses[name] = ing
 		return "ingress.networking.k8s.io/" + name + " configured", nil
+	case "PersistentVolumeClaim":
+		ns.ensure()
+		sc := str(m, "spec", "storageClassName")
+		if sc == "" {
+			sc = "standard-rwo"
+		}
+		pvc := &PVC{Name: name, StorageClass: sc, Size: str(m, "spec", "resources", "requests", "storage"), Phase: "Bound"}
+		if !StorageClasses[sc] {
+			pvc.Phase, pvc.Reason = "Pending", fmt.Sprintf("storageclass.storage.k8s.io %q not found", sc)
+		}
+		existed := ns.PVCs[name] != nil
+		ns.PVCs[name] = pvc
+		if existed {
+			return "persistentvolumeclaim/" + name + " configured", nil
+		}
+		return "persistentvolumeclaim/" + name + " created", nil
+	case "Role":
+		ns.ensure()
+		r := &K8sRole{Name: name}
+		for _, x := range list(m, "rules") {
+			xm, _ := x.(map[string]any)
+			var rule PolicyRule
+			for _, v := range list(xm, "resources") {
+				rule.Resources = append(rule.Resources, fmt.Sprint(v))
+			}
+			for _, v := range list(xm, "verbs") {
+				rule.Verbs = append(rule.Verbs, fmt.Sprint(v))
+			}
+			r.Rules = append(r.Rules, rule)
+		}
+		ns.Roles[name] = r
+		return "role.rbac.authorization.k8s.io/" + name + " created", nil
+	case "RoleBinding":
+		ns.ensure()
+		rb := &RoleBinding{Name: name, Role: str(m, "roleRef", "name")}
+		for _, x := range list(m, "subjects") {
+			xm, _ := x.(map[string]any)
+			if str(xm, "kind") == "ServiceAccount" {
+				sn := str(xm, "name")
+				if n := str(xm, "namespace"); n != "" {
+					sn = n + ":" + sn
+				}
+				rb.Subjects = append(rb.Subjects, sn)
+			}
+		}
+		ns.RoleBindings[name] = rb
+		return "rolebinding.rbac.authorization.k8s.io/" + name + " created", nil
 	case "NetworkPolicy":
 		np := &NetworkPolicy{Name: name, Selector: strMap(sub(m, "spec", "podSelector", "matchLabels"))}
 		for _, in := range list(m, "spec", "ingress") {
@@ -928,4 +1092,13 @@ func (s *State) tickK8s(project string, c *Cluster, rpsBySvc map[string]int) {
 			}
 		}
 	}
+}
+
+func firstNonEmptyS(v ...string) string {
+	for _, x := range v {
+		if x != "" {
+			return x
+		}
+	}
+	return ""
 }

@@ -17,6 +17,8 @@ var kindAlias = map[string]string{
 	"cm": "configmaps", "configmap": "configmaps", "configmaps": "configmaps", "secret": "secrets", "secrets": "secrets",
 	"sa": "serviceaccounts", "serviceaccount": "serviceaccounts", "serviceaccounts": "serviceaccounts", "ing": "ingresses", "ingress": "ingresses", "ingresses": "ingresses",
 	"netpol": "networkpolicies", "networkpolicy": "networkpolicies", "networkpolicies": "networkpolicies", "all": "all", "events": "events", "ev": "events", "rs": "replicasets", "replicasets": "replicasets",
+	"pvc": "persistentvolumeclaims", "persistentvolumeclaim": "persistentvolumeclaims", "persistentvolumeclaims": "persistentvolumeclaims",
+	"role": "roles", "roles": "roles", "rolebinding": "rolebindings", "rolebindings": "rolebindings", "sc": "storageclasses", "storageclass": "storageclasses", "storageclasses": "storageclasses",
 }
 
 func (s *Session) kube() (*sim.Project, *sim.Cluster, error) {
@@ -505,6 +507,16 @@ func (s *Session) kubectl(args []string, stdin string) (string, error) {
 		}
 		return kind + "/" + name + " annotated\n", nil
 	case "auth":
+		if as := firstOr(f["as"], ""); len(pos) >= 4 && pos[1] == "can-i" && strings.HasPrefix(as, "system:serviceaccount:") {
+			parts := strings.Split(strings.TrimPrefix(as, "system:serviceaccount:"), ":")
+			if len(parts) == 2 {
+				ns := c.K8s.NS(parts[0])
+				if ns.RBACAllows(parts[0], parts[1], pos[2], kindAlias[pos[3]]) {
+					return "yes\n", nil
+				}
+				return "no\n", fail(1, "")
+			}
+		}
 		if len(pos) >= 4 && pos[1] == "can-i" {
 			perm := "container." + kindAlias[pos[3]] + "." + map[string]string{"get": "get", "list": "list", "create": "create", "delete": "delete", "update": "update", "patch": "update"}[pos[2]]
 			if s.State.Allowed(s.Principal(), perm, sim.ProjectResource(p.ID)) {
@@ -628,6 +640,15 @@ func (s *Session) kubectlDelete(ns *sim.Namespace, kind, name string) (string, e
 	case "serviceaccounts":
 		delete(ns.ServiceAccounts, name)
 		return "serviceaccount \"" + name + "\" deleted\n", nil
+	case "persistentvolumeclaims":
+		delete(ns.PVCs, name)
+		return "persistentvolumeclaim \"" + name + "\" deleted\n", nil
+	case "roles":
+		delete(ns.Roles, name)
+		return "role.rbac.authorization.k8s.io \"" + name + "\" deleted\n", nil
+	case "rolebindings":
+		delete(ns.RoleBindings, name)
+		return "rolebinding.rbac.authorization.k8s.io \"" + name + "\" deleted\n", nil
 	}
 	return "", fail(1, "error: the server doesn't have a resource type \"%s\"", kind)
 }
@@ -781,6 +802,43 @@ func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allN
 					if name == "" || x == name {
 						rows = append(rows, n.NetworkPolicies[x])
 						w("%-24s %v\n", x, n.NetworkPolicies[x].Selector)
+					}
+				}
+			}
+		}
+	case "persistentvolumeclaims":
+		w("%-20s %-8s %-10s %-14s %s\n", "NAME", "STATUS", "CAPACITY", "STORAGECLASS", "AGE")
+		for _, ns := range nss {
+			n := k.NS(ns)
+			for _, x := range sim.SortedKeys(n.PVCs) {
+				pv := n.PVCs[x]
+				if name == "" || x == name {
+					rows = append(rows, pv)
+					w("%-20s %-8s %-10s %-14s %s\n", x, pv.Phase, pv.Size, pv.StorageClass, age())
+				}
+			}
+		}
+	case "storageclasses":
+		w("%-14s %-24s %s\n", "NAME", "PROVISIONER", "RECLAIMPOLICY")
+		for _, sc := range sim.SortedKeys(sim.StorageClasses) {
+			w("%-14s %-24s %s\n", sc, "pd.csi.storage.gke.io", "Delete")
+		}
+	case "roles", "rolebindings":
+		w("%-24s %s\n", "NAME", "DETAIL")
+		for _, ns := range nss {
+			n := k.NS(ns)
+			if kind == "roles" {
+				for _, x := range sim.SortedKeys(n.Roles) {
+					if name == "" || x == name {
+						rows = append(rows, n.Roles[x])
+						w("%-24s %v\n", x, n.Roles[x].Rules)
+					}
+				}
+			} else {
+				for _, x := range sim.SortedKeys(n.RoleBindings) {
+					if name == "" || x == name {
+						rows = append(rows, n.RoleBindings[x])
+						w("%-24s Role/%s → %v\n", x, n.RoleBindings[x].Role, n.RoleBindings[x].Subjects)
 					}
 				}
 			}

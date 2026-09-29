@@ -1,0 +1,221 @@
+id: gke-k01-nightmare
+title: "Kubernetes Nightmare: four broken workloads before the demo"
+summary: Diagnose OOMKilled, unbound PVCs, RBAC denials and ImagePullBackOff in one cluster and fix each with the minimum change.
+track: gke-sre
+day: 1
+level: advanced
+branch: gke
+type: incident
+mode: production
+skills: [gke.troubleshooting, gke.rbac, gke.workloads, linux.troubleshooting]
+wellArchitected: [reliability, operations]
+certs: [PCDE, ACE]
+difficulty: 4
+minutes: 75
+baseline: [default-network]
+setup: |
+  gcloud container clusters create ops-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-4
+  cat > apps.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: reports}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: reports}}
+    template:
+      metadata: {labels: {app: reports}}
+      spec:
+        containers:
+        - name: reports
+          image: europe-docker.pkg.dev/gcplab-public/apps/report-generator:1.0
+          ports: [{containerPort: 8080}]
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: reports}
+  spec:
+    type: LoadBalancer
+    selector: {app: reports}
+    ports: [{port: 80, targetPort: 8080}]
+  ---
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata: {name: media-data}
+  spec:
+    storageClassName: fast-ssd
+    accessModes: [ReadWriteOnce]
+    resources: {requests: {storage: 20Gi}}
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: media}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: media}}
+    template:
+      metadata: {labels: {app: media}}
+      spec:
+        containers:
+        - name: media
+          image: europe-docker.pkg.dev/gcplab-public/apps/media-store:1.0
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 512Mi}}
+        volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: media-data}
+  ---
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata: {name: inspector}
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: inspector}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: inspector}}
+    template:
+      metadata: {labels: {app: inspector}}
+      spec:
+        serviceAccountName: inspector
+        containers:
+        - name: inspector
+          image: europe-docker.pkg.dev/gcplab-public/apps/pod-inspector:1.0
+          ports: [{containerPort: 8080}]
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: inspector}
+  spec:
+    type: LoadBalancer
+    selector: {app: inspector}
+    ports: [{port: 80, targetPort: 8080}]
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: web}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: web}}
+    template:
+      metadata: {labels: {app: web}}
+      spec:
+        containers:
+        - name: web
+          image: europe-docker.pkg.dev/{{.project}}/apps/web-frontend:2.0
+          ports: [{containerPort: 8080}]
+  YAML
+  gcloud container clusters get-credentials ops-gke --zone={{.zone}}
+  kubectl apply -f apps.yaml
+traffic:
+  - {name: reports, target: "k8s:ops-gke/reports", path: /report, rps: 5}
+ticket:
+  id: INC-4410
+  kind: INC
+  priority: P2
+  summary: "Demo for the board in 2 hours and half of ops-gke is red. Please don't just recreate the cluster."
+  reporter: Irene (engineering manager)
+actors:
+  - role: developer
+    name: Kai (platform team)
+    fallback: "I deployed everything from apps.yaml yesterday; it worked on my laptop."
+    facts:
+      - {keywords: [[web, image, 2.0, registry]], answer: "web 2.0 was never pushed — CI failed. 1.0 in the public registry is the one we demo."}
+      - {keywords: [[report, memory, memoria, oom]], answer: "The report generator renders PDFs in memory; in staging it uses around 700Mi."}
+      - {keywords: [[storage, disk, disco, pvc, fast-ssd]], answer: "I copied the PVC from another cloud; I don't know which storage classes GKE has."}
+      - {keywords: [[inspector, rbac, permission, permiso, pods]], answer: "inspector only needs to list pods in its namespace for the dashboard."}
+story: |
+  Four workloads in `ops-gke` are failing: **reports**, **media**, **inspector** and **web**. Each one has a
+  different root cause. Fix them without recreating the cluster, without granting cluster-admin and without
+  deleting data. Use `kubectl get pods`, `kubectl describe`, `kubectl get events`, `kubectl get pvc` and
+  `kubectl auth can-i`.
+constraints: [no-basic-roles]
+objectives:
+  - Diagnose each failure from Kubernetes evidence
+  - reports runs without OOM
+  - media gets its volume
+  - inspector can list pods (and nothing more)
+  - web runs the published image
+hints:
+  - text: "`kubectl get events` groups the reasons: OOMKilled, FailedScheduling, ImagePullBackOff…"
+  - text: "`kubectl get storageclass` lists what GKE provides; a PVC's storage class cannot be changed in place."
+evidence:
+  fields: [rootCause]
+  sample:
+    rootCause: reports was OOMKilled because its 256Mi memory limit is below its ~700Mi working set; media-data asked for a non-existent storage class fast-ssd so the PVC stayed Pending; inspector's service account had no RBAC role to list pods; web referenced an image tag 2.0 that was never pushed (ImagePullBackOff).
+solution: |
+  gcloud container clusters get-credentials ops-gke --zone={{.zone}}
+  kubectl get pods
+  kubectl get events
+  kubectl get pvc
+  kubectl get storageclass
+  kubectl set resources deployment reports --requests=cpu=250m,memory=768Mi --limits=cpu=500m,memory=1Gi
+  kubectl delete pvc media-data
+  cat > pvc.yaml <<'YAML'
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata: {name: media-data}
+  spec:
+    storageClassName: premium-rwo
+    accessModes: [ReadWriteOnce]
+    resources: {requests: {storage: 20Gi}}
+  YAML
+  kubectl apply -f pvc.yaml
+  cat > rbac.yaml <<'YAML'
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata: {name: pod-reader}
+  rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+  ---
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata: {name: inspector-pod-reader}
+  subjects:
+  - kind: ServiceAccount
+    name: inspector
+  roleRef: {kind: Role, name: pod-reader, apiGroup: rbac.authorization.k8s.io}
+  YAML
+  kubectl apply -f rbac.yaml
+  kubectl auth can-i list pods --as=system:serviceaccount:default:inspector
+  kubectl set image deployment/web web=europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0
+  kubectl get pods
+rubric:
+  - name: reports (OOMKilled)
+    validator: functional
+    points: 15
+    checks:
+      - {type: k8s_ready, cluster: ops-gke, deployment: reports, min: 2, desc: "reports ready without OOM"}
+  - name: media (PVC)
+    validator: functional
+    points: 15
+    checks:
+      - {type: k8s_ready, cluster: ops-gke, deployment: media, min: 1, desc: "media running with its volume"}
+  - name: inspector (RBAC)
+    validator: security
+    points: 20
+    all: true
+    checks:
+      - {type: http, target: "k8s:ops-gke/inspector", path: /pods, status: 200, desc: "inspector lists pods"}
+      - {type: k8s_rbac, cluster: ops-gke, serviceAccount: inspector, verb: delete, resource: pods, expect: false, desc: "inspector cannot delete pods"}
+      - {type: k8s_rbac, cluster: ops-gke, serviceAccount: inspector, verb: list, resource: secrets, expect: false, desc: "inspector cannot read secrets"}
+  - name: web (ImagePullBackOff)
+    validator: functional
+    points: 15
+    checks:
+      - {type: k8s_ready, cluster: ops-gke, deployment: web, min: 2, desc: "web running"}
+  - name: Diagnosis
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "kubectl (describe|get events|get pvc|logs|auth can-i)", min: 2, desc: "Evidence gathered from Kubernetes"}
+  - name: Root causes
+    validator: evidence
+    points: 25
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[oom, memory, memoria], [storage class, storageclass, pvc], [rbac, role, permission], [image, imagen, pull]], desc: "All four root causes explained"}

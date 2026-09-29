@@ -1,9 +1,9 @@
 package api
 
 import (
-	"github.com/neodevesp/gcp-trainer/internal/company"
 	"bytes"
 	"encoding/json"
+	"github.com/neodevesp/gcp-trainer/internal/company"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"

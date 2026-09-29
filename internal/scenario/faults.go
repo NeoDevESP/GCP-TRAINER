@@ -47,7 +47,7 @@ var FaultTypes = []string{
 	"run_iam_public", "sql_flag", "sql_slow_query", "sql_extra_connections", "vm_tag_remove", "vm_stop", "vm_metadata",
 	"health_check_path", "named_port_remove", "mig_autoscaler", "bucket_public", "api_disable", "k8s_image",
 	"k8s_remove_requests", "k8s_probe_port", "k8s_scale", "leaked_key_miner", "subnet_pga_off", "dns_record",
-	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource",
+	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource", "region_outage", "zone_outage",
 }
 
 // ApplyFault mutates the world. Faults mutate real resource state, so symptoms
@@ -353,6 +353,13 @@ func ApplyFault(st *sim.State, project string, l *Lab, f Fault) error {
 		for _, line := range fl(f, "lines") {
 			st.Log(project, sim.LogEntry{Severity: fs(f, "severity"), LogName: "stderr", Resource: sim.LogResource{Type: fs(f, "resourceType"), Labels: map[string]string{}}, Text: line})
 		}
+	case "region_outage", "zone_outage":
+		where := fs(f, "region")
+		if t == "zone_outage" {
+			where = fs(f, "zone")
+		}
+		st.Extra["outage:"+where] = "down"
+		st.Log(project, sim.LogEntry{Severity: "CRITICAL", LogName: "cloud-status", Resource: sim.LogResource{Type: "global"}, Text: "Google Cloud Status: multiple services unavailable in " + where})
 	case "decoy_resource":
 		// handled via setup commands; kept for documentation of intent
 	default:

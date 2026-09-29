@@ -25,6 +25,7 @@ type Behavior struct {
 	Public      bool     `json:"public,omitempty" yaml:"public"`
 	Description string   `json:"description,omitempty" yaml:"description"`
 	LatencyMs   int      `json:"latencyMs,omitempty" yaml:"latencyMs"`
+	MemMB       int      `json:"memMb,omitempty" yaml:"memMb"` // working set; exceeding a memory limit means OOMKilled
 }
 
 // Dep is a runtime dependency resolved from environment variables.
@@ -66,7 +67,13 @@ func DefaultImages() map[string]*Behavior {
 		"shop-api":                 {Name: "shop-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/products", "/checkout", "/search"}, ErrorPaths: []string{"/search"}, Public: true, CPUPerRPS: 0.01},
 		"shop-api:1.4":             {Name: "shop-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/products", "/checkout", "/search"}, Public: true, CPUPerRPS: 0.01},
 		"cpu-burner":               {Name: "cpu-burner", Port: 8080, Health: "/", CPUPerRPS: 0.08, Public: true},
-		"egress-app":               {Name: "egress-app", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/fx"}, Deps: []Dep{{Kind: "egress", Paths: []string{"/fx"}}}, Public: true},
+		"report-generator": {Name: "report-generator", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/report"}, MemMB: 700, Public: true,
+			Description: "Builds PDF reports in memory; needs ~700Mi"},
+		"pod-inspector": {Name: "pod-inspector", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/pods"}, Deps: []Dep{{Kind: "k8s-api", Paths: []string{"/pods"}}}, Public: true,
+			Description: "Lists pods of its namespace through the Kubernetes API (needs RBAC list on pods)"},
+		"media-store": {Name: "media-store", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/media"}, Public: true, MemMB: 200,
+			Description: "Stores uploads on a persistent volume mounted at /data"},
+		"egress-app": {Name: "egress-app", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/fx"}, Deps: []Dep{{Kind: "egress", Paths: []string{"/fx"}}}, Public: true},
 	}
 }
 
@@ -324,6 +331,10 @@ type Workload struct {
 	Behavior  *Behavior
 	CloudSQL  []string
 	Instances int
+	// Kubernetes context of a pod workload (RBAC checks against the API server).
+	K8sNS     *Namespace
+	K8sNSName string
+	K8sSA     string
 }
 
 func scopeAllows(scopes []string, api string, write bool) bool {
@@ -390,9 +401,11 @@ func pathMatch(paths []string, p string) bool {
 func (s *State) Call(w *Workload, path string) (int, string) {
 	b := w.Behavior
 	if b == nil {
+		s.note("application", "fail", "no application is serving requests on %s", w.Name)
 		return 502, "no application is serving requests"
 	}
 	if b.Mode == "crash" {
+		s.note("application", "fail", "%s (%s) crashes at start-up and never listens", w.Name, b.Name)
 		return 503, "container failed to start and listen on the port"
 	}
 	if path == "" {
@@ -403,16 +416,20 @@ func (s *State) Call(w *Workload, path string) (int, string) {
 	}
 	for _, ep := range b.ErrorPaths {
 		if ep == path {
+			s.note("application", "fail", "%s: handler %s panics (code regression in this image)", b.Name, path)
 			return 500, fmt.Sprintf("panic: runtime error: invalid memory address in handler %s (release regression)", path)
 		}
 	}
+	s.note("application", "ok", "%s handles %s as %s", b.Name, path, w.Principal)
 	for _, d := range b.Deps {
 		if len(d.Paths) > 0 && !pathMatch(d.Paths, path) {
 			continue
 		}
 		if st, msg := s.checkDep(w, d); st != 200 {
+			s.note("dependency", "fail", "%s (%s=%q): %s", d.Kind, d.Env, w.Env[d.Env], msg)
 			return st, msg
 		}
+		s.note("dependency", "ok", "%s (%s=%q) reachable and authorised", d.Kind, d.Env, w.Env[d.Env])
 	}
 	return 200, "OK"
 }
@@ -476,6 +493,14 @@ func (s *State) checkDep(w *Workload, d Dep) (int, string) {
 		}
 		if !s.Allowed(w.Principal, "pubsub.topics.publish", Resource{Project: tp, Type: "pubsub.googleapis.com/Topic", Name: "projects/" + tp + "/topics/" + tn, Service: "pubsub.googleapis.com"}) {
 			return 403, fmt.Sprintf("rpc error: code = PermissionDenied desc = User not authorized to perform this action. (pubsub.topics.publish on projects/%s/topics/%s)", tp, tn)
+		}
+		return 200, ""
+	case "k8s-api":
+		if w.K8sNS == nil {
+			return 500, "not running in Kubernetes: no in-cluster API credentials"
+		}
+		if !w.K8sNS.RBACAllows(w.K8sNSName, w.K8sSA, "list", "pods") {
+			return 403, fmt.Sprintf("pods is forbidden: User \"system:serviceaccount:%s:%s\" cannot list resource \"pods\" in API group \"\" in the namespace \"%s\"", w.K8sNSName, w.K8sSA, w.K8sNSName)
 		}
 		return 200, ""
 	case "secret":
@@ -572,6 +597,9 @@ func (s *State) checkDB(w *Workload, d Dep, host string) (int, string) {
 			return 500, fmt.Sprintf("failed to connect to instance: Cloud SQL instance %q does not exist", conn)
 		}
 		sqlIn = p.SQLInstances[parts[2]]
+		if s.RegionDown(sqlIn.Region) {
+			return 503, fmt.Sprintf("failed to connect to instance %s: instance unavailable (regional outage in %s)", conn, sqlIn.Region)
+		}
 		listed := false
 		for _, c := range w.CloudSQL {
 			if c == conn {
@@ -754,6 +782,7 @@ func (s *State) HTTP(req HTTPRequest) HTTPResponse {
 			for _, sn := range SortedKeys(s.Projects[pid].RunServices) {
 				svc := s.Projects[pid].RunServices[sn]
 				if strings.Contains(svc.URL, host) {
+					s.note("dns", "ok", "%s is the Cloud Run URL of service %s (Google front end, TLS terminated by Google)", host, sn)
 					return s.callRun(pid, svc, req, path)
 				}
 			}
@@ -768,8 +797,10 @@ func (s *State) HTTP(req HTTPRequest) HTTPResponse {
 	}
 	ip, ok := s.ResolveHost(host, req.From)
 	if !ok {
+		s.note("dns", "fail", "%s does not resolve from %s (no public/private DNS record)", host, endpointName(req.From))
 		return HTTPResponse{Error: fmt.Sprintf("Could not resolve host: %s", host)}
 	}
+	s.note("dns", "ok", "%s resolves to %s", host, ip)
 	res.Trace = append(res.Trace, fmt.Sprintf("resolved %s -> %s", host, ip))
 	// Load balancers
 	for _, pid := range SortedKeys(s.Projects) {
@@ -780,8 +811,10 @@ func (s *State) HTTP(req HTTPRequest) HTTPResponse {
 				continue
 			}
 			if !portInList(fr.Ports, port) {
+				s.note("load-balancer", "fail", "forwarding rule %s listens on %v, not on port %d", fn, fr.Ports, port)
 				return HTTPResponse{Error: fmt.Sprintf("Failed to connect to %s port %d: Connection refused", host, port), Trace: res.Trace}
 			}
+			s.note("load-balancer", "ok", "%s:%d is forwarding rule %s (global external HTTP(S) load balancer, TCP/TLS terminated at the Google edge)", ip, port, fn)
 			r := s.callLB(pid, fr, req, host, path)
 			r.Trace = append(res.Trace, r.Trace...)
 			return r
@@ -816,6 +849,11 @@ func (s *State) HTTP(req HTTPRequest) HTTPResponse {
 	dst.IP = ip
 	fl := s.CheckFlow(src, dst, "tcp", port)
 	res.Trace = append(res.Trace, fl.Reason)
+	if fl.Allowed {
+		s.note("network", "ok", "TCP %s → %s:%d allowed: %s", endpointName(src), vm.Name, port, fl.Reason)
+	} else {
+		s.note("network", "fail", "TCP %s → %s:%d blocked: %s", endpointName(src), vm.Name, port, fl.Reason)
+	}
 	if !fl.Allowed {
 		res.Error = fmt.Sprintf("Failed to connect to %s port %d after 130000 ms: Connection timed out", host, port)
 		return res
@@ -847,14 +885,25 @@ func (s *State) callVMPort(project string, vm *Instance, port int, path string, 
 }
 
 func (s *State) callVMPortLocal(project string, vm *Instance, port int, path string, res HTTPResponse, local bool) HTTPResponse {
+	if s.ZoneDown(vm.Zone) {
+		s.note("zone", "fail", "zone %s of %s is unavailable (outage)", vm.Zone, vm.Name)
+		res.Error = fmt.Sprintf("Failed to connect to %s port %d: Connection timed out (zone %s unavailable)", vm.InternalIP, port, vm.Zone)
+		return res
+	}
 	ls, _ := s.VMListeners(project, vm)
 	for _, l := range ls {
 		if l.Port != port {
 			continue
 		}
-		if !l.Running || (!local && (l.Bind == "127.0.0.1" || l.Bind == "localhost")) {
+		if !l.Running {
+			s.note("process", "fail", "%s on %s is not running (%s) — nothing accepts connections on port %d", l.Name, vm.Name, l.Error, port)
 			break
 		}
+		if !local && (l.Bind == "127.0.0.1" || l.Bind == "localhost") {
+			s.note("process", "fail", "%s on %s listens only on %s:%d — remote clients are refused", l.Name, vm.Name, l.Bind, port)
+			break
+		}
+		s.note("process", "ok", "%s listening on %s:%d on %s", l.Name, l.Bind, port, vm.Name)
 		w := &Workload{Kind: "vm", Project: project, Name: vm.Name, Endpoint: s.VMEndpoint(project, vm), Principal: "serviceAccount:" + vm.ServiceAccount, Scopes: vm.Scopes, Env: l.Env, Behavior: l.Behavior}
 		st, msg := s.Call(w, path)
 		res.Status, res.Body, res.Target = st, msg, "vm:"+vm.Name
@@ -863,8 +912,30 @@ func (s *State) callVMPortLocal(project string, vm *Instance, port int, path str
 		}
 		return res
 	}
+	if len(ls) == 0 || !anyPort(ls, port) {
+		s.note("process", "fail", "nothing listens on port %d on %s (connection refused)", port, vm.Name)
+	}
 	res.Error = fmt.Sprintf("Failed to connect to %s port %d: Connection refused", vm.InternalIP, port)
 	return res
+}
+
+func anyPort(ls []Listener, port int) bool {
+	for _, l := range ls {
+		if l.Port == port {
+			return true
+		}
+	}
+	return false
+}
+
+func endpointName(e Endpoint) string {
+	switch e.Kind {
+	case "", "internet":
+		return "the internet"
+	case "vm", "pod":
+		return e.Kind + " " + e.Name
+	}
+	return e.Kind
 }
 
 // RunWorkload builds the workload view of a Cloud Run service.
@@ -984,9 +1055,15 @@ func (s *State) AccessSecret(project, principal, ref string) (string, string) {
 
 func (s *State) callRun(project string, svc *RunService, req HTTPRequest, path string) HTTPResponse {
 	res := HTTPResponse{Target: "run:" + svc.Name}
+	if s.RegionDown(svc.Region) {
+		s.note("region", "fail", "region %s is unavailable (regional outage): Cloud Run service %s cannot serve", svc.Region, svc.Name)
+		res.Status, res.Body = 503, "Service Unavailable (regional outage in "+svc.Region+")"
+		return res
+	}
 	switch svc.Ingress {
 	case "internal":
 		if req.From.Kind != "vm" && req.From.Kind != "pod" && req.From.Kind != "run-vpc" {
+			s.note("ingress", "fail", "Cloud Run service %s accepts only internal traffic", svc.Name)
 			res.Status, res.Body = 404, "Error: Page not found (ingress is restricted to internal traffic)"
 			return res
 		}
@@ -1005,15 +1082,19 @@ func (s *State) callRun(project string, svc *RunService, req HTTPRequest, path s
 		allowed = false
 	}
 	if !allowed {
+		s.note("iam", "fail", "%s lacks run.routes.invoke on Cloud Run service %s (no roles/run.invoker for it or allUsers)", principal, svc.Name)
 		res.Status = 403
 		res.Body = "Error: Forbidden\nYour client does not have permission to get URL " + path + " from this server."
 		return res
 	}
+	s.note("iam", "ok", "%s may invoke %s (ingress %s)", principal, svc.Name, svc.Ingress)
 	w, why := s.RunWorkload(project, svc)
 	if w == nil {
+		s.note("workload", "fail", "Cloud Run revision of %s cannot serve: %s", svc.Name, why)
 		res.Status, res.Body = 503, "Service Unavailable: "+why
 		return res
 	}
+	s.note("workload", "ok", "revision of %s runs %s as %s", svc.Name, svc.Image, w.Principal)
 	st, msg := s.Call(w, path)
 	res.Status, res.Body = st, msg
 	if st == 200 {
@@ -1081,6 +1162,10 @@ func (s *State) probeInstance(project string, vm *Instance, hc *HealthCheck, ser
 		h.Reason = "backend service has no health check"
 		return h
 	}
+	if s.ZoneDown(vm.Zone) {
+		h.Reason = "zone " + vm.Zone + " unavailable (outage)"
+		return h
+	}
 	port := hc.Port
 	if port == 0 {
 		port = servingPort
@@ -1128,6 +1213,11 @@ func (s *State) callLB(project string, fr *ForwardingRule, req HTTPRequest, host
 	bs := p.BackendServices[bsName]
 	res.Trace = append(res.Trace, "url-map -> backend service "+bsName)
 	if bs == nil {
+		s.note("load-balancer", "fail", "the URL map sends %s%s to %q which does not exist", host, path, bsName)
+	} else {
+		s.note("load-balancer", "ok", "URL map routes %s%s to backend service %s", host, path, bsName)
+	}
+	if bs == nil {
 		res.Status, res.Body = 404, "no backend service for "+path
 		return res
 	}
@@ -1144,6 +1234,7 @@ func (s *State) callLB(project string, fr *ForwardingRule, req HTTPRequest, host
 				} else if strings.Contains(act, "502") {
 					code = 502
 				}
+				s.note("cloud-armor", "fail", "security policy %s rule %s matched source %s → %s", bs.SecurityPolicy, rule, src, act)
 				res.Status, res.Body = code, "Forbidden by Cloud Armor rule "+rule
 				return res
 			}
@@ -1154,6 +1245,10 @@ func (s *State) callLB(project string, fr *ForwardingRule, req HTTPRequest, host
 		if be.NEG != "" {
 			if neg := p.NEGs[be.NEG]; neg != nil {
 				if svc := p.RunServices[neg.RunService]; svc != nil {
+					if s.RegionDown(svc.Region) || s.RegionDown(neg.Region) {
+						s.note("load-balancer", "info", "serverless NEG %s (%s) skipped: region unavailable", neg.Name, neg.Region)
+						continue
+					}
 					r := req
 					r.ViaLB = true
 					r.Principal = ""
@@ -1169,7 +1264,13 @@ func (s *State) callLB(project string, fr *ForwardingRule, req HTTPRequest, host
 	for _, h := range health {
 		if h.Healthy {
 			healthy = append(healthy, h.Instance)
+			s.note("backend-health", "ok", "%s is HEALTHY", h.Instance)
+		} else {
+			s.note("backend-health", "fail", "%s is UNHEALTHY: %s", h.Instance, h.Reason)
 		}
+	}
+	if len(health) == 0 {
+		s.note("backend-health", "fail", "backend service %s has no backends", bs.Name)
 	}
 	if len(healthy) == 0 {
 		res.Status, res.Body = 502, "Error: Server Error\nThe server encountered a temporary error and could not complete your request. (failed_to_pick_backend: no healthy upstream)"
@@ -1185,6 +1286,7 @@ func (s *State) callLB(project string, fr *ForwardingRule, req HTTPRequest, host
 			}
 		}
 	}
+	s.note("network", "ok", "load balancer proxies to %s:%d (named port %q)", vm.Name, port, bs.PortName)
 	out := s.callVMPort(project, vm, port, path, res)
 	if out.Status == 0 {
 		out.Status, out.Body = 502, "upstream connect error"

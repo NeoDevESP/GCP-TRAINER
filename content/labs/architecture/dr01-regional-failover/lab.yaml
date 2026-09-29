@@ -1,0 +1,110 @@
+id: arch-dr01-regional-failover
+title: "Disaster drill: europe-west1 is down"
+summary: Execute a regional failover — promote the cross-region replica, repoint the standby service and verify RTO/RPO.
+track: architect
+day: 1
+level: advanced
+branch: architecture
+type: incident
+mode: production
+skills: [architecture.dr, databases.ha, networking.lb, compute.serverless]
+wellArchitected: [reliability]
+certs: [PCA, PCDBE]
+difficulty: 4
+minutes: 60
+baseline: [empty]
+setup: |
+  gcloud iam service-accounts create orders-sa
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:orders-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:orders-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  gcloud pubsub topics create orders
+  echo -n "dr-drill-pw" | gcloud secrets create orders-db-password --data-file=-
+  gcloud secrets add-iam-policy-binding orders-db-password --member=serviceAccount:orders-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud sql instances create orders-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region=europe-west1 --availability-type=REGIONAL --backup-start-time=02:00 --enable-point-in-time-recovery
+  gcloud sql databases create orders --instance=orders-db
+  gcloud sql users create app --instance=orders-db --password=dr-drill-pw
+  gcloud sql instances create orders-db-dr --master-instance-name=orders-db --region=europe-west4
+  gcloud run deploy orders-ew1 --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region=europe-west1 --service-account=orders-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:europe-west1:orders-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:europe-west1:orders-db,DB_USER=app,DB_NAME=orders,TOPIC=orders --set-secrets=DB_PASSWORD=orders-db-password:latest --allow-unauthenticated
+  gcloud run deploy orders-ew4 --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region=europe-west4 --service-account=orders-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:europe-west1:orders-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:europe-west1:orders-db,DB_USER=app,DB_NAME=orders,TOPIC=orders --set-secrets=DB_PASSWORD=orders-db-password:latest --allow-unauthenticated
+  gcloud compute network-endpoint-groups create orders-neg-ew1 --region=europe-west1 --network-endpoint-type=serverless --cloud-run-service=orders-ew1
+  gcloud compute network-endpoint-groups create orders-neg-ew4 --region=europe-west4 --network-endpoint-type=serverless --cloud-run-service=orders-ew4
+  gcloud compute backend-services create orders-be --global --load-balancing-scheme=EXTERNAL_MANAGED
+  gcloud compute backend-services add-backend orders-be --global --network-endpoint-group=orders-neg-ew1 --network-endpoint-group-region=europe-west1
+  gcloud compute backend-services add-backend orders-be --global --network-endpoint-group=orders-neg-ew4 --network-endpoint-group-region=europe-west4
+  gcloud compute url-maps create orders-map --default-service=orders-be
+  gcloud compute target-http-proxies create orders-proxy --url-map=orders-map
+  gcloud compute forwarding-rules create orders-lb --global --target-http-proxy=orders-proxy --ports=80 --load-balancing-scheme=EXTERNAL_MANAGED
+faults:
+  - {type: region_outage, region: europe-west1}
+traffic:
+  - {name: orders, target: "lb:orders-lb", path: /orders, rps: 30}
+constraints: [protect:orders-db]
+ticket:
+  id: INC-9001
+  kind: INC
+  priority: P1
+  summary: "Google Cloud status page: europe-west1 degraded. Orders API returns 503. Execute the DR runbook."
+  reporter: Incident Commander
+actors:
+  - role: manager
+    name: Irene (engineering manager)
+    fallback: "What is our RTO and RPO right now? I need numbers for the board."
+    facts:
+      - {keywords: [[rto, rpo, target, objetivo]], answer: "Our DR policy: RTO 30 minutes, RPO 5 minutes. The replica in europe-west4 is asynchronous."}
+      - {keywords: [[primary, primario, delete, borrar, orders-db]], answer: "Do NOT delete the primary — when the region is back we need it for forensics and fail-back."}
+story: |
+  **Disaster drill (for real this time).** `europe-west1` is unavailable. The global load balancer already
+  sends traffic to the standby service `orders-ew4` in `europe-west4`, but it still points at the primary
+  database `orders-db` in the failed region. A cross-region read replica `orders-db-dr` exists in europe-west4.
+
+  Execute the failover, verify orders work through `orders-lb`, and report the achieved RTO and RPO.
+objectives:
+  - Confirm the scope of the outage from evidence
+  - Promote the cross-region replica
+  - Repoint the standby service and verify end to end
+  - Report RTO/RPO and the fail-back plan
+quiz:
+  - {id: q1, question: "Why was the REGIONAL (HA) primary not enough for this incident?", options: ["HA protects against zone failures, not the loss of a whole region", "HA was misconfigured", "HA only works for MySQL", "HA needs a load balancer"], answer: [0]}
+  - {id: q2, question: "What bounds the data loss (RPO) of this failover?", options: ["The replication lag of the asynchronous cross-region replica", "The backup window at 02:00", "The Cloud Run concurrency", "The DNS TTL"], answer: [0]}
+hints:
+  - text: "`gcloud sql instances promote-replica orders-db-dr` turns the replica into a standalone primary."
+  - text: "The standby Cloud Run service must attach and use the new instance connection name."
+evidence:
+  fields: [rto, rpo, failback]
+  sample:
+    rto: RTO was about 12 minutes from detection to orders working through the load balancer after promoting the replica and updating orders-ew4.
+    rpo: RPO equals the replication lag of the asynchronous replica, a few seconds, well under the 5 minute target.
+    failback: When europe-west1 recovers, rebuild a replica from the new primary in europe-west4, then schedule a controlled switchover back.
+solution: |
+  gcloud logging read 'logName:cloud-status' --limit=2 --format='value(textPayload)'
+  gcloud sql instances describe orders-db-dr
+  ask manager "what are our rto and rpo targets?"
+  gcloud sql instances promote-replica orders-db-dr
+  gcloud run services update orders-ew4 --region=europe-west4 --add-cloudsql-instances={{.project}}:europe-west4:orders-db-dr --update-env-vars=DB_HOST=/cloudsql/{{.project}}:europe-west4:orders-db-dr
+  curl -s http://$(gcloud compute forwarding-rules describe orders-lb --global --format='value(IPAddress)')/orders
+  ticket update "Failed over to europe-west4: replica promoted and orders-ew4 repointed; orders are served again. Impact about 12 minutes, data loss limited to replication lag."
+rubric:
+  - name: Service restored
+    validator: functional
+    points: 35
+    checks:
+      - {type: http, target: "lb:orders-lb", path: /orders, status: 200, desc: "Orders work through the global load balancer"}
+  - name: Failover executed
+    validator: state
+    points: 20
+    all: true
+    checks:
+      - {type: exists, path: "sqlInstances[\"orders-db-dr\"]", expect: {masterInstanceName: ""}, desc: "Replica promoted to primary"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", desc: "Primary kept for fail-back and forensics"}
+  - name: DR knowledge
+    validator: quiz
+    points: 15
+    checks:
+      - {type: quiz, ratio: 1, desc: "HA vs DR and what bounds RPO"}
+  - name: Communication & RTO/RPO
+    validator: evidence
+    points: 30
+    checks:
+      - {type: ticket_update, desc: "Stakeholder update"}
+      - {type: evidence, fields: [rto, rpo], keywords: [[rto, minut], [rpo, lag, replica]], desc: "RTO and RPO reported"}
+      - {type: evidence, fields: [failback], keywords: [[replica, switchover, fail-back, failback]], desc: "Fail-back plan"}

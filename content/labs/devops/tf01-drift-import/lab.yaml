@@ -1,0 +1,198 @@
+id: devops-tf01-drift-import
+title: "Terraform Challenge: drift, import and a dangerous rename"
+summary: Reconcile Terraform with reality — detect console drift, adopt a hand-made bucket, prevent a mass destruction caused by a rename and protect the network.
+track: devops
+day: 1
+level: advanced
+branch: devops
+type: challenge
+mode: production
+skills: [devops.iacops, devops.iac, networking.firewall]
+wellArchitected: [operations, reliability]
+certs: [PCDE, ACE]
+difficulty: 4
+minutes: 60
+baseline: [empty]
+setup: |
+  gcloud storage buckets create gs://tfstate-{{.project}} --location=EU --uniform-bucket-level-access --versioning
+  cat > main.tf <<'HCL'
+  terraform {
+    backend "gcs" {
+      bucket = "tfstate-{{.project}}"
+      prefix = "prod"
+    }
+  }
+  provider "google" {
+    project = "{{.project}}"
+    region  = "europe-west1"
+  }
+  resource "google_compute_network" "main" {
+    name                    = "prod-net"
+    auto_create_subnetworks = false
+  }
+  resource "google_compute_subnetwork" "app" {
+    name          = "app"
+    ip_cidr_range = "10.20.0.0/20"
+    region        = "europe-west1"
+    network       = google_compute_network.main.id
+  }
+  resource "google_compute_firewall" "ssh_iap" {
+    name          = "allow-ssh-iap"
+    network       = google_compute_network.main.name
+    source_ranges = ["35.235.240.0/20"]
+    allow {
+      protocol = "tcp"
+      ports    = ["22"]
+    }
+  }
+  HCL
+  terraform init
+  terraform apply -auto-approve
+  gcloud storage buckets create gs://logs-{{.project}} --location=EU --uniform-bucket-level-access
+faults:
+  - {type: firewall_source, rule: allow-ssh-iap, sourceRanges: [0.0.0.0/0], actor: "ops-hotfix@{{.project}}.iam.gserviceaccount.com"}
+files:
+  main.tf: |
+    terraform {
+      backend "gcs" {
+        bucket = "tfstate-{{.project}}"
+        prefix = "prod"
+      }
+    }
+    provider "google" {
+      project = "{{.project}}"
+      region  = "europe-west1"
+    }
+    # PR #412: "rename main -> vpc for consistency" and "manage the logs bucket"
+    resource "google_compute_network" "vpc" {
+      name                    = "prod-net"
+      auto_create_subnetworks = false
+    }
+    resource "google_compute_subnetwork" "app" {
+      name          = "app"
+      ip_cidr_range = "10.20.0.0/20"
+      region        = "europe-west1"
+      network       = google_compute_network.vpc.id
+    }
+    resource "google_compute_firewall" "ssh_iap" {
+      name          = "allow-ssh-iap"
+      network       = google_compute_network.vpc.name
+      source_ranges = ["35.235.240.0/20"]
+      allow {
+        protocol = "tcp"
+        ports    = ["22"]
+      }
+    }
+    resource "google_storage_bucket" "logs" {
+      name                        = "logs-{{.project}}"
+      location                    = "EU"
+      uniform_bucket_level_access = true
+    }
+ticket:
+  id: CHG-512
+  kind: CHG
+  priority: P2
+  summary: "Merge PR #412 (rename network resource, manage the logs bucket) and bring prod back in line with Terraform. Last night ops hot-fixed something in the console."
+  reporter: Kai (platform team)
+story: |
+  The state lives in `gs://tfstate-{{.project}}` (prefix `prod`). PR #412 renames `google_compute_network.main`
+  to `google_compute_network.vpc` and adds the **existing** bucket `logs-{{.project}}`, created by hand last year.
+  Last night someone changed a firewall rule in the console.
+
+  Get to a clean `terraform plan` **without destroying or recreating anything** that exists, revert the
+  console drift, and make sure nobody can destroy the production network by accident again.
+objectives:
+  - Detect drift before changing anything
+  - Avoid destroy/recreate caused by the rename (state operations)
+  - Adopt the hand-made bucket (import)
+  - Revert the drift in place and protect the network
+hints:
+  - text: "`terraform plan -refresh-only` shows what changed outside Terraform; read the full plan before applying."
+  - text: "`terraform state mv OLD NEW` and `terraform import ADDR ID`; `lifecycle { prevent_destroy = true }`."
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: The rename would destroy and recreate prod-net, so I moved the state address with terraform state mv; I imported the existing logs bucket instead of creating it; the refresh-only plan showed allow-ssh-iap opened to 0.0.0.0/0 in the console, which apply reverted in place; prevent_destroy now protects the network.
+solution: |
+  terraform init
+  terraform plan -refresh-only
+  terraform plan
+  terraform state mv google_compute_network.main google_compute_network.vpc
+  terraform import google_storage_bucket.logs logs-{{.project}}
+  cat > main.tf <<'HCL'
+  terraform {
+    backend "gcs" {
+      bucket = "tfstate-{{.project}}"
+      prefix = "prod"
+    }
+  }
+  provider "google" {
+    project = "{{.project}}"
+    region  = "europe-west1"
+  }
+  resource "google_compute_network" "vpc" {
+    name                    = "prod-net"
+    auto_create_subnetworks = false
+    lifecycle {
+      prevent_destroy = true
+    }
+  }
+  resource "google_compute_subnetwork" "app" {
+    name          = "app"
+    ip_cidr_range = "10.20.0.0/20"
+    region        = "europe-west1"
+    network       = google_compute_network.vpc.id
+  }
+  resource "google_compute_firewall" "ssh_iap" {
+    name          = "allow-ssh-iap"
+    network       = google_compute_network.vpc.name
+    source_ranges = ["35.235.240.0/20"]
+    allow {
+      protocol = "tcp"
+      ports    = ["22"]
+    }
+  }
+  resource "google_storage_bucket" "logs" {
+    name                        = "logs-{{.project}}"
+    location                    = "EU"
+    uniform_bucket_level_access = true
+  }
+  HCL
+  terraform plan
+  terraform apply -auto-approve
+  terraform plan
+rubric:
+  - name: Clean plan
+    validator: state
+    points: 25
+    checks:
+      - {type: terraform_clean, minResources: 4, desc: "terraform plan shows no changes"}
+  - name: Nothing destroyed
+    validator: security
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: log_contains, filter: "protoPayload.methodName:networks.delete OR protoPayload.methodName:buckets.delete", min: 1, not: true, desc: "No network or bucket was deleted"}
+      - {type: tf_state, address: google_compute_network.vpc, desc: "State tracks the renamed network"}
+      - {type: tf_state, address: google_storage_bucket.logs, desc: "Existing bucket imported"}
+  - name: Drift reverted
+    validator: security
+    points: 20
+    checks:
+      - {type: exists, path: "firewalls[\"allow-ssh-iap\"]", expect: {sourceRanges: ["35.235.240.0/20"]}, desc: "SSH only from IAP again"}
+  - name: Guardrail
+    validator: state
+    points: 10
+    checks:
+      - {type: file_contains, file: main.tf, regex: "prevent_destroy\\s*=\\s*true", desc: "Network protected with prevent_destroy"}
+  - name: Drift detected first
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "terraform plan", min: 2, desc: "Planned before applying"}
+  - name: Explanation
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[state mv, rename, move], [import], [drift, console, refresh]], desc: "Explain the operations"}

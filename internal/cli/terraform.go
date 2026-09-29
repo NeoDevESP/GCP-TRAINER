@@ -19,10 +19,11 @@ import (
 // resources against the simulator through the same code paths as gcloud.
 
 type tfResource struct {
-	Type, Name string
-	Body       *hclsyntax.Body
-	Deps       []string
-	Desired    map[string]any
+	Type, Name     string
+	Body           *hclsyntax.Body
+	Deps           []string
+	Desired        map[string]any
+	PreventDestroy bool // lifecycle { prevent_destroy = true }
 }
 
 type tfConfig struct {
@@ -112,21 +113,24 @@ func (s *Session) terraform(args []string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		out, _, _ := s.tfPlan(cfg, ev, st, false)
+		if f["refresh-only"] != nil {
+			return s.tfRefreshOnly(cfg, ev, st), nil
+		}
+		out, _, _ := s.tfPlan(cfg, ev, st, false, f["target"]...)
 		return out, nil
 	case "apply":
 		ev, err := s.tfEvaluate(cfg)
 		if err != nil {
 			return "", err
 		}
-		out, changes, _ := s.tfPlan(cfg, ev, st, false)
+		out, changes, _ := s.tfPlan(cfg, ev, st, false, f["target"]...)
 		if changes == 0 {
 			return out + s.tfOutputs(cfg, ev, st), nil
 		}
 		if !autoApprove {
 			return out, fail(1, "\nError: No confirmation in non-interactive terminal. Re-run with -auto-approve.")
 		}
-		res, err := s.tfApply(cfg, ev, st)
+		res, err := s.tfApply(cfg, ev, st, f["target"]...)
 		out += res
 		if err != nil {
 			s.tfWriteState(cfg, st)
@@ -141,6 +145,11 @@ func (s *Session) terraform(args []string) (string, error) {
 			return "", fail(1, "Error: No confirmation in non-interactive terminal. Re-run with -auto-approve.")
 		}
 		var b strings.Builder
+		for _, r := range cfg.Resources {
+			if r.PreventDestroy && stateFind(st, r.Type, r.Name) != nil {
+				return "", fail(1, "Error: Instance cannot be destroyed\n\nResource %s.%s has lifecycle.prevent_destroy set, but the plan calls for this resource to be destroyed.", r.Type, r.Name)
+			}
+		}
 		for i := len(st.Resources) - 1; i >= 0; i-- {
 			e := st.Resources[i]
 			if err := s.tfDestroy(cfg, e); err != nil {
@@ -175,10 +184,17 @@ func (s *Session) terraform(args []string) (string, error) {
 			b.WriteString(k + " = " + string(j) + "\n")
 		}
 		return b.String(), nil
-	case "show", "state":
-		if sub == "state" && (len(pos) < 2 || pos[1] != "list") {
-			return "", fail(1, "only `terraform state list` is supported")
+	case "import":
+		if len(pos) < 3 {
+			return "", fail(1, "Usage: terraform import ADDR ID")
 		}
+		return s.tfImport(cfg, st, pos[1], pos[2])
+	case "state":
+		if len(pos) >= 2 && pos[1] != "list" {
+			return s.tfStateCmd(cfg, st, pos[1:])
+		}
+		fallthrough
+	case "show":
 		var b strings.Builder
 		for _, e := range st.Resources {
 			b.WriteString(e.Type + "." + e.Name)
@@ -189,7 +205,131 @@ func (s *Session) terraform(args []string) (string, error) {
 		}
 		return b.String(), nil
 	}
-	return "", fail(1, "Terraform has no command named %q (supported: init, validate, plan, apply, destroy, output, show, state list, fmt)", sub)
+	return "", fail(1, "Terraform has no command named %q (supported: init, validate, plan, apply, destroy, output, show, state list|show|rm|mv, import, fmt)", sub)
+}
+
+func splitAddr(addr string) (string, string, bool) {
+	i := strings.Index(addr, ".")
+	if i <= 0 {
+		return "", "", false
+	}
+	return addr[:i], addr[i+1:], true
+}
+
+// tfImport adopts an existing cloud resource into the state.
+func (s *Session) tfImport(cfg *tfConfig, st *tfState, addr, id string) (string, error) {
+	typ, name, ok := splitAddr(addr)
+	if !ok {
+		return "", fail(1, "Error: Invalid address %q", addr)
+	}
+	var r *tfResource
+	for _, x := range cfg.Resources {
+		if x.Type == typ && x.Name == name {
+			r = x
+		}
+	}
+	if r == nil {
+		return "", fail(1, "Error: resource address %q does not exist in the configuration.\n\nBefore importing this resource, please create its configuration in the root module.", addr)
+	}
+	if stateFind(st, typ, name) != nil {
+		return "", fail(1, "Error: Resource already managed by Terraform\n\nTerraform is already managing a remote object for %s. To import to this address you must first remove the existing object from the state.", addr)
+	}
+	t := tfTypes[typ]
+	ev, err := s.tfEvaluate(cfg)
+	if err != nil {
+		return "", err
+	}
+	full := id
+	if want := t.id(cfg, ev.desired[addr]); strings.HasSuffix(want, "/"+id) || want == id {
+		full = want
+	}
+	if _, exists := t.read(s, cfg, full); !exists {
+		return "", fail(1, "Error: Cannot import non-existent remote object\n\nWhile attempting to import an existing object to %q, the provider detected that no object exists with the given id %q.", addr, id)
+	}
+	st.Resources = append(st.Resources, tfStateEntry{Type: typ, Name: name, ID: full})
+	s.tfWriteState(cfg, st)
+	return fmt.Sprintf("%s: Importing from ID %q...\n%s: Import prepared!\n%s: Refreshing state... [id=%s]\n\nImport successful!\n\nThe resources that were imported are shown above. These resources are now in\nyour Terraform state and will henceforth be managed by Terraform.\n", addr, id, addr, addr, full), nil
+}
+
+func (s *Session) tfStateCmd(cfg *tfConfig, st *tfState, args []string) (string, error) {
+	switch args[0] {
+	case "show":
+		if len(args) < 2 {
+			return "", fail(1, "Usage: terraform state show ADDR")
+		}
+		typ, name, _ := splitAddr(args[1])
+		e := stateFind(st, typ, name)
+		if e == nil {
+			return "", fail(1, "No instance found for the given address!")
+		}
+		actual, _ := tfTypes[typ].read(s, cfg, e.ID)
+		var b strings.Builder
+		fmt.Fprintf(&b, "# %s:\nresource %q %q {\n    id = %q\n", args[1], typ, name, e.ID)
+		for _, k := range sim.SortedKeys(actual) {
+			j, _ := json.Marshal(actual[k])
+			fmt.Fprintf(&b, "    %s = %s\n", k, j)
+		}
+		b.WriteString("}\n")
+		return b.String(), nil
+	case "rm":
+		if len(args) < 2 {
+			return "", fail(1, "Usage: terraform state rm ADDR")
+		}
+		typ, name, _ := splitAddr(args[1])
+		if stateFind(st, typ, name) == nil {
+			return "", fail(1, "Error: Invalid target address\n\nNo matching objects found for %s.", args[1])
+		}
+		removeState(st, typ, name)
+		s.tfWriteState(cfg, st)
+		return fmt.Sprintf("Removed %s\nSuccessfully removed 1 resource instance(s).\n", args[1]), nil
+	case "mv":
+		if len(args) < 3 {
+			return "", fail(1, "Usage: terraform state mv SOURCE DESTINATION")
+		}
+		t1, n1, _ := splitAddr(args[1])
+		t2, n2, _ := splitAddr(args[2])
+		e := stateFind(st, t1, n1)
+		if e == nil {
+			return "", fail(1, "Error: Invalid source address\n\nCannot move %s: does not match anything in the current state.", args[1])
+		}
+		if t1 != t2 {
+			return "", fail(1, "Error: Invalid state move request\n\nCannot move %s to %s: resource types don't match.", args[1], args[2])
+		}
+		if stateFind(st, t2, n2) != nil {
+			return "", fail(1, "Error: Invalid target address\n\nCannot move to %s: there is already a resource instance at that address.", args[2])
+		}
+		e.Name = n2
+		s.tfWriteState(cfg, st)
+		return fmt.Sprintf("Move %q to %q\nSuccessfully moved 1 object(s).\n", args[1], args[2]), nil
+	}
+	return "", fail(1, "unsupported state subcommand %q (list, show, rm, mv)", args[0])
+}
+
+// tfRefreshOnly reports drift between state and real infrastructure without
+// proposing changes to match the configuration.
+func (s *Session) tfRefreshOnly(cfg *tfConfig, ev *tfEvaluated, st *tfState) string {
+	var b strings.Builder
+	drift := 0
+	for _, e := range st.Resources {
+		t := tfTypes[e.Type]
+		actual, exists := t.read(s, cfg, e.ID)
+		if !exists {
+			drift++
+			fmt.Fprintf(&b, "  # %s.%s has been deleted outside of Terraform\n", e.Type, e.Name)
+			continue
+		}
+		want := t.norm(cfg, ev.desired[e.Type+"."+e.Name])
+		for _, k := range sim.SortedKeys(want) {
+			if fmt.Sprint(want[k]) != fmt.Sprint(actual[k]) {
+				drift++
+				fmt.Fprintf(&b, "  # %s.%s has changed outside of Terraform: %s = %v (configuration says %v)\n", e.Type, e.Name, k, actual[k], want[k])
+			}
+		}
+	}
+	if drift == 0 {
+		return "\nNo changes. Your infrastructure still matches the configuration.\n"
+	}
+	return "\nNote: Objects have changed outside of Terraform\n\n" + b.String() + "\nThis is a refresh-only plan, so Terraform will not take any actions to undo these.\n"
 }
 
 func (s *Session) tfLoad(extraVars map[string]string) (*tfConfig, error) {
@@ -265,6 +405,15 @@ func (s *Session) tfLoad(extraVars map[string]string) (*tfConfig, error) {
 					return nil, fail(1, "Error: Invalid resource type\n\n  on %s line %d: The provider hashicorp/google does not support resource type %q in the simulator.\n  Supported: %s", fn, blk.DefRange().Start.Line, blk.Labels[0], strings.Join(sim.SortedKeys(tfTypes), ", "))
 				}
 				r := &tfResource{Type: blk.Labels[0], Name: blk.Labels[1], Body: blk.Body}
+				for _, lb := range blk.Body.Blocks {
+					if lb.Type == "lifecycle" {
+						if a, ok := lb.Body.Attributes["prevent_destroy"]; ok {
+							if v, d := a.Expr.Value(nil); !d.HasErrors() && v.Type() == cty.Bool && v.True() {
+								r.PreventDestroy = true
+							}
+						}
+					}
+				}
 				for _, t := range bodyVars(blk.Body) {
 					root := t.RootName()
 					if strings.HasPrefix(root, "google_") && len(t) > 1 {
@@ -603,11 +752,22 @@ func (s *Session) tfActions(cfg *tfConfig, ev *tfEvaluated, st *tfState) []tfAct
 				changed = append(changed, fmt.Sprintf("%s: %v -> %v", k, actual[k], want[k]))
 			}
 		}
+		inplace := t.update != nil
+		for _, k := range sim.SortedKeys(want) {
+			if fmt.Sprint(want[k]) != fmt.Sprint(actual[k]) && !t.inplace[k] {
+				inplace = false
+			}
+		}
 		if e.ID != id {
 			changed = append(changed, fmt.Sprintf("id: %s -> %s", e.ID, id))
+			inplace = false
 		}
 		if len(changed) > 0 {
-			acts = append(acts, tfAction{r: r, kind: "replace", changed: changed, entry: *e})
+			kind := "replace"
+			if inplace {
+				kind = "update"
+			}
+			acts = append(acts, tfAction{r: r, kind: kind, changed: changed, entry: *e})
 		}
 	}
 	for i := len(st.Resources) - 1; i >= 0; i-- {
@@ -619,8 +779,8 @@ func (s *Session) tfActions(cfg *tfConfig, ev *tfEvaluated, st *tfState) []tfAct
 	return acts
 }
 
-func (s *Session) tfPlan(cfg *tfConfig, ev *tfEvaluated, st *tfState, _ bool) (string, int, []tfAction) {
-	acts := s.tfActions(cfg, ev, st)
+func (s *Session) tfPlan(cfg *tfConfig, ev *tfEvaluated, st *tfState, _ bool, targets ...string) (string, int, []tfAction) {
+	acts := filterTarget(s.tfActions(cfg, ev, st), targets)
 	if len(acts) == 0 {
 		return "\nNo changes. Your infrastructure matches the configuration.\n\nTerraform has compared your real infrastructure against your configuration and found no differences, so no changes are needed.\n", 0, nil
 	}
@@ -637,6 +797,13 @@ func (s *Session) tfPlan(cfg *tfConfig, ev *tfEvaluated, st *tfState, _ bool) (s
 				fmt.Fprintf(&b, "      + %-22s = %s\n", k, string(j))
 			}
 			b.WriteString("    }\n\n")
+		case "update":
+			change++
+			fmt.Fprintf(&b, "  # %s.%s will be updated in-place\n  ~ resource %q %q {\n", a.r.Type, a.r.Name, a.r.Type, a.r.Name)
+			for _, c := range a.changed {
+				fmt.Fprintf(&b, "      ~ %s\n", c)
+			}
+			b.WriteString("    }\n\n")
 		case "replace":
 			add++
 			destroy++
@@ -651,13 +818,51 @@ func (s *Session) tfPlan(cfg *tfConfig, ev *tfEvaluated, st *tfState, _ bool) (s
 		}
 	}
 	fmt.Fprintf(&b, "Plan: %d to add, %d to change, %d to destroy.\n", add, change, destroy)
+	for _, a := range acts {
+		if a.kind == "replace" && a.r != nil && a.r.PreventDestroy {
+			fmt.Fprintf(&b, "\n\u2502 Error: Instance cannot be destroyed\n\u2502\n\u2502 Resource %s.%s has lifecycle.prevent_destroy set, but the plan calls for this resource to be destroyed.\n", a.r.Type, a.r.Name)
+		}
+	}
 	return b.String(), add + change + destroy, acts
 }
 
-func (s *Session) tfApply(cfg *tfConfig, ev *tfEvaluated, st *tfState) (string, error) {
-	acts := s.tfActions(cfg, ev, st)
+// preventDestroyViolation returns an error if the actions destroy a protected resource.
+func preventDestroyViolation(acts []tfAction) error {
+	for _, a := range acts {
+		if a.kind == "replace" && a.r != nil && a.r.PreventDestroy {
+			return fail(1, "Error: Instance cannot be destroyed\n\nResource %s.%s has lifecycle.prevent_destroy set, but the plan calls for this resource to be destroyed. To avoid this error and continue with the plan, either disable lifecycle.prevent_destroy or reduce the scope of the plan using the -target flag.", a.r.Type, a.r.Name)
+		}
+	}
+	return nil
+}
+
+// filterTarget keeps only actions on the given resource addresses (-target).
+func filterTarget(acts []tfAction, targets []string) []tfAction {
+	if len(targets) == 0 {
+		return acts
+	}
+	var out []tfAction
+	for _, a := range acts {
+		addr := a.entry.Type + "." + a.entry.Name
+		if a.r != nil {
+			addr = a.r.Type + "." + a.r.Name
+		}
+		for _, t := range targets {
+			if t == addr {
+				out = append(out, a)
+			}
+		}
+	}
+	return out
+}
+
+func (s *Session) tfApply(cfg *tfConfig, ev *tfEvaluated, st *tfState, targets ...string) (string, error) {
+	acts := filterTarget(s.tfActions(cfg, ev, st), targets)
+	if err := preventDestroyViolation(acts); err != nil {
+		return "", err
+	}
 	var b strings.Builder
-	added, destroyed := 0, 0
+	added, destroyed, changedN := 0, 0, 0
 	for _, a := range acts {
 		if a.kind == "destroy" {
 			if err := s.tfDestroy(cfg, a.entry); err != nil {
@@ -673,6 +878,15 @@ func (s *Session) tfApply(cfg *tfConfig, ev *tfEvaluated, st *tfState) (string, 
 			continue
 		}
 		t := tfTypes[a.r.Type]
+		if a.kind == "update" {
+			fmt.Fprintf(&b, "%s.%s: Modifying... [id=%s]\n", a.r.Type, a.r.Name, a.entry.ID)
+			if err := t.update(s, cfg, a.entry.ID, a.r.Desired); err != nil {
+				return b.String(), fail(1, "\nError: updating %s.%s: %v", a.r.Type, a.r.Name, err)
+			}
+			changedN++
+			fmt.Fprintf(&b, "%s.%s: Modifications complete after 1s [id=%s]\n", a.r.Type, a.r.Name, a.entry.ID)
+			continue
+		}
 		if a.kind == "replace" {
 			if err := s.tfDestroy(cfg, a.entry); err != nil {
 				return b.String(), fail(1, "Error: replacing %s.%s: %v", a.r.Type, a.r.Name, err)
@@ -689,7 +903,7 @@ func (s *Session) tfApply(cfg *tfConfig, ev *tfEvaluated, st *tfState) (string, 
 		added++
 		fmt.Fprintf(&b, "%s.%s: Creation complete after 2s [id=%s]\n", a.r.Type, a.r.Name, id)
 	}
-	fmt.Fprintf(&b, "\nApply complete! Resources: %d added, 0 changed, %d destroyed.\n", added, destroyed)
+	fmt.Fprintf(&b, "\nApply complete! Resources: %d added, %d changed, %d destroyed.\n", added, changedN, destroyed)
 	return b.String(), nil
 }
 
@@ -754,6 +968,9 @@ type tfType struct {
 	read     func(s *Session, cfg *tfConfig, id string) (map[string]any, bool)
 	create   func(s *Session, cfg *tfConfig, d map[string]any) error
 	destroy  func(s *Session, cfg *tfConfig, id string) error
+	// inplace lists attributes the provider can update without replacement.
+	inplace map[string]bool
+	update  func(s *Session, cfg *tfConfig, id string, d map[string]any) error
 }
 
 func sv(d map[string]any, k, def string) string {
@@ -984,6 +1201,24 @@ func init() {
 		destroy: func(s *Session, cfg *tfConfig, id string) error {
 			parts := strings.Split(id, "/")
 			return s.tfExec(parts[1], "compute", "firewall-rules", "delete", parts[4], "--quiet")
+		},
+		inplace: map[string]bool{"source_ranges": true, "target_tags": true, "source_tags": true, "priority": true, "rules": true},
+		update: func(s *Session, cfg *tfConfig, id string, d map[string]any) error {
+			parts := strings.Split(id, "/")
+			_, r := fwRules(d)
+			args := []string{"compute", "firewall-rules", "update", parts[4], "--priority=" + sv(d, "priority", "1000"), "--rules=" + r}
+			src := lv(d, "source_ranges")
+			if len(src) == 0 && len(lv(d, "source_tags")) == 0 {
+				src = []string{"0.0.0.0/0"}
+			}
+			if len(src) > 0 {
+				args = append(args, "--source-ranges="+strings.Join(src, ","))
+			}
+			args = append(args, "--target-tags="+strings.Join(lv(d, "target_tags"), ","))
+			if l := lv(d, "source_tags"); len(l) > 0 {
+				args = append(args, "--source-tags="+strings.Join(l, ","))
+			}
+			return s.tfExec(parts[1], args...)
 		},
 	}
 	tfTypes["google_compute_instance"] = &tfType{required: []string{"name", "machine_type", "boot_disk", "network_interface"},

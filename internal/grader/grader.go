@@ -311,6 +311,28 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		}
 	case "log_contains":
 		ok, detail = c.logContains(ch)
+	case "k8s_rbac":
+		cl, ns := c.cluster(ch)
+		if cl == nil || cl.K8s == nil {
+			ok, detail = false, "cluster not found"
+			break
+		}
+		allowed := cl.K8s.NS(ns).RBACAllows(ns, str(ch, "serviceAccount"), str(ch, "verb"), str(ch, "resource"))
+		ok = allowed == boolean(ch, "expect", true)
+		detail = fmt.Sprintf("system:serviceaccount:%s:%s can %s %s: %v", ns, str(ch, "serviceAccount"), str(ch, "verb"), str(ch, "resource"), allowed)
+	case "tf_state":
+		ok, detail = c.tfState(ch)
+	case "file_contains":
+		content, exists := c.Session.Files[str(ch, "file")]
+		re, err := regexp.Compile(str(ch, "regex"))
+		switch {
+		case !exists:
+			ok, detail = false, "file "+str(ch, "file")+" not found"
+		case err != nil:
+			ok, detail = false, "bad regex"
+		default:
+			ok, detail = re.MatchString(content), "file "+str(ch, "file")
+		}
 	case "org_policy":
 		op := c.State.EffectiveOrgPolicy(c.Project, strings.TrimPrefix(str(ch, "constraint"), "constraints/"))
 		ok, detail = op != nil && op.Enforce == boolean(ch, "enforced", true), "no effective policy"
@@ -1404,4 +1426,36 @@ func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
 		return float64(n) >= num(ch, "min", 1), fmt.Sprintf("%d relevant question(s)", n)
 	}
 	return false, "unknown desk check"
+}
+
+// tfState checks that a resource address is (or is not) in the Terraform state.
+func (c *Context) tfState(ch scenario.Check) (bool, string) {
+	raw, ok := c.Session.Files["terraform.tfstate"]
+	if !ok {
+		for _, b := range c.State.Projects[c.Project].Buckets {
+			for k, o := range b.Objects {
+				if strings.HasSuffix(k, "default.tfstate") {
+					raw, ok = o.Content, true
+				}
+			}
+		}
+	}
+	if !ok {
+		return false, "no Terraform state"
+	}
+	var st struct {
+		Resources []struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"resources"`
+	}
+	_ = json.Unmarshal([]byte(raw), &st)
+	want := str(ch, "address")
+	found := false
+	for _, r := range st.Resources {
+		if r.Type+"."+r.Name == want {
+			found = true
+		}
+	}
+	return found == boolean(ch, "present", true), fmt.Sprintf("%s in state: %v", want, found)
 }

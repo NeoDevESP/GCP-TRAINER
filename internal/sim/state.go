@@ -28,6 +28,7 @@ type State struct {
 	Extra   map[string]string    `json:"extra,omitempty"`
 	ipSeq   map[string]int
 	rng     *rand.Rand
+	explain *[]Hop // causal-chain recorder for "teach me why" (not serialised)
 }
 
 type Organization struct {

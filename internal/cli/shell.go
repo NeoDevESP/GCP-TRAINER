@@ -699,6 +699,10 @@ func (s *Session) run(args []string, stdin string) (string, error) {
 		return helpText, nil
 	case "ticket", "ask", "team":
 		return s.deskCmd(args, stdin)
+	case "why":
+		return s.whyCmd(args)
+	case "whatif":
+		return s.whatifCmd(args, stdin)
 	case "watch":
 		return s.run(args[1:], stdin)
 	case "uuidgen":
@@ -874,6 +878,7 @@ const helpText = `GCP Lab Simulator terminal (F0). Available tools:
   terraform init, validate, plan, apply, destroy, output, fmt, show
   git, docker, curl, nc, ping, dig, psql
   desk      ticket (show|comment|update|resolve|escalate), team, ask WHO "question"
+  mentor    why TARGET (causal chain of a request), whatif COMMAND (impact preview)
   shell     echo, cat, ls, rm, export, env, grep, head, tail, wc, awk, cut,
             jq, base64, sleep (advances simulated time), history
 Tips: pipes (|), &&, ||, ;, > and >> redirections, heredocs (<<EOF) and
