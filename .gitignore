@@ -12,3 +12,4 @@ coverage.out
 *.tfstate.*
 terraform.tfvars
 *.tsbuildinfo
+.demo/
