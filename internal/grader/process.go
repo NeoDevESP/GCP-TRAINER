@@ -2,6 +2,7 @@ package grader
 
 import (
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"math"
 	"regexp"
 	"strings"
@@ -85,6 +86,7 @@ func isReadOnly(line string) bool {
 // submission. hints is the number of hints consumed.
 func AssessProcess(lab *scenario.Lab, sess *cli.Session, res *Result, sub Submission, hints int) *ProcessReport {
 	pr := &ProcessReport{}
+	p := func(es, en string) string { return i18n.P(sub.Lang, es, en) }
 	evidenceBefore := 0
 	for _, r := range sess.Records {
 		line := r.Line
@@ -113,7 +115,7 @@ func AssessProcess(lab *scenario.Lab, sess *cli.Session, res *Result, sub Submis
 			pr.BlindFixes = append(pr.BlindFixes, line)
 		}
 		for _, c := range lab.Constraints {
-			if v := constraintViolated(c, line); v != "" {
+			if v := constraintViolated(c, line, sub.Lang); v != "" {
 				pr.Violations = append(pr.Violations, v)
 			}
 		}
@@ -147,10 +149,10 @@ func AssessProcess(lab *scenario.Lab, sess *cli.Session, res *Result, sub Submis
 	if v, ok := share("diagnosis", "evidence"); ok {
 		diag = 0.5*diag + 0.5*v
 	}
-	sig := []string{fmt.Sprintf("%d read-only / %d mutating commands", pr.ReadOnly, pr.Mutating)}
+	sig := []string{fmt.Sprintf(p("%d comandos de solo lectura / %d que modifican", "%d read-only / %d mutating commands"), pr.ReadOnly, pr.Mutating)}
 	if len(pr.BlindFixes) > 0 {
 		diag -= 15 * float64(len(pr.BlindFixes))
-		sig = append(sig, fmt.Sprintf("%d change(s) before gathering evidence", len(pr.BlindFixes)))
+		sig = append(sig, fmt.Sprintf(p("%d cambio(s) antes de reunir evidencias", "%d change(s) before gathering evidence"), len(pr.BlindFixes)))
 	}
 	add("diagnosis", diag, sig...)
 	// Security
@@ -162,7 +164,7 @@ func AssessProcess(lab *scenario.Lab, sess *cli.Session, res *Result, sub Submis
 		sec = math.Min(sec, 30)
 	}
 	sec -= 20 * float64(len(pr.RiskyGrants))
-	add("security", sec, pluralSig(len(pr.RiskyGrants), "over-broad grant or exposure command"))
+	add("security", sec, pluralSig(len(pr.RiskyGrants), p("permiso demasiado amplio o comando de exposición", "over-broad grant or exposure command"), p("permisos demasiado amplios o comandos de exposición", "over-broad grant or exposure commands")))
 	// Cost
 	cost := 100.0
 	if v, ok := share("cost"); ok {
@@ -184,10 +186,10 @@ func AssessProcess(lab *scenario.Lab, sess *cli.Session, res *Result, sub Submis
 		eff -= 40 * float64(pr.Errors) / float64(pr.Commands)
 	}
 	eff -= 5 * float64(hints)
-	add("efficiency", eff, fmt.Sprintf("%d commands (reference %d), %d errors, %d hints", pr.Commands, ref, pr.Errors, hints))
+	add("efficiency", eff, fmt.Sprintf(p("%d comandos (referencia %d), %d errores, %d pistas", "%d commands (reference %d), %d errors, %d hints"), pr.Commands, ref, pr.Errors, hints))
 	// Risk: destructive changes, blind restarts and constraint violations.
 	risk := 100 - 10*float64(len(pr.Destructive)) - 20*float64(len(pr.Violations))
-	add("risk", risk, pluralSig(len(pr.Destructive), "destructive command"), pluralSig(len(pr.Violations), "constraint violation"))
+	add("risk", risk, pluralSig(len(pr.Destructive), p("comando destructivo", "destructive command"), p("comandos destructivos", "destructive commands")), pluralSig(len(pr.Violations), p("restricción incumplida", "constraint violation"), p("restricciones incumplidas", "constraint violations")))
 	// Communication: incident updates / ticket comments.
 	comm := textQuality(sub.Evidence, []string{"update", "communication", "ticket", "status", "impact"})
 	if d := sess.Desk; d != nil {
@@ -240,7 +242,7 @@ func isIncident(l *scenario.Lab) bool {
 // Supported: "no-downtime" (no stop/delete/reset of serving resources),
 // "no-delete", "no-public" (no allUsers grants), "no-basic-roles",
 // "protect:<name>" (resource must not be modified).
-func constraintViolated(c, line string) string {
+func constraintViolated(c, line, lang string) string {
 	c = strings.TrimSpace(c)
 	switch {
 	case c == "no-downtime":
@@ -264,7 +266,7 @@ func constraintViolated(c, line string) string {
 	case strings.HasPrefix(c, "protect:"):
 		name := strings.TrimPrefix(c, "protect:")
 		if !isReadOnly(line) && regexp.MustCompile(`(^|[\s/=])`+regexp.QuoteMeta(name)+`(\s|$|[,:])`).MatchString(line) {
-			return "protected resource " + name + " modified: " + line
+			return i18n.Pf(lang, "se ha modificado el recurso protegido %s: %s", "protected resource %s modified: %s", name, line)
 		}
 	}
 	return ""
@@ -287,14 +289,14 @@ func textQuality(ev map[string]string, fields []string) float64 {
 	return math.Min(100, float64(words)*4+float64(present)*10)
 }
 
-func pluralSig(n int, what string) string {
+func pluralSig(n int, one, many string) string {
 	if n == 0 {
 		return ""
 	}
 	if n == 1 {
-		return "1 " + what
+		return "1 " + one
 	}
-	return fmt.Sprintf("%d %ss", n, what)
+	return fmt.Sprintf("%d %s", n, many)
 }
 
 func clamp(v float64) float64 {

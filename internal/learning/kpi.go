@@ -1,6 +1,7 @@
 package learning
 
 import (
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"sort"
 	"strings"
 	"time"
@@ -41,11 +42,12 @@ type KPIs struct {
 
 // ComputeKPIs derives KPIs from all attempts (optionally for a class).
 func (e *Engine) ComputeKPIs(all []Attempt) KPIs {
+	p := e.p
 	k := KPIs{Targets: map[string]string{
-		"firstAttemptSuccess": "45–70% depending on difficulty", "hintDependency": "<30% after 2nd exposure",
-		"retryToMastery": "1–3 retries", "retention7d": ">70%", "retention30d": ">60%", "incidentRootCauseRate": ">70% intermediate",
-		"capstonePassRate": "50–70% first attempt", "skillCoverage": ">90% target skills", "provisionP95Ms": "F0/F1 <60s, F2 <4min",
-		"graderErrorRate": "<1%", "autoGradedLabs": ">80%", "infraFailureRate": "<2% of sessions",
+		"firstAttemptSuccess": p("45–70% según la dificultad", "45–70% depending on difficulty"), "hintDependency": p("<30% tras la 2.ª exposición", "<30% after 2nd exposure"),
+		"retryToMastery": p("1–3 intentos", "1–3 retries"), "retention7d": ">70%", "retention30d": ">60%", "incidentRootCauseRate": p(">70% en intermedio", ">70% intermediate"),
+		"capstonePassRate": p("50–70% al primer intento", "50–70% first attempt"), "skillCoverage": p(">90% de las habilidades objetivo", ">90% target skills"), "provisionP95Ms": "F0/F1 <60s, F2 <4min",
+		"graderErrorRate": "<1%", "autoGradedLabs": ">80%", "infraFailureRate": p("<2% de las sesiones", "<2% of sessions"),
 	}}
 	byUserLab := map[string][]Attempt{}
 	users := map[string]bool{}
@@ -68,7 +70,7 @@ func (e *Engine) ComputeKPIs(all []Attempt) KPIs {
 			for _, it := range a.Result.Items {
 				for _, c := range it.Checks {
 					checks++
-					if strings.HasPrefix(c.Detail, "grader error") {
+					if strings.HasPrefix(c.Detail, "grader error") || strings.HasPrefix(c.Detail, "error del evaluador") {
 						graderErr++
 					}
 				}
@@ -150,7 +152,7 @@ func (e *Engine) ComputeKPIs(all []Attempt) KPIs {
 					continue
 				}
 				for _, it := range a.Result.Items {
-					if strings.Contains(strings.ToLower(it.Name), "root cause") {
+					if n := i18n.Fold(it.Name); strings.Contains(n, "root cause") || strings.Contains(n, "causa raiz") {
 						rcN++
 						la.rcN++
 						if it.Earned >= float64(it.Points)*0.7 {
@@ -229,9 +231,9 @@ func (e *Engine) ComputeKPIs(all []Attempt) KPIs {
 		if la.users >= 5 {
 			switch {
 			case lk.FirstAttemptSucc < 30:
-				lk.Flag = "too hard or grader false-negatives: review"
+				lk.Flag = p("demasiado difícil o falsos negativos del evaluador: revisar", "too hard or grader false-negatives: review")
 			case lk.FirstAttemptSucc > 90:
-				lk.Flag = "too easy: raise difficulty"
+				lk.Flag = p("demasiado fácil: sube la dificultad", "too easy: raise difficulty")
 			}
 		}
 		k.PerLab = append(k.PerLab, lk)

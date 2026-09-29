@@ -20,15 +20,16 @@ type State struct {
 	Folders  map[string]*Folder  `json:"folders"`
 	Projects map[string]*Project `json:"projects"`
 	// Buckets live in a global namespace in GCS.
-	Logs    []LogEntry           `json:"logs"`
-	Metrics map[string][]Point   `json:"metrics"`
-	Traffic []TrafficSpec        `json:"traffic"`
-	Images  map[string]*Behavior `json:"images"` // image catalog (behaviour models)
-	Tick    int                  `json:"tick"`
-	Extra   map[string]string    `json:"extra,omitempty"`
-	ipSeq   map[string]int
-	rng     *rand.Rand
-	explain *[]Hop // causal-chain recorder for "teach me why" (not serialised)
+	Logs        []LogEntry           `json:"logs"`
+	Metrics     map[string][]Point   `json:"metrics"`
+	Traffic     []TrafficSpec        `json:"traffic"`
+	Images      map[string]*Behavior `json:"images"` // image catalog (behaviour models)
+	Tick        int                  `json:"tick"`
+	Extra       map[string]string    `json:"extra,omitempty"`
+	ipSeq       map[string]int
+	rng         *rand.Rand
+	explain     *[]Hop // causal-chain recorder for "teach me why" (not serialised)
+	explainLang string // language of the recorded explanations
 }
 
 type Organization struct {

@@ -77,7 +77,7 @@ func play(t *testing.T, d *Definition, c *Company, id string, cmds ...string) {
 }
 
 func available(c *Company, d *Definition, id string) bool {
-	for _, m := range c.Missions(d, stages, 5) {
+	for _, m := range c.Missions(d, stages, 5, "es") {
 		if m.ID == id && m.Available {
 			return true
 		}

@@ -50,11 +50,11 @@ func (e *Engine) Adaptive(attempts []Attempt, skills []SkillScore, sm StudentMod
 			continue
 		}
 		if spec := e.stealthSpec(r.Skill, attempts); spec != nil {
-			add(Recommendation{Kind: "stealth", Title: "Production incident", Reason: fmt.Sprintf("retention check (estimated recall %.0f%%) embedded in an unannounced incident", 100*r.Retention/max(1, r.Demonstrated)), Gen: spec, Skill: r.Skill})
+			add(Recommendation{Kind: "stealth", Title: e.p("Incidente en producción", "Production incident"), Reason: fmt.Sprintf(e.p("comprobación de retención (recuerdo estimado %.0f%%) dentro de un incidente sin avisar", "retention check (estimated recall %.0f%%) embedded in an unannounced incident"), 100*r.Retention/max(1, r.Demonstrated)), Gen: spec, Skill: r.Skill})
 			continue
 		}
 		if id := e.labForSkill(r.Skill, passed, true); id != "" {
-			add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "review", Reason: fmt.Sprintf("spaced review of %s (due since %s)", r.Skill, r.DueAt.Format("2006-01-02")), Skill: r.Skill})
+			add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "review", Reason: fmt.Sprintf(e.p("repaso espaciado de %s (pendiente desde %s)", "spaced review of %s (due since %s)"), r.Skill, r.DueAt.Format("2006-01-02")), Skill: r.Skill})
 		}
 	}
 	// 2. weakest dimension
@@ -75,9 +75,9 @@ func (e *Engine) Adaptive(attempts []Attempt, skills []SkillScore, sm StudentMod
 			continue
 		}
 		if id := e.labOfType(want, passed, d); id != "" {
-			add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "dimension", Reason: "strengthen your weakest dimension: " + d})
+			add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "dimension", Reason: e.p("refuerza tu dimensión más débil: ", "strengthen your weakest dimension: ") + e.dimName(d)})
 		} else if e.Lib != nil && (d == DimTroubleshooting || d == DimAutonomy) {
-			add(Recommendation{Kind: "dimension", Title: "Generated incident", Reason: "strengthen " + d + " with a new, unlabelled incident", Gen: &scenario.GenSpec{System: "three-tier", Difficulty: 3, Seed: int64(len(attempts) + 11)}})
+			add(Recommendation{Kind: "dimension", Title: e.p("Incidente generado", "Generated incident"), Reason: fmt.Sprintf(e.p("refuerza %s con un incidente nuevo y sin etiquetar", "strengthen %s with a new, unlabelled incident"), e.dimName(d)), Gen: &scenario.GenSpec{System: "three-tier", Difficulty: 3, Seed: int64(len(attempts) + 11)}})
 		}
 	}
 	// 3. frontier of the skill graph
@@ -96,14 +96,14 @@ func (e *Engine) Adaptive(attempts []Attempt, skills []SkillScore, sm StudentMod
 			break
 		}
 		if id := e.labForSkill(sk, passed, false); id != "" {
-			add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "frontier", Reason: "newly unlocked in the skill graph: " + sk, Skill: sk})
+			add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "frontier", Reason: e.p("recién desbloqueada en el grafo de habilidades: ", "newly unlocked in the skill graph: ") + sk, Skill: sk})
 		}
 	}
 	// 4. recurring errors
 	for _, ep := range sm.Errors {
 		for _, sk := range ep.Skills {
 			if id := e.labForSkill(sk, passed, false); id != "" {
-				add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "remediation", Reason: "recurring error: " + ep.Pattern, Skill: sk})
+				add(Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Kind: "remediation", Reason: e.p("error recurrente: ", "recurring error: ") + ep.Pattern, Skill: sk})
 				break
 			}
 		}

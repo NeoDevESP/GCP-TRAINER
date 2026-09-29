@@ -7,11 +7,13 @@
 package desk
 
 import (
+	"errors"
 	"fmt"
-	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 )
 
 // Ticket kinds.
@@ -82,6 +84,8 @@ type Desk struct {
 	Ticket    *Ticket    `json:"ticket,omitempty"`
 	Actors    []Actor    `json:"actors,omitempty"`
 	Questions []Question `json:"questions,omitempty"`
+	// Lang is the language of the desk's own messages (es primary, en).
+	Lang string `json:"lang,omitempty"`
 }
 
 // Clone deep-copies the desk.
@@ -89,7 +93,7 @@ func (d *Desk) Clone() *Desk {
 	if d == nil {
 		return nil
 	}
-	n := &Desk{Actors: d.Actors, Questions: append([]Question{}, d.Questions...)}
+	n := &Desk{Actors: d.Actors, Questions: append([]Question{}, d.Questions...), Lang: d.Lang}
 	if d.Ticket != nil {
 		t := *d.Ticket
 		t.Comments = append([]Comment{}, d.Ticket.Comments...)
@@ -150,9 +154,9 @@ func (d *Desk) Ask(who, question, at string) (string, string, string, error) {
 		}
 		sort.Strings(roles)
 		if len(roles) == 0 {
-			return "", "", "", fmt.Errorf("nobody else is involved in this ticket")
+			return "", "", "", errors.New(i18n.P(d.Lang, "no hay nadie más implicado en este ticket", "nobody else is involved in this ticket"))
 		}
-		return "", "", "", fmt.Errorf("unknown person %q (available: %s)", who, strings.Join(roles, ", "))
+		return "", "", "", fmt.Errorf(i18n.P(d.Lang, "persona desconocida %q (disponibles: %s)", "unknown person %q (available: %s)"), who, strings.Join(roles, ", "))
 	}
 	q := normalize(question)
 	for _, f := range a.Facts {
@@ -177,7 +181,7 @@ func (d *Desk) Ask(who, question, at string) (string, string, string, error) {
 	}
 	fb := a.Fallback
 	if fb == "" {
-		fb = "I'm not sure — can you be more specific? I can tell you what I saw or what changed."
+		fb = i18n.P(d.Lang, "No estoy seguro, ¿puedes concretar más? Puedo contarte lo que vi o lo que cambió.", "I'm not sure — can you be more specific? I can tell you what I saw or what changed.")
 	}
 	d.Questions = append(d.Questions, Question{At: at, Actor: a.Role, Question: question, Answer: fb})
 	return fb, "", "", nil
@@ -186,10 +190,10 @@ func (d *Desk) Ask(who, question, at string) (string, string, string, error) {
 // Comment adds an update to the ticket.
 func (d *Desk) Comment(from, text, at string, public bool) error {
 	if d.Ticket == nil {
-		return fmt.Errorf("no ticket is attached to this lab")
+		return d.noTicket()
 	}
 	if strings.TrimSpace(text) == "" {
-		return fmt.Errorf("empty comment")
+		return errors.New(i18n.P(d.Lang, "comentario vacío", "empty comment"))
 	}
 	d.Ticket.Comments = append(d.Ticket.Comments, Comment{At: at, From: from, Text: text, Public: public})
 	if d.Ticket.Status == "" || d.Ticket.Status == "NEW" {
@@ -201,24 +205,28 @@ func (d *Desk) Comment(from, text, at string, public bool) error {
 // Resolve closes the ticket with a resolution note.
 func (d *Desk) Resolve(from, note, at string) error {
 	if d.Ticket == nil {
-		return fmt.Errorf("no ticket is attached to this lab")
+		return d.noTicket()
 	}
 	if len(strings.Fields(note)) < 5 {
-		return fmt.Errorf("a resolution note needs at least five words (what was wrong, what you changed)")
+		return errors.New(i18n.P(d.Lang, "la nota de resolución necesita al menos cinco palabras (qué fallaba y qué has cambiado)", "a resolution note needs at least five words (what was wrong, what you changed)"))
 	}
 	d.Ticket.Status, d.Ticket.Resolution = "RESOLVED", note
-	d.Ticket.Comments = append(d.Ticket.Comments, Comment{At: at, From: from, Text: "RESOLVED: " + note})
+	d.Ticket.Comments = append(d.Ticket.Comments, Comment{At: at, From: from, Text: i18n.P(d.Lang, "RESUELTO: ", "RESOLVED: ") + note})
 	return nil
 }
 
 // Escalate hands the ticket to another team.
 func (d *Desk) Escalate(from, team, reason, at string) error {
 	if d.Ticket == nil {
-		return fmt.Errorf("no ticket is attached to this lab")
+		return d.noTicket()
 	}
 	d.Ticket.Status, d.Ticket.EscalatedTo = "ESCALATED", team
-	d.Ticket.Comments = append(d.Ticket.Comments, Comment{At: at, From: from, Text: "ESCALATED to " + team + ": " + reason})
+	d.Ticket.Comments = append(d.Ticket.Comments, Comment{At: at, From: from, Text: i18n.P(d.Lang, "ESCALADO a ", "ESCALATED to ") + team + ": " + reason})
 	return nil
+}
+
+func (d *Desk) noTicket() error {
+	return errors.New(i18n.P(d.Lang, "este laboratorio no tiene ningún ticket", "no ticket is attached to this lab"))
 }
 
 // StudentComments returns the comments written by the learner.
@@ -236,18 +244,19 @@ func (d *Desk) StudentComments(student string) []Comment {
 }
 
 // Render formats the ticket for the terminal.
-func (t *Ticket) Render() string {
+func (t *Ticket) Render(lang string) string {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s  [%s %s]  SLA %s  status %s\n", t.ID, t.Kind, t.Priority, t.SLA, firstNonEmpty(t.Status, "NEW"))
-	fmt.Fprintf(&b, "Summary:  %s\n", t.Summary)
+	fmt.Fprintf(&b, "%s  [%s %s]  SLA %s  %s %s\n", t.ID, t.Kind, t.Priority, t.SLA, p("estado", "status"), statusName(lang, firstNonEmpty(t.Status, "NEW")))
+	fmt.Fprintf(&b, "%-13s %s\n", p("Resumen:", "Summary:"), t.Summary)
 	if t.Impact != "" {
-		fmt.Fprintf(&b, "Impact:   %s\n", t.Impact)
+		fmt.Fprintf(&b, "%-13s %s\n", p("Impacto:", "Impact:"), t.Impact)
 	}
 	if t.Reporter != "" {
-		fmt.Fprintf(&b, "Reporter: %s\n", t.Reporter)
+		fmt.Fprintf(&b, "%-13s %s\n", p("Abierto por:", "Reporter:"), t.Reporter)
 	}
 	for _, a := range t.Attachments {
-		fmt.Fprintf(&b, "Attachment: %s (cat %s)\n", a.Name, a.Name)
+		fmt.Fprintf(&b, "%s %s (cat %s)\n", p("Adjunto:", "Attachment:"), a.Name, a.Name)
 	}
 	if len(t.Comments) > 0 {
 		b.WriteString("\n")
@@ -256,6 +265,24 @@ func (t *Ticket) Render() string {
 		}
 	}
 	return b.String()
+}
+
+// statusName translates a ticket status code for display.
+func statusName(lang, s string) string {
+	if lang == i18n.EN {
+		return s
+	}
+	switch s {
+	case "NEW":
+		return "NUEVO"
+	case "IN_PROGRESS":
+		return "EN_CURSO"
+	case "RESOLVED":
+		return "RESUELTO"
+	case "ESCALATED":
+		return "ESCALADO"
+	}
+	return s
 }
 
 func firstNonEmpty(v ...string) string {

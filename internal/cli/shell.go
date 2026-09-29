@@ -717,7 +717,7 @@ func (s *Session) run(args []string, stdin string) (string, error) {
 	case "ssh", "scp":
 		return "", fail(1, "Use `gcloud compute ssh INSTANCE --command=\"...\"` to run commands on a VM.")
 	case "help":
-		return helpText, nil
+		return s.tr(helpTextES, helpText), nil
 	case "ticket", "ask", "team":
 		return s.deskCmd(args, stdin)
 	case "why":
@@ -893,6 +893,34 @@ func cut(args []string, in string) (string, error) {
 }
 
 func nowStamp() string { return time.Now().UTC().Format(time.RFC3339) }
+
+const helpTextES = `Terminal del simulador GCP Lab (F0). Herramientas disponibles:
+  gcloud    compute, network, storage, iam, run, sql, pubsub, secrets, kms,
+            container, artifacts, builds, deploy, logging, monitoring, dns,
+            ai, scc, services, config, auth, projects, folders, organizations,
+            org-policies, billing, recommender
+  gsutil    mb, ls, cp, cat, rm, iam ch, lifecycle, versioning, pap, ubla
+  bq        mk, ls, show, query (--dry_run), rm
+  kubectl   apply, get, describe, logs, scale, set, rollout, autoscale,
+            expose, create, delete, run, exec, top, auth can-i
+  terraform init, validate, plan, apply, destroy, output, fmt, show,
+            import, state (list|show|rm|mv), -target, -refresh-only
+  git, docker, curl, nc, ping, dig, psql
+  desk      ticket (show|comment|update|resolve|escalate), team, ask QUIÉN "pregunta"
+  mentor    why OBJETIVO (cadena causal de una petición), whatif COMANDO (vista previa del impacto)
+  arch      arch evaluate design.yaml requirements.yaml (simulador de arquitectura)
+  chaos     chaos run zone-outage|region-outage|kill-instance|stop-service --target=...,
+            chaos history
+  finops    billing report, gcloud recommender recommendations list --recommender=ID
+  interview interview (siguiente pregunta), answer ID N[,M] ["justificación"]
+  vm (ssh)  ls -l, stat, id, groups, usermod, chmod, chown, df -h, du, find,
+            truncate, logrotate, systemctl, journalctl, sudo
+  shell     echo, cat, ls, rm, export, env, grep, head, tail, wc, awk, cut, sed,
+            jq (incl. select, keys), base64, sleep (avanza el tiempo simulado), history
+Consejos: se admiten tuberías (|), &&, ||, ;, redirecciones > y >>, heredocs (<<EOF),
+sustitución $(comando) y bloques for/while/if. Usa la pestaña Archivos para
+editar ficheros.
+`
 
 const helpText = `GCP Lab Simulator terminal (F0). Available tools:
   gcloud    compute, network, storage, iam, run, sql, pubsub, secrets, kms,

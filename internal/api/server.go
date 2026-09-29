@@ -74,17 +74,17 @@ func (s *Server) Handler() http.Handler {
 				var err error
 				u, err = s.authenticate(r)
 				if err != nil {
-					writeErr(w, http.StatusUnauthorized, err)
+					writeErr(w, s.lang(r), http.StatusUnauthorized, err)
 					return
 				}
 				if len(roles) > 0 && !contains(roles, u.Role) {
-					writeErr(w, http.StatusForbidden, fmt.Errorf("requires role %v", roles))
+					writeErr(w, s.lang(r), http.StatusForbidden, fmt.Errorf("requires role %v", roles))
 					return
 				}
 				r = r.WithContext(context.WithValue(r.Context(), ctxKey("user"), u))
 			}
 			if !s.allow(r) {
-				writeErr(w, http.StatusTooManyRequests, fmt.Errorf("rate limit exceeded"))
+				writeErr(w, s.lang(r), http.StatusTooManyRequests, fmt.Errorf("rate limit exceeded"))
 				return
 			}
 			v, err := fn(w, r)
@@ -94,7 +94,7 @@ func (s *Server) Handler() http.Handler {
 				if errors.As(err, &he) {
 					code = he.code
 				}
-				writeErr(w, code, err)
+				writeErr(w, s.lang(r), code, err)
 			} else if v != nil {
 				writeJSON(w, v)
 			}
@@ -476,10 +476,10 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeErr(w http.ResponseWriter, code int, err error) {
+func writeErr(w http.ResponseWriter, lang string, code int, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": localizeError(lang, err.Error())})
 }
 
 func contains(l []string, v string) bool {
@@ -835,7 +835,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	s.Engine.ForLang(info.Lang).Award(att, prior)
 	var companyOut map[string]any
 	if l := s.Cat.Lab(info.LabID); l != nil && l.Company != nil && s.Company != nil {
-		companyOut = s.companyComplete(att.UserID, l.ID, info.ID, res)
+		companyOut = s.companyComplete(att.UserID, l.ID, info.ID, res, info.Lang)
 	}
 	if err := s.Store.Put("attempts", att.ID, att); err != nil {
 		return nil, err

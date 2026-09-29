@@ -12,7 +12,7 @@ func TestNaiveDesignFailsWithReasons(t *testing.T) {
 		{Name: "web", Type: "mig", Regions: []string{"europe-west1"}, Zones: 1, MinInstances: 2, MaxInstances: 4, MachineType: "e2-standard-2"},
 		{Name: "db", Type: "cloud-sql", Regions: []string{"europe-west1"}, Tier: "db-custom-2-7680", PublicIP: true},
 	}, Path: []string{"lb", "web", "db"}}
-	r := Evaluate(d, req)
+	r := Evaluate(d, req, "en")
 	if r.Passed == r.Total {
 		t.Fatalf("naive design should not meet the requirements: %+v", r.Findings)
 	}
@@ -40,8 +40,8 @@ func TestGoodDesignMeetsRequirements(t *testing.T) {
 		{Name: "db", Type: "spanner", Regions: []string{"eur3"}, MultiRegion: true, Nodes: 1, Private: true},
 	}, Path: []string{"lb", "web", "db"}}
 	d.Components[3].Regions = []string{"europe-west1", "europe-west4"}
-	r := Evaluate(d, req)
+	r := Evaluate(d, req, "en")
 	if r.Passed != r.Total {
-		t.Fatalf("good design should pass everything, got %s", r.Render())
+		t.Fatalf("good design should pass everything, got %s", r.Render("en"))
 	}
 }

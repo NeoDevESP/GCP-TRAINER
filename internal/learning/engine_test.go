@@ -91,7 +91,7 @@ func TestAutonomyLadder(t *testing.T) {
 	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	e := &Engine{Cat: c, Now: func() time.Time { return now }}
 	var atts []Attempt
-	if a := e.Autonomy(atts); a.Stage != "Guided" {
+	if a := e.Autonomy(atts); a.Index != 0 || a.Stage != "Guiado" {
 		t.Fatalf("empty history should be Guided, got %s", a.Stage)
 	}
 	for i, l := range []string{"ace-d11-app-403", "ace-d12-private-egress", "ace-d18-api-db-firewall", "ace-d19-secret-env", "ace-d20-sql-saturated", "ace-d25-public-exposure"} {

@@ -145,22 +145,23 @@ func (e *Engine) Award(a *Attempt, prior []Attempt) {
 		a.Bonus += n
 		a.BonusReasons = append(a.BonusReasons, fmt.Sprintf("+%d %s", n, why))
 	}
+	p := e.p
 	if len(a.HintsUsed) == 0 && !a.SolutionShown && !passedBefore {
-		addBonus(10, "solved without hints")
+		addBonus(10, p("resuelto sin pistas", "solved without hints"))
 	}
 	if lab != nil && a.DurationSec() > 0 && a.DurationSec() < float64(lab.Minutes*60)/2 && !passedBefore {
-		addBonus(3, "fast (after security and functional checks passed)")
+		addBonus(3, p("rápido (tras superar las comprobaciones funcionales y de seguridad)", "fast (after security and functional checks passed)"))
 	}
 	if lab != nil && lab.RetestOf != "" {
-		addBonus(15, "delayed re-test of an equivalent scenario")
+		addBonus(15, p("repetición diferida de un escenario equivalente", "delayed re-test of an equivalent scenario"))
 		a.Retest = true
 	}
 	if passedBefore && firstPass != nil && a.Started.Sub(*firstPass.Finished) >= 7*24*time.Hour && len(a.HintsUsed) == 0 {
-		addBonus(10, "retention check (≥7 days later, no hints)")
+		addBonus(10, p("comprobación de retención (≥7 días después, sin pistas)", "retention check (≥7 days later, no hints)"))
 		a.Retest = true
 	}
 	if lab != nil && (lab.Type == "boss") && a.Score >= 90 {
-		addBonus(20, "boss battle ≥90")
+		addBonus(20, p("jefe final ≥90", "boss battle ≥90"))
 	}
 	// cap bonus per track
 	used := 0
@@ -171,7 +172,7 @@ func (e *Engine) Award(a *Attempt, prior []Attempt) {
 	}
 	if used+a.Bonus > BonusCap {
 		a.Bonus = max(0, BonusCap-used)
-		a.BonusReasons = append(a.BonusReasons, "bonus capped at 300 per track")
+		a.BonusReasons = append(a.BonusReasons, p("bonificación limitada a 300 por ruta", "bonus capped at 300 per track"))
 	}
 }
 
@@ -258,6 +259,9 @@ type Profile struct {
 	Adaptive        []Recommendation   `json:"adaptive"`
 	Career          CareerProfile      `json:"career"`
 }
+
+// p picks the Spanish or English text for the engine's language.
+func (e *Engine) p(es, en string) string { return i18n.P(e.Lang, es, en) }
 
 func (e *Engine) now() time.Time {
 	if e.Now != nil {
@@ -459,14 +463,15 @@ func (e *Engine) ReadinessFor(skills []SkillScore, branches map[string]float64) 
 				r.Weak = append(r.Weak, e.branchName(parts[i].b))
 			}
 		}
-		exp := fmt.Sprintf("%.0f%% practical readiness", r.Percent)
+		and := e.p(" y ", " and ")
+		exp := fmt.Sprintf(e.p("%.0f%% de preparación práctica", "%.0f%% practical readiness"), r.Percent)
 		if len(r.Strong) > 0 {
-			exp += "; strong in " + strings.Join(r.Strong, " and ")
+			exp += e.p("; fuerte en ", "; strong in ") + strings.Join(r.Strong, and)
 		}
 		if len(r.Weak) > 0 {
-			exp += "; weak in " + strings.Join(r.Weak, " and ")
+			exp += e.p("; flojo en ", "; weak in ") + strings.Join(r.Weak, and)
 		}
-		exp += fmt.Sprintf(" (blueprint coverage %.0f%%)", r.Coverage)
+		exp += fmt.Sprintf(e.p(" (cobertura del temario %.0f%%)", " (blueprint coverage %.0f%%)"), r.Coverage)
 		r.Explained = exp
 		out = append(out, r)
 	}
@@ -513,11 +518,11 @@ func (e *Engine) Badges(skills []SkillScore, branches map[string]float64, attemp
 		switch b.Kind {
 		case "technical":
 			if branches[b.Branch] >= b.MinMastery && branchPassed[b.Branch] >= b.MinLabs {
-				out = append(out, Badge{ID: b.ID, Name: b.Name, Kind: b.Kind, Reason: fmt.Sprintf("%s mastery %.0f with %d labs", e.branchName(b.Branch), branches[b.Branch], branchPassed[b.Branch])})
+				out = append(out, Badge{ID: b.ID, Name: b.Name, Kind: b.Kind, Reason: fmt.Sprintf(e.p("dominio de %s %.0f con %d laboratorios", "%s mastery %.0f with %d labs"), e.branchName(b.Branch), branches[b.Branch], branchPassed[b.Branch])})
 			}
 		case "mastery":
 			if s, ok := skill[b.Skill]; ok && s.MasteryBadge && s.Mastery >= b.MinMastery {
-				out = append(out, Badge{ID: b.ID, Name: b.Name, Kind: b.Kind, Reason: "challenge + incident + delayed re-test without help"})
+				out = append(out, Badge{ID: b.ID, Name: b.Name, Kind: b.Kind, Reason: e.p("reto + incidente + repetición diferida sin ayuda", "challenge + incident + delayed re-test without help")})
 			}
 		case "special":
 			ok := len(b.Labs) > 0
@@ -551,7 +556,7 @@ func (e *Engine) Recommend(skills []SkillScore, branches map[string]float64, att
 	if t := e.Cat.Track(trackID); t != nil {
 		for _, id := range t.Labs {
 			if !passed[id] {
-				recs = append(recs, Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Reason: "next step in " + t.Title, Kind: "next"})
+				recs = append(recs, Recommendation{LabID: id, Title: e.Cat.Lab(id).Title, Reason: e.p("siguiente paso en ", "next step in ") + t.Title, Kind: "next"})
 				break
 			}
 		}
@@ -585,7 +590,7 @@ func (e *Engine) Recommend(skills []SkillScore, branches map[string]float64, att
 		}
 		sort.SliceStable(cands, func(i, j int) bool { return e.Cat.Labs[cands[i]].Difficulty < e.Cat.Labs[cands[j]].Difficulty })
 		if len(cands) > 0 {
-			recs = append(recs, Recommendation{LabID: cands[0], Title: e.Cat.Labs[cands[0]].Title, Reason: fmt.Sprintf("%s remediation pack (branch score %.0f)", e.branchName(b.id), b.s), Kind: "remediation"})
+			recs = append(recs, Recommendation{LabID: cands[0], Title: e.Cat.Labs[cands[0]].Title, Reason: fmt.Sprintf(e.p("paquete de refuerzo de %s (puntuación de la rama %.0f)", "%s remediation pack (branch score %.0f)"), e.branchName(b.id), b.s), Kind: "remediation"})
 			n++
 		}
 	}
@@ -596,14 +601,14 @@ func (e *Engine) Recommend(skills []SkillScore, branches map[string]float64, att
 			continue
 		}
 		if t, ok := firstPass[l.RetestOf]; ok && e.now().Sub(t) >= 7*24*time.Hour {
-			recs = append(recs, Recommendation{LabID: id, Title: l.Title, Reason: "retention check: equivalent scenario without hints", Kind: "retest"})
+			recs = append(recs, Recommendation{LabID: id, Title: l.Title, Reason: e.p("comprobación de retención: escenario equivalente sin pistas", "retention check: equivalent scenario without hints"), Kind: "retest"})
 		}
 	}
 	// mock scenario when ACE readiness is high
 	for _, id := range e.Cat.LabOrder {
 		l := e.Cat.Lab(id)
 		if l.Type == "boss" && !passed[id] && branches["networking"] >= 60 && branches["iam"] >= 60 {
-			recs = append(recs, Recommendation{LabID: id, Title: l.Title, Reason: "ACE mock scenario / boss battle", Kind: "mock"})
+			recs = append(recs, Recommendation{LabID: id, Title: l.Title, Reason: e.p("simulacro ACE / jefe final", "ACE mock scenario / boss battle"), Kind: "mock"})
 			break
 		}
 	}

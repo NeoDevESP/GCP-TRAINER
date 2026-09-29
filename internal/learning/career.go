@@ -76,7 +76,7 @@ func passedLabs(attempts []Attempt) map[string]bool {
 func (e *Engine) stageNeeds(st CareerStage, branches map[string]float64, sm StudentModel, passed map[string]bool) []string {
 	var need []string
 	if sm.Autonomy.Index < st.MinAutonomy {
-		need = append(need, fmt.Sprintf("autonomy %s (now %s)", AutonomyLadder[st.MinAutonomy], sm.Autonomy.Stage))
+		need = append(need, fmt.Sprintf(e.p("autonomía %s (ahora %s)", "autonomy %s (now %s)"), e.autonomyName(st.MinAutonomy), sm.Autonomy.Stage))
 	}
 	keys := make([]string, 0, len(st.Branches))
 	for b := range st.Branches {
@@ -85,7 +85,7 @@ func (e *Engine) stageNeeds(st CareerStage, branches map[string]float64, sm Stud
 	sort.Strings(keys)
 	for _, b := range keys {
 		if branches[b] < st.Branches[b] {
-			need = append(need, fmt.Sprintf("%s mastery %.0f/%.0f", e.branchName(b), branches[b], st.Branches[b]))
+			need = append(need, fmt.Sprintf(e.p("dominio de %s %.0f/%.0f", "%s mastery %.0f/%.0f"), e.branchName(b), branches[b], st.Branches[b]))
 		}
 	}
 	for _, c := range st.Capstones {
@@ -94,7 +94,7 @@ func (e *Engine) stageNeeds(st CareerStage, branches map[string]float64, sm Stud
 			if l := e.Cat.Lab(c); l != nil {
 				title = l.Title
 			}
-			need = append(need, "capstone: "+title)
+			need = append(need, e.p("proyecto final: ", "capstone: ")+title)
 		}
 	}
 	return need
@@ -143,7 +143,7 @@ func (e *Engine) Career(skills []SkillScore, branches map[string]float64, sm Stu
 			total++
 			got += clamp01(mastery[s] / 70)
 			if mastery[s] < 70 {
-				p.Missing = append(p.Missing, "skill "+s)
+				p.Missing = append(p.Missing, e.p("habilidad ", "skill ")+s)
 			}
 		}
 		for _, c := range sp.Capstones {
@@ -151,7 +151,7 @@ func (e *Engine) Career(skills []SkillScore, branches map[string]float64, sm Stu
 			if passed[c] {
 				got++
 			} else {
-				p.Missing = append(p.Missing, "capstone "+c)
+				p.Missing = append(p.Missing, e.p("proyecto final ", "capstone ")+c)
 			}
 		}
 		if total > 0 {

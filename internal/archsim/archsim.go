@@ -11,6 +11,7 @@ package archsim
 
 import (
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"math"
 	"sort"
 	"strings"
@@ -112,51 +113,52 @@ func continent(region string) string {
 }
 
 // componentAvailability returns the availability (%) of a component and why.
-func componentAvailability(c Component) (float64, string) {
+func componentAvailability(c Component, lang string) (float64, string) {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	regions := len(c.Regions)
 	switch c.Type {
 	case "global-lb":
 		return 99.99, "global external load balancer SLA 99.99%"
 	case "cdn":
-		return 99.99, "Cloud CDN at the edge"
+		return 99.99, p("Cloud CDN en el borde", "Cloud CDN at the edge")
 	case "cloud-run":
 		if regions >= 2 {
-			return 99.99, "Cloud Run in 2+ regions behind a global LB (regional failure tolerated)"
+			return 99.99, p("Cloud Run en 2+ regiones tras un balanceador global (tolera el fallo de una región)", "Cloud Run in 2+ regions behind a global LB (regional failure tolerated)")
 		}
-		return 99.95, "Cloud Run single region (99.95%)"
+		return 99.95, p("Cloud Run en una sola región (99,95%)", "Cloud Run single region (99.95%)")
 	case "mig", "gke":
 		switch {
 		case regions >= 2:
-			return 99.99, "regional " + c.Type + " in 2+ regions"
+			return 99.99, p(c.Type+" regional en 2+ regiones", "regional "+c.Type+" in 2+ regions")
 		case c.Zones >= 2:
-			return 99.95, c.Type + " spread over several zones of one region"
+			return 99.95, p(c.Type+" repartido en varias zonas de una región", c.Type+" spread over several zones of one region")
 		default:
-			return 99.5, "zonal " + c.Type + " (single zone: a zone failure takes it down)"
+			return 99.5, p(c.Type+" zonal (una sola zona: la caída de la zona lo tumba)", "zonal "+c.Type+" (single zone: a zone failure takes it down)")
 		}
 	case "cloud-sql":
 		if c.HA {
-			return 99.95, "Cloud SQL regional HA (standby in another zone)"
+			return 99.95, p("Cloud SQL con HA regional (réplica en espera en otra zona)", "Cloud SQL regional HA (standby in another zone)")
 		}
-		return 99.5, "Cloud SQL zonal instance (no standby)"
+		return 99.5, p("instancia zonal de Cloud SQL (sin réplica en espera)", "Cloud SQL zonal instance (no standby)")
 	case "spanner":
 		if c.MultiRegion {
-			return 99.999, "Spanner multi-region configuration"
+			return 99.999, p("configuración multirregión de Spanner", "Spanner multi-region configuration")
 		}
-		return 99.99, "Spanner regional configuration"
+		return 99.99, p("configuración regional de Spanner", "Spanner regional configuration")
 	case "firestore":
 		if c.MultiRegion {
-			return 99.999, "Firestore multi-region"
+			return 99.999, p("Firestore multirregión", "Firestore multi-region")
 		}
-		return 99.99, "Firestore regional"
+		return 99.99, p("Firestore regional", "Firestore regional")
 	case "memorystore":
 		if c.HA {
-			return 99.9, "Memorystore Standard tier (replica)"
+			return 99.9, p("Memorystore nivel Standard (con réplica)", "Memorystore Standard tier (replica)")
 		}
-		return 99.5, "Memorystore Basic tier (no replica)"
+		return 99.5, p("Memorystore nivel Basic (sin réplica)", "Memorystore Basic tier (no replica)")
 	case "pubsub", "gcs", "bigquery":
-		return 99.95, c.Type + " regional/multi-regional managed service"
+		return 99.95, p(c.Type+": servicio gestionado regional/multirregional", c.Type+" regional/multi-regional managed service")
 	}
-	return 99.0, "unknown component type (assumed 99%)"
+	return 99.0, p("tipo de componente desconocido (se asume 99%)", "unknown component type (assumed 99%)")
 }
 
 // capacity in requests per second per instance/unit.
@@ -258,19 +260,21 @@ func componentCost(c Component) (float64, string) {
 
 var dataStores = map[string]bool{"cloud-sql": true, "spanner": true, "firestore": true, "memorystore": true, "gcs": true, "bigquery": true}
 
-// Evaluate scores a design against requirements.
-func Evaluate(d *Design, req Requirements) Report {
+// Evaluate scores a design against requirements; lang selects the language
+// of the explanations (es primary, en). Requirement ids stay in English.
+func Evaluate(d *Design, req Requirements, lang string) Report {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	r := Report{LatencyMs: map[string]int{}, CostLines: map[string]float64{}}
 	byName := map[string]Component{}
 	for _, c := range d.Components {
 		if c.Name == "" {
-			r.Problems = append(r.Problems, "component without name")
+			r.Problems = append(r.Problems, p("componente sin nombre", "component without name"))
 			continue
 		}
 		byName[c.Name] = c
 	}
 	if len(d.Path) == 0 {
-		r.Problems = append(r.Problems, "design has no request path (path: [lb, app, db])")
+		r.Problems = append(r.Problems, p("el diseño no tiene camino de petición (path: [lb, app, db])", "design has no request path (path: [lb, app, db])"))
 	}
 	// availability: series composition along the synchronous path
 	avail := 1.0
@@ -278,10 +282,10 @@ func Evaluate(d *Design, req Requirements) Report {
 	for _, n := range d.Path {
 		c, ok := byName[n]
 		if !ok {
-			r.Problems = append(r.Problems, "path references unknown component "+n)
+			r.Problems = append(r.Problems, p("el camino hace referencia a un componente desconocido: ", "path references unknown component ")+n)
 			continue
 		}
-		a, why := componentAvailability(c)
+		a, why := componentAvailability(c, lang)
 		avail *= a / 100
 		availWhy = append(availWhy, fmt.Sprintf("%s %.3f%% (%s)", n, a, why))
 	}
@@ -296,7 +300,7 @@ func Evaluate(d *Design, req Requirements) Report {
 		case "cloud-run", "mig", "gke":
 			if len(c.Regions) < 2 {
 				computeMulti = false
-				drWhy = append(drWhy, n+" runs in a single region: redeploying elsewhere takes ~60 min")
+				drWhy = append(drWhy, n+p(" se ejecuta en una sola región: redesplegar en otra lleva ~60 min", " runs in a single region: redeploying elsewhere takes ~60 min"))
 				r.RTOMinutes = math.Max(r.RTOMinutes, 60)
 			}
 		case "cloud-sql":
@@ -304,27 +308,27 @@ func Evaluate(d *Design, req Requirements) Report {
 			case len(c.Replicas) > 0:
 				r.RPOMinutes = math.Max(r.RPOMinutes, 1)
 				r.RTOMinutes = math.Max(r.RTOMinutes, 15)
-				drWhy = append(drWhy, n+": promote the cross-region replica (async: seconds of data loss, ~15 min manual failover)")
+				drWhy = append(drWhy, n+p(": promocionar la réplica en otra región (asíncrona: segundos de pérdida de datos, ~15 min de conmutación manual)", ": promote the cross-region replica (async: seconds of data loss, ~15 min manual failover)"))
 			case c.PITR && c.Backups:
 				r.RPOMinutes = math.Max(r.RPOMinutes, 60)
 				r.RTOMinutes = math.Max(r.RTOMinutes, 120)
-				drWhy = append(drWhy, n+": restore backups/PITR into another region (~1 h of log shipping lag, ~2 h restore)")
+				drWhy = append(drWhy, n+p(": restaurar copias/PITR en otra región (~1 h de retraso en el envío de logs, ~2 h de restauración)", ": restore backups/PITR into another region (~1 h of log shipping lag, ~2 h restore)"))
 			case c.Backups:
 				r.RPOMinutes = math.Max(r.RPOMinutes, 1440)
 				r.RTOMinutes = math.Max(r.RTOMinutes, 180)
-				drWhy = append(drWhy, n+": only daily backups (up to 24 h of data lost, ~3 h restore)")
+				drWhy = append(drWhy, n+p(": solo copias diarias (hasta 24 h de datos perdidos, ~3 h de restauración)", ": only daily backups (up to 24 h of data lost, ~3 h restore)"))
 			default:
 				r.RPOMinutes = math.Max(r.RPOMinutes, 1e6)
 				r.RTOMinutes = math.Max(r.RTOMinutes, 1e6)
-				drWhy = append(drWhy, n+": no backups — a regional disaster loses the data")
+				drWhy = append(drWhy, n+p(": sin copias de seguridad; un desastre regional pierde los datos", ": no backups — a regional disaster loses the data"))
 			}
 		case "spanner", "firestore":
 			if !c.MultiRegion {
 				r.RPOMinutes = math.Max(r.RPOMinutes, 60)
 				r.RTOMinutes = math.Max(r.RTOMinutes, 120)
-				drWhy = append(drWhy, n+": regional configuration — restore from backup in another region")
+				drWhy = append(drWhy, n+p(": configuración regional; restaurar desde copia en otra región", ": regional configuration — restore from backup in another region"))
 			} else {
-				drWhy = append(drWhy, n+": multi-region, synchronous replication (RPO 0, automatic failover)")
+				drWhy = append(drWhy, n+p(": multirregión, replicación síncrona (RPO 0, conmutación automática)", ": multi-region, synchronous replication (RPO 0, automatic failover)"))
 			}
 		}
 	}
@@ -345,7 +349,7 @@ func Evaluate(d *Design, req Requirements) Report {
 		total := u * maxI * max(1, len(c.Regions))
 		if cap < 0 || total < cap {
 			cap = total
-			capWhy = fmt.Sprintf("%s: %d rps/instance × max %d × %d region(s)", n, u, maxI, max(1, len(c.Regions)))
+			capWhy = fmt.Sprintf(p("%s: %d rps/instancia × máx. %d × %d región(es)", "%s: %d rps/instance × max %d × %d region(s)"), n, u, maxI, max(1, len(c.Regions)))
 		}
 	}
 	if cap < 0 {
@@ -410,19 +414,19 @@ func Evaluate(d *Design, req Requirements) Report {
 		}
 	}
 	if req.Availability > 0 {
-		add("availability", fmt.Sprintf("≥ %.3f%%", req.Availability), fmt.Sprintf("%.3f%%", r.Availability), r.Availability >= req.Availability, "series composition: "+strings.Join(availWhy, " × "))
+		add("availability", fmt.Sprintf("≥ %.3f%%", req.Availability), fmt.Sprintf("%.3f%%", r.Availability), r.Availability >= req.Availability, p("composición en serie: ", "series composition: ")+strings.Join(availWhy, " × "))
 	}
 	if req.RPOMinutes > 0 || req.RTOMinutes > 0 {
 		sort.Strings(drWhy)
 		why := strings.Join(drWhy, "; ")
 		if why == "" {
-			why = "no stateful component on the request path"
+			why = p("no hay ningún componente con estado en el camino de la petición", "no stateful component on the request path")
 		}
 		if req.RPOMinutes > 0 {
-			add("RPO (regional failure)", fmt.Sprintf("≤ %.0f min", req.RPOMinutes), fmtMin(r.RPOMinutes), r.RPOMinutes <= req.RPOMinutes, why)
+			add("RPO (regional failure)", fmt.Sprintf("≤ %.0f min", req.RPOMinutes), fmtMin(r.RPOMinutes, lang), r.RPOMinutes <= req.RPOMinutes, why)
 		}
 		if req.RTOMinutes > 0 {
-			add("RTO (regional failure)", fmt.Sprintf("≤ %.0f min", req.RTOMinutes), fmtMin(r.RTOMinutes), r.RTOMinutes <= req.RTOMinutes, why)
+			add("RTO (regional failure)", fmt.Sprintf("≤ %.0f min", req.RTOMinutes), fmtMin(r.RTOMinutes, lang), r.RTOMinutes <= req.RTOMinutes, why)
 		}
 	}
 	if req.PeakRPS > 0 {
@@ -431,9 +435,9 @@ func Evaluate(d *Design, req Requirements) Report {
 	if req.LatencyMs > 0 {
 		for _, ur := range req.UserRegions {
 			l := r.LatencyMs[ur]
-			why := "served from the same continent"
+			why := p("se sirve desde el mismo continente", "served from the same continent")
 			if !serving[ur] {
-				why = "no serving region on this continent (cross-ocean round trip)"
+				why = p("no hay región que sirva en este continente (ida y vuelta transoceánica)", "no serving region on this continent (cross-ocean round trip)")
 			}
 			add("latency "+ur, fmt.Sprintf("≤ %d ms p95", req.LatencyMs), fmt.Sprintf("%d ms", l), l <= req.LatencyMs, why)
 		}
@@ -452,11 +456,11 @@ func Evaluate(d *Design, req Requirements) Report {
 				}
 			}
 		}
-		why := "all data stores in EU regions"
+		why := p("todos los almacenes de datos están en regiones de la UE", "all data stores in EU regions")
 		if !ok {
-			why = "data stored outside the EU: " + strings.Join(bad, ", ")
+			why = p("datos almacenados fuera de la UE: ", "data stored outside the EU: ") + strings.Join(bad, ", ")
 		}
-		add("data residency (EU)", "EU only", map[bool]string{true: "EU", false: "violated"}[ok], ok, why)
+		add("data residency (EU)", p("solo UE", "EU only"), map[bool]string{true: p("UE", "EU"), false: p("incumplida", "violated")}[ok], ok, why)
 	}
 	if req.PrivateData {
 		ok := true
@@ -467,7 +471,7 @@ func Evaluate(d *Design, req Requirements) Report {
 				bad = append(bad, c.Name)
 			}
 		}
-		add("private data stores", "no public IPs", map[bool]string{true: "private", false: "public: " + strings.Join(bad, ", ")}[ok], ok, "databases reachable only through private networking")
+		add("private data stores", p("sin IP públicas", "no public IPs"), map[bool]string{true: p("privados", "private"), false: p("públicos: ", "public: ") + strings.Join(bad, ", ")}[ok], ok, p("bases de datos accesibles solo por red privada", "databases reachable only through private networking"))
 	}
 	if req.CMEK {
 		ok := true
@@ -476,7 +480,7 @@ func Evaluate(d *Design, req Requirements) Report {
 				ok = false
 			}
 		}
-		add("customer-managed keys", "CMEK on data stores", map[bool]string{true: "yes", false: "missing"}[ok], ok, "compliance requires keys the company controls")
+		add("customer-managed keys", p("CMEK en los almacenes de datos", "CMEK on data stores"), map[bool]string{true: p("sí", "yes"), false: p("falta", "missing")}[ok], ok, p("el cumplimiento normativo exige claves que controle la empresa", "compliance requires keys the company controls"))
 	}
 	if req.WAF {
 		ok := false
@@ -485,17 +489,17 @@ func Evaluate(d *Design, req Requirements) Report {
 				ok = true
 			}
 		}
-		add("web application firewall", "Cloud Armor", map[bool]string{true: "yes", false: "missing"}[ok], ok, "OWASP rules and rate limiting at the edge")
+		add("web application firewall", "Cloud Armor", map[bool]string{true: p("sí", "yes"), false: p("falta", "missing")}[ok], ok, p("reglas OWASP y limitación de tasa en el borde", "OWASP rules and rate limiting at the edge"))
 	}
 	if req.BudgetEur > 0 {
-		add("monthly budget", fmt.Sprintf("≤ %.0f EUR", req.BudgetEur), fmt.Sprintf("%.0f EUR", r.CostEur), r.CostEur <= req.BudgetEur, costWhy(r.CostLines))
+		add("monthly budget", fmt.Sprintf("≤ %.0f EUR", req.BudgetEur), fmt.Sprintf("%.0f EUR", r.CostEur), r.CostEur <= req.BudgetEur, costWhy(r.CostLines, lang))
 	}
 	return r
 }
 
-func fmtMin(m float64) string {
+func fmtMin(m float64, lang string) string {
 	if m >= 1e6 {
-		return "data lost / unbounded"
+		return i18n.P(lang, "datos perdidos / sin límite", "data lost / unbounded")
 	}
 	if m == 0 {
 		return "0 min"
@@ -503,7 +507,7 @@ func fmtMin(m float64) string {
 	return fmt.Sprintf("%.0f min", m)
 }
 
-func costWhy(lines map[string]float64) string {
+func costWhy(lines map[string]float64, lang string) string {
 	type kv struct {
 		k string
 		v float64
@@ -520,7 +524,7 @@ func costWhy(lines map[string]float64) string {
 		}
 		parts = append(parts, fmt.Sprintf("%s %.0f", x.k, x.v))
 	}
-	return "largest items: " + strings.Join(parts, ", ")
+	return i18n.P(lang, "partidas mayores: ", "largest items: ") + strings.Join(parts, ", ")
 }
 
 func firstNonEmpty(v ...string) string {
@@ -532,24 +536,52 @@ func firstNonEmpty(v ...string) string {
 	return ""
 }
 
+// requirementES names the requirements in Spanish for display.
+var requirementES = map[string]string{
+	"availability":             "disponibilidad",
+	"RPO (regional failure)":   "RPO (fallo regional)",
+	"RTO (regional failure)":   "RTO (fallo regional)",
+	"peak capacity":            "capacidad en pico",
+	"data residency (EU)":      "residencia de datos (UE)",
+	"private data stores":      "almacenes de datos privados",
+	"customer-managed keys":    "claves gestionadas por el cliente",
+	"web application firewall": "cortafuegos de aplicaciones web",
+	"monthly budget":           "presupuesto mensual",
+}
+
+// RequirementName returns the display name of a requirement id.
+func RequirementName(id, lang string) string {
+	if lang == i18n.EN {
+		return id
+	}
+	if n, ok := requirementES[id]; ok {
+		return n
+	}
+	if r, ok := strings.CutPrefix(id, "latency "); ok {
+		return "latencia " + r
+	}
+	return id
+}
+
 // Render formats a report for the terminal.
-func (r Report) Render() string {
+func (r Report) Render(lang string) string {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	var b strings.Builder
 	if len(r.Problems) > 0 {
-		b.WriteString("Design problems:\n")
-		for _, p := range r.Problems {
-			b.WriteString("  ✗ " + p + "\n")
+		b.WriteString(p("Problemas del diseño:\n", "Design problems:\n"))
+		for _, pr := range r.Problems {
+			b.WriteString("  ✗ " + pr + "\n")
 		}
 		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, "Requirement                  Target            Achieved\n")
+	fmt.Fprintf(&b, "%-28s %-17s %s\n", p("Requisito", "Requirement"), p("Objetivo", "Target"), p("Conseguido", "Achieved"))
 	for _, f := range r.Findings {
 		mark := "✓"
 		if !f.Pass {
 			mark = "✗"
 		}
-		fmt.Fprintf(&b, "%s %-26s %-17s %s\n    %s\n", mark, f.Requirement, f.Target, f.Achieved, f.Why)
+		fmt.Fprintf(&b, "%s %-26s %-17s %s\n    %s\n", mark, RequirementName(f.Requirement, lang), f.Target, f.Achieved, f.Why)
 	}
-	fmt.Fprintf(&b, "\n%d/%d requirements met · availability %.3f%% · %d rps · %.0f EUR/month\n", r.Passed, r.Total, r.Availability, r.CapacityRPS, r.CostEur)
+	fmt.Fprintf(&b, p("\n%d/%d requisitos cumplidos · disponibilidad %.3f%% · %d rps · %.0f EUR/mes\n", "\n%d/%d requirements met · availability %.3f%% · %d rps · %.0f EUR/month\n"), r.Passed, r.Total, r.Availability, r.CapacityRPS, r.CostEur)
 	return b.String()
 }

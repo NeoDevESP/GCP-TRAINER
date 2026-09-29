@@ -2,6 +2,7 @@ package learning
 
 import (
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"math"
 	"sort"
 	"strings"
@@ -66,6 +67,31 @@ type AutonomyStage struct {
 
 // AutonomyLadder: Guided → Assisted → Independent → Professional → Senior → Expert.
 var AutonomyLadder = []string{"Guided", "Assisted", "Independent", "Professional", "Senior", "Expert"}
+
+// AutonomyLadderES names the autonomy stages in Spanish.
+var AutonomyLadderES = []string{"Guiado", "Asistido", "Independiente", "Profesional", "Sénior", "Experto"}
+
+// autonomyName returns the display name of an autonomy stage.
+func (e *Engine) autonomyName(i int) string {
+	if e.Lang == i18n.EN {
+		return AutonomyLadder[i]
+	}
+	return AutonomyLadderES[i]
+}
+
+var dimensionES = map[string]string{
+	"knowledge": "conocimiento", "execution": "ejecución", "troubleshooting": "resolución de problemas",
+	"architecture": "arquitectura", "security": "seguridad", "cost": "coste", "operations": "operaciones",
+	"autonomy": "autonomía", "retention": "retención",
+}
+
+// dimName returns the display name of a competence dimension.
+func (e *Engine) dimName(d string) string {
+	if e.Lang != i18n.EN && dimensionES[d] != "" {
+		return dimensionES[d]
+	}
+	return d
+}
 
 // StudentModel is the individual state of a learner.
 type StudentModel struct {
@@ -279,20 +305,20 @@ func (e *Engine) Autonomy(attempts []Attempt) AutonomyStage {
 		}
 		stage = L
 	}
-	res := AutonomyStage{Stage: AutonomyLadder[stage], Index: stage}
+	res := AutonomyStage{Stage: e.autonomyName(stage), Index: stage}
 	if stage+1 < len(AutonomyLadder) {
-		res.Next = AutonomyLadder[stage+1]
+		res.Next = e.autonomyName(stage + 1)
 		n, branches := count(stage)
 		res.Progress = math.Min(1, float64(n)/3)
-		res.Why = fmt.Sprintf("%d/3 unassisted passes at explicitness ≥%d", n, stage)
+		res.Why = fmt.Sprintf(e.p("%d/3 aprobados sin ayuda con explicitud ≥%d", "%d/3 unassisted passes at explicitness ≥%d"), n, stage)
 		if stage+1 >= 4 {
-			res.Why += fmt.Sprintf(", %d/3 branches (transfer)", branches)
+			res.Why += fmt.Sprintf(e.p(", %d/3 ramas (transferencia)", ", %d/3 branches (transfer)"), branches)
 			if branches < 3 {
 				res.Progress = math.Min(res.Progress, float64(branches)/3)
 			}
 		}
 	} else {
-		res.Progress, res.Why = 1, "solves unlabelled production problems across domains without assistance"
+		res.Progress, res.Why = 1, e.p("resuelve problemas de producción sin etiquetar en varios dominios sin ayuda", "solves unlabelled production problems across domains without assistance")
 	}
 	return res
 }
@@ -329,19 +355,19 @@ func (e *Engine) RecurringErrors(attempts []Attempt) []ErrorPattern {
 		for _, it := range a.Result.Items {
 			for _, c := range it.Checks {
 				if !c.Pass {
-					bump(checkPattern(c.Type, it.Validator), a.LabID, skills)
+					bump(checkPattern(c.Type, it.Validator, e.Lang), a.LabID, skills)
 				}
 			}
 		}
 		if pr := a.Result.Process; pr != nil {
 			if len(pr.BlindFixes) > 0 {
-				bump("acts before gathering evidence", a.LabID, skills)
+				bump(e.p("actúa antes de reunir evidencias", "acts before gathering evidence"), a.LabID, skills)
 			}
 			if len(pr.RiskyGrants) > 0 {
-				bump("grants over-broad access (basic roles / allUsers / 0.0.0.0/0)", a.LabID, skills)
+				bump(e.p("concede accesos demasiado amplios (roles básicos / allUsers / 0.0.0.0/0)", "grants over-broad access (basic roles / allUsers / 0.0.0.0/0)"), a.LabID, skills)
 			}
 			if len(pr.Violations) > 0 {
-				bump("violates stated constraints", a.LabID, skills)
+				bump(e.p("incumple las restricciones indicadas", "violates stated constraints"), a.LabID, skills)
 			}
 		}
 	}
@@ -370,26 +396,27 @@ func (e *Engine) RecurringErrors(attempts []Attempt) []ErrorPattern {
 	return out
 }
 
-func checkPattern(typ, validator string) string {
+func checkPattern(typ, validator, lang string) string {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	switch typ {
 	case "iam", "no_basic_roles":
-		return "IAM: wrong or excessive permissions"
+		return p("IAM: permisos incorrectos o excesivos", "IAM: wrong or excessive permissions")
 	case "http", "tcp", "egress", "google_api":
-		return "connectivity or service not restored"
+		return p("conectividad o servicio sin restablecer", "connectivity or service not restored")
 	case "policy":
-		return "security/cost/reliability policy violated (" + validator + ")"
+		return p("política de seguridad/coste/fiabilidad incumplida (", "security/cost/reliability policy violated (") + validator + ")"
 	case "evidence":
-		return "incomplete explanation or postmortem"
+		return p("explicación o post-mortem incompletos", "incomplete explanation or postmortem")
 	case "quiz":
-		return "design / knowledge questions"
+		return p("preguntas de diseño / conocimiento", "design / knowledge questions")
 	case "command":
-		return "skipped diagnostic or measurement step"
+		return p("se saltó un paso de diagnóstico o medición", "skipped diagnostic or measurement step")
 	case "cost_max", "bq_bytes_max":
-		return "cost target missed"
+		return p("objetivo de coste no alcanzado", "cost target missed")
 	case "finding_absent":
-		return "security finding left open"
+		return p("hallazgo de seguridad sin resolver", "security finding left open")
 	}
-	return "resource state not as required (" + typ + ")"
+	return p("el estado de los recursos no es el requerido (", "resource state not as required (") + typ + ")"
 }
 
 // Student builds the full student model.

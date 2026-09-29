@@ -18,6 +18,20 @@ import (
 //	    its impact (resources, service health, security findings, cost)
 //	    before doing it for real.
 
+var layerAdviceES = map[string]string{
+	"dns":            "revisa los registros de Cloud DNS y el nombre de host (gcloud dns record-sets list)",
+	"load-balancer":  "revisa los puertos de la regla de reenvío, el proxy de destino y el mapa de URL (gcloud compute url-maps describe)",
+	"cloud-armor":    "revisa las reglas de la política de seguridad (gcloud compute security-policies describe)",
+	"backend-health": "revisa la ruta/puerto de la comprobación de estado, los puertos con nombre y las reglas de cortafuegos para 35.191.0.0/16 y 130.211.0.0/22 (gcloud compute backend-services get-health)",
+	"network":        "revisa las reglas de cortafuegos (prioridad, dirección, etiquetas), las rutas y el NAT (gcloud compute firewall-rules list)",
+	"process":        "entra por SSH y revisa el servicio y su dirección de escucha (systemctl status, ss -ltnp)",
+	"ingress":        "revisa la configuración de ingress de Cloud Run",
+	"iam":            "revisa quién puede invocar o acceder al recurso (get-iam-policy, policy troubleshooter)",
+	"workload":       "revisa la configuración de la revisión: imagen, cuenta de servicio, secretos (gcloud run services describe)",
+	"application":    "lee los registros de la aplicación y la versión desplegada (gcloud logging read)",
+	"dependency":     "revisa la propia dependencia y los permisos y el camino de red de la identidad de la carga de trabajo",
+}
+
 var layerAdvice = map[string]string{
 	"dns":            "check Cloud DNS records and the hostname (gcloud dns record-sets list)",
 	"load-balancer":  "check forwarding rule ports, target proxy and URL map (gcloud compute url-maps describe)",
@@ -35,7 +49,7 @@ var layerAdvice = map[string]string{
 func (s *Session) whyCmd(args []string) (string, error) {
 	pos, f := parseArgs(args[1:])
 	if len(pos) == 0 {
-		return "", fail(2, "usage: why URL|lb:NAME|run:NAME|vm:NAME:PORT|k8s:CLUSTER/SVC [--path=/x] [--from=vm:NAME] [--as=EMAIL]")
+		return "", fail(2, "%s", s.tr("uso: why URL|lb:NOMBRE|run:NOMBRE|vm:NOMBRE:PUERTO|k8s:CLÚSTER/SVC [--path=/x] [--from=vm:NOMBRE] [--as=EMAIL]", "usage: why URL|lb:NAME|run:NAME|vm:NAME:PORT|k8s:CLUSTER/SVC [--path=/x] [--from=vm:NAME] [--as=EMAIL]"))
 	}
 	target := pos[0]
 	path := firstOr(f["path"], "")
@@ -46,7 +60,7 @@ func (s *Session) whyCmd(args []string) (string, error) {
 		}
 		url = s.State.ResolveTrafficURL(s.Project, target, path)
 		if url == "" {
-			return "", fail(1, "unknown target %s in project %s", target, s.Project)
+			return "", fail(1, s.tr("objetivo desconocido %s en el proyecto %s", "unknown target %s in project %s"), target, s.Project)
 		}
 	} else if path != "" {
 		url = strings.TrimSuffix(url, "/") + path
@@ -56,7 +70,7 @@ func (s *Session) whyCmd(args []string) (string, error) {
 		p := s.State.Projects[s.Project]
 		vm := p.Instances[strings.TrimPrefix(from, "vm:")]
 		if vm == nil {
-			return "", fail(1, "instance %s not found", from)
+			return "", fail(1, s.tr("no se encuentra la instancia %s", "instance %s not found"), from)
 		}
 		req.From = s.State.VMEndpoint(s.Project, vm)
 		req.Principal = "serviceAccount:" + vm.ServiceAccount
@@ -68,9 +82,9 @@ func (s *Session) whyCmd(args []string) (string, error) {
 		}
 	}
 	st := s.State.Clone() // explaining never changes the world
-	_, hops := st.ExplainHTTP(req)
+	_, hops := st.ExplainHTTP(req, s.Lang)
 	var b strings.Builder
-	fmt.Fprintf(&b, "Causal chain for %s\n", url)
+	fmt.Fprintf(&b, s.tr("Cadena causal de %s\n", "Causal chain for %s\n"), url)
 	var broken *sim.Hop
 	for i := range hops {
 		h := hops[i]
@@ -84,11 +98,15 @@ func (s *Session) whyCmd(args []string) (string, error) {
 		fmt.Fprintf(&b, "  %s %-15s %s\n", mark, h.Layer, h.Detail)
 	}
 	if broken != nil {
-		fmt.Fprintf(&b, "\nFirst broken link: %s — %s\n", broken.Layer, broken.Detail)
-		if a := layerAdvice[broken.Layer]; a != "" {
-			fmt.Fprintf(&b, "Where to look: %s\n", a)
+		fmt.Fprintf(&b, s.tr("\nPrimer eslabón roto: %s — %s\n", "\nFirst broken link: %s — %s\n"), broken.Layer, broken.Detail)
+		advice := layerAdvice
+		if s.Lang != "en" {
+			advice = layerAdviceES
 		}
-		b.WriteString("Why this matters: every later hop depends on this one; fixing symptoms further down the chain will not help.\n")
+		if a := advice[broken.Layer]; a != "" {
+			fmt.Fprintf(&b, s.tr("Dónde mirar: %s\n", "Where to look: %s\n"), a)
+		}
+		b.WriteString(s.tr("Por qué importa: todos los saltos posteriores dependen de este; arreglar síntomas más abajo en la cadena no servirá.\n", "Why this matters: every later hop depends on this one; fixing symptoms further down the chain will not help.\n"))
 	}
 	return b.String(), nil
 }
@@ -147,7 +165,7 @@ func probe(st *sim.State, project, target, path string) int {
 
 func (s *Session) whatifCmd(args []string, stdin string) (string, error) {
 	if len(args) < 2 {
-		return "", fail(2, "usage: whatif COMMAND... (e.g. whatif gcloud compute firewall-rules delete allow-health)")
+		return "", fail(2, "%s", s.tr("uso: whatif COMANDO... (p. ej. whatif gcloud compute firewall-rules delete allow-health)", "usage: whatif COMMAND... (e.g. whatif gcloud compute firewall-rules delete allow-health)"))
 	}
 	line := shellJoin(args[1:])
 	before := s.State.Clone()
@@ -158,9 +176,9 @@ func (s *Session) whatifCmd(args []string, stdin string) (string, error) {
 	after.Step(3) // let health checks, autoscalers and traffic react
 	before.Step(3)
 	var b strings.Builder
-	fmt.Fprintf(&b, "What if you run: %s\n(simulated on a copy of the environment — nothing was changed)\n\n", line)
+	fmt.Fprintf(&b, s.tr("¿Qué pasa si ejecutas: %s?\n(simulado sobre una copia del entorno; no se ha cambiado nada)\n\n", "What if you run: %s\n(simulated on a copy of the environment — nothing was changed)\n\n"), line)
 	if res.Exit != 0 {
-		fmt.Fprintf(&b, "The command would FAIL (exit %d):\n%s\n", res.Exit, indent(res.Output))
+		fmt.Fprintf(&b, s.tr("El comando FALLARÍA (código %d):\n%s\n", "The command would FAIL (exit %d):\n%s\n"), res.Exit, indent(res.Output))
 		return b.String(), nil
 	}
 	// resource changes
@@ -177,70 +195,72 @@ func (s *Session) whatifCmd(args []string, stdin string) (string, error) {
 		}
 		for _, n := range sim.SortedKeys(bm) {
 			if _, ok := am[n]; !ok {
-				changes = append(changes, fmt.Sprintf("  - %s %s would be DELETED", k, n))
+				changes = append(changes, fmt.Sprintf(s.tr("  - %s %s se BORRARÍA", "  - %s %s would be DELETED"), k, n))
 			} else if fmt.Sprint(am[n]) != fmt.Sprint(bm[n]) {
-				changes = append(changes, fmt.Sprintf("  ~ %s %s would be modified", k, n))
+				changes = append(changes, fmt.Sprintf(s.tr("  ~ %s %s se modificaría", "  ~ %s %s would be modified"), k, n))
 			}
 		}
 		for _, n := range sim.SortedKeys(am) {
 			if _, ok := bm[n]; !ok {
-				changes = append(changes, fmt.Sprintf("  + %s %s would be created", k, n))
+				changes = append(changes, fmt.Sprintf(s.tr("  + %s %s se crearía", "  + %s %s would be created"), k, n))
 			}
 		}
 	}
 	if len(changes) == 0 {
-		changes = []string{"  (no resource changes in " + s.Project + ")"}
+		changes = []string{s.tr("  (sin cambios de recursos en ", "  (no resource changes in ") + s.Project + ")"}
 	}
-	b.WriteString("Resources:\n" + strings.Join(changes, "\n") + "\n\n")
+	b.WriteString(s.tr("Recursos:\n", "Resources:\n") + strings.Join(changes, "\n") + "\n\n")
 	// service impact
 	var impact []string
+	breaks := false
 	for _, t := range s.probeTargets() {
 		tp := strings.SplitN(t, "|", 2)
 		x, y := probe(before, s.Project, tp[0], tp[1]), probe(after, s.Project, tp[0], tp[1])
 		if x != y {
-			verdict := "changes"
+			verdict := s.tr("CAMBIA", "changes")
 			if x < 400 && (y >= 400 || y == 0) {
-				verdict = "BREAKS"
+				verdict = s.tr("ROMPE", "BREAKS")
+				breaks = true
 			} else if (x >= 400 || x == 0) && y < 400 && y != 0 {
-				verdict = "FIXES"
+				verdict = s.tr("ARREGLA", "FIXES")
 			}
-			impact = append(impact, fmt.Sprintf("  %s %s%s: HTTP %s → %s", verdict, tp[0], tp[1], code(x), code(y)))
+			impact = append(impact, fmt.Sprintf("  %s %s%s: HTTP %s → %s", verdict, tp[0], tp[1], s.code(x), s.code(y)))
 		}
 	}
 	if len(impact) == 0 {
-		impact = []string{"  no change in the availability of known services"}
+		impact = []string{s.tr("  sin cambios en la disponibilidad de los servicios conocidos", "  no change in the availability of known services")}
 	}
-	b.WriteString("Service impact:\n" + strings.Join(impact, "\n") + "\n\n")
+	b.WriteString(s.tr("Impacto en el servicio:\n", "Service impact:\n") + strings.Join(impact, "\n") + "\n\n")
 	// security findings
 	bf, af := findingSet(before, s.Project), findingSet(after, s.Project)
 	var sec []string
 	for k := range af {
 		if !bf[k] {
-			sec = append(sec, "  + NEW finding "+k)
+			sec = append(sec, s.tr("  + NUEVO hallazgo ", "  + NEW finding ")+k)
 		}
 	}
 	for k := range bf {
 		if !af[k] {
-			sec = append(sec, "  - resolves finding "+k)
+			sec = append(sec, s.tr("  - resuelve el hallazgo ", "  - resolves finding ")+k)
 		}
 	}
 	sort.Strings(sec)
 	if len(sec) == 0 {
-		sec = []string{"  no change in security findings"}
+		sec = []string{s.tr("  sin cambios en los hallazgos de seguridad", "  no change in security findings")}
 	}
-	b.WriteString("Security posture:\n" + strings.Join(sec, "\n") + "\n\n")
+	b.WriteString(s.tr("Postura de seguridad:\n", "Security posture:\n") + strings.Join(sec, "\n") + "\n\n")
 	_, c0 := before.CostEstimate(s.Project)
 	_, c1 := after.CostEstimate(s.Project)
-	fmt.Fprintf(&b, "Cost: %.2f → %.2f EUR/month (%+.2f)\n", c0, c1, c1-c0)
-	if strings.Contains(strings.Join(impact, ""), "BREAKS") {
-		b.WriteString("\n⚠ This change would break a running service. Consider a safer alternative or a rollback plan.\n")
+	fmt.Fprintf(&b, s.tr("Coste: %.2f → %.2f EUR/mes (%+.2f)\n", "Cost: %.2f → %.2f EUR/month (%+.2f)\n"), c0, c1, c1-c0)
+	if breaks {
+		b.WriteString(s.tr("\n⚠ Este cambio rompería un servicio en marcha. Plantéate una alternativa más segura o un plan de marcha atrás.\n", "\n⚠ This change would break a running service. Consider a safer alternative or a rollback plan.\n"))
 	}
 	return b.String(), nil
 }
 
-func code(c int) string {
+func (s *Session) code(c int) string {
 	if c == 0 {
-		return "no response"
+		return s.tr("sin respuesta", "no response")
 	}
 	return fmt.Sprint(c)
 }

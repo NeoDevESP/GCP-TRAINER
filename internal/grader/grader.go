@@ -7,6 +7,7 @@ package grader
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/neodevesp/gcp-trainer/internal/archsim"
 	"gopkg.in/yaml.v3"
@@ -129,13 +130,16 @@ func Grade(lab *scenario.Lab, st *sim.State, sess *cli.Session, project string, 
 	}
 	res.Process = AssessProcess(lab, sess, res, sub, sub.HintsUsed)
 	for _, v := range res.Process.Violations {
-		res.Feedback = append(res.Feedback, "[Process] "+v)
+		res.Feedback = append(res.Feedback, i18n.P(sub.Lang, "[Proceso] ", "[Process] ")+v)
 	}
 	if n := len(res.Process.BlindFixes); n > 0 {
-		res.Feedback = append(res.Feedback, fmt.Sprintf("[Process] %d change(s) made before gathering evidence — form a hypothesis first", n))
+		res.Feedback = append(res.Feedback, fmt.Sprintf(i18n.P(sub.Lang, "[Proceso] %d cambio(s) hecho(s) antes de reunir evidencias: formula antes una hipótesis", "[Process] %d change(s) made before gathering evidence — form a hypothesis first"), n))
 	}
 	return res
 }
+
+// p picks the text of a check detail in the learner's language.
+func (c *Context) p(es, en string) string { return i18n.P(c.Sub.Lang, es, en) }
 
 func (c *Context) View() map[string]any {
 	if c.view == nil {
@@ -208,7 +212,7 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 	defer func() {
 		if r := recover(); r != nil {
 			res.Pass = false
-			res.Detail = fmt.Sprintf("grader error: %v", r)
+			res.Detail = fmt.Sprintf(c.p("error del evaluador: %v", "grader error: %v"), r)
 		}
 	}()
 	if n := int(num(ch, "settle", 0)); n > 0 {
@@ -229,7 +233,7 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		ok, detail = c.exists(ch)
 	case "absent":
 		_, found := resolve(c.View(), str(ch, "path"))
-		ok, detail = !found, "path "+str(ch, "path")
+		ok, detail = !found, c.p("ruta ", "path ")+str(ch, "path")
 	case "count":
 		ok, detail = c.count(ch)
 	case "http":
@@ -252,10 +256,10 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		ok, detail = c.finding(ch, true)
 	case "cost_max":
 		_, total := c.State.CostEstimate(c.Project)
-		ok, detail = total <= num(ch, "eur", 0), fmt.Sprintf("estimated %.2f EUR/month (limit %.2f)", total, num(ch, "eur", 0))
+		ok, detail = total <= num(ch, "eur", 0), fmt.Sprintf(c.p("estimación %.2f EUR/mes (límite %.2f)", "estimated %.2f EUR/month (limit %.2f)"), total, num(ch, "eur", 0))
 	case "cost_min":
 		_, total := c.State.CostEstimate(c.Project)
-		ok, detail = total >= num(ch, "eur", 0), fmt.Sprintf("estimated %.2f EUR/month", total)
+		ok, detail = total >= num(ch, "eur", 0), fmt.Sprintf(c.p("estimación %.2f EUR/mes", "estimated %.2f EUR/month"), total)
 	case "log_metric":
 		ok, detail = c.logMetric(ch)
 	case "alert_policy":
@@ -286,20 +290,20 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		ok, detail = c.rollout(ch)
 	case "secret_rotated":
 		sec := c.State.Projects[c.Project].Secrets[str(ch, "secret")]
-		ok, detail = false, "secret not found"
+		ok, detail = false, c.p("no se encuentra el secreto", "secret not found")
 		if sec != nil {
 			enabled := 0
-			ok, detail = true, "exposed value no longer served"
+			ok, detail = true, c.p("el valor expuesto ya no se sirve", "exposed value no longer served")
 			for _, v := range sec.Versions {
 				if v.State == "ENABLED" {
 					enabled++
 					if v.Data == str(ch, "exposedValue") {
-						ok, detail = false, fmt.Sprintf("version %d still contains the exposed value", v.ID)
+						ok, detail = false, fmt.Sprintf(c.p("la versión %d aún contiene el valor expuesto", "version %d still contains the exposed value"), v.ID)
 					}
 				}
 			}
 			if enabled == 0 {
-				ok, detail = false, "no enabled version"
+				ok, detail = false, c.p("no hay ninguna versión habilitada", "no enabled version")
 			}
 		}
 	case "session_config":
@@ -318,39 +322,39 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 	case "k8s_rbac":
 		cl, ns := c.cluster(ch)
 		if cl == nil || cl.K8s == nil {
-			ok, detail = false, "cluster not found"
+			ok, detail = false, c.p("no se encuentra el clúster", "cluster not found")
 			break
 		}
 		allowed := cl.K8s.NS(ns).RBACAllows(ns, str(ch, "serviceAccount"), str(ch, "verb"), str(ch, "resource"))
 		ok = allowed == boolean(ch, "expect", true)
 		detail = fmt.Sprintf("system:serviceaccount:%s:%s can %s %s: %v", ns, str(ch, "serviceAccount"), str(ch, "verb"), str(ch, "resource"), allowed)
 	case "chaos":
-		ok, detail = false, "no matching chaos experiment"
+		ok, detail = false, c.p("no hay ningún experimento de caos que coincida", "no matching chaos experiment")
 		for _, r := range c.Session.Chaos {
 			if (str(ch, "experiment") == "" || r.Experiment == str(ch, "experiment")) && r.SLO >= num(ch, "minSlo", 0) && r.Minutes >= int(num(ch, "minMinutes", 1)) {
 				if r.Held || !boolean(ch, "held", true) {
-					ok, detail = true, fmt.Sprintf("%s held at %.2f%% (SLO %.1f%%)", r.Experiment, r.Availability, r.SLO)
+					ok, detail = true, fmt.Sprintf(c.p("%s se mantuvo en %.2f%% (SLO %.1f%%)", "%s held at %.2f%% (SLO %.1f%%)"), r.Experiment, r.Availability, r.SLO)
 					break
 				}
-				detail = fmt.Sprintf("%s failed: %.2f%% < SLO %.1f%%", r.Experiment, r.Availability, r.SLO)
+				detail = fmt.Sprintf(c.p("%s falló: %.2f%% < SLO %.1f%%", "%s failed: %.2f%% < SLO %.1f%%"), r.Experiment, r.Availability, r.SLO)
 			}
 		}
 	case "vm_file", "vm_disk":
 		vm := c.State.Projects[c.Project].Instances[str(ch, "vm")]
 		if vm == nil || vm.OS == nil {
-			ok, detail = false, "vm or guest OS not found"
+			ok, detail = false, c.p("no se encuentra la VM o su sistema operativo", "vm or guest OS not found")
 			break
 		}
 		o := vm.OS
 		if res.Type == "vm_disk" {
 			pct := 100 * o.UsedGB() / float64(max(1, o.DiskGB))
-			ok, detail = pct <= num(ch, "maxPct", 90), fmt.Sprintf("disk %.0f%% used of %d GB", pct, o.DiskGB)
+			ok, detail = pct <= num(ch, "maxPct", 90), fmt.Sprintf(c.p("disco al %.0f%% de %d GB", "disk %.0f%% used of %d GB"), pct, o.DiskGB)
 			break
 		}
 		f := o.Files[str(ch, "path")]
 		want := boolean(ch, "exists", true)
 		if f == nil {
-			ok, detail = !want, "file absent"
+			ok, detail = !want, c.p("el archivo no existe", "file absent")
 			break
 		}
 		ok, detail = want, fmt.Sprintf("%s %s:%s %s", f.ModeString(), f.Owner, f.Group, str(ch, "path"))
@@ -382,22 +386,22 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		re, err := regexp.Compile(str(ch, "regex"))
 		switch {
 		case !exists:
-			ok, detail = false, "file "+str(ch, "file")+" not found"
+			ok, detail = false, c.p("el archivo ", "file ")+str(ch, "file")+c.p(" no existe", " not found")
 		case err != nil:
-			ok, detail = false, "bad regex"
+			ok, detail = false, c.p("expresión regular no válida", "bad regex")
 		default:
-			ok, detail = re.MatchString(content), "file "+str(ch, "file")
+			ok, detail = re.MatchString(content), c.p("el archivo ", "file ")+str(ch, "file")
 		}
 	case "org_policy":
 		op := c.State.EffectiveOrgPolicy(c.Project, strings.TrimPrefix(str(ch, "constraint"), "constraints/"))
-		ok, detail = op != nil && op.Enforce == boolean(ch, "enforced", true), "no effective policy"
+		ok, detail = op != nil && op.Enforce == boolean(ch, "enforced", true), c.p("no hay política efectiva", "no effective policy")
 		if op != nil {
 			detail = fmt.Sprintf("effective policy enforce=%v", op.Enforce)
 		}
 	case "ticket_update", "ticket_resolved", "asked":
 		ok, detail = c.deskCheck(res.Type, ch)
 	default:
-		return CheckResult{Type: res.Type, Desc: res.Desc, Detail: "unknown check type"}
+		return CheckResult{Type: res.Type, Desc: res.Desc, Detail: c.p("tipo de comprobación desconocido", "unknown check type")}
 	}
 	if boolean(ch, "not", false) {
 		ok = !ok
@@ -484,10 +488,10 @@ func asList(v any) []string {
 }
 
 // expect evaluates an expectation against a value.
-func expect(got any, want any) (bool, string) {
+func expect(lang string, got any, want any) (bool, string) {
 	if m, ok := want.(map[string]any); ok {
 		for op, w := range m {
-			ok, why := expectOp(got, op, w)
+			ok, why := expectOp(lang, got, op, w)
 			if !ok {
 				return false, why
 			}
@@ -503,7 +507,7 @@ func expect(got any, want any) (bool, string) {
 			return true, ""
 		}
 	}
-	return false, fmt.Sprintf("got %s, want %s", trunc(g), w)
+	return false, fmt.Sprintf(i18n.P(lang, "se obtuvo %s, se esperaba %s", "got %s, want %s"), trunc(g), w)
 }
 
 func trunc(s string) string {
@@ -513,24 +517,24 @@ func trunc(s string) string {
 	return s
 }
 
-func expectOp(got any, op string, w any) (bool, string) {
+func expectOp(lang string, got any, op string, w any) (bool, string) {
 	gs, ws := scalarStr(got), scalarStr(w)
 	gf, gok := toFloat(got)
 	wf, wok := toFloat(w)
 	switch op {
 	case "eq":
-		return expect(got, w)
+		return expect(lang, got, w)
 	case "ne":
-		ok, _ := expect(got, w)
-		return !ok, fmt.Sprintf("value must not be %s", ws)
+		ok, _ := expect(lang, got, w)
+		return !ok, fmt.Sprintf(i18n.P(lang, "el valor no debe ser %s", "value must not be %s"), ws)
 	case "gt":
-		return gok && wok && gf > wf, fmt.Sprintf("got %s, want > %s", gs, ws)
+		return gok && wok && gf > wf, fmt.Sprintf(i18n.P(lang, "se obtuvo %s, se esperaba > %s", "got %s, want > %s"), gs, ws)
 	case "gte":
-		return gok && wok && gf >= wf, fmt.Sprintf("got %s, want >= %s", gs, ws)
+		return gok && wok && gf >= wf, fmt.Sprintf(i18n.P(lang, "se obtuvo %s, se esperaba >= %s", "got %s, want >= %s"), gs, ws)
 	case "lt":
-		return gok && wok && gf < wf, fmt.Sprintf("got %s, want < %s", gs, ws)
+		return gok && wok && gf < wf, fmt.Sprintf(i18n.P(lang, "se obtuvo %s, se esperaba < %s", "got %s, want < %s"), gs, ws)
 	case "lte":
-		return gok && wok && gf <= wf, fmt.Sprintf("got %s, want <= %s", gs, ws)
+		return gok && wok && gf <= wf, fmt.Sprintf(i18n.P(lang, "se obtuvo %s, se esperaba <= %s", "got %s, want <= %s"), gs, ws)
 	case "contains":
 		if l := asList(got); l != nil {
 			for _, x := range l {
@@ -538,57 +542,57 @@ func expectOp(got any, op string, w any) (bool, string) {
 					return true, ""
 				}
 			}
-			return false, fmt.Sprintf("%s does not contain %s", trunc(gs), ws)
+			return false, fmt.Sprintf(i18n.P(lang, "%s no contiene %s", "%s does not contain %s"), trunc(gs), ws)
 		}
-		return strings.Contains(strings.ToLower(gs), strings.ToLower(ws)), fmt.Sprintf("%q does not contain %q", trunc(gs), ws)
+		return strings.Contains(strings.ToLower(gs), strings.ToLower(ws)), fmt.Sprintf(i18n.P(lang, "%q no contiene %q", "%q does not contain %q"), trunc(gs), ws)
 	case "notContains":
-		ok, _ := expectOp(got, "contains", w)
-		return !ok, fmt.Sprintf("%s must not contain %s", trunc(gs), ws)
+		ok, _ := expectOp(lang, got, "contains", w)
+		return !ok, fmt.Sprintf(i18n.P(lang, "%s no debe contener %s", "%s must not contain %s"), trunc(gs), ws)
 	case "in":
 		for _, x := range asList(w) {
 			if strings.EqualFold(x, gs) {
 				return true, ""
 			}
 		}
-		return false, fmt.Sprintf("%s not in %s", gs, ws)
+		return false, fmt.Sprintf(i18n.P(lang, "%s no está en %s", "%s not in %s"), gs, ws)
 	case "regex":
 		re, err := regexp.Compile(ws)
-		return err == nil && re.MatchString(gs), fmt.Sprintf("%q does not match /%s/", trunc(gs), ws)
+		return err == nil && re.MatchString(gs), fmt.Sprintf(i18n.P(lang, "%q no coincide con /%s/", "%q does not match /%s/"), trunc(gs), ws)
 	case "len":
 		n := len(asList(got))
 		if m, ok := got.(map[string]any); ok {
 			n = len(m)
 		}
-		return expect(n, w)
+		return expect(lang, n, w)
 	case "minLen":
 		n := len(asList(got))
 		if m, ok := got.(map[string]any); ok {
 			n = len(m)
 		}
-		return float64(n) >= wf, fmt.Sprintf("has %d elements, want >= %s", n, ws)
+		return float64(n) >= wf, fmt.Sprintf(i18n.P(lang, "tiene %d elementos, se esperaban >= %s", "has %d elements, want >= %s"), n, ws)
 	case "maxLen":
 		n := len(asList(got))
 		if m, ok := got.(map[string]any); ok {
 			n = len(m)
 		}
-		return float64(n) <= wf, fmt.Sprintf("has %d elements, want <= %s", n, ws)
+		return float64(n) <= wf, fmt.Sprintf(i18n.P(lang, "tiene %d elementos, se esperaban <= %s", "has %d elements, want <= %s"), n, ws)
 	case "empty":
 		empty := gs == "" || gs == "[]" || gs == "{}" || gs == "null" || gs == "false" || gs == "0"
 		want := ws == "true"
-		return empty == want, fmt.Sprintf("emptiness of %s", trunc(gs))
+		return empty == want, fmt.Sprintf(i18n.P(lang, "vacuidad de %s", "emptiness of %s"), trunc(gs))
 	}
-	return false, "unknown operator " + op
+	return false, i18n.P(lang, "operador desconocido ", "unknown operator ") + op
 }
 
 func (c *Context) exists(ch scenario.Check) (bool, string) {
 	v, ok := resolve(c.View(), str(ch, "path"))
 	if !ok {
-		return false, "resource " + str(ch, "path") + " not found"
+		return false, c.p("el recurso ", "resource ") + str(ch, "path") + c.p(" no existe", " not found")
 	}
 	if exp, ok := ch["expect"].(map[string]any); ok {
 		for _, k := range sortedKeys(exp) {
 			got, _ := resolve(v, k)
-			if ok, why := expect(got, exp[k]); !ok {
+			if ok, why := expect(c.Sub.Lang, got, exp[k]); !ok {
 				return false, k + ": " + why
 			}
 		}
@@ -625,7 +629,7 @@ func (c *Context) count(ch scenario.Check) (bool, string) {
 		match := true
 		for _, k := range sortedKeys(where) {
 			got, _ := resolve(it, k)
-			if ok, _ := expect(got, where[k]); !ok {
+			if ok, _ := expect(c.Sub.Lang, got, where[k]); !ok {
 				match = false
 				break
 			}
@@ -635,7 +639,7 @@ func (c *Context) count(ch scenario.Check) (bool, string) {
 		}
 	}
 	mn, mx := num(ch, "min", 0), num(ch, "max", math.MaxInt32)
-	return float64(n) >= mn && float64(n) <= mx, fmt.Sprintf("%d matching %s (want %v..%v)", n, str(ch, "collection"), mn, mx)
+	return float64(n) >= mn && float64(n) <= mx, fmt.Sprintf(c.p("%d %s coincidentes (se esperaban %v..%v)", "%d matching %s (want %v..%v)"), n, str(ch, "collection"), mn, mx)
 }
 
 // endpoint parses "internet", "vm:NAME", "pod:CLUSTER/NS/DEPLOY", "run:SVC".
@@ -647,17 +651,17 @@ func (c *Context) endpoint(ref string) (sim.Endpoint, string, error) {
 	case strings.HasPrefix(ref, "vm:"):
 		vm := p.Instances[strings.TrimPrefix(ref, "vm:")]
 		if vm == nil {
-			return sim.Endpoint{}, "", fmt.Errorf("vm %s not found", ref)
+			return sim.Endpoint{}, "", fmt.Errorf(c.p("no se encuentra la VM %s", "vm %s not found"), ref)
 		}
 		return c.State.VMEndpoint(c.Project, vm), "serviceAccount:" + vm.ServiceAccount, nil
 	case strings.HasPrefix(ref, "pod:"):
 		parts := strings.Split(strings.TrimPrefix(ref, "pod:"), "/")
 		if len(parts) != 3 {
-			return sim.Endpoint{}, "", fmt.Errorf("pod ref must be pod:CLUSTER/NS/DEPLOYMENT")
+			return sim.Endpoint{}, "", errors.New(c.p("la referencia de pod debe ser pod:CLÚSTER/NS/DEPLOYMENT", "pod ref must be pod:CLUSTER/NS/DEPLOYMENT"))
 		}
 		cl := p.Clusters[parts[0]]
 		if cl == nil {
-			return sim.Endpoint{}, "", fmt.Errorf("cluster %s not found", parts[0])
+			return sim.Endpoint{}, "", fmt.Errorf(c.p("no se encuentra el clúster %s", "cluster %s not found"), parts[0])
 		}
 		for _, pd := range c.State.ComputePods(c.Project, cl)[parts[1]] {
 			if pd.Owner == parts[2] && pd.Ready {
@@ -665,11 +669,11 @@ func (c *Context) endpoint(ref string) (sim.Endpoint, string, error) {
 				return w.Endpoint, w.Principal, nil
 			}
 		}
-		return sim.Endpoint{}, "", fmt.Errorf("no ready pod for %s", ref)
+		return sim.Endpoint{}, "", fmt.Errorf(c.p("no hay ningún pod listo para %s", "no ready pod for %s"), ref)
 	case strings.HasPrefix(ref, "run:"):
 		svc := p.RunServices[strings.TrimPrefix(ref, "run:")]
 		if svc == nil {
-			return sim.Endpoint{}, "", fmt.Errorf("service %s not found", ref)
+			return sim.Endpoint{}, "", fmt.Errorf(c.p("no se encuentra el servicio %s", "service %s not found"), ref)
 		}
 		w, why := c.State.RunWorkload(c.Project, svc)
 		if w == nil {
@@ -677,14 +681,14 @@ func (c *Context) endpoint(ref string) (sim.Endpoint, string, error) {
 		}
 		return w.Endpoint, w.Principal, nil
 	}
-	return sim.Endpoint{}, "", fmt.Errorf("unknown endpoint %q", ref)
+	return sim.Endpoint{}, "", fmt.Errorf(c.p("destino desconocido %q", "unknown endpoint %q"), ref)
 }
 
 func (c *Context) http(ch scenario.Check) (bool, string) {
 	target := str(ch, "target")
 	url := c.State.ResolveTrafficURL(c.Project, target, str(ch, "path"))
 	if url == "" {
-		return false, "target " + target + " does not exist"
+		return false, c.p("el objetivo ", "target ") + target + c.p(" no existe", " does not exist")
 	}
 	from, fromPrincipal, err := c.endpoint(str(ch, "from"))
 	if err != nil {
@@ -764,25 +768,25 @@ func (c *Context) resource(ref string) (sim.Resource, error) {
 		bn, obj, _ := strings.Cut(name, "/")
 		b, _ := c.State.FindBucket(bn)
 		if b == nil {
-			return sim.Resource{}, fmt.Errorf("bucket %s not found", bn)
+			return sim.Resource{}, fmt.Errorf(c.p("no se encuentra el bucket %s", "bucket %s not found"), bn)
 		}
 		return c.State.BucketResource(b, obj), nil
 	case "secret":
 		s := p.Secrets[name]
 		if s == nil {
-			return sim.Resource{}, fmt.Errorf("secret %s not found", name)
+			return sim.Resource{}, fmt.Errorf(c.p("no se encuentra el secreto %s", "secret %s not found"), name)
 		}
 		return sim.Resource{Project: c.Project, Type: "secretmanager.googleapis.com/Secret", Name: "projects/" + c.Project + "/secrets/" + name, Service: "secretmanager.googleapis.com", Policies: []*sim.Policy{&s.IAM}}, nil
 	case "sa":
 		s := p.ServiceAccounts[name]
 		if s == nil {
-			return sim.Resource{}, fmt.Errorf("service account %s not found", name)
+			return sim.Resource{}, fmt.Errorf(c.p("no se encuentra la cuenta de servicio %s", "service account %s not found"), name)
 		}
 		return sim.Resource{Project: c.Project, Type: "iam.googleapis.com/ServiceAccount", Name: "projects/" + c.Project + "/serviceAccounts/" + name, Service: "iam.googleapis.com", Policies: []*sim.Policy{&s.IAM}}, nil
 	case "run":
 		s := p.RunServices[name]
 		if s == nil {
-			return sim.Resource{}, fmt.Errorf("service %s not found", name)
+			return sim.Resource{}, fmt.Errorf(c.p("no se encuentra el servicio %s", "service %s not found"), name)
 		}
 		return sim.Resource{Project: c.Project, Type: "run.googleapis.com/Service", Name: "projects/" + c.Project + "/locations/" + s.Region + "/services/" + name, Service: "run.googleapis.com", Policies: []*sim.Policy{&s.IAM}}, nil
 	case "topic":
@@ -795,15 +799,15 @@ func (c *Context) resource(ref string) (sim.Resource, error) {
 				return sim.Resource{Project: c.Project, Type: "cloudkms.googleapis.com/CryptoKey", Name: "projects/" + c.Project + "/locations/" + kr.Location + "/keyRings/" + kr.Name + "/cryptoKeys/" + k.Name, Service: "cloudkms.googleapis.com", Policies: []*sim.Policy{&k.IAM}}, nil
 			}
 		}
-		return sim.Resource{}, fmt.Errorf("key %s not found", name)
+		return sim.Resource{}, fmt.Errorf(c.p("no se encuentra la clave %s", "key %s not found"), name)
 	case "dataset":
 		d := p.Datasets[name]
 		if d == nil {
-			return sim.Resource{}, fmt.Errorf("dataset %s not found", name)
+			return sim.Resource{}, fmt.Errorf(c.p("no se encuentra el dataset %s", "dataset %s not found"), name)
 		}
 		return sim.Resource{Project: c.Project, Type: "bigquery.googleapis.com/Dataset", Name: "projects/" + c.Project + "/datasets/" + name, Service: "bigquery.googleapis.com", Policies: []*sim.Policy{&d.IAM}}, nil
 	}
-	return sim.Resource{}, fmt.Errorf("unknown resource %q", ref)
+	return sim.Resource{}, fmt.Errorf(c.p("recurso desconocido %q", "unknown resource %q"), ref)
 }
 
 func (c *Context) principal(ref string) string {
@@ -834,7 +838,7 @@ func (c *Context) iam(ch scenario.Check) (bool, string) {
 	want := boolean(ch, "expect", true)
 	d := fmt.Sprintf("%s %s on %s: allowed=%v", pr, str(ch, "permission"), r.Name, allowed)
 	if role != "" {
-		d += " via " + role
+		d += c.p(" mediante ", " via ") + role
 	}
 	return allowed == want, d
 }
@@ -863,11 +867,11 @@ func (c *Context) noBasicRoles(ch scenario.Check) (bool, string) {
 				}
 			}
 			if !skip {
-				return false, fmt.Sprintf("%s holds basic role %s", m, b.Role)
+				return false, fmt.Sprintf(c.p("%s tiene el rol básico %s", "%s holds basic role %s"), m, b.Role)
 			}
 		}
 	}
-	return true, "no unexpected basic roles"
+	return true, c.p("no hay roles básicos inesperados", "no unexpected basic roles")
 }
 
 func (c *Context) forbidFirewall(ch scenario.Check) (bool, string) {
@@ -902,17 +906,17 @@ func (c *Context) forbidFirewall(ch scenario.Check) (bool, string) {
 			continue
 		}
 		if len(ports) == 0 {
-			return false, "rule " + name + " allows " + src
+			return false, c.p("la regla ", "rule ") + name + c.p(" permite ", " allows ") + src
 		}
 		for _, port := range ports {
 			for _, r := range fw.Rules {
 				if matchPort(r, port) {
-					return false, fmt.Sprintf("rule %s allows %s on port %d", name, src, port)
+					return false, fmt.Sprintf(c.p("la regla %s permite %s en el puerto %d", "rule %s allows %s on port %d"), name, src, port)
 				}
 			}
 		}
 	}
-	return true, "no overly permissive firewall rule"
+	return true, c.p("no hay reglas de cortafuegos demasiado permisivas", "no overly permissive firewall rule")
 }
 
 func matchPort(r sim.FWRule, port int) bool {
@@ -932,10 +936,10 @@ func (c *Context) finding(ch scenario.Check, want bool) (bool, string) {
 	cat := str(ch, "category")
 	for _, f := range c.State.Findings(c.Project) {
 		if f.Category == cat && (str(ch, "resourceContains") == "" || strings.Contains(f.Resource, str(ch, "resourceContains"))) {
-			return want, "finding " + cat + " present on " + f.Resource
+			return want, c.p("hallazgo ", "finding ") + cat + c.p(" presente en ", " present on ") + f.Resource
 		}
 	}
-	return !want, "finding " + cat + " absent"
+	return !want, c.p("hallazgo ", "finding ") + cat + c.p(" ausente", " absent")
 }
 
 func (c *Context) logMetric(ch scenario.Check) (bool, string) {
@@ -962,10 +966,10 @@ func (c *Context) logMetric(ch scenario.Check) (bool, string) {
 			ok = found
 		}
 		if ok {
-			return true, "log-based metric " + n
+			return true, c.p("métrica basada en registros ", "log-based metric ") + n
 		}
 	}
-	return false, "no log-based metric matching the requirement"
+	return false, c.p("ninguna métrica basada en registros cumple el requisito", "no log-based metric matching the requirement")
 }
 
 func (c *Context) alertPolicy(ch scenario.Check) (bool, string) {
@@ -989,10 +993,10 @@ func (c *Context) alertPolicy(ch scenario.Check) (bool, string) {
 			ok = false
 		}
 		if ok {
-			return true, "alert policy " + ap.DisplayName
+			return true, c.p("política de alertas ", "alert policy ") + ap.DisplayName
 		}
 	}
-	return false, "no matching alert policy"
+	return false, c.p("ninguna política de alertas coincide", "no matching alert policy")
 }
 
 // ---- evidence, quiz, commands ----------------------------------------------------
@@ -1034,11 +1038,11 @@ func (c *Context) evidence(ch scenario.Check) (bool, string) {
 	text := normalize(c.evidenceText(list(ch, "fields")))
 	minW := int(num(ch, "minWords", 3))
 	if n := words(text); n < minW {
-		return false, fmt.Sprintf("explanation has %d words (minimum %d)", n, minW)
+		return false, fmt.Sprintf(c.p("la explicación tiene %d palabras (mínimo %d)", "explanation has %d words (minimum %d)"), n, minW)
 	}
 	if c.Lab.Evidence != nil && c.Lab.Evidence.MinWords > 0 {
 		if n := words(c.evidenceText(nil)); n < c.Lab.Evidence.MinWords {
-			return false, fmt.Sprintf("the whole explanation has %d words (minimum %d)", n, c.Lab.Evidence.MinWords)
+			return false, fmt.Sprintf(c.p("la explicación completa tiene %d palabras (mínimo %d)", "the whole explanation has %d words (minimum %d)"), n, c.Lab.Evidence.MinWords)
 		}
 	}
 	var groups [][]string
@@ -1076,9 +1080,9 @@ func (c *Context) evidence(ch scenario.Check) (bool, string) {
 		need = int(math.Ceil(float64(len(groups)) * r))
 	}
 	if len(groups)-len(missing) < need {
-		return false, fmt.Sprintf("explanation does not yet cover %d key concept(s)", len(missing))
+		return false, fmt.Sprintf(c.p("la explicación aún no cubre %d concepto(s) clave", "explanation does not yet cover %d key concept(s)"), len(missing))
 	}
-	return true, "explanation covers the key concepts"
+	return true, c.p("la explicación cubre los conceptos clave", "explanation covers the key concepts")
 }
 
 func (c *Context) quiz(ch scenario.Check) (bool, string) {
@@ -1152,10 +1156,10 @@ func (c *Context) quiz(ch scenario.Check) (bool, string) {
 		correct++
 	}
 	if total == 0 {
-		return false, "no quiz questions"
+		return false, c.p("no hay preguntas", "no quiz questions")
 	}
 	ratio := num(ch, "ratio", 1)
-	return float64(correct) >= math.Ceil(float64(total)*ratio), fmt.Sprintf("%d/%d correct", correct, total)
+	return float64(correct) >= math.Ceil(float64(total)*ratio), fmt.Sprintf(c.p("%d/%d correctas", "%d/%d correct"), correct, total)
 }
 
 func contains(l []string, v string) bool {
@@ -1170,7 +1174,7 @@ func contains(l []string, v string) bool {
 func (c *Context) command(ch scenario.Check) (bool, string) {
 	re, err := regexp.Compile(str(ch, "regex"))
 	if err != nil {
-		return false, "invalid regex"
+		return false, c.p("expresión regular no válida", "invalid regex")
 	}
 	n := 0
 	for _, r := range c.Session.Records {
@@ -1180,9 +1184,9 @@ func (c *Context) command(ch scenario.Check) (bool, string) {
 	}
 	// `max` turns the check into a guard ("never ran X"); min then defaults to 0.
 	if _, capped := ch["max"]; capped {
-		return n >= int(num(ch, "min", 0)) && n <= int(num(ch, "max", 0)), fmt.Sprintf("%d matching commands (at most %d allowed)", n, int(num(ch, "max", 0)))
+		return n >= int(num(ch, "min", 0)) && n <= int(num(ch, "max", 0)), fmt.Sprintf(c.p("%d comandos coincidentes (se permiten como máximo %d)", "%d matching commands (at most %d allowed)"), n, int(num(ch, "max", 0)))
 	}
-	return n >= int(num(ch, "min", 1)), fmt.Sprintf("%d matching commands", n)
+	return n >= int(num(ch, "min", 1)), fmt.Sprintf(c.p("%d comandos coincidentes", "%d matching commands"), n)
 }
 
 func (c *Context) bqBytes(ch scenario.Check) (bool, string) {
@@ -1204,9 +1208,9 @@ func (c *Context) bqBytes(ch scenario.Check) (bool, string) {
 		}
 	}
 	if best < 0 {
-		return false, "no qualifying query found"
+		return false, c.p("no se ha encontrado ninguna consulta válida", "no qualifying query found")
 	}
-	return best <= limit, fmt.Sprintf("best query processed %s (limit %s)", sim.FormatBytes(best), sim.FormatBytes(limit))
+	return best <= limit, fmt.Sprintf(c.p("la mejor consulta procesó %s (límite %s)", "best query processed %s (limit %s)"), sim.FormatBytes(best), sim.FormatBytes(limit))
 }
 
 func (c *Context) terraformClean(ch scenario.Check) (bool, string) {
@@ -1223,19 +1227,19 @@ func (c *Context) terraformClean(ch scenario.Check) (bool, string) {
 		}
 	}
 	if !ok {
-		return false, "no Terraform state found (run terraform apply)"
+		return false, c.p("no hay estado de Terraform (ejecuta terraform apply)", "no Terraform state found (run terraform apply)")
 	}
 	var parsed struct {
 		Resources []any `json:"resources"`
 	}
 	_ = json.Unmarshal([]byte(st), &parsed)
 	if len(parsed.Resources) < int(num(ch, "minResources", 1)) {
-		return false, fmt.Sprintf("state manages %d resources", len(parsed.Resources))
+		return false, fmt.Sprintf(c.p("el estado gestiona %d recursos", "state manages %d resources"), len(parsed.Resources))
 	}
 	s.Env["TF_INITIALIZED"] = "1"
 	r := s.Exec("terraform plan")
 	if !strings.Contains(r.Output, "No changes") {
-		return false, "terraform plan is not empty (configuration drift or non-idempotent code)"
+		return false, c.p("terraform plan no está vacío (deriva de configuración o código no idempotente)", "terraform plan is not empty (configuration drift or non-idempotent code)")
 	}
 	for _, v := range list(ch, "requireVariables") {
 		found := false
@@ -1245,7 +1249,7 @@ func (c *Context) terraformClean(ch scenario.Check) (bool, string) {
 			}
 		}
 		if !found {
-			return false, "variable " + v + " not declared"
+			return false, c.p("la variable ", "variable ") + v + c.p(" no está declarada", " not declared")
 		}
 	}
 	if boolean(ch, "requireOutputs", false) {
@@ -1256,10 +1260,10 @@ func (c *Context) terraformClean(ch scenario.Check) (bool, string) {
 			}
 		}
 		if !found {
-			return false, "no outputs declared"
+			return false, c.p("no hay outputs declarados", "no outputs declared")
 		}
 	}
-	return true, fmt.Sprintf("%d resources, plan clean", len(parsed.Resources))
+	return true, fmt.Sprintf(c.p("%d recursos, plan limpio", "%d resources, plan clean"), len(parsed.Resources))
 }
 
 func (c *Context) cluster(ch scenario.Check) (*sim.Cluster, string) {
@@ -1275,7 +1279,7 @@ func (c *Context) cluster(ch scenario.Check) (*sim.Cluster, string) {
 func (c *Context) k8sReady(ch scenario.Check) (bool, string) {
 	cl, ns := c.cluster(ch)
 	if cl == nil || cl.K8s == nil {
-		return false, "cluster not found"
+		return false, c.p("no se encuentra el clúster", "cluster not found")
 	}
 	ready := 0
 	for _, pd := range c.State.ComputePods(c.Project, cl)[ns] {
@@ -1283,44 +1287,44 @@ func (c *Context) k8sReady(ch scenario.Check) (bool, string) {
 			ready++
 		}
 	}
-	return float64(ready) >= num(ch, "min", 1), fmt.Sprintf("%d ready pods for %s", ready, str(ch, "deployment"))
+	return float64(ready) >= num(ch, "min", 1), fmt.Sprintf(c.p("%d pods listos para %s", "%d ready pods for %s"), ready, str(ch, "deployment"))
 }
 
 func (c *Context) hpaScaled(ch scenario.Check) (bool, string) {
 	cl, ns := c.cluster(ch)
 	if cl == nil || cl.K8s == nil {
-		return false, "cluster not found"
+		return false, c.p("no se encuentra el clúster", "cluster not found")
 	}
 	for _, h := range cl.K8s.NS(ns).HPAs {
 		if h.Target == str(ch, "deployment") {
 			if h.Unknown {
-				return false, "HPA cannot read CPU metrics (missing resource requests)"
+				return false, c.p("el HPA no puede leer las métricas de CPU (faltan resource requests)", "HPA cannot read CPU metrics (missing resource requests)")
 			}
 			if h.ScaledUpTo <= h.Min {
-				return false, fmt.Sprintf("HPA never scaled out (max observed %d)", h.ScaledUpTo)
+				return false, fmt.Sprintf(c.p("el HPA nunca escaló hacia fuera (máximo observado %d)", "HPA never scaled out (max observed %d)"), h.ScaledUpTo)
 			}
 			if boolean(ch, "requireScaleIn", false) && !h.ScaledDown {
-				return false, "HPA scaled out but scale-in was not demonstrated"
+				return false, c.p("el HPA escaló hacia fuera pero no se demostró el escalado hacia dentro", "HPA scaled out but scale-in was not demonstrated")
 			}
-			return true, fmt.Sprintf("scaled up to %d replicas", h.ScaledUpTo)
+			return true, fmt.Sprintf(c.p("escaló hasta %d réplicas", "scaled up to %d replicas"), h.ScaledUpTo)
 		}
 	}
-	return false, "no HPA targeting " + str(ch, "deployment")
+	return false, c.p("no hay HPA dirigido a ", "no HPA targeting ") + str(ch, "deployment")
 }
 
 func (c *Context) pubsub(ch scenario.Check) (bool, string) {
 	sub := c.State.Projects[c.Project].Subs[str(ch, "subscription")]
 	if sub == nil {
-		return false, "subscription not found"
+		return false, c.p("no se encuentra la suscripción", "subscription not found")
 	}
 	if v := num(ch, "ackedMin", -1); v >= 0 && float64(sub.Acked) < v {
-		return false, fmt.Sprintf("%d messages acknowledged", sub.Acked)
+		return false, fmt.Sprintf(c.p("%d mensajes confirmados", "%d messages acknowledged"), sub.Acked)
 	}
 	if v := num(ch, "deadLetteredMin", -1); v >= 0 && float64(sub.DeadLettered) < v {
-		return false, fmt.Sprintf("%d messages dead-lettered", sub.DeadLettered)
+		return false, fmt.Sprintf(c.p("%d mensajes enviados a dead-letter", "%d messages dead-lettered"), sub.DeadLettered)
 	}
 	if v := num(ch, "backlogMax", -1); v >= 0 && float64(len(sub.Backlog)) > v {
-		return false, fmt.Sprintf("backlog is %d messages", len(sub.Backlog))
+		return false, fmt.Sprintf(c.p("hay %d mensajes pendientes", "backlog is %d messages"), len(sub.Backlog))
 	}
 	return true, fmt.Sprintf("acked=%d deadLettered=%d backlog=%d", sub.Acked, sub.DeadLettered, len(sub.Backlog))
 }
@@ -1340,24 +1344,24 @@ func (c *Context) build(ch scenario.Check) (bool, string) {
 				if boolean(ch, "shaTag", false) && !strings.Contains(img, b.Commit[:7]) && !strings.Contains(img, b.Commit) {
 					continue
 				}
-				return true, "build " + b.ID + " produced " + img
+				return true, c.p("la compilación ", "build ") + b.ID + c.p(" produjo ", " produced ") + img
 			}
 		}
 	}
-	return false, "no successful build producing a matching image"
+	return false, c.p("ninguna compilación correcta ha producido una imagen que coincida", "no successful build producing a matching image")
 }
 
 func (c *Context) sqlHealthy(ch scenario.Check) (bool, string) {
 	in := c.State.Projects[c.Project].SQLInstances[str(ch, "instance")]
 	if in == nil {
-		return false, "instance not found"
+		return false, c.p("no se encuentra la instancia", "instance not found")
 	}
 	maxc := sim.DBMaxConnections(in)
 	if in.Connections > maxc {
-		return false, fmt.Sprintf("%d connections > max_connections %d", in.Connections, maxc)
+		return false, fmt.Sprintf(c.p("%d conexiones > max_connections %d", "%d connections > max_connections %d"), in.Connections, maxc)
 	}
 	if boolean(ch, "noSlowQueries", false) && len(in.SlowQueries) > 0 {
-		return false, fmt.Sprintf("%d slow queries still present", len(in.SlowQueries))
+		return false, fmt.Sprintf(c.p("aún quedan %d consultas lentas", "%d slow queries still present"), len(in.SlowQueries))
 	}
 	if in.CPU > num(ch, "maxCpu", 90) {
 		return false, fmt.Sprintf("CPU %.0f%%", in.CPU)
@@ -1376,16 +1380,16 @@ func (c *Context) rollout(ch scenario.Check) (bool, string) {
 				if frag := str(ch, "detailContains"); frag != "" && !strings.Contains(ro.Detail, frag) {
 					continue
 				}
-				return true, "release " + r.Name + " " + ro.State
+				return true, c.p("versión ", "release ") + r.Name + " " + ro.State
 			}
 		}
 	}
-	return false, "no matching rollout"
+	return false, c.p("ningún despliegue coincide", "no matching rollout")
 }
 
 func (c *Context) logContains(ch scenario.Check) (bool, string) {
 	n := len(c.State.QueryLogs(c.Project, str(ch, "filter"), 0))
-	return float64(n) >= num(ch, "min", 1), fmt.Sprintf("%d matching log entries", n)
+	return float64(n) >= num(ch, "min", 1), fmt.Sprintf(c.p("%d entradas de registro coincidentes", "%d matching log entries"), n)
 }
 
 // ---- OPA / Rego policy validator -------------------------------------------------
@@ -1449,7 +1453,7 @@ func (c *Context) policy(ch scenario.Check) (bool, string) {
 	input := map[string]any{"project": c.View(), "projectId": c.Project, "params": ch["params"]}
 	msgs, err := EvalPolicy(pkg, input)
 	if err != nil {
-		return false, "policy evaluation error: " + err.Error()
+		return false, c.p("error al evaluar la política: ", "policy evaluation error: ") + err.Error()
 	}
 	ids := list(ch, "ids")
 	var hit []string
@@ -1467,7 +1471,7 @@ func (c *Context) policy(ch scenario.Check) (bool, string) {
 	if len(hit) > 0 {
 		return false, strings.Join(hit, "; ")
 	}
-	return true, "policy " + pkg + " satisfied"
+	return true, c.p("la política ", "policy ") + pkg + c.p(" se cumple", " satisfied")
 }
 
 // deskCheck validates service-desk communication: stakeholder updates, the
@@ -1475,7 +1479,7 @@ func (c *Context) policy(ch scenario.Check) (bool, string) {
 func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
 	d := c.Session.Desk
 	if d == nil {
-		return false, "no service desk in this lab"
+		return false, c.p("este laboratorio no tiene mesa de servicio", "no service desk in this lab")
 	}
 	match := func(text string) bool {
 		groups := ch["keywords"]
@@ -1508,12 +1512,12 @@ func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
 				n++
 			}
 		}
-		return float64(n) >= num(ch, "min", 1), fmt.Sprintf("%d useful update(s)", n)
+		return float64(n) >= num(ch, "min", 1), fmt.Sprintf(c.p("%d actualización(es) útil(es)", "%d useful update(s)"), n)
 	case "ticket_resolved":
 		if d.Ticket == nil || d.Ticket.Status != "RESOLVED" {
-			return false, "ticket not resolved"
+			return false, c.p("ticket sin resolver", "ticket not resolved")
 		}
-		return match(d.Ticket.Resolution), "resolved: " + d.Ticket.Resolution
+		return match(d.Ticket.Resolution), c.p("resuelto: ", "resolved: ") + d.Ticket.Resolution
 	case "asked":
 		n := 0
 		for _, q := range d.Questions {
@@ -1521,9 +1525,9 @@ func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
 				n++
 			}
 		}
-		return float64(n) >= num(ch, "min", 1), fmt.Sprintf("%d relevant question(s)", n)
+		return float64(n) >= num(ch, "min", 1), fmt.Sprintf(c.p("%d pregunta(s) relevante(s)", "%d relevant question(s)"), n)
 	}
-	return false, "unknown desk check"
+	return false, c.p("comprobación de mesa de servicio desconocida", "unknown desk check")
 }
 
 // tfState checks that a resource address is (or is not) in the Terraform state.
@@ -1539,7 +1543,7 @@ func (c *Context) tfState(ch scenario.Check) (bool, string) {
 		}
 	}
 	if !ok {
-		return false, "no Terraform state"
+		return false, c.p("no hay estado de Terraform", "no Terraform state")
 	}
 	var st struct {
 		Resources []struct {
@@ -1555,7 +1559,7 @@ func (c *Context) tfState(ch scenario.Check) (bool, string) {
 			found = true
 		}
 	}
-	return found == boolean(ch, "present", true), fmt.Sprintf("%s in state: %v", want, found)
+	return found == boolean(ch, "present", true), fmt.Sprintf(c.p("%s en el estado: %v", "%s in state: %v"), want, found)
 }
 
 // design evaluates the learner's architecture file against the requirements
@@ -1564,7 +1568,7 @@ func (c *Context) tfState(ch scenario.Check) (bool, string) {
 func (c *Context) design(ch scenario.Check) (bool, string) {
 	raw, ok := c.Session.Files[firstNonEmpty(str(ch, "file"), "design.yaml")]
 	if !ok {
-		return false, "design file not found"
+		return false, c.p("no se encuentra el archivo de diseño", "design file not found")
 	}
 	d, err := archsim.Parse([]byte(raw))
 	if err != nil {
@@ -1573,9 +1577,9 @@ func (c *Context) design(ch scenario.Check) (bool, string) {
 	var req archsim.Requirements
 	b, _ := yaml.Marshal(ch["requirements"])
 	if err := yaml.Unmarshal(b, &req); err != nil {
-		return false, "bad requirements: " + err.Error()
+		return false, c.p("requisitos no válidos: ", "bad requirements: ") + err.Error()
 	}
-	rep := archsim.Evaluate(d, req)
+	rep := archsim.Evaluate(d, req, c.Sub.Lang)
 	if len(rep.Problems) > 0 {
 		return false, strings.Join(rep.Problems, "; ")
 	}
@@ -1586,13 +1590,13 @@ func (c *Context) design(ch scenario.Check) (bool, string) {
 			continue
 		}
 		if !f.Pass {
-			failed = append(failed, fmt.Sprintf("%s (%s, target %s)", f.Requirement, f.Achieved, f.Target))
+			failed = append(failed, fmt.Sprintf(c.p("%s (%s, objetivo %s)", "%s (%s, target %s)"), archsim.RequirementName(f.Requirement, c.Sub.Lang), f.Achieved, f.Target))
 		}
 	}
 	if len(failed) > 0 {
-		return false, "not met: " + strings.Join(failed, "; ")
+		return false, c.p("no se cumple: ", "not met: ") + strings.Join(failed, "; ")
 	}
-	return true, fmt.Sprintf("%d/%d requirements met, %.0f EUR/month", rep.Passed, rep.Total, rep.CostEur)
+	return true, fmt.Sprintf(c.p("%d/%d requisitos cumplidos, %.0f EUR/mes", "%d/%d requirements met, %.0f EUR/month"), rep.Passed, rep.Total, rep.CostEur)
 }
 
 // subnetPlan checks an addressing plan: each named subnet exists in the
@@ -1607,7 +1611,7 @@ func (c *Context) subnetPlan(ch scenario.Check) (bool, string) {
 	for _, name := range sortedAnyKeys(want) {
 		sn := p.Subnets[name]
 		if sn == nil || (net != "" && sn.Network != net) {
-			problems = append(problems, name+" missing")
+			problems = append(problems, name+c.p(" no existe", " missing"))
 			continue
 		}
 		minHosts, _ := strconv.Atoi(fmt.Sprint(want[name]))
@@ -1615,30 +1619,30 @@ func (c *Context) subnetPlan(ch scenario.Check) (bool, string) {
 		ones, bits := ipn.Mask.Size()
 		usable := (1 << (bits - ones)) - 4
 		if usable < minHosts {
-			problems = append(problems, fmt.Sprintf("%s %s has %d usable addresses (needs %d)", name, sn.Range, usable, minHosts))
+			problems = append(problems, fmt.Sprintf(c.p("%s %s tiene %d direcciones utilizables (necesita %d)", "%s %s has %d usable addresses (needs %d)"), name, sn.Range, usable, minHosts))
 		}
 		if w := str(ch, "within"); w != "" && !(sim.IPInCIDR(ipn.IP.String(), w) && ones >= prefixOf(w)) {
-			problems = append(problems, fmt.Sprintf("%s %s is outside %s", name, sn.Range, w))
+			problems = append(problems, fmt.Sprintf(c.p("%s %s está fuera de %s", "%s %s is outside %s"), name, sn.Range, w))
 		}
 		for _, a := range list(ch, "avoid") {
 			if sim.CIDROverlap(sn.Range, a) {
-				problems = append(problems, fmt.Sprintf("%s %s overlaps reserved %s", name, sn.Range, a))
+				problems = append(problems, fmt.Sprintf(c.p("%s %s se solapa con el rango reservado %s", "%s %s overlaps reserved %s"), name, sn.Range, a))
 			}
 		}
 		for _, r := range ranges {
 			if sim.CIDROverlap(sn.Range, r) {
-				problems = append(problems, fmt.Sprintf("%s %s overlaps %s", name, sn.Range, r))
+				problems = append(problems, fmt.Sprintf(c.p("%s %s se solapa con %s", "%s %s overlaps %s"), name, sn.Range, r))
 			}
 		}
 		ranges = append(ranges, sn.Range)
 		if mx := num(ch, "maxWasteFactor", 0); mx > 0 && float64(usable) > mx*float64(minHosts) {
-			problems = append(problems, fmt.Sprintf("%s %s wastes address space (%d usable for %d needed)", name, sn.Range, usable, minHosts))
+			problems = append(problems, fmt.Sprintf(c.p("%s %s desperdicia espacio de direcciones (%d utilizables para %d necesarias)", "%s %s wastes address space (%d usable for %d needed)"), name, sn.Range, usable, minHosts))
 		}
 	}
 	if len(problems) > 0 {
 		return false, strings.Join(problems, "; ")
 	}
-	return true, fmt.Sprintf("plan valid: %s", strings.Join(ranges, ", "))
+	return true, fmt.Sprintf(c.p("plan válido: %s", "plan valid: %s"), strings.Join(ranges, ", "))
 }
 
 func prefixOf(cidr string) int {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/neodevesp/gcp-trainer/internal/desk"
 	"github.com/neodevesp/gcp-trainer/internal/grader"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"github.com/neodevesp/gcp-trainer/internal/scenario"
 	"github.com/neodevesp/gcp-trainer/internal/sim"
 	"gopkg.in/yaml.v3"
@@ -44,6 +45,18 @@ type Consequence struct {
 	After   int    `yaml:"after" json:"after"` // days until it materialises
 	Mission string `yaml:"mission" json:"mission"`
 	Note    string `yaml:"note" json:"note"`
+	// EN is the English overlay (content is written in Spanish).
+	EN *struct {
+		Note string `yaml:"note"`
+	} `yaml:"en,omitempty" json:"-"`
+}
+
+// NoteIn returns the consequence note in the given language.
+func (c Consequence) NoteIn(lang string) string {
+	if lang == i18n.EN && c.EN != nil && c.EN.Note != "" {
+		return c.EN.Note
+	}
+	return c.Note
 }
 
 // Definition is the company content (content/company/<id>.yaml).
@@ -56,6 +69,7 @@ type Definition struct {
 	Actors       []desk.Actor             `yaml:"actors" json:"actors"`
 	Consequences []Consequence            `yaml:"consequences" json:"-"`
 	StudentRoles []string                 `yaml:"studentRoles" json:"studentRoles"`
+	EN           *DefinitionEN            `yaml:"en,omitempty" json:"-"`
 	Missions     map[string]*scenario.Lab `yaml:"-" json:"-"`
 	MissionOrder []string                 `yaml:"-" json:"-"`
 }
@@ -131,8 +145,18 @@ func (d *Definition) consequence(id string) *Consequence {
 type Event struct {
 	Day  int    `json:"day"`
 	At   string `json:"at"`
-	Kind string `json:"kind"` // mission, consequence, incident, metric
-	Text string `json:"text"`
+	Kind string `json:"kind"`         // mission, consequence, incident, metric
+	Text string `json:"text"`         // Spanish (primary language)
+	EN   string `json:"en,omitempty"` // English
+}
+
+// Localized returns the event in the given language.
+func (e Event) Localized(lang string) Event {
+	if lang == i18n.EN && e.EN != "" {
+		e.Text = e.EN
+	}
+	e.EN = ""
+	return e
 }
 
 // Pending is an incident scheduled by a consequence.
@@ -143,6 +167,21 @@ type Pending struct {
 	Mission     string `json:"mission"`
 	Day         int    `json:"day"` // day it becomes available
 	Note        string `json:"note"`
+	NoteEN      string `json:"noteEn,omitempty"`
+}
+
+// Localized returns the pending incident in the given language.
+func (p Pending) Localized(lang string) Pending {
+	if lang == i18n.EN && p.NoteEN != "" {
+		p.Note = p.NoteEN
+	}
+	p.NoteEN = ""
+	return p
+}
+
+// missionTitle returns a mission title in the given language.
+func missionTitle(m *scenario.Lab, lang string) string {
+	return m.Localized(lang).Title
 }
 
 // Metrics are the company health indicators the learner is responsible for.
@@ -232,13 +271,15 @@ func New(d *Definition, userID string, seed int64, baselineDir string) (*Company
 			c.Baseline[cons.ID+"|"+h.key+"|"+h.res] = true
 		}
 	}
-	c.log("company", fmt.Sprintf("You joined %s as a Cloud Intern. %d projects in %d folders.", d.Name, len(d.Projects), len(d.Folders)))
+	c.log("company",
+		fmt.Sprintf("Te incorporas a %s como becario/a de cloud. %d proyectos en %d carpetas.", d.Name, len(d.Projects), len(d.Folders)),
+		fmt.Sprintf("You joined %s as a Cloud Intern. %d projects in %d folders.", d.Name, len(d.Projects), len(d.Folders)))
 	c.Metrics = c.measure(st, d)
 	return c, nil
 }
 
-func (c *Company) log(kind, text string) {
-	c.Journal = append(c.Journal, Event{Day: c.Day, At: fmt.Sprintf("Day %d", c.Day), Kind: kind, Text: text})
+func (c *Company) log(kind, es, en string) {
+	c.Journal = append(c.Journal, Event{Day: c.Day, At: fmt.Sprintf("Day %d", c.Day), Kind: kind, Text: es, EN: en})
 	if len(c.Journal) > 200 {
 		c.Journal = c.Journal[len(c.Journal)-200:]
 	}
@@ -260,7 +301,8 @@ type MissionStatus struct {
 
 // Missions lists missions with availability. careerIndex is the learner's
 // career stage index (0 = intern).
-func (c *Company) Missions(d *Definition, stageIndex map[string]int, careerIndex int) []MissionStatus {
+func (c *Company) Missions(d *Definition, stageIndex map[string]int, careerIndex int, lang string) []MissionStatus {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	var out []MissionStatus
 	pending := map[string]bool{}
 	for _, p := range c.Pending {
@@ -269,7 +311,7 @@ func (c *Company) Missions(d *Definition, stageIndex map[string]int, careerIndex
 		}
 	}
 	for _, id := range d.MissionOrder {
-		m := d.Missions[id]
+		m := d.Missions[id].Localized(lang)
 		ms := MissionStatus{ID: id, Title: m.Title, Summary: m.Summary, Kind: m.Company.Kind, Stage: m.Company.Stage, Incident: m.Company.Trigger != ""}
 		score, done := c.Completed[id]
 		ms.Done, ms.Score = done, score
@@ -278,22 +320,22 @@ func (c *Company) Missions(d *Definition, stageIndex map[string]int, careerIndex
 			ms.Available = pending[id]
 			if !ms.Available {
 				if done {
-					ms.Why = "resolved"
+					ms.Why = p("resuelto", "resolved")
 				} else {
-					ms.Why = "not happening (yet)"
+					ms.Why = p("no está ocurriendo (todavía)", "not happening (yet)")
 				}
 			}
 		case done && !m.Company.Repeatable:
-			ms.Why = "completed"
+			ms.Why = p("completada", "completed")
 		default:
 			ms.Available = true
 			for _, a := range m.Company.After {
 				if _, ok := c.Completed[a]; !ok {
-					ms.Available, ms.Why = false, "requires "+a
+					ms.Available, ms.Why = false, p("requiere ", "requires ")+missionTitle(d.Missions[a], lang)
 				}
 			}
 			if si, ok := stageIndex[m.Company.Stage]; ok && si > careerIndex {
-				ms.Available, ms.Why = false, "requires career stage "+m.Company.Stage
+				ms.Available, ms.Why = false, p("requiere la etapa profesional ", "requires career stage ")+m.Company.Stage
 			}
 		}
 		if m.Company.Trigger != "" && !ms.Available {
@@ -341,7 +383,7 @@ func MissionLab(d *Definition, base *scenario.Lab, params map[string]string, sta
 // Start prepares a mission for launch and returns the lab and primary project.
 func (c *Company) Start(d *Definition, missionID string, stageIndex map[string]int, careerIndex int) (*scenario.Lab, string, error) {
 	var ok bool
-	for _, m := range c.Missions(d, stageIndex, careerIndex) {
+	for _, m := range c.Missions(d, stageIndex, careerIndex, i18n.ES) {
 		if m.ID == missionID && m.Available {
 			ok = true
 		}
@@ -378,11 +420,13 @@ func (c *Company) Complete(d *Definition, missionID string, res *grader.Result, 
 	if res.Score > c.Completed[missionID] || c.Completed[missionID] == 0 {
 		c.Completed[missionID] = res.Score
 	}
-	verdict := "completed"
+	es, en := "completada", "completed"
 	if !res.Passed {
-		verdict = "closed without meeting the objectives"
+		es, en = "cerrada sin cumplir los objetivos", "closed without meeting the objectives"
 	}
-	c.log("mission", fmt.Sprintf("%s — %s (score %d).", m.Title, verdict, res.Score))
+	c.log("mission",
+		fmt.Sprintf("%s — %s (puntuación %d).", missionTitle(m, i18n.ES), es, res.Score),
+		fmt.Sprintf("%s — %s (score %d).", missionTitle(m, i18n.EN), en, res.Score))
 	// resolved incidents leave the pending list
 	var keep []Pending
 	for _, p := range c.Pending {
@@ -402,7 +446,7 @@ func (c *Company) Complete(d *Definition, missionID string, res *grader.Result, 
 		cons := d.consequence(p.Consequence)
 		if p.Day > c.Day-1 && cons != nil {
 			if hit, _, _, _ := c.risky(st, *cons); !hit {
-				c.log("consequence", "Risk mitigated in time: "+cons.Note)
+				c.log("consequence", "Riesgo mitigado a tiempo: "+cons.NoteIn(i18n.ES), "Risk mitigated in time: "+cons.NoteIn(i18n.EN))
 				continue
 			}
 		}
@@ -419,13 +463,13 @@ func (c *Company) Complete(d *Definition, missionID string, res *grader.Result, 
 		if !hit {
 			continue
 		}
-		p := Pending{Consequence: cons.ID, Mission: cons.Mission, Day: c.Day - 1 + max(1, cons.After), Note: cons.Note + " (" + where + ")", Resource: res, ProjectKey: key}
+		p := Pending{Consequence: cons.ID, Mission: cons.Mission, Day: c.Day - 1 + max(1, cons.After), Note: cons.NoteIn(i18n.ES) + " (" + where + ")", NoteEN: cons.NoteIn(i18n.EN) + " (" + where + ")", Resource: res, ProjectKey: key}
 		c.Pending = append(c.Pending, p)
 		scheduled = append(scheduled, p)
 	}
 	for _, p := range scheduled {
 		if p.Day <= c.Day {
-			c.log("incident", "New incident: "+d.Missions[p.Mission].Title)
+			c.log("incident", "Nuevo incidente: "+missionTitle(d.Missions[p.Mission], i18n.ES), "New incident: "+missionTitle(d.Missions[p.Mission], i18n.EN))
 		}
 	}
 	c.Metrics = c.measureWith(st, d, res)
@@ -493,7 +537,7 @@ func (c *Company) risks(st *sim.State, cons Consequence) []riskHit {
 			}
 		case cons.Missing == "budget":
 			if len(p.Budgets) == 0 && k == "prod-web" {
-				out = append(out, riskHit{k + ": no budget", k, ""})
+				out = append(out, riskHit{k + ": sin presupuesto / no budget", k, ""})
 			}
 		}
 	}
@@ -573,4 +617,32 @@ func clamp(v float64) float64 {
 		return 100
 	}
 	return float64(int(v*10)) / 10
+}
+
+// DefinitionEN is the English overlay of a company definition: project
+// purposes by key and people's personas by role.
+type DefinitionEN struct {
+	Projects map[string]string `yaml:"projects"`
+	Personas map[string]string `yaml:"personas"`
+}
+
+// Localized returns the definition with its texts in the given language.
+func (d *Definition) Localized(lang string) *Definition {
+	if lang != i18n.EN || d.EN == nil {
+		return d
+	}
+	c := *d
+	c.Projects = append([]ProjectDef{}, d.Projects...)
+	for i, p := range c.Projects {
+		if v := d.EN.Projects[p.Key]; v != "" {
+			c.Projects[i].Purpose = v
+		}
+	}
+	c.Actors = append([]desk.Actor{}, d.Actors...)
+	for i, a := range c.Actors {
+		if v := d.EN.Personas[a.Role]; v != "" {
+			c.Actors[i].Persona = v
+		}
+	}
+	return &c
 }
