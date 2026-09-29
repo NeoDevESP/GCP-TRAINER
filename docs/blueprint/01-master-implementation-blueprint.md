@@ -96,12 +96,13 @@ provisioning, grading and CI with hand-written labs.
 | 2 — Assessment | 9-dimension student model, process scoring, autonomy ladder | ✅ | `TestMasteryFormulaAndStudentModel`, `TestAutonomyLadder`, `TestBlindRestartPenalised` |
 | 3 — Lab DSL | Tickets, actors, modes, constraints, company block | ✅ | `internal/scenario/lab.go`, `labctl validate` |
 | 4 — GCP state | Resource model and simulated operations | ✅ (pre-existing, extended) | `internal/sim` |
-| 5 — Unified UI/CLI | Console views and terminal on the same state | ✅ | `/api/sessions/{id}/views/*`, `web/` |
-| 6 — Incidents | Failure library, symptom graph, tickets, generator, P1 mode | ✅ | `TestGeneratedIncidents` (29 cases) |
+| 5 — Unified UI/CLI | Console views and terminal on the same state | ✅ | `/api/sessions/{id}/views/*`, `web/` (Next.js static export: xterm terminal, desk, console, topology, logs, metrics, IAM, cost, Monaco files) |
+| 6 — Incidents | Failure library, symptom graph, tickets, generator, P1 mode | ✅ | `TestGeneratedIncidents` (31 cases, incl. production mode → P1) |
 | 7 — Adaptive | Forgetting curve, spaced repetition, stealth assessment | ✅ | `TestAdaptiveStealthRetention` |
 | 8 — Company Sim | Nebula Corporation, missions, consequences | ✅ | `TestMissionsSolvable`, `TestConsequences`, `TestMitigationCancelsConsequence` |
-| 9 — Advanced | Architecture, FinOps, Security, DR, Terraform, Kubernetes, Chaos, Interview, Unknown problem, Teach-me-why, What-if | ✅ | labs under `content/labs/{architecture,devops,gke,finops,...}` |
-| 10 — Career | Stages, specialisations, capstones, verifiable profile | ✅ | `content/career.yaml`, `TestCareerAndTranscript` |
+| 9 — Advanced | Architecture, FinOps, Security, DR, Terraform, Kubernetes, Chaos, Interview, Unknown problem, Teach-me-why, What-if | ✅ | labs under `content/labs/{architecture,devops,gke,finops,sre,career,linux,...}`; `internal/archsim` (`TestGoodDesignMeetsRequirements`, `TestNaiveDesignFailsWithReasons`); `chaos`, `interview`, `billing report`, `why`, `whatif` commands |
+| 10 — Career | Stages, specialisations, capstones, verifiable profile | ✅ | `content/career.yaml`, `TestCareerAndTranscript`, `/verify` page |
+| Platform | Fidelity router, F2 sandbox pool, split planes, deployment, CI | ✅ | `TestRouterChoosesAndFallsBack`, `TestPoolLifecycleWithSimDriver`, `TestJanitorReclaimsExpiredLeasesAndRecoversQuarantine`, `TestF1PubSubEmulator`, `TestSplitPlanesAndRemoteGrader`, `TestJanitorAndRestore`; `deploy/`, `.github/workflows/ci.yml` |
 
 ## 6. Decisions kept open (Blueprint §23) and how they were resolved
 
@@ -127,6 +128,10 @@ provisioning, grading and CI with hand-written labs.
 | 8 | orchestrator API | `StartRequest.Mission`, `LabPlane.Export` | `internal/company`, folder org policies, folder/org IAM | company tests, `TestCompanyFlow` |
 | 9 | simulator behaviour | request path records a causal chain (opt-in) | `why`, `whatif`, OOM/PVC/RBAC, regional outages, Terraform import/state/in-place, new labs | lab CI |
 | 10 | levels/leagues (gamification) | — | career stages, specialisations, signed transcripts | `TestCareerAndTranscript` |
+| 9 (cont.) | lab schema, grader | `Question` gained `after`/`when` (interview follow-ups); quiz merges interview answers | interview mode, chaos experiments, FinOps billing/recommender, architecture simulator (`archsim`), guest-OS model for VMs (files, permissions, disks, services, users), shell loops/conditionals, `jq select`, Cloud SQL import/export | `TestAllLabs`, archsim and cli tests |
+| 1 (cont.) | skill graph | — | foundations/linux/netfund/devtools/automation/containers/finops branches with labs | `labctl validate`, `TestAllLabs` |
+| 5 (cont.) | API | `Attempt` gained `sessionId` (resume running labs) | web client pages: dashboard, catalog, lab workspace, incidents, company, skill graph, leagues, instructor console, transcript verification | headless browser run (register → lab → terminal → views → check) |
+| Platform | fidelity, orchestrator | `Service.Close` idempotent; production-mode incidents escalate to P1 | Dockerfile, docker-compose (emulators), Terraform (sandbox folder + guardrails + Cloud Run platform), Cloud Build, GitHub Actions; fidelity, orchestrator, store and desk tests | CI |
 
 Rollback: every phase is a separate commit on the development branch; features
 are additive and the new endpoints/fields are optional, so older clients keep

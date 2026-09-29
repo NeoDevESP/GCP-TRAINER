@@ -896,21 +896,29 @@ func nowStamp() string { return time.Now().UTC().Format(time.RFC3339) }
 const helpText = `GCP Lab Simulator terminal (F0). Available tools:
   gcloud    compute, network, storage, iam, run, sql, pubsub, secrets, kms,
             container, artifacts, builds, deploy, logging, monitoring, dns,
-            ai, scc, services, config, auth, projects, org-policies, billing
+            ai, scc, services, config, auth, projects, folders, organizations,
+            org-policies, billing, recommender
   gsutil    mb, ls, cp, cat, rm, iam ch, lifecycle, versioning, pap, ubla
   bq        mk, ls, show, query (--dry_run), rm
   kubectl   apply, get, describe, logs, scale, set, rollout, autoscale,
-            expose, create, delete, run, exec, top
-  terraform init, validate, plan, apply, destroy, output, fmt, show
+            expose, create, delete, run, exec, top, auth can-i
+  terraform init, validate, plan, apply, destroy, output, fmt, show,
+            import, state (list|show|rm|mv), -target, -refresh-only
   git, docker, curl, nc, ping, dig, psql
   desk      ticket (show|comment|update|resolve|escalate), team, ask WHO "question"
   mentor    why TARGET (causal chain of a request), whatif COMMAND (impact preview)
   arch      arch evaluate design.yaml requirements.yaml (architecture simulator)
-  chaos     chaos run zone-outage|region-outage|kill-instance|stop-service --target=... (chaos engineering)
-  shell     echo, cat, ls, rm, export, env, grep, head, tail, wc, awk, cut,
-            jq, base64, sleep (advances simulated time), history
-Tips: pipes (|), &&, ||, ;, > and >> redirections, heredocs (<<EOF) and
-$(command) substitution are supported. Use the Files tab to edit files.
+  chaos     chaos run zone-outage|region-outage|kill-instance|stop-service --target=...,
+            chaos history
+  finops    billing report, gcloud recommender recommendations list --recommender=ID
+  interview interview (next question), answer ID N[,M] ["justification"]
+  vm (ssh)  ls -l, stat, id, groups, usermod, chmod, chown, df -h, du, find,
+            truncate, logrotate, systemctl, journalctl, sudo
+  shell     echo, cat, ls, rm, export, env, grep, head, tail, wc, awk, cut, sed,
+            jq (incl. select, keys), base64, sleep (advances simulated time), history
+Tips: pipes (|), &&, ||, ;, > and >> redirections, heredocs (<<EOF),
+$(command) substitution and for/while/if blocks are supported. Use the Files
+tab to edit files.
 `
 
 // Clone copies a session onto another state (grading, what-if analysis).
