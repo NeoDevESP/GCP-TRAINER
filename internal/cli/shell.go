@@ -52,8 +52,9 @@ type Session struct {
 	DockerAuth  map[string]bool   `json:"dockerAuth"`
 	LocalImages map[string]string `json:"localImages"` // tag -> behaviour
 	NoTick      bool              `json:"-"`
-	Credentials map[string]string `json:"credentials"`    // activated SA key files
-	Desk        *desk.Desk        `json:"desk,omitempty"` // ticket and simulated actors
+	Credentials map[string]string `json:"credentials"`     // activated SA key files
+	Desk        *desk.Desk        `json:"desk,omitempty"`  // ticket and simulated actors
+	Chaos       []ChaosRun        `json:"chaos,omitempty"` // chaos experiments run in this session
 	// Interceptor lets higher fidelity layers (F1 emulators, F2 real GCP)
 	// take over a command before the simulator handles it.
 	Interceptor func(s *Session, args []string, stdin string) (handled bool, out string, err error) `json:"-"`
@@ -703,6 +704,10 @@ func (s *Session) run(args []string, stdin string) (string, error) {
 		return s.whyCmd(args)
 	case "whatif":
 		return s.whatifCmd(args, stdin)
+	case "arch":
+		return s.archCmd(args)
+	case "chaos":
+		return s.chaosCmd(args)
 	case "watch":
 		return s.run(args[1:], stdin)
 	case "uuidgen":
@@ -879,6 +884,8 @@ const helpText = `GCP Lab Simulator terminal (F0). Available tools:
   git, docker, curl, nc, ping, dig, psql
   desk      ticket (show|comment|update|resolve|escalate), team, ask WHO "question"
   mentor    why TARGET (causal chain of a request), whatif COMMAND (impact preview)
+  arch      arch evaluate design.yaml requirements.yaml (architecture simulator)
+  chaos     chaos run zone-outage|region-outage|kill-instance|stop-service --target=... (chaos engineering)
   shell     echo, cat, ls, rm, export, env, grep, head, tail, wc, awk, cut,
             jq, base64, sleep (advances simulated time), history
 Tips: pipes (|), &&, ||, ;, > and >> redirections, heredocs (<<EOF) and
@@ -900,5 +907,6 @@ func (s *Session) Clone(st *sim.State) *Session {
 	}
 	c.Records = append([]ExecRecord{}, s.Records...)
 	c.Desk = s.Desk.Clone()
+	c.Chaos = append([]ChaosRun{}, s.Chaos...)
 	return &c
 }

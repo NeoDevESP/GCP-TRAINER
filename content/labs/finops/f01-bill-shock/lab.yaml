@@ -1,0 +1,111 @@
+id: finops-f01-bill-shock
+title: "FinOps Simulator: the bill went from 100 to 3,000 EUR"
+summary: Read the invoice, find anomalies and waste, act on recommender advice with the owners' agreement and put guardrails in place — without touching production.
+track: finops
+day: 1
+level: intermediate
+branch: finops
+type: incident
+mode: production
+skills: [finops.visibility, finops.optimization, architecture.cost, foundations.billing]
+wellArchitected: [cost]
+certs: [ACE, PCA]
+difficulty: 3
+minutes: 50
+baseline: [three-tier-app]
+faults:
+  - {type: bill_snapshot}
+  - {type: command, run: "gcloud compute instances create ml-experiment --zone={{.zone}} --machine-type=g2-standard-4 --accelerator=type=nvidia-l4,count=1 --subnet=app-subnet --no-address --labels=team=data,sim-cpu=idle --image-family=debian-12 --image-project=debian-cloud"}
+  - {type: command, run: "gcloud compute instances create batch-1 --zone={{.zone}} --machine-type=n2-standard-16 --subnet=app-subnet --no-address --labels=team=finance,sim-cpu=low --image-family=debian-12 --image-project=debian-cloud"}
+  - {type: command, run: "gcloud compute disks create old-backup-1 old-backup-2 old-backup-3 --zone={{.zone}} --size=500 --type=pd-ssd"}
+  - {type: command, run: "gcloud compute addresses create legacy-ip-1 legacy-ip-2 --region={{.region}}"}
+traffic:
+  - {name: checkout, target: "lb:checkout-lb", path: /checkout, rps: 20}
+constraints: [protect:api-1, protect:sql-1]
+ticket:
+  id: COST-44
+  kind: COST
+  priority: P2
+  summary: "The forecast for this month is ~3,300 EUR; last month was ~100 EUR. What happened, and how do we get back to normal without breaking checkout?"
+  reporter: Marta (FinOps)
+actors:
+  - role: data
+    name: Lucía (data science)
+    fallback: "We were testing a model on a GPU three weeks ago."
+    facts:
+      - {keywords: [[ml-experiment, gpu, experiment, delete, borrar]], answer: "ml-experiment? The experiment finished long ago — delete it, the results are in the bucket."}
+  - role: finance
+    name: Marta (FinOps)
+    facts:
+      - {keywords: [[batch, batch-1, report, informe]], answer: "batch-1 runs our nightly reports for Finance. It must stay, but it doesn't need to be huge."}
+      - {keywords: [[disk, disco, backup, old-backup]], answer: "The old-backup disks belong to a migration that ended in May. Keep one snapshot for audit and remove the disks."}
+story: |
+  Last month's bill for `{{.project}}` was about **100 EUR**. This month's forecast is **30× higher**.
+  Use the FinOps tools to explain it and bring the cost back down:
+
+  - `gcloud billing report` (compare with last month; `--group-by=resource` or `--group-by=label:team`)
+  - `gcloud recommender recommendations list --recommender=google.compute.instance.IdleResourceRecommender`
+    (also `...MachineTypeRecommender`, `google.compute.disk.IdleResourceRecommender`, `google.compute.address.IdleResourceRecommender`)
+
+  Confirm with the owners before deleting anything, keep checkout working, keep one snapshot of the old
+  backups, and add a **budget of 300 EUR** with alerts at 50/90/100%.
+objectives:
+  - Explain the increase with evidence
+  - Act on each recommendation after confirming with the owner
+  - Keep production and required workloads running
+  - Prevent the next surprise
+evidence:
+  fields: [savings]
+  sample:
+    savings: The increase came from an idle GPU VM ml-experiment left from an experiment (~2,300 EUR), an oversized batch-1 on n2-standard-16 at low CPU, three unattached 500 GB SSD disks and two unused static IPs. Deleting the idle GPU VM, rightsizing batch-1 to n2-standard-4, snapshotting and deleting the old disks and releasing the IPs brings the forecast back under 300 EUR; a budget with alerts catches the next anomaly.
+solution: |
+  gcloud billing report
+  gcloud billing report --group-by=resource
+  gcloud recommender recommendations list --recommender=google.compute.instance.IdleResourceRecommender --location={{.zone}}
+  gcloud recommender recommendations list --recommender=google.compute.instance.MachineTypeRecommender --location={{.zone}}
+  gcloud recommender recommendations list --recommender=google.compute.disk.IdleResourceRecommender --location={{.zone}}
+  ask data "can we delete ml-experiment?"
+  ask finance "what is batch-1 and the old-backup disks?"
+  gcloud compute instances delete ml-experiment --zone={{.zone}} --quiet
+  gcloud compute instances stop batch-1 --zone={{.zone}}
+  gcloud compute instances set-machine-type batch-1 --machine-type=n2-standard-4 --zone={{.zone}}
+  gcloud compute instances start batch-1 --zone={{.zone}}
+  gcloud compute disks snapshot old-backup-1 --zone={{.zone}} --snapshot-names=old-backups-audit
+  gcloud compute disks delete old-backup-1 old-backup-2 old-backup-3 --zone={{.zone}} --quiet
+  gcloud compute addresses delete legacy-ip-1 legacy-ip-2 --region={{.region}} --quiet
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=monthly --budget-amount=300EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+  gcloud billing report
+rubric:
+  - name: Spend back to normal
+    validator: cost
+    points: 30
+    all: true
+    checks:
+      - {type: cost_max, eur: 400, desc: "Monthly forecast below 400 EUR"}
+      - {type: absent, path: "instances[\"ml-experiment\"]", desc: "Idle GPU VM removed"}
+      - {type: count, collection: disks, where: {name: {regex: "^old-backup"}}, max: 0, desc: "Unattached disks removed"}
+  - name: Required workloads kept
+    validator: functional
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "Checkout still works"}
+      - {type: exists, path: "instances[\"batch-1\"]", expect: {machineType: {regex: "n2-standard-(2|4|8)$"}, status: RUNNING}, desc: "batch-1 rightsized and running"}
+      - {type: count, collection: snapshots, min: 1, desc: "Audit snapshot kept"}
+  - name: Evidence first
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: command, regex: "billing report|recommender recommendations list", min: 2, desc: "Used the invoice and the recommender"}
+      - {type: asked, min: 2, desc: "Confirmed with the owners"}
+  - name: Guardrail
+    validator: cost
+    points: 15
+    checks:
+      - {type: exists, path: "budgets.monthly", expect: {amount: 300, thresholds: {minLen: 3}}, desc: "300 EUR budget with three thresholds"}
+  - name: Explanation
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [savings], keywords: [[gpu], [rightsiz, n2-standard-4, machine type], [disk, disco], [budget, alert]], desc: "Cost drivers and savings explained"}

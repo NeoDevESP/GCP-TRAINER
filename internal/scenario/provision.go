@@ -18,6 +18,11 @@ const AdminAccount = "platform-admin@gcplab.dev"
 // BaselineDir holds reusable baseline scripts (content/baselines/*.sh).
 var BaselineDir = "content/baselines"
 
+// PlatformPolicy applies to platform sessions (baselines, setup, faults):
+// learner guardrails such as "no GPUs" must not stop the platform from
+// building a scenario (e.g. planting an idle GPU VM in a FinOps lab).
+var PlatformPolicy = cli.Policy{AllowGPUs: true}
+
 // World is a provisioned lab environment.
 type World struct {
 	Lab     *Lab              `json:"lab"`
@@ -52,6 +57,7 @@ var builtinBaselines = map[string]func(st *sim.State, p *sim.Project){
 func AdminSession(st *sim.State, project string, l *Lab) *cli.Session {
 	s := cli.NewSession(st, project, AdminAccount)
 	s.Region, s.Zone, s.NoTick = l.Region, l.Zone, true
+	s.Policy = PlatformPolicy
 	for k, v := range l.Files {
 		s.Files[k] = v
 	}
@@ -267,5 +273,6 @@ func RunBaseline(st *sim.State, projectID, name string, extra map[string]string)
 	}
 	s := cli.NewSession(st, projectID, AdminAccount)
 	s.Region, s.Zone, s.NoTick = "europe-west1", "europe-west1-b", true
+	s.Policy = PlatformPolicy
 	return runScript(s, rendered, "baseline "+name)
 }

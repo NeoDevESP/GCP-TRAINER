@@ -1,0 +1,121 @@
+id: arch-a01-global-expansion
+title: "Architecture Simulator: Nebula opens in the United States"
+summary: Redesign a single-zone storefront for two continents under availability, RPO/RTO, capacity, latency, residency, security and budget constraints — and justify the trade-offs.
+track: architect
+day: 2
+level: professional
+branch: architecture
+type: case-study
+mode: architecture
+skills: [architecture.design, architecture.reliability, architecture.cost, architecture.dr]
+wellArchitected: [reliability, performance, cost, security]
+certs: [PCA]
+difficulty: 4
+minutes: 60
+baseline: [empty]
+files:
+  requirements.yaml: |
+    # Non-functional requirements agreed with the board
+    availability: 99.9        # monthly, % (three nines)
+    rpoMinutes: 5             # data loss tolerated if a whole region fails
+    rtoMinutes: 30            # downtime tolerated if a whole region fails
+    peakRps: 3000             # Black Friday peak
+    userRegions: [europe, us]
+    latencyMs: 200            # p95 per user region
+    budgetEur: 1500           # per month
+    residency: eu             # customer data must stay in the EU (GDPR)
+    privateData: true         # no public IPs on data stores
+    waf: true                 # OWASP protection at the edge
+  design.yaml: |
+    # Current architecture (single zone, built in a hurry three years ago)
+    name: storefront-v1
+    components:
+      - {name: lb, type: global-lb}
+      - {name: web, type: mig, regions: [europe-west1], zones: 1, minInstances: 2, maxInstances: 4, machineType: e2-standard-2}
+      - {name: db, type: cloud-sql, regions: [europe-west1], tier: db-custom-2-7680, backups: true, publicIp: true}
+    path: [lb, web, db]
+story: |
+  Nebula is launching in the **United States**. Edit `design.yaml` so the storefront meets every requirement in
+  `requirements.yaml`, and evaluate it with the Architecture Simulator:
+
+  ```
+  arch evaluate design.yaml requirements.yaml
+  ```
+
+  Component types: `global-lb` (with `armor`), `cdn`, `cloud-run`, `mig`, `gke`, `cloud-sql` (`ha`, `replicas`,
+  `backups`, `pitr`, `tier`, `publicIp`), `spanner`/`firestore` (`multiRegion`, `nodes`), `memorystore`.
+  Every number in the report is explained — use it to discuss trade-offs. Then answer the review board.
+objectives:
+  - Meet availability, RPO/RTO and peak capacity
+  - Serve both continents within the latency target while keeping data in the EU
+  - Stay within budget with security controls (WAF, private data)
+  - Justify the main trade-offs
+quiz:
+  - id: q1
+    question: Why is a multi-region Spanner instance not the obvious answer here?
+    options: ["It cannot keep data in the EU", "It meets RPO/RTO but costs more than the whole budget", "It does not support SQL", "It needs a VPN"]
+    answer: [1]
+    justify: true
+    keywords: [[cost, coste, budget, presupuesto], [rpo, rto, replication, replicacion]]
+  - id: q2
+    question: US users are served from a US region, yet data must stay in the EU. What is the consequence?
+    options: ["Nothing", "Each uncached request pays a transatlantic round trip to the database", "The data is copied to the US", "The WAF blocks US users"]
+    answer: [1]
+    justify: true
+    keywords: [[latency, latencia, round trip, ms], [residency, gdpr, eu, residencia]]
+  - id: q3
+    question: What does the cross-region read replica buy you compared with backups + PITR?
+    options: ["Lower cost", "Minutes-level RTO and seconds of RPO on a regional disaster", "Synchronous replication", "Automatic failover without action"]
+    answer: [1]
+hints:
+  - text: "Availability multiplies along the path: a zonal database caps the whole system."
+  - text: "RPO ≤ 5 min on a regional disaster needs a replica in another region; RTO ≤ 30 min needs a rehearsed promotion."
+evidence:
+  fields: [adr]
+  sample:
+    adr: "Decision: Cloud Run in europe-west1 and us-central1 behind a global load balancer with Cloud Armor and CDN; Cloud SQL regional HA in europe-west1 with private IP and a cross-region replica in europe-west4. Trade-offs: multi-region Spanner would give RPO 0 but costs more than the budget; US requests pay a transatlantic round trip to keep data in the EU, mitigated with CDN caching; failover to the replica is a manual, rehearsed step."
+solution: |
+  arch evaluate design.yaml requirements.yaml
+  cat > design.yaml <<'YAML'
+  name: storefront-v2
+  components:
+    - {name: lb, type: global-lb, armor: true}
+    - {name: cdn, type: cdn}
+    - {name: web, type: cloud-run, regions: [europe-west1, us-central1], minInstances: 2, maxInstances: 20}
+    - {name: db, type: cloud-sql, regions: [europe-west1], tier: db-custom-4-15360, ha: true, replicas: [europe-west4], backups: true, pitr: true, private: true}
+  path: [lb, web, db]
+  YAML
+  arch evaluate design.yaml requirements.yaml
+rubric:
+  - name: Reliability & DR
+    validator: reliability
+    points: 25
+    checks:
+      - {type: design, only: [availability, "RPO (regional failure)", "RTO (regional failure)"], requirements: {availability: 99.9, rpoMinutes: 5, rtoMinutes: 30}, desc: "Availability, RPO and RTO met"}
+  - name: Scale & latency
+    validator: state
+    points: 15
+    checks:
+      - {type: design, requirements: {peakRps: 3000, userRegions: [europe, us], latencyMs: 200}, desc: "Peak capacity and latency for both continents"}
+  - name: Security & compliance
+    validator: security
+    points: 15
+    critical: true
+    checks:
+      - {type: design, requirements: {residency: eu, privateData: true, waf: true}, desc: "EU residency, private data stores, WAF"}
+  - name: Cost
+    validator: cost
+    points: 10
+    checks:
+      - {type: design, requirements: {budgetEur: 1500}, desc: "Within the monthly budget"}
+  - name: Trade-offs
+    validator: quiz
+    points: 20
+    checks:
+      - {type: quiz, ratio: 1, desc: "Review board questions"}
+  - name: Decision record
+    validator: evidence
+    points: 15
+    checks:
+      - {type: command, regex: "arch evaluate", min: 2, desc: "Evaluated before and after"}
+      - {type: evidence, fields: [adr], keywords: [[trade-off, tradeoff, compromiso, cost], [replica, rpo], [latency, latencia]], desc: "Architecture decision record"}

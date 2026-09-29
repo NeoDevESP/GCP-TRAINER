@@ -8,6 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/archsim"
+	"gopkg.in/yaml.v3"
 	"math"
 	"os"
 	"path/filepath"
@@ -320,6 +322,19 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		allowed := cl.K8s.NS(ns).RBACAllows(ns, str(ch, "serviceAccount"), str(ch, "verb"), str(ch, "resource"))
 		ok = allowed == boolean(ch, "expect", true)
 		detail = fmt.Sprintf("system:serviceaccount:%s:%s can %s %s: %v", ns, str(ch, "serviceAccount"), str(ch, "verb"), str(ch, "resource"), allowed)
+	case "chaos":
+		ok, detail = false, "no matching chaos experiment"
+		for _, r := range c.Session.Chaos {
+			if (str(ch, "experiment") == "" || r.Experiment == str(ch, "experiment")) && r.SLO >= num(ch, "minSlo", 0) && r.Minutes >= int(num(ch, "minMinutes", 1)) {
+				if r.Held || !boolean(ch, "held", true) {
+					ok, detail = true, fmt.Sprintf("%s held at %.2f%% (SLO %.1f%%)", r.Experiment, r.Availability, r.SLO)
+					break
+				}
+				detail = fmt.Sprintf("%s failed: %.2f%% < SLO %.1f%%", r.Experiment, r.Availability, r.SLO)
+			}
+		}
+	case "design":
+		ok, detail = c.design(ch)
 	case "tf_state":
 		ok, detail = c.tfState(ch)
 	case "file_contains":
@@ -1458,4 +1473,41 @@ func (c *Context) tfState(ch scenario.Check) (bool, string) {
 		}
 	}
 	return found == boolean(ch, "present", true), fmt.Sprintf("%s in state: %v", want, found)
+}
+
+// design evaluates the learner's architecture file against the requirements
+// stated in the check (Architecture Simulator). "requirements" filters which
+// findings must pass (all by default).
+func (c *Context) design(ch scenario.Check) (bool, string) {
+	raw, ok := c.Session.Files[firstNonEmpty(str(ch, "file"), "design.yaml")]
+	if !ok {
+		return false, "design file not found"
+	}
+	d, err := archsim.Parse([]byte(raw))
+	if err != nil {
+		return false, err.Error()
+	}
+	var req archsim.Requirements
+	b, _ := yaml.Marshal(ch["requirements"])
+	if err := yaml.Unmarshal(b, &req); err != nil {
+		return false, "bad requirements: " + err.Error()
+	}
+	rep := archsim.Evaluate(d, req)
+	if len(rep.Problems) > 0 {
+		return false, strings.Join(rep.Problems, "; ")
+	}
+	only := list(ch, "only")
+	var failed []string
+	for _, f := range rep.Findings {
+		if len(only) > 0 && !contains(only, f.Requirement) {
+			continue
+		}
+		if !f.Pass {
+			failed = append(failed, fmt.Sprintf("%s (%s, target %s)", f.Requirement, f.Achieved, f.Target))
+		}
+	}
+	if len(failed) > 0 {
+		return false, "not met: " + strings.Join(failed, "; ")
+	}
+	return true, fmt.Sprintf("%d/%d requirements met, %.0f EUR/month", rep.Passed, rep.Total, rep.CostEur)
 }

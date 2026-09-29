@@ -1157,6 +1157,10 @@ func (s *State) BackendHealth(project string, bs *BackendService) []HealthState 
 }
 
 func (s *State) probeInstance(project string, vm *Instance, hc *HealthCheck, servingPort int) HealthState {
+	// health probes are summarised by the caller; do not record their inner hops
+	saved := s.explain
+	s.explain = nil
+	defer func() { s.explain = saved }()
 	h := HealthState{Instance: vm.Name}
 	if hc == nil {
 		h.Reason = "backend service has no health check"

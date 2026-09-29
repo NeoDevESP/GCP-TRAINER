@@ -52,7 +52,7 @@ func isReadOnly(line string) bool {
 	}
 	first := strings.Fields(l)[0]
 	switch first {
-	case "why", "whatif", "ticket", "team", "ask":
+	case "why", "whatif", "ticket", "team", "ask", "arch":
 		return true
 	case "echo", "printf", "export", "unset", "sleep", "cd", "pwd", "date", "env", "printenv", "cat", "ls", "grep", "head", "tail", "wc", "sort", "uniq", "awk", "cut", "base64", "openssl", "uuidgen", "watch", "help", "history", "whoami", "hostname", "jq", "dig", "nslookup", "host", "ping", "nc", "ncat", "telnet":
 		return !strings.Contains(l, ">")

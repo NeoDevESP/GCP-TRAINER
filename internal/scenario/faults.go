@@ -47,7 +47,7 @@ var FaultTypes = []string{
 	"run_iam_public", "sql_flag", "sql_slow_query", "sql_extra_connections", "vm_tag_remove", "vm_stop", "vm_metadata",
 	"health_check_path", "named_port_remove", "mig_autoscaler", "bucket_public", "api_disable", "k8s_image",
 	"k8s_remove_requests", "k8s_probe_port", "k8s_scale", "leaked_key_miner", "subnet_pga_off", "dns_record",
-	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource", "region_outage", "zone_outage",
+	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource", "region_outage", "zone_outage", "bill_snapshot",
 }
 
 // ApplyFault mutates the world. Faults mutate real resource state, so symptoms
@@ -74,6 +74,7 @@ func ApplyFault(st *sim.State, project string, l *Lab, f Fault) error {
 			s = cli.NewSession(st, project, a)
 			s.Region, s.Zone, s.NoTick = l.Region, l.Zone, true
 		}
+		s.Policy = PlatformPolicy
 		return runScript(s, fs(f, "run"), "fault command")
 	case "firewall_priority":
 		fw := p.Firewalls[fs(f, "rule")]
@@ -353,6 +354,9 @@ func ApplyFault(st *sim.State, project string, l *Lab, f Fault) error {
 		for _, line := range fl(f, "lines") {
 			st.Log(project, sim.LogEntry{Severity: fs(f, "severity"), LogName: "stderr", Resource: sim.LogResource{Type: fs(f, "resourceType"), Labels: map[string]string{}}, Text: line})
 		}
+	case "bill_snapshot":
+		// Records the current estimate as last month's invoice (FinOps anomalies).
+		st.SnapshotBill(project)
 	case "region_outage", "zone_outage":
 		where := fs(f, "region")
 		if t == "zone_outage" {

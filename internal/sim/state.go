@@ -298,6 +298,7 @@ type InstanceGroup struct {
 	Name             string         `json:"name"`
 	Zone             string         `json:"zone"`
 	Region           string         `json:"region,omitempty"`
+	Zones            []string       `json:"distributionZones,omitempty"` // regional MIG: zones instances are spread over
 	Managed          bool           `json:"managed"`
 	Template         string         `json:"instanceTemplate,omitempty"`
 	TargetSize       int            `json:"targetSize"`

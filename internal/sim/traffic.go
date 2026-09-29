@@ -544,6 +544,25 @@ func (s *State) reconcileMIGs(pid string) {
 		if !ig.Managed {
 			continue
 		}
+		// The MIG keeps instances RUNNING. With autohealing it also replaces
+		// instances whose zone failed; regional MIGs recreate them in a healthy zone.
+		var keep []string
+		for _, n := range ig.Instances {
+			vm := p.Instances[n]
+			if vm == nil {
+				continue
+			}
+			if ig.AutoHealing != nil && s.ZoneDown(vm.Zone) && len(ig.Zones) > 1 {
+				delete(p.Instances, n)
+				s.Audit(pid, "serviceAccount:"+p.Number+"@cloudservices.gserviceaccount.com", "compute.googleapis.com", "compute.instances.repair", "projects/"+pid+"/zones/"+vm.Zone+"/instances/"+n)
+				continue
+			}
+			if vm.Status != "RUNNING" && !s.ZoneDown(vm.Zone) {
+				vm.Status = "RUNNING"
+			}
+			keep = append(keep, n)
+		}
+		ig.Instances = keep
 		if ig.Autoscaler != nil {
 			target := ig.Autoscaler.Min
 			if ig.Autoscaler.TargetCPU > 0 && ig.Autoscaler.TargetCPU < 0.05 {
@@ -570,7 +589,26 @@ func (s *State) ResizeMIG(pid string, ig *InstanceGroup) {
 	tpl := p.InstanceTemplates[ig.Template]
 	for len(ig.Instances) < ig.TargetSize && tpl != nil {
 		name := fmt.Sprintf("%s-%s", ig.BaseInstanceName, s.ID(4))
-		vm := &Instance{Name: name, Zone: ig.Zone, MachineType: tpl.MachineType, Status: "RUNNING", Tags: append([]string{}, tpl.Tags...),
+		zone := ig.Zone
+		if len(ig.Zones) > 0 {
+			// spread over healthy zones, fewest instances first
+			count := map[string]int{}
+			for _, n := range ig.Instances {
+				if vm := p.Instances[n]; vm != nil {
+					count[vm.Zone]++
+				}
+			}
+			best := -1
+			for _, z := range ig.Zones {
+				if s.ZoneDown(z) {
+					continue
+				}
+				if best < 0 || count[z] < best {
+					best, zone = count[z], z
+				}
+			}
+		}
+		vm := &Instance{Name: name, Zone: zone, MachineType: tpl.MachineType, Status: "RUNNING", Tags: append([]string{}, tpl.Tags...),
 			Labels: copyMap(tpl.Labels), Metadata: copyMap(tpl.Metadata), Network: tpl.Network, Subnet: tpl.Subnet, ServiceAccount: tpl.ServiceAccount,
 			Scopes: []string{"default"}, Image: tpl.Image, Group: ig.Name, CreatedBy: "serviceAccount:" + p.Number + "@cloudservices.gserviceaccount.com", ShieldedVM: true}
 		if sn := p.Subnets[tpl.Subnet]; sn != nil {

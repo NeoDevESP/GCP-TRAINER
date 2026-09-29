@@ -1,0 +1,99 @@
+id: sre-c01-zone-chaos
+title: "Chaos Engineering: prove the storefront survives a zone failure"
+summary: State a hypothesis, break things on purpose, watch the SLO — then redesign the web tier until the experiment holds.
+track: sre
+day: 1
+level: advanced
+branch: observability
+type: challenge
+mode: production
+skills: [observability.chaos, compute.mig, architecture.reliability, observability.slo]
+wellArchitected: [reliability]
+certs: [PCDE, PCA]
+difficulty: 3
+minutes: 60
+baseline: [default-network]
+setup: |
+  gcloud compute firewall-rules create allow-health-web --network=default --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=web
+  gcloud compute instance-templates create web-tpl --machine-type=e2-small --tags=web --metadata=startup-script='apt-get install -y nginx'
+  gcloud compute instances create web-1 --zone={{.zone}} --machine-type=e2-small --tags=web --metadata=startup-script='apt-get install -y nginx'
+  gcloud compute instance-groups unmanaged create web-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances web-ig --instances=web-1 --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports web-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute health-checks create http web-hc --port=80 --request-path=/
+  gcloud compute backend-services create web-be --protocol=HTTP --port-name=http --health-checks=web-hc --global
+  gcloud compute backend-services add-backend web-be --instance-group=web-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create web-map --default-service=web-be
+  gcloud compute target-http-proxies create web-proxy --url-map=web-map
+  gcloud compute forwarding-rules create web-lb --global --target-http-proxy=web-proxy --ports=80
+traffic:
+  - {name: shoppers, target: "lb:web-lb", path: /, rps: 30}
+ticket:
+  id: PRB-71
+  kind: PRB
+  priority: P3
+  summary: "Our SLO is 99% availability. Architecture review says the web tier 'should' survive a zone outage. Prove it — with an experiment, not a slide."
+  reporter: Sam (SRE)
+story: |
+  The storefront `web-lb` is served by a single VM `web-1` in `{{.zone}}`. Use the **chaos** tool:
+
+  ```
+  chaos run zone-outage --zone={{.zone}} --target=lb:web-lb --slo=99 --duration=5
+  chaos run kill-instance --instance=NAME --target=lb:web-lb --slo=99 --duration=5
+  chaos history
+  ```
+
+  1. Run the zone experiment against the current design and watch the hypothesis fail.
+  2. Rebuild the web tier from the `web-tpl` template as a **regional** managed instance group (3 zones,
+     autohealing with `web-hc`) behind the same load balancer, and retire the zonal group.
+  3. Re-run both experiments until the hypothesis holds, and write the experiment report.
+objectives:
+  - Define steady state and hypothesis
+  - Observe the failure on the current design
+  - Redesign for zonal failure and instance loss
+  - Prove it with experiments and report
+hints:
+  - text: "`gcloud compute instance-groups managed create NAME --region=REGION --template=... --size=3 --health-check=web-hc`"
+  - text: "Add the new group to `web-be` (`--instance-group-region`) and remove `web-ig` before experimenting again."
+evidence:
+  fields: [report]
+  sample:
+    report: "Hypothesis: the storefront stays above 99% availability when a zone fails. The first experiment failed (0% during the outage) because the only VM was zonal. After moving to a regional managed instance group across three zones with autohealing, the zone-outage experiment held at 100% and the kill-instance experiment held because the load balancer routed around the lost VM and the MIG recreated it."
+solution: |
+  chaos run zone-outage --zone={{.zone}} --target=lb:web-lb --slo=99 --duration=5
+  gcloud compute instance-groups managed create web-mig --template=web-tpl --size=3 --region={{.region}} --health-check=web-hc --initial-delay=60
+  gcloud compute instance-groups managed set-named-ports web-mig --named-ports=http:80 --region={{.region}}
+  gcloud compute backend-services add-backend web-be --instance-group=web-mig --instance-group-region={{.region}} --global
+  gcloud compute backend-services remove-backend web-be --instance-group=web-ig --instance-group-zone={{.zone}} --global
+  gcloud compute backend-services get-health web-be --global
+  chaos run zone-outage --zone={{.zone}} --target=lb:web-lb --slo=99 --duration=10
+  chaos run kill-instance --instance=$(gcloud compute instances list --filter="name~web-mig" --format="value(name)" --limit=1) --target=lb:web-lb --slo=99 --duration=5
+  chaos history
+rubric:
+  - name: Failure observed first
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: chaos, experiment: zone-outage, held: false, desc: "Ran the experiment against the original design"}
+  - name: Resilient design
+    validator: reliability
+    points: 25
+    all: true
+    checks:
+      - {type: exists, path: "instanceGroups[\"web-mig\"]", expect: {distributionZones: {minLen: 3}, autoHealing: {regex: "web-hc"}}, desc: "Regional MIG over 3 zones with autohealing"}
+      - {type: http, target: "lb:web-lb", path: /, status: 200, desc: "Storefront serving"}
+  - name: Zone failure survived
+    validator: functional
+    points: 25
+    checks:
+      - {type: chaos, experiment: zone-outage, minSlo: 99, minMinutes: 5, desc: "Zone-outage experiment held at ≥99%"}
+  - name: Instance loss survived
+    validator: functional
+    points: 15
+    checks:
+      - {type: chaos, experiment: kill-instance, minSlo: 99, desc: "Kill-instance experiment held"}
+  - name: Experiment report
+    validator: evidence
+    points: 20
+    checks:
+      - {type: evidence, fields: [report], keywords: [[hypothesis, hipotesis], [zone, zona], [regional, managed instance group, mig], [99, slo]], desc: "Hypothesis, observations and conclusion"}

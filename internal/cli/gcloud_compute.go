@@ -747,6 +747,12 @@ func init() {
 			return nil, fmt.Errorf("Quota 'INSTANCES' exceeded. Limit: %d.0 (lab quota).", s)
 		}
 		ig := &sim.InstanceGroup{Name: n, Zone: zone, Region: region, Managed: true, Template: tpl, TargetSize: size, NamedPorts: map[string]int{}, BaseInstanceName: c.Str("base-instance-name", n)}
+		if region != "" {
+			ig.Zones = c.List("zones")
+			if len(ig.Zones) == 0 {
+				ig.Zones = []string{region + "-b", region + "-c", region + "-d"}
+			}
+		}
 		if hc := c.Str("health-check", ""); hc != "" {
 			ig.AutoHealing = &sim.AutoHealing{HealthCheck: hc, InitialDelay: c.Int("initial-delay", 300)}
 		}
