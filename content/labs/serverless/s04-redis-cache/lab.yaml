@@ -95,6 +95,9 @@ rubric:
       - {type: ticket_update, desc: "Ticket actualizado"}
       - {type: evidence, fields: [rootCause], keywords: [[network, red, vpc], [authorized, autorizad, default, shop-vpc]], desc: "Explica la causa: red autorizada distinta"}
 en:
+  ticket:
+    summary: "Since yesterday's deployment every page takes 3 s: the log says 'Could not connect to Redis ... Connection timed out'."
+    impact: Every page is slow because each request rebuilds the session.
   title: The session cache does not answer from the website
   summary: A Memorystore instance created on the wrong network leaves the website without cache. Find out why, create the cache where it belongs and prove it with redis-cli.
   story: |
@@ -122,3 +125,9 @@ en:
     Comunicación: Communication
     Ticket actualizado: Ticket updated
     "Explica la causa: red autorizada distinta": "Explains the cause: a different authorized network"
+    "Equipo web": "Web team"
+    "Leo (backend)": "Leo (backend)"
+    "Creé la instancia `sessions` ayer con los valores por defecto y puse su IP en la configuración de web-1.": "I created the `sessions` instance yesterday with the defaults and put its IP in web-1's configuration."
+    "¿Red? No indiqué ninguna al crearla. web-1 está en shop-vpc, eso sí lo sé.": "Network? I did not specify one when I created it. web-1 is on shop-vpc, that much I know."
+    "Omar (plataforma)": "Omar (platform)"
+    "Memorystore solo tiene IP privada y únicamente es accesible desde la red autorizada que eliges al crearla. Eso no se puede cambiar después.": "Memorystore only has a private IP and is only reachable from the authorized network you choose when creating it. That cannot be changed later."
