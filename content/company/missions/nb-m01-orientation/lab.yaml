@@ -1,0 +1,53 @@
+id: nb-m01-orientation
+title: "Day 1 at Nebula: find your way around"
+summary: Map the organisation, folders and projects, and configure your CLI for the development project.
+level: basic
+branch: foundations
+type: guided
+mode: career
+skills: [foundations.hierarchy, foundations.cli]
+difficulty: 1
+minutes: 20
+company: {stage: intern, project: dev-web, kind: REQ}
+student: {unconfigured: true}
+ticket:
+  id: REQ-101
+  kind: REQ
+  priority: P4
+  summary: "Welcome aboard! Get familiar with our cloud estate and set up your CLI for the web team's development project."
+  reporter: Irene (engineering manager)
+story: |
+  Welcome to **{{.company}}**. Before touching anything, learn where things live.
+
+  1. Explore the organisation: folders and projects (`gcloud resource-manager folders list`, `gcloud projects list`).
+  2. Configure your CLI: default project = the **web team's development project**, region `europe-west1`.
+  3. Answer the orientation questions.
+objectives:
+  - Explore folders and projects
+  - Configure the CLI for dev-web
+  - Answer the orientation questions
+quiz:
+  - {id: q1, question: "Which folder contains the orders database project (prod-data)?", options: [Production, Development, Security, "Directly under the organisation"], answer: [0]}
+  - {id: q2, question: "Where does the checkout load balancer run?", options: ["{{.dev_web}}", "{{.prod_web}}", "{{.prod_platform}}", "{{.sandbox}}"], answer: [1]}
+  - {id: q3, question: "Where should you try an experimental service?", options: ["{{.prod_web}}", "{{.sandbox}}", "{{.security_monitoring}}", "{{.prod_data}}"], answer: [1]}
+solution: |
+  gcloud resource-manager folders list
+  gcloud projects list
+  gcloud config set project {{.dev_web}}
+  gcloud config set compute/region europe-west1
+rubric:
+  - name: Explored
+    validator: diagnosis
+    points: 20
+    checks:
+      - {type: command, regex: "folders list|projects list|get-ancestors", desc: "Explored the hierarchy"}
+  - name: CLI configured
+    validator: state
+    points: 30
+    checks:
+      - {type: session_config, project: "{{.dev_web}}", region: europe-west1, desc: "Default project dev-web and region europe-west1"}
+  - name: Orientation
+    validator: quiz
+    points: 50
+    checks:
+      - {type: quiz, ratio: 1, desc: "All orientation questions correct"}

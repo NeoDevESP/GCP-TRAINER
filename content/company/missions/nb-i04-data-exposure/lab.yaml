@@ -1,0 +1,61 @@
+id: nb-i04-data-exposure
+title: "SEC: customer data reachable from the internet"
+summary: Consequence of a public data bucket — close the exposure, assess what leaked and prevent recurrence.
+level: advanced
+branch: security
+type: incident
+mode: career
+skills: [storage.access, security.incident, security.audit]
+difficulty: 3
+minutes: 40
+company: {project: prod-web, kind: SEC, trigger: public-data}
+faults:
+  - {type: log_noise, severity: INFO, resourceType: gcs_bucket, lines: ["GET /{{.risk}}/ 200 from 45.155.205.9 (python-requests/2.31)", "GET /{{.risk}}/ 200 from 45.155.205.9 (python-requests/2.31)"]}
+ticket:
+  id: SEC-318
+  kind: SEC
+  priority: P2
+  summary: "A bug-bounty researcher reports that gs://{{.risk}} lists and downloads files anonymously."
+  reporter: Bug bounty programme
+story: |
+  `gs://{{.risk}}` in `{{.risk_project}}` is public. Close it, find out what was accessed and by whom, prevent it
+  from happening again in that project, and reply on the ticket.
+objectives:
+  - Close the exposure
+  - Assess access from logs
+  - Prevent recurrence
+evidence:
+  fields: [rootCause, prevention]
+  sample:
+    rootCause: The bucket granted allUsers read access, so anyone could list and download its objects; the logs show downloads from 45.155.205.9.
+    prevention: Enforce public access prevention on the bucket and through an organization policy for production, and route public content to labelled dedicated buckets.
+solution: |
+  gcloud storage buckets get-iam-policy gs://{{.risk}}
+  gcloud logging read 'resource.type="gcs_bucket"' --limit=5 --format='value(textPayload)' --project={{.risk_project}}
+  gcloud storage buckets remove-iam-policy-binding gs://{{.risk}} --member=allUsers --role=roles/storage.objectViewer
+  gcloud storage buckets update gs://{{.risk}} --public-access-prevention
+  ticket update "The bucket is private again and public access prevention is enforced; downloads from 45.155.205.9 are being assessed with legal. Next update tomorrow."
+rubric:
+  - name: Closed
+    validator: security
+    points: 40
+    critical: true
+    all: true
+    checks:
+      - {type: policy, on: "{{.risk_project}}", package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "No public data bucket"}
+  - name: Prevented
+    validator: security
+    points: 20
+    checks:
+      - {type: exists, on: "{{.risk_project}}", path: "buckets[\"{{.risk}}\"]", expect: {publicAccessPrevention: enforced}, desc: "Public access prevention on the bucket"}
+  - name: Assessed
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: command, regex: "logging read|get-iam-policy", desc: "Checked access logs and policy"}
+  - name: Communication
+    validator: evidence
+    points: 25
+    checks:
+      - {type: ticket_update, desc: "Stakeholder update"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[allusers, public, publico], [prevention, prevencion, org policy, policy]], desc: "Root cause and prevention"}

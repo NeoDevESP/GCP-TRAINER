@@ -4,6 +4,7 @@
 package main
 
 import (
+	"github.com/neodevesp/gcp-trainer/internal/company"
 	"log"
 	"net/http"
 	"os"
@@ -35,7 +36,11 @@ func main() {
 	if err != nil {
 		log.Printf("failure library not loaded: %v", err)
 	}
-	mux.HandleFunc("POST /grade", orchestrator.HandleGrade(byID, lib))
+	co, err := company.Load(filepath.Join(content, "company"), "nebula")
+	if err != nil {
+		log.Printf("company content not loaded: %v", err)
+	}
+	mux.HandleFunc("POST /grade", orchestrator.HandleGrade(byID, lib, co))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	addr := os.Getenv("ADDR")
 	if addr == "" {

@@ -1,0 +1,44 @@
+# Nebula Corporation — the persistent company of Career Mode (Blueprint §5).
+id: nebula
+name: Nebula Corporation
+domain: nebula.dev
+folders: [Production, Development, Security]
+studentRoles: [roles/owner]
+projects:
+  - {key: prod-web, folder: Production, baseline: [three-tier-app, nebula-web-extra], labels: {env: prod, team: web}, purpose: "Checkout and storefront"}
+  - {key: prod-data, folder: Production, baseline: [nebula-data], labels: {env: prod, team: data}, purpose: "Orders database, data lake and analytics"}
+  - {key: prod-platform, folder: Production, baseline: [nebula-platform], labels: {env: prod, team: platform}, purpose: "Shared registry and event bus"}
+  - {key: dev-web, folder: Development, baseline: [default-network, nebula-dev], labels: {env: dev, team: web}, purpose: "Web team development"}
+  - {key: sandbox, folder: Development, baseline: [default-network], labels: {env: sandbox}, purpose: "Experiments"}
+  - {key: security-monitoring, folder: Security, baseline: [nebula-security], labels: {env: prod, team: security}, purpose: "Audit archive and security tooling"}
+actors:
+  - role: developer
+    name: Leo (web team)
+    persona: builds the storefront; always in a hurry
+    fallback: "Can you just make it work? I don't know the cloud details."
+  - role: security
+    name: Aisha (CISO office)
+    persona: owns guardrails and audits
+    fallback: "Whatever you do, keep least privilege and nothing public without approval."
+  - role: finance
+    name: Marta (FinOps)
+    persona: watches the bill
+    fallback: "I need budgets and labels so I can attribute costs."
+  - role: manager
+    name: Irene (engineering manager)
+    persona: your manager
+    fallback: "Keep the ticket updated and tell me about risks before you take them."
+  - role: sre
+    name: Sam (SRE)
+    persona: on call for production
+    fallback: "Check the dashboards and audit logs first."
+  - role: customer
+    name: Store customer
+    persona: angry when checkout fails
+    fallback: "I just want to pay for my order!"
+# Decisions today, incidents tomorrow.
+consequences:
+  - {id: open-ssh, policy: gcplab.security, deny: OPEN_ADMIN_PORT, after: 1, newOnly: true, mission: nb-i01-ssh-compromise, note: "SSH/RDP left open to the internet"}
+  - {id: public-data, policy: gcplab.security, deny: PUBLIC_BUCKET, after: 1, newOnly: true, mission: nb-i04-data-exposure, note: "a data bucket is public"}
+  - {id: no-backups, policy: gcplab.reliability, deny: SQL_NO_BACKUPS, params: {haDatabases: [orders-db]}, after: 3, mission: nb-i02-data-loss, note: "orders-db has no backups"}
+  - {id: no-budget, missing: budget, after: 4, mission: nb-i03-cost-spike, note: "no budget alerts on prod-web"}

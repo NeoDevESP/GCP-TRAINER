@@ -211,6 +211,13 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		c.State.Step(n)
 		c.view = nil
 	}
+	// "on" evaluates the check against another project of the same world
+	// (multi-project company missions).
+	if p := str(ch, "on"); p != "" && p != c.Project && c.State.Projects[p] != nil {
+		savedP, savedV := c.Project, c.view
+		c.Project, c.view = p, nil
+		defer func() { c.Project, c.view = savedP, savedV }()
+	}
 	var ok bool
 	var detail string
 	switch res.Type {
@@ -304,6 +311,12 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		}
 	case "log_contains":
 		ok, detail = c.logContains(ch)
+	case "org_policy":
+		op := c.State.EffectiveOrgPolicy(c.Project, strings.TrimPrefix(str(ch, "constraint"), "constraints/"))
+		ok, detail = op != nil && op.Enforce == boolean(ch, "enforced", true), "no effective policy"
+		if op != nil {
+			detail = fmt.Sprintf("effective policy enforce=%v", op.Enforce)
+		}
 	case "ticket_update", "ticket_resolved", "asked":
 		ok, detail = c.deskCheck(res.Type, ch)
 	default:

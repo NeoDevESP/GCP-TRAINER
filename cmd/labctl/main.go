@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/company"
 	"os"
 	"path/filepath"
 	"sort"
@@ -95,6 +96,22 @@ func main() {
 					if _, ok := known[sk]; !ok {
 						problems = append(problems, fmt.Sprintf("failure %s: unknown skill %s", f.ID, sk))
 					}
+				}
+			}
+		}
+		if co, err := company.Load(filepath.Join(*content, "company"), "nebula"); err != nil {
+			problems = append(problems, "company: "+err.Error())
+		} else {
+			problems = append(problems, co.Validate()...)
+			known := cat.SkillMap()
+			for id, m := range co.Missions {
+				for _, sk := range m.Skills {
+					if _, ok := known[sk]; !ok {
+						problems = append(problems, fmt.Sprintf("mission %s: unknown skill %s", id, sk))
+					}
+				}
+				if m.MaxPoints() != 100 {
+					problems = append(problems, fmt.Sprintf("mission %s: rubric totals %d", id, m.MaxPoints()))
 				}
 			}
 		}

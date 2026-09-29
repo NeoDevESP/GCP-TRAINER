@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/company"
 	"hash/fnv"
 	"io"
 	"net/http"
@@ -35,6 +36,8 @@ type StartRequest struct {
 	AttemptID string `json:"attemptId"`
 	// Gen asks the lab plane to generate the lab from its failure library.
 	Gen *scenario.GenSpec `json:"gen,omitempty"`
+	// Mission runs a company-simulation mission on a persisted world.
+	Mission *MissionStart `json:"mission,omitempty"`
 }
 
 // SessionInfo is the public view of a session.
@@ -68,6 +71,7 @@ type SessionInfo struct {
 	Quiz         []scenario.Question      `json:"quiz,omitempty"`
 	Live         map[string]any           `json:"live"`
 	Gen          *scenario.GenSpec        `json:"gen,omitempty"`
+	Mission      *MissionStart            `json:"mission,omitempty"` // without state
 	Mode         string                   `json:"mode,omitempty"`
 	Type         string                   `json:"type,omitempty"`
 }
@@ -83,6 +87,15 @@ type LabPlane interface {
 	Grade(id string, sub grader.Submission) (*grader.Result, error)
 	Stop(id, reason string) error
 	Hint(id string, n int) (*scenario.Hint, error)
+	// Export returns the marshalled world (persistent company simulation).
+	Export(id string) ([]byte, error)
+}
+
+// MissionStart asks the lab plane to run a company mission on a saved world.
+type MissionStart struct {
+	ID     string            `json:"id"`
+	Params map[string]string `json:"params"`
+	State  []byte            `json:"state,omitempty"`
 }
 
 // Session is a running lab.
@@ -101,8 +114,9 @@ type Service struct {
 	Router    *fidelity.Router
 	Store     store.Store
 	TTL       time.Duration
-	GraderURL string            // optional remote grader worker
-	Lib       *scenario.Library // failure library for generated incidents
+	GraderURL string              // optional remote grader worker
+	Lib       *scenario.Library   // failure library for generated incidents
+	Company   *company.Definition // company simulation content
 	OnExpire  func(info SessionInfo)
 	Now       func() time.Time
 
@@ -166,6 +180,15 @@ func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
 		s.Register(g)
 		l, req.LabID = g, g.ID
 	}
+	var mission *MissionStart
+	if l == nil && req.Mission != nil && s.Company != nil {
+		base := s.Company.Missions[req.Mission.ID]
+		if base == nil {
+			return nil, fmt.Errorf("mission %s not found", req.Mission.ID)
+		}
+		l = company.MissionLab(s.Company, base, req.Mission.Params, req.Mission.State)
+		mission = &MissionStart{ID: req.Mission.ID, Params: req.Mission.Params}
+	}
 	if l == nil {
 		return nil, fmt.Errorf("lab %s not found", req.LabID)
 	}
@@ -178,6 +201,9 @@ func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
 		seed = s.now().UnixNano()%100000 + 1
 	}
 	proj := projectID(req.UserID, req.LabID, seed)
+	if l.FixedProject != "" {
+		proj = l.FixedProject
+	}
 	t0 := time.Now()
 	env, err := s.Router.Provision(d, l, seed, proj, req.UserID)
 	if err != nil {
@@ -188,6 +214,7 @@ func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
 	info := SessionInfo{ID: id, UserID: req.UserID, LabID: l.ID, AttemptID: req.AttemptID, Project: w.Project, Region: w.Lab.Region, Zone: w.Lab.Zone,
 		Fidelity: string(d.Level), Reason: d.Reason, Seed: seed, Params: w.Params, Started: s.now(), Expires: s.now().Add(s.ttlFor(l)), Status: "running",
 		ProvisionMs: time.Since(t0).Milliseconds()}
+	info.Mission = mission
 	se := &Session{Info: info, Lab: w.Lab, Env: env}
 	s.fillStatic(se)
 	s.mu.Lock()
@@ -414,9 +441,20 @@ func (s *Service) Grade(id string, sub grader.Submission) (*grader.Result, error
 	}
 	w := se.Env.World
 	if s.GraderURL != "" {
-		return RemoteGrade(s.GraderURL, se.Lab.ID, se.Info.Seed, w, sub)
+		return RemoteGrade(s.GraderURL, se.Lab.ID, se.Info.Seed, w, sub, se.Info.Mission)
 	}
 	return grader.Grade(w.Lab, w.State, w.Session, w.Project, sub), nil
+}
+
+// Export returns the marshalled simulator state of a session.
+func (s *Service) Export(id string) ([]byte, error) {
+	se, err := s.get(id)
+	if err != nil {
+		return nil, err
+	}
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.Env.World.State.Marshal()
 }
 
 // Stop ends a session and releases real-cloud resources.
@@ -534,6 +572,11 @@ func (s *Service) restore(id string) (*Session, error) {
 			base = g
 		}
 	}
+	if base == nil && snap.Info.Mission != nil && s.Company != nil {
+		if m := s.Company.Missions[snap.Info.Mission.ID]; m != nil {
+			base = company.MissionLab(s.Company, m, snap.Info.Mission.Params, nil)
+		}
+	}
 	if base == nil {
 		return nil, ErrNotFound
 	}
@@ -574,15 +617,21 @@ type GradeRequest struct {
 	// Gen identifies a generated incident; the worker regenerates it from its
 	// own failure library instead of trusting a lab definition from the lab plane.
 	Gen *scenario.GenSpec `json:"gen,omitempty"`
+	// Mission identifies a company mission (rebuilt from the worker's content).
+	Mission *MissionStart `json:"mission,omitempty"`
 }
 
 // RemoteGrade calls an isolated grader worker (it executes probes against
 // environments students could have tampered with, so it runs separately
 // from the web application).
-func RemoteGrade(url, labID string, seed int64, w *scenario.World, sub grader.Submission) (*grader.Result, error) {
+func RemoteGrade(url, labID string, seed int64, w *scenario.World, sub grader.Submission, mission ...*MissionStart) (*grader.Result, error) {
 	st, _ := w.State.Marshal()
 	sb, _ := json.Marshal(w.Session)
-	body, _ := json.Marshal(GradeRequest{LabID: labID, Seed: seed, Project: w.Project, State: st, Session: sb, Submission: sub, Gen: w.Lab.Generated})
+	req := GradeRequest{LabID: labID, Seed: seed, Project: w.Project, State: st, Session: sb, Submission: sub, Gen: w.Lab.Generated}
+	if len(mission) > 0 {
+		req.Mission = mission[0]
+	}
+	body, _ := json.Marshal(req)
 	resp, err := http.Post(strings.TrimSuffix(url, "/")+"/grade", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -598,7 +647,7 @@ func RemoteGrade(url, labID string, seed int64, w *scenario.World, sub grader.Su
 
 // HandleGrade is the grader worker's HTTP handler.
 // lib may be nil when the worker has no failure library.
-func HandleGrade(labs map[string]*scenario.Lab, lib ...*scenario.Library) http.HandlerFunc {
+func HandleGrade(labs map[string]*scenario.Lab, lib *scenario.Library, co *company.Definition) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req GradeRequest
 		if err := json.NewDecoder(io.LimitReader(r.Body, 32<<20)).Decode(&req); err != nil {
@@ -606,9 +655,14 @@ func HandleGrade(labs map[string]*scenario.Lab, lib ...*scenario.Library) http.H
 			return
 		}
 		base := labs[req.LabID]
-		if base == nil && req.Gen != nil && len(lib) > 0 && lib[0] != nil {
-			if g, err := lib[0].Generate(*req.Gen); err == nil && g.ID == req.LabID {
+		if base == nil && req.Gen != nil && lib != nil {
+			if g, err := lib.Generate(*req.Gen); err == nil && g.ID == req.LabID {
 				base = g
+			}
+		}
+		if base == nil && req.Mission != nil && co != nil {
+			if m := co.Missions[req.Mission.ID]; m != nil && m.ID == req.LabID {
+				base = company.MissionLab(co, m, req.Mission.Params, nil)
 			}
 		}
 		if base == nil {

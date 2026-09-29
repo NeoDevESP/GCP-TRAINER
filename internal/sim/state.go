@@ -38,10 +38,11 @@ type Organization struct {
 }
 
 type Folder struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"displayName"`
-	Parent      string `json:"parent"`
-	IAM         Policy `json:"iamPolicy"`
+	ID          string                `json:"id"`
+	DisplayName string                `json:"displayName"`
+	Parent      string                `json:"parent"`
+	IAM         Policy                `json:"iamPolicy"`
+	OrgPolicies map[string]*OrgPolicy `json:"orgPolicies,omitempty"`
 }
 
 type OrgPolicy struct {

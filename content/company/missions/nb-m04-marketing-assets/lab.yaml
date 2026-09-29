@@ -1,0 +1,67 @@
+id: nb-m04-marketing-assets
+title: "REQ: public bucket for website images"
+summary: Publish approved public content safely without exposing any other data.
+level: intermediate
+branch: storage
+type: challenge
+mode: career
+skills: [storage.buckets, storage.access]
+difficulty: 2
+minutes: 25
+company: {stage: junior, project: prod-web, kind: REQ, after: [nb-m01-orientation]}
+ticket:
+  id: REQ-131
+  kind: REQ
+  priority: P3
+  summary: "Marketing needs the website images publicly readable. Can you make the exports bucket public? It already has files in it."
+  reporter: Julia (marketing)
+actors:
+  - role: marketing
+    name: Julia (marketing)
+    fallback: "I just need a URL that works for everyone."
+    facts:
+      - {keywords: [[exports, orders, pedido, which, cual]], answer: "Oh, the exports bucket has order data? No no, we only need the logo and banners — a new place is fine."}
+  - role: security
+    name: Aisha (CISO office)
+    facts:
+      - {keywords: [[public, publico, allusers, approve, aprob]], answer: "Public buckets must contain only approved content and carry the label public-content=true so audits skip them."}
+story: |
+  Marketing asks to make `gs://exports-{{.prod_web}}` public. Find out what they really need, then publish
+  `logo.png` in a **new** bucket `gs://assets-{{.prod_web}}` (EU, uniform access, label `public-content=true`).
+files:
+  logo.png: "PNG...nebula logo"
+objectives:
+  - Clarify the request
+  - Create a dedicated public bucket for approved content
+  - Keep order exports private
+solution: |
+  ask marketing "which files do you need, the exports?"
+  ask security "can a bucket be public?"
+  gcloud storage buckets create gs://assets-{{.prod_web}} --location=europe-west1 --uniform-bucket-level-access
+  gcloud storage buckets update gs://assets-{{.prod_web}} --update-labels=public-content=true
+  gcloud storage cp logo.png gs://assets-{{.prod_web}}/logo.png
+  gcloud storage buckets add-iam-policy-binding gs://assets-{{.prod_web}} --member=allUsers --role=roles/storage.objectViewer
+  ticket resolve "Created a dedicated public assets bucket with the logo; the exports bucket contains order data and stays private."
+rubric:
+  - name: Assets published
+    validator: functional
+    points: 35
+    all: true
+    checks:
+      - {type: exists, path: "buckets[\"assets-{{.prod_web}}\"]", expect: {uniformBucketLevelAccess: true, labels: {regex: "public-content"}}, desc: "Dedicated, labelled bucket with UBLA"}
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:assets-{{.prod_web}}/logo.png", desc: "Logo publicly readable"}
+      - {type: exists, path: "buckets[\"assets-{{.prod_web}}\"].objects[\"logo.png\"]", desc: "Logo uploaded"}
+  - name: Data stays private
+    validator: security
+    points: 45
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.prod_web}}/2026-08/orders.csv", expect: false, desc: "Order exports stay private"}
+      - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "No unapproved public bucket"}
+  - name: Communication
+    validator: evidence
+    points: 20
+    checks:
+      - {type: asked, min: 1, desc: "Clarified the request"}
+      - {type: ticket_resolved, desc: "Ticket resolved"}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/neodevesp/gcp-trainer/internal/company"
 	"io"
 	"log/slog"
 	"net/http"
@@ -36,8 +37,9 @@ type Server struct {
 	Pool      *fidelity.Pool
 	WebDir    string
 	Log       *slog.Logger
-	F2Monthly int               // max real-cloud sessions per user per month
-	Lib       *scenario.Library // failure library (incident generator)
+	F2Monthly int                 // max real-cloud sessions per user per month
+	Lib       *scenario.Library   // failure library (incident generator)
+	Company   *company.Definition // persistent company simulation (Career Mode)
 	mu        sync.Mutex
 	rl        map[string][]time.Time
 }
@@ -257,6 +259,9 @@ func (s *Server) Handler() http.Handler {
 	})
 	h("POST /api/sessions/{id}/hint", s.hint)
 	h("GET /api/failures", s.failureLibrary)
+	h("GET /api/company", s.companyStatus)
+	h("POST /api/company", s.companyCreate)
+	h("POST /api/company/missions/{id}/start", s.companyStart)
 	h("POST /api/incidents", s.generateIncident)
 	h("POST /api/sessions/{id}/check", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		_, info, err := s.ownSession(r)
@@ -703,6 +708,11 @@ func (s *Server) generateIncident(w http.ResponseWriter, r *http.Request) (any, 
 
 // LoadGenerated re-registers generated labs persisted in the store (after a restart).
 func (s *Server) LoadGenerated() {
+	if s.Company != nil {
+		for _, m := range s.Company.Missions {
+			s.Cat.AddGenerated(m)
+		}
+	}
 	if s.Lib == nil {
 		return
 	}
@@ -799,6 +809,10 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	att.Commands, att.Errors = info.Commands, info.Errors
 	prior, _ := s.attemptsOf(att.UserID)
 	s.Engine.Award(att, prior)
+	var companyOut map[string]any
+	if l := s.Cat.Lab(info.LabID); l != nil && l.Company != nil && s.Company != nil {
+		companyOut = s.companyComplete(att.UserID, l.ID, info.ID, res)
+	}
 	if err := s.Store.Put("attempts", att.ID, att); err != nil {
 		return nil, err
 	}
@@ -807,6 +821,9 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	all, _ := s.attemptsOf(u.ID)
 	prof := s.Engine.Profile(*u, all, att.Track)
 	out := map[string]any{"result": res, "xp": att.XP, "bonus": att.Bonus, "bonusReasons": att.BonusReasons, "profile": prof, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID), res)}
+	if companyOut != nil {
+		out["company"] = companyOut
+	}
 	if mentor.Enabled() && len(sub.Evidence) > 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 		defer cancel()

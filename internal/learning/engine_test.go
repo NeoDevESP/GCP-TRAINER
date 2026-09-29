@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/neodevesp/gcp-trainer/internal/grader"
+	"github.com/neodevesp/gcp-trainer/internal/scenario"
 )
 
 func loadCat(t *testing.T) *Catalog {
@@ -150,5 +151,40 @@ func TestAwardHintCostsAndBonusCap(t *testing.T) {
 	e.Award(&b, prior)
 	if b.Bonus != 0 {
 		t.Fatalf("bonus should be capped at %d per track, got %d", BonusCap, b.Bonus)
+	}
+}
+
+func TestAdaptiveStealthRetention(t *testing.T) {
+	c := loadCat(t)
+	lib, err := scenario.LoadLibrary("../../content/failures")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	e := &Engine{Cat: c, Now: func() time.Time { return now }, Lib: lib}
+	atts := []Attempt{att("1", "ace-d11-app-403", 95, true, 0, now.Add(-60*24*time.Hour))}
+	p := e.Profile(User{ID: "u"}, atts, "ace-30")
+	var stealth *Recommendation
+	for i, r := range p.Adaptive {
+		if r.Kind == "stealth" {
+			stealth = &p.Adaptive[i]
+			break
+		}
+	}
+	if stealth == nil || stealth.Gen == nil {
+		t.Fatalf("expected a stealth retention incident, got %+v", p.Adaptive)
+	}
+	l, err := lib.Generate(*stealth.Gen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, s := range l.Skills {
+		if s == stealth.Skill {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("generated incident %s should exercise %s (skills %v)", l.ID, stealth.Skill, l.Skills)
 	}
 }

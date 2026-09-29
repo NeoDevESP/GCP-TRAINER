@@ -744,6 +744,9 @@ func init() {
 				return nil, err
 			}
 			cons = strings.TrimPrefix(cons, "constraints/")
+			if f := c.Str("folder", ""); f != "" || c.Str("organization", "") != "" {
+				return c.S.orgPolicyAt(c, cons, &sim.OrgPolicy{Constraint: cons, Enforce: enforce})
+			}
 			p, err := c.P()
 			if err != nil {
 				return nil, err
@@ -784,9 +787,9 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		op := p.OrgPolicies[cons]
-		if op == nil {
-			op = c.S.State.Org.OrgPolicies[cons]
+		op := c.S.State.EffectiveOrgPolicy(p.ID, cons)
+		if c.Bool("effective") && op != nil {
+			return Obj{V: op}, nil
 		}
 		if op == nil {
 			return Obj{V: map[string]any{"constraint": "constraints/" + cons}}, nil
@@ -984,4 +987,33 @@ func (s *Session) resourceFromFullName(full string) sim.Resource {
 		}
 	}
 	return sim.ProjectResource(s.Project)
+}
+
+// orgPolicyAt sets a policy on a folder or the organization.
+func (s *Session) orgPolicyAt(c *Cmd, cons string, op *sim.OrgPolicy) (any, error) {
+	st := s.State
+	var target map[string]*sim.OrgPolicy
+	var res string
+	var pol *sim.Policy
+	if f := c.Str("folder", ""); f != "" {
+		f = strings.TrimPrefix(f, "folders/")
+		fo := st.Folders["folders/"+f]
+		if fo == nil {
+			return nil, fmt.Errorf("NOT_FOUND: folder %s", f)
+		}
+		if fo.OrgPolicies == nil {
+			fo.OrgPolicies = map[string]*sim.OrgPolicy{}
+		}
+		target, res, pol = fo.OrgPolicies, "folders/"+f, &fo.IAM
+	} else {
+		target, res, pol = st.Org.OrgPolicies, "organizations/"+st.Org.ID, &st.Org.IAM
+	}
+	// setting policy needs orgpolicy.policy.set on the node (or above)
+	allowed := st.Allowed(s.Principal(), "orgpolicy.policy.set", sim.Resource{Type: "cloudresourcemanager.googleapis.com/Folder", Name: res, Policies: []*sim.Policy{pol, &st.Org.IAM}})
+	if !allowed {
+		return nil, fmt.Errorf("PERMISSION_DENIED: Permission 'orgpolicy.policy.set' denied on resource '%s'", res)
+	}
+	target[cons] = op
+	st.Audit("", s.Principal(), "orgpolicy.googleapis.com", "SetOrgPolicy", res+"/policies/"+cons)
+	return Obj{V: map[string]any{"name": res + "/policies/" + cons, "constraint": "constraints/" + cons, "booleanPolicy": map[string]any{"enforced": op.Enforce}}}, nil
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/neodevesp/gcp-trainer/internal/company"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -34,9 +35,14 @@ func newTestServer(t *testing.T) (*httptest.Server, *Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	co, err := company.Load(filepath.Join(root, "company"), "nebula")
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc := orchestrator.New(cat.Labs, fidelity.NewRouter(), st)
-	svc.Lib = lib
-	srv := &Server{Cat: cat, Engine: &learning.Engine{Cat: cat}, Store: st, Labs: svc, Tokens: &learning.Tokens{Secret: []byte("test"), TTL: time.Hour}, Lib: lib}
+	svc.Lib, svc.Company = lib, co
+	srv := &Server{Cat: cat, Engine: &learning.Engine{Cat: cat, Lib: lib}, Store: st, Labs: svc, Tokens: &learning.Tokens{Secret: []byte("test"), TTL: time.Hour}, Lib: lib, Company: co}
+	srv.LoadGenerated()
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, srv
@@ -153,5 +159,43 @@ func TestGeneratedIncidentFlow(t *testing.T) {
 	c.do("GET", "/api/sessions/"+info.ID+"/views/desk", nil, &desk)
 	if desk["ticket"] == nil {
 		t.Fatalf("desk view should expose the ticket: %v", desk)
+	}
+}
+
+func TestCompanyFlow(t *testing.T) {
+	ts, _ := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+	var auth struct {
+		Token string `json:"token"`
+	}
+	c.do("POST", "/api/auth/register", map[string]string{"email": "intern@example.com", "name": "Ines", "password": "correct horse battery"}, &auth)
+	c.token = auth.Token
+	var co map[string]any
+	if code := c.do("POST", "/api/company", nil, &co); code != 200 {
+		t.Fatalf("create company: %d %v", code, co)
+	}
+	projects := co["projects"].(map[string]any)
+	var info orchestrator.SessionInfo
+	if code := c.do("POST", "/api/company/missions/nb-m01-orientation/start", nil, &info); code != 200 {
+		t.Fatalf("start mission: %d", code)
+	}
+	var res struct {
+		Output string `json:"output"`
+		Exit   int    `json:"exit"`
+	}
+	c.do("POST", "/api/sessions/"+info.ID+"/exec", map[string]string{"line": "gcloud projects list"}, &res)
+	c.do("POST", "/api/sessions/"+info.ID+"/exec", map[string]string{"line": "gcloud config set project " + projects["dev-web"].(string)}, &res)
+	c.do("POST", "/api/sessions/"+info.ID+"/exec", map[string]string{"line": "gcloud config set compute/region europe-west1"}, &res)
+	var sub map[string]any
+	if code := c.do("POST", "/api/sessions/"+info.ID+"/submit", map[string]any{"answers": map[string][]int{"q1": {0}, "q2": {1}, "q3": {1}}}, &sub); code != 200 {
+		t.Fatalf("submit: %d %v", code, sub)
+	}
+	out, _ := sub["company"].(map[string]any)
+	if out == nil || out["day"].(float64) != 2 {
+		t.Fatalf("company should advance to day 2: %v", sub["company"])
+	}
+	c.do("GET", "/api/company", nil, &co)
+	if co["day"].(float64) != 2 {
+		t.Fatalf("company status should persist the day: %v", co["day"])
 	}
 }

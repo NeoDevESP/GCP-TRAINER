@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/neodevesp/gcp-trainer/internal/grader"
+	"github.com/neodevesp/gcp-trainer/internal/scenario"
 )
 
 // User is a learner, instructor or admin.
@@ -161,6 +162,7 @@ func (e *Engine) Award(a *Attempt, prior []Attempt) {
 type Engine struct {
 	Cat *Catalog
 	Now func() time.Time
+	Lib *scenario.Library // optional: enables generated/stealth recommendations
 }
 
 // SkillScore is the mastery breakdown of a skill.
@@ -201,7 +203,10 @@ type Recommendation struct {
 	LabID  string `json:"labId"`
 	Title  string `json:"title"`
 	Reason string `json:"reason"`
-	Kind   string `json:"kind"` // remediation, retest, next, mock
+	Kind   string `json:"kind"` // remediation, retest, next, mock, review, stealth, dimension, frontier
+	Skill  string `json:"skill,omitempty"`
+	// Gen is set when the recommendation is a generated incident.
+	Gen *scenario.GenSpec `json:"gen,omitempty"`
 }
 
 // Profile is the learner dashboard.
@@ -222,6 +227,7 @@ type Profile struct {
 	Attempts        int                `json:"attempts"`
 	League          string             `json:"league"`
 	Student         StudentModel       `json:"student"`
+	Adaptive        []Recommendation   `json:"adaptive"`
 	Career          CareerProfile      `json:"career"`
 }
 
@@ -610,6 +616,7 @@ func (e *Engine) Profile(u User, attempts []Attempt, trackID string) Profile {
 	p.League = League(u.ID, p.LevelIndex, e.now())
 	p.Student = e.Student(attempts, skills)
 	p.Career = e.Career(skills, branches, p.Student, attempts)
+	p.Adaptive = e.Adaptive(attempts, skills, p.Student)
 	p.User.PasswordHash = ""
 	return p
 }

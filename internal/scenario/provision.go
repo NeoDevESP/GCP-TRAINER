@@ -64,14 +64,31 @@ func Provision(base *Lab, seed int64, projectID string) (*World, error) {
 	if err != nil {
 		return nil, err
 	}
-	st := sim.New(seed, projectID, "user:"+AdminAccount)
-	st.Clock = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
+	var st *sim.State
+	if len(l.InitialState) > 0 {
+		// Persistent world (company simulation): continue from the saved state.
+		st, err = sim.Unmarshal(l.InitialState)
+		if err != nil {
+			return nil, fmt.Errorf("lab %s: initial state: %w", l.ID, err)
+		}
+		if st.Projects[projectID] == nil {
+			return nil, fmt.Errorf("lab %s: project %s not in the saved world", l.ID, projectID)
+		}
+		d := st.Clock
+		st.Clock = time.Date(d.Year(), d.Month(), d.Day(), 8, 0, 0, 0, time.UTC)
+	} else {
+		st = sim.New(seed, projectID, "user:"+AdminAccount)
+		st.Clock = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
+	}
 	p := st.Projects[projectID]
 	st.Org.IAM.AddBinding("roles/owner", "user:"+AdminAccount, nil)
 	for _, r := range l.Student.Roles {
 		p.IAM.AddBinding(r, "user:"+l.Student.Account, nil)
 	}
 	for _, b := range l.Baseline {
+		if len(l.InitialState) > 0 {
+			break
+		}
 		if fn, ok := builtinBaselines[b]; ok {
 			fn(st, p)
 			continue
@@ -94,7 +111,7 @@ func Provision(base *Lab, seed int64, projectID string) (*World, error) {
 			return nil, fmt.Errorf("lab %s: %w", l.ID, err)
 		}
 	}
-	st.Clock = time.Date(2026, 9, 1, 8, 50, 0, 0, time.UTC)
+	st.Clock = time.Date(st.Clock.Year(), st.Clock.Month(), st.Clock.Day(), 8, 50, 0, 0, time.UTC)
 	for i, f := range l.Faults {
 		if err := ApplyFault(st, projectID, l, f); err != nil {
 			return nil, fmt.Errorf("lab %s: fault %d: %w", l.ID, i, err)
@@ -223,4 +240,32 @@ func RunSolution(w *World) (string, error) {
 		}
 	}
 	return log.String(), nil
+}
+
+// RunBaseline applies a builtin or scripted baseline to a project of an
+// existing world (used to build persistent company worlds).
+func RunBaseline(st *sim.State, projectID, name string, extra map[string]string) error {
+	p := st.Projects[projectID]
+	if p == nil {
+		return fmt.Errorf("project %s not found", projectID)
+	}
+	if fn, ok := builtinBaselines[name]; ok {
+		fn(st, p)
+		return nil
+	}
+	script, err := os.ReadFile(filepath.Join(BaselineDir, name+".sh"))
+	if err != nil {
+		return fmt.Errorf("unknown baseline %q", name)
+	}
+	params := map[string]string{"project": projectID, "region": "europe-west1", "zone": "europe-west1-b"}
+	for k, v := range extra {
+		params[k] = v
+	}
+	rendered, _, err := renderWith(string(script), params)
+	if err != nil {
+		return err
+	}
+	s := cli.NewSession(st, projectID, AdminAccount)
+	s.Region, s.Zone, s.NoTick = "europe-west1", "europe-west1-b", true
+	return runScript(s, rendered, "baseline "+name)
 }

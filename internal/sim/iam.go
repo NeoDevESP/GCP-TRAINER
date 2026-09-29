@@ -43,6 +43,9 @@ var PredefinedRoles = map[string][]string{
 	"roles/iam.securityAdmin":                 {"*.getIamPolicy", "*.setIamPolicy", "iam.roles.*", "iam.serviceAccountKeys.*"},
 	"roles/resourcemanager.projectIamAdmin":   {"resourcemanager.projects.getIamPolicy", "resourcemanager.projects.setIamPolicy"},
 	"roles/orgpolicy.policyAdmin":             {"orgpolicy.*"},
+	"roles/resourcemanager.folderAdmin":       {"resourcemanager.folders.*", "resourcemanager.projects.get", "resourcemanager.projects.list"},
+	"roles/resourcemanager.folderIamAdmin":    {"resourcemanager.folders.getIamPolicy", "resourcemanager.folders.setIamPolicy", "resourcemanager.folders.get"},
+	"roles/resourcemanager.organizationAdmin": {"resourcemanager.organizations.*", "resourcemanager.folders.*", "resourcemanager.projects.getIamPolicy", "resourcemanager.projects.setIamPolicy", "resourcemanager.projects.get", "resourcemanager.projects.list"},
 	"roles/serviceusage.serviceUsageAdmin":    {"serviceusage.*"},
 	"roles/serviceusage.serviceUsageConsumer": {"serviceusage.services.use", "serviceusage.services.get", "serviceusage.services.list"},
 
@@ -688,28 +691,45 @@ func compare(l, r any, op string) (any, error) {
 
 // OrgPolicyEnforced checks a boolean constraint along the hierarchy.
 func (s *State) OrgPolicyEnforced(project, constraint string) bool {
-	if p := s.Projects[project]; p != nil {
-		if op := p.OrgPolicies[constraint]; op != nil {
-			return op.Enforce
-		}
-	}
-	if s.Org != nil {
-		if op := s.Org.OrgPolicies[constraint]; op != nil {
-			return op.Enforce
-		}
+	if op := s.EffectiveOrgPolicy(project, constraint); op != nil {
+		return op.Enforce
 	}
 	return false
 }
 
+// EffectiveOrgPolicy walks project → folders → organization and returns the
+// closest policy set for a constraint (inheritance as in Resource Manager).
+func (s *State) EffectiveOrgPolicy(project, constraint string) *OrgPolicy {
+	p := s.Projects[project]
+	if p == nil {
+		if s.Org != nil {
+			return s.Org.OrgPolicies[constraint]
+		}
+		return nil
+	}
+	if op := p.OrgPolicies[constraint]; op != nil {
+		return op
+	}
+	parent := p.Parent
+	for i := 0; i < 10 && strings.HasPrefix(parent, "folders/"); i++ {
+		f := s.Folders[parent]
+		if f == nil {
+			break
+		}
+		if op := f.OrgPolicies[constraint]; op != nil {
+			return op
+		}
+		parent = f.Parent
+	}
+	if s.Org != nil {
+		return s.Org.OrgPolicies[constraint]
+	}
+	return nil
+}
+
 // OrgPolicyAllows checks a list constraint (e.g. gcp.resourceLocations).
 func (s *State) OrgPolicyAllows(project, constraint, value string) bool {
-	var op *OrgPolicy
-	if p := s.Projects[project]; p != nil {
-		op = p.OrgPolicies[constraint]
-	}
-	if op == nil && s.Org != nil {
-		op = s.Org.OrgPolicies[constraint]
-	}
+	op := s.EffectiveOrgPolicy(project, constraint)
 	if op == nil {
 		return true
 	}

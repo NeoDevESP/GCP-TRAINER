@@ -1,0 +1,71 @@
+id: nb-i03-cost-spike
+title: "COST: the storefront bill doubled"
+summary: Consequence of having no budget — find forgotten resources, clean up safely and put an alert in place.
+level: intermediate
+branch: finops
+type: incident
+mode: career
+skills: [finops.visibility, finops.optimization, architecture.cost]
+difficulty: 3
+minutes: 40
+company: {project: prod-web, kind: COST, trigger: no-budget}
+faults:
+  - {type: command, actor: "perf-bot@{{.prod_web}}.iam.gserviceaccount.com", run: "gcloud compute instances create loadtest-1 loadtest-2 loadtest-3 --zone=europe-west1-b --machine-type=e2-standard-32 --subnet=app-subnet --no-address --labels=owner=perf-team,purpose=loadtest --image-family=debian-12 --image-project=debian-cloud --project={{.prod_web}}"}
+ticket:
+  id: COST-19
+  kind: COST
+  priority: P2
+  summary: "The storefront project's forecast doubled this month and nobody noticed until the invoice. Why, and how do we avoid a surprise next time?"
+  reporter: Marta (FinOps)
+actors:
+  - role: perf
+    name: Chen (performance team)
+    fallback: "We ran load tests two weeks ago."
+    facts:
+      - {keywords: [[loadtest, load test, vm, instance, delete, borrar, still, todavia]], answer: "Oh no, the loadtest VMs are still up? The tests finished two weeks ago — please delete them."}
+story: |
+  Explain the cost increase in `{{.prod_web}}`, remove the waste **after confirming with its owner**, keep production
+  running and add a budget alert of 1000 EUR (50/90/100%).
+objectives:
+  - Find the cost driver with evidence
+  - Confirm ownership before deleting
+  - Clean up and prevent surprises
+evidence:
+  fields: [rootCause]
+  sample:
+    rootCause: Three e2-standard-32 loadtest VMs from the performance team kept running for two weeks after the tests ended and there was no budget alert to notice it.
+solution: |
+  gcloud billing estimate
+  gcloud compute instances list --format='table(name,machineType.basename(),labels)'
+  ask perf "are the loadtest vms still needed?"
+  gcloud compute instances delete loadtest-1 loadtest-2 loadtest-3 --zone=europe-west1-b --quiet
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=storefront-monthly --budget-amount=1000EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+  gcloud billing estimate
+rubric:
+  - name: Waste removed
+    validator: cost
+    points: 35
+    all: true
+    checks:
+      - {type: count, collection: instances, where: {labels: {regex: "loadtest"}}, max: 0, desc: "Load-test VMs gone"}
+      - {type: cost_max, eur: 1000, desc: "Spend back to normal"}
+  - name: Production intact
+    validator: functional
+    points: 15
+    checks:
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "Checkout works"}
+  - name: Ownership confirmed
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: asked, actor: perf, min: 1, desc: "Confirmed with the owner before deleting"}
+  - name: Alerting
+    validator: cost
+    points: 20
+    checks:
+      - {type: count, collection: budgets, where: {amount: {gte: 1}}, min: 1, desc: "Budget alert configured"}
+  - name: Explanation
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [rootCause], keywords: [[loadtest, load test, vm, instance], [budget, alert, alerta]], desc: "Cost driver explained"}

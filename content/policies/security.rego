@@ -44,6 +44,7 @@ deny contains msg if {
 	some bnd in b.iamPolicy.bindings
 	some m in bnd.members
 	m in {"allUsers", "allAuthenticatedUsers"}
+	object.get(object.get(b, "labels", {}), "public-content", "") != "true" # explicitly approved public content (e.g. website assets)
 	msg := sprintf("PUBLIC_BUCKET: bucket %s grants %s to %s", [name, bnd.role, m])
 }
 

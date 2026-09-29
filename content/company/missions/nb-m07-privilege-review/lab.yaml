@@ -1,0 +1,76 @@
+id: nb-m07-privilege-review
+title: "PRB: service accounts with basic roles in production"
+summary: Replace legacy basic roles on production service accounts with the minimum predefined roles, without breaking workloads.
+level: advanced
+branch: iam
+type: challenge
+mode: career
+skills: [iam.leastprivilege, iam.serviceaccounts, security.audit]
+difficulty: 3
+minutes: 45
+company: {stage: senior, project: prod-web, kind: PRB, after: [nb-m02-dev-access]}
+ticket:
+  id: PRB-33
+  kind: PRB
+  priority: P3
+  summary: "Recurring audit finding: service accounts in production hold roles/editor. Remove it without breaking the deployer or the ETL."
+  reporter: Aisha (CISO office)
+actors:
+  - role: developer
+    name: Leo (web team)
+    facts:
+      - {keywords: [[web-deployer, deployer, what, que, does, hace]], answer: "web-deployer updates instance metadata and restarts VMs during deploys. It also has to act as api-sa."}
+  - role: data
+    name: Ravi (data team)
+    fallback: "The ETL loads data every night."
+    facts:
+      - {keywords: [[etl, what, que, does, hace, need]], answer: "etl-sa reads the data lake bucket and writes BigQuery tables in analytics. Nothing else."}
+story: |
+  `web-deployer` in `{{.prod_web}}` and `etl-sa` in `{{.prod_data}}` hold **roles/editor**. Ask the owners what
+  each identity does, grant the minimum predefined roles and only then remove editor. Document the change.
+objectives:
+  - Discover what each identity really does
+  - Grant predefined roles at the smallest scope
+  - Remove basic roles without breaking workloads
+evidence:
+  fields: [explanation]
+  sample:
+    explanation: web-deployer got compute.instanceAdmin.v1 and serviceAccountUser on api-sa; etl-sa got storage.objectViewer on the datalake bucket and bigquery.dataEditor; editor was removed from both after granting the replacements.
+solution: |
+  gcloud projects get-iam-policy {{.prod_web}} --flatten='bindings[].members' --filter='bindings.role:roles/editor' --format='value(bindings.members)'
+  ask developer "what does web-deployer do?"
+  ask data "what does etl need?"
+  gcloud projects add-iam-policy-binding {{.prod_web}} --member=serviceAccount:web-deployer@{{.prod_web}}.iam.gserviceaccount.com --role=roles/compute.instanceAdmin.v1
+  gcloud iam service-accounts add-iam-policy-binding api-sa@{{.prod_web}}.iam.gserviceaccount.com --member=serviceAccount:web-deployer@{{.prod_web}}.iam.gserviceaccount.com --role=roles/iam.serviceAccountUser --project={{.prod_web}}
+  gcloud projects remove-iam-policy-binding {{.prod_web}} --member=serviceAccount:web-deployer@{{.prod_web}}.iam.gserviceaccount.com --role=roles/editor
+  gcloud storage buckets add-iam-policy-binding gs://datalake-{{.prod_data}} --member=serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud projects add-iam-policy-binding {{.prod_data}} --member=serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com --role=roles/bigquery.dataEditor
+  gcloud projects remove-iam-policy-binding {{.prod_data}} --member=serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com --role=roles/editor
+rubric:
+  - name: No basic roles
+    validator: security
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: policy, package: gcplab.security, ids: [BASIC_ROLE_SERVICE_ACCOUNT], desc: "No basic roles on prod-web service accounts"}
+      - {type: policy, on: "{{.prod_data}}", package: gcplab.security, ids: [BASIC_ROLE_SERVICE_ACCOUNT], desc: "No basic roles on prod-data service accounts"}
+  - name: Workloads still work
+    validator: functional
+    points: 35
+    all: true
+    checks:
+      - {type: iam, principal: "serviceAccount:web-deployer@{{.prod_web}}.iam.gserviceaccount.com", permission: compute.instances.setMetadata, resource: project, desc: "Deployer can update VMs"}
+      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: project, desc: "ETL can load BigQuery"}
+      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:datalake-{{.prod_data}}/raw/x.json", desc: "ETL can read the data lake"}
+      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:datalake-{{.prod_data}}/raw/x.json", expect: false, desc: "ETL cannot delete raw data"}
+  - name: Discovery
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: asked, min: 2, desc: "Asked the owners what each identity does"}
+  - name: Documentation
+    validator: evidence
+    points: 15
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[editor], [instanceadmin, compute], [bigquery, dataeditor]], desc: "Change explained"}

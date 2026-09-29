@@ -1,0 +1,59 @@
+id: nb-m03-ops-ssh
+title: "REQ: ops needs SSH to production — today"
+summary: Provide administrative access to production VMs without exposing SSH to the internet.
+level: intermediate
+branch: security
+type: challenge
+mode: career
+skills: [networking.firewall, iam.leastprivilege, security.armor]
+difficulty: 2
+minutes: 30
+company: {stage: junior, project: prod-web, kind: REQ, after: [nb-m01-orientation]}
+ticket:
+  id: REQ-124
+  kind: REQ
+  priority: P2
+  summary: "Ops (group ops@nebula.dev) must SSH into api-1 in {{.prod_web}} from home. Our IPs change every day — just open port 22 to everyone, it's urgent."
+  reporter: Pat (ops lead)
+actors:
+  - role: ops
+    name: Pat (ops lead)
+    fallback: "Please hurry, the vendor is waiting on the call."
+    facts:
+      - {keywords: [[vpn, iap, tunnel, gcloud]], answer: "We all have gcloud installed. If `gcloud compute ssh --tunnel-through-iap` works, that's fine for us."}
+  - role: security
+    name: Aisha (CISO office)
+    facts:
+      - {keywords: [[22, ssh, open, abrir, internet, 0.0.0.0]], answer: "Never open 22 to 0.0.0.0/0 — scanners find it within minutes. IAP's range 35.235.240.0/20 is already allowed in prod-vpc."}
+story: |
+  Pat wants port 22 open to the world "just for today". Deliver SSH access for `group:ops@nebula.dev`
+  to production VMs **without** exposing SSH publicly. Talk to the people involved and resolve the ticket.
+objectives:
+  - Understand the constraint (changing home IPs)
+  - Grant IAP tunnel + OS Login access to the ops group
+  - Keep SSH closed to the internet
+solution: |
+  ask security "can I open 22 to the internet?"
+  gcloud compute firewall-rules list --filter='network:prod-vpc'
+  gcloud projects add-iam-policy-binding {{.prod_web}} --member=group:ops@nebula.dev --role=roles/iap.tunnelResourceAccessor
+  gcloud projects add-iam-policy-binding {{.prod_web}} --member=group:ops@nebula.dev --role=roles/compute.osLogin
+  ticket resolve "Ops can use gcloud compute ssh --tunnel-through-iap with IAP tunnel and OS Login roles; port 22 stays closed to the internet."
+rubric:
+  - name: Access delivered
+    validator: functional
+    points: 40
+    all: true
+    checks:
+      - {type: iam, principal: "group:ops@nebula.dev", permission: iap.tunnelInstances.accessViaIAP, resource: project, desc: "IAP tunnel access"}
+      - {type: iam, principal: "group:ops@nebula.dev", permission: compute.instances.osLogin, resource: project, desc: "OS Login"}
+  - name: SSH not exposed
+    validator: security
+    points: 40
+    critical: true
+    checks:
+      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT], desc: "No administrative port open to 0.0.0.0/0"}
+  - name: Communication
+    validator: evidence
+    points: 20
+    checks:
+      - {type: ticket_resolved, desc: "Explained the solution on the ticket"}

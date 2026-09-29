@@ -78,6 +78,10 @@ func Handler(lp LabPlane, token string) http.Handler {
 		h, err := lp.Hint(r.PathValue("id"), req.N)
 		reply(w, h, err)
 	}))
+	mux.HandleFunc("GET /lab/sessions/{id}/export", auth(func(w http.ResponseWriter, r *http.Request) {
+		b, err := lp.Export(r.PathValue("id"))
+		reply(w, map[string]json.RawMessage{"state": b}, err)
+	}))
 	mux.HandleFunc("POST /lab/sessions/{id}/stop", auth(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Reason string }
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -161,4 +165,11 @@ func (c *Client) Stop(id, reason string) error {
 func (c *Client) Hint(id string, n int) (*scenario.Hint, error) {
 	var out scenario.Hint
 	return &out, c.do("POST", "/lab/sessions/"+id+"/hint", map[string]int{"N": n}, &out)
+}
+func (c *Client) Export(id string) ([]byte, error) {
+	var out struct {
+		State json.RawMessage `json:"state"`
+	}
+	err := c.do("GET", "/lab/sessions/"+id+"/export", nil, &out)
+	return out.State, err
 }

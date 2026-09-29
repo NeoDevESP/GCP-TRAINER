@@ -62,8 +62,13 @@ type Lab struct {
 	Ticket          *desk.Ticket        `yaml:"ticket" json:"ticket,omitempty"`       // service-desk framing (INC/REQ/CHG/PRB/SEC/COST/MIG)
 	Actors          []desk.Actor        `yaml:"actors" json:"actors,omitempty"`       // simulated people the learner can question
 	Generated       *GenSpec            `yaml:"generated" json:"generated,omitempty"` // set when built by the incident generator
-	Noise           []string            `yaml:"noise" json:"-"`
-	Dir             string              `yaml:"-" json:"-"`
+	Company         *CompanySpec        `yaml:"company" json:"company,omitempty"`     // company-simulation mission metadata
+	// InitialState starts the lab from a persisted world (company simulation)
+	// instead of a fresh baseline; FixedProject is the primary project id.
+	InitialState []byte   `yaml:"-" json:"-"`
+	FixedProject string   `yaml:"-" json:"-"`
+	Noise        []string `yaml:"noise" json:"-"`
+	Dir          string   `yaml:"-" json:"-"`
 }
 
 // Fidelity declares which layers a lab supports.
@@ -135,6 +140,16 @@ type TimelineEvent struct {
 	At   string `yaml:"at" json:"at"`
 	From string `yaml:"from" json:"from"`
 	Text string `yaml:"text" json:"text"`
+}
+
+// CompanySpec places a mission in the persistent company simulation.
+type CompanySpec struct {
+	Stage      string   `yaml:"stage" json:"stage"`                     // career stage that unlocks it
+	After      []string `yaml:"after" json:"after,omitempty"`           // missions that must be completed first
+	Trigger    string   `yaml:"trigger" json:"trigger,omitempty"`       // consequence id that schedules it
+	Project    string   `yaml:"project" json:"project"`                 // primary company project key (e.g. prod-web)
+	Repeatable bool     `yaml:"repeatable" json:"repeatable,omitempty"` //
+	Kind       string   `yaml:"kind" json:"kind,omitempty"`             // REQ, CHG, INC, SEC, COST, MIG, PRB
 }
 
 // Fault is a declarative mutation applied after the baseline.
@@ -306,6 +321,7 @@ func (l *Lab) Variant(seed int64, projectID string) (*Lab, map[string]string, er
 		return nil, nil, err
 	}
 	v.Dir = l.Dir
+	v.InitialState, v.FixedProject = l.InitialState, l.FixedProject
 	v.Instructions, _ = render(l.Instructions)
 	v.Solution, _ = render(l.Solution)
 	v.Setup, _ = render(l.Setup)

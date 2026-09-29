@@ -336,6 +336,34 @@ func init() {
 		c.Audit("cloudsql.googleapis.com", "cloudsql.databases.create", "projects/"+p.ID+"/instances/"+in.Name+"/databases/"+n)
 		return "Creating Cloud SQL database...done.\nCreated database [" + n + "].\n", nil
 	})
+	reg("sql databases delete", func(c *Cmd) (any, error) {
+		n, err := c.Arg(0, "DATABASE")
+		if err != nil {
+			return nil, err
+		}
+		p, in, err := c.sqlInstance(c.Str("instance", ""))
+		if err != nil {
+			return nil, err
+		}
+		if err := c.Need("cloudsql.databases.delete", sqlRes(p, in.Name)); err != nil {
+			return nil, err
+		}
+		var keep []string
+		found := false
+		for _, d := range in.Databases {
+			if d == n {
+				found = true
+				continue
+			}
+			keep = append(keep, d)
+		}
+		if !found {
+			return nil, fmt.Errorf("HTTPError 404: database %s not found", n)
+		}
+		in.Databases = keep
+		c.Audit("cloudsql.googleapis.com", "cloudsql.databases.delete", "projects/"+p.ID+"/instances/"+in.Name+"/databases/"+n)
+		return "Deleted database [" + n + "].\n", nil
+	})
 	reg("sql databases list", func(c *Cmd) (any, error) {
 		_, in, err := c.sqlInstance(c.Str("instance", ""))
 		if err != nil {

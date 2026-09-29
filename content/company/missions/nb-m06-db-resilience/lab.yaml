@@ -1,0 +1,47 @@
+id: nb-m06-db-resilience
+title: "CHG: make the orders database resilient"
+summary: Add automated backups, point-in-time recovery and high availability to the orders database.
+level: intermediate
+branch: databases
+type: challenge
+mode: career
+skills: [databases.ha, architecture.reliability]
+difficulty: 3
+minutes: 30
+company: {stage: engineer, project: prod-data, kind: CHG, after: [nb-m01-orientation]}
+ticket:
+  id: CHG-208
+  kind: CHG
+  priority: P3
+  summary: "Audit finding: orders-db has no backups and is zonal. Required: RPO ≤ 5 minutes, survive a zone outage."
+  reporter: Aisha (CISO office)
+story: |
+  `orders-db` in `{{.prod_data}}` is zonal without backups. Make it meet **RPO ≤ 5 min** and **survive a zone outage**.
+  Update the change ticket when done.
+objectives:
+  - Automated backups and point-in-time recovery
+  - Regional high availability
+  - Document the change
+solution: |
+  gcloud sql instances describe orders-db
+  gcloud sql instances patch orders-db --backup-start-time=02:00 --enable-point-in-time-recovery
+  gcloud sql instances patch orders-db --availability-type=REGIONAL
+  ticket update "orders-db now has daily backups with point-in-time recovery (RPO minutes) and regional HA with a standby in another zone."
+rubric:
+  - name: Resilience
+    validator: reliability
+    points: 60
+    all: true
+    checks:
+      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db]}, desc: "Regional HA and automated backups"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "PITR for RPO ≤ 5 min"}
+  - name: Diagnosis
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "sql instances describe|sql instances list", desc: "Inspected the instance first"}
+  - name: Change documented
+    validator: evidence
+    points: 30
+    checks:
+      - {type: ticket_update, public: false, keywords: [[backup, copia], [regional, ha, standby, zone, zona]], desc: "Change documented"}

@@ -1,0 +1,69 @@
+id: nb-i02-data-loss
+title: "INC P1: the orders database is gone"
+summary: Consequence of skipping backups — a migration dropped the orders database and there is nothing to restore.
+level: advanced
+branch: databases
+type: incident
+mode: career
+skills: [databases.ha, architecture.dr, observability.postmortem]
+difficulty: 4
+minutes: 45
+company: {project: prod-data, kind: INC, trigger: no-backups}
+faults:
+  - {type: command, actor: "migration-bot@{{.prod_data}}.iam.gserviceaccount.com", run: "gcloud sql databases delete orders --instance=orders-db --project={{.prod_data}}"}
+ticket:
+  id: INC-777
+  kind: INC
+  priority: P1
+  summary: "Order history is empty. The nightly migration job failed at 03:10."
+  reporter: Customer Support
+actors:
+  - role: data
+    name: Ravi (data team)
+    facts:
+      - {keywords: [[migration, migracion, job, what, que]], answer: "The migration script runs DROP DATABASE and recreates it from a dump... the dump step failed after the drop."}
+      - {keywords: [[bigquery, analytics, copy, copia]], answer: "Analytics has a copy of orders up to yesterday 23:00 in analytics.orders."}
+story: |
+  The orders database in `{{.prod_data}}` disappeared. Find out what happened, recover what is possible,
+  make sure it cannot happen again (backups, PITR) and communicate honestly: this is a P1.
+objectives:
+  - Establish what happened and what can be recovered
+  - Recreate the database and protect it
+  - Communicate impact honestly and write the postmortem
+evidence:
+  fields: [rootCause, prevention, postmortem]
+  sample:
+    rootCause: The migration bot dropped the orders database and failed before restoring it; orders-db had no automated backups, so no restore point existed.
+    prevention: Automated backups with point-in-time recovery, deletion protection and a migration process that takes a backup first and requires approval.
+    postmortem: "Timeline: 03:10 drop by migration-bot, 08:00 detection. Impact: order history lost since the last analytics export (23:00). Action items: backups and PITR, migration review."
+solution: |
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:cloudsql.databases.delete' --limit=3 --format='value(protoPayload.authenticationInfo.principalEmail)'
+  !gcloud sql backups list --instance=orders-db
+  ask data "what does the migration job do?"
+  gcloud sql databases create orders --instance=orders-db
+  gcloud sql instances patch orders-db --backup-start-time=02:00 --enable-point-in-time-recovery
+  ticket update "Orders database recreated; no backups existed so history since the last analytics export at 23:00 is lost. Backups and PITR are now enabled. Next update in 30 minutes."
+rubric:
+  - name: Service restored
+    validator: functional
+    points: 25
+    checks:
+      - {type: exists, path: "sqlInstances[\"orders-db\"].databases", expect: {"": {regex: "orders"}}, desc: "orders database exists again"}
+  - name: Never again
+    validator: reliability
+    points: 30
+    all: true
+    checks:
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {backupEnabled: true, pointInTimeRecovery: true}, desc: "Backups and PITR enabled"}
+  - name: Investigation
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: command, regex: "logging read|backups list", desc: "Checked audit log and restore points"}
+  - name: Honest communication & postmortem
+    validator: evidence
+    points: 30
+    checks:
+      - {type: ticket_update, keywords: [[lost, perdid, no backup, sin copia, cannot, no se puede]], desc: "Update states the data loss honestly"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[backup, copia], [migration, migracion, drop]], desc: "Root cause and prevention"}
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto]], desc: "Postmortem"}

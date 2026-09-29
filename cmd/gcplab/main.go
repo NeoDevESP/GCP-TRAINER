@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"github.com/neodevesp/gcp-trainer/internal/company"
 	"log/slog"
 	"net/http"
 	"os"
@@ -41,6 +42,11 @@ func main() {
 	lib, libErr := scenario.LoadLibrary(filepath.Join(content, "failures"))
 	if libErr != nil {
 		slog.Warn("failure library not loaded", "err", libErr)
+	}
+	co, coErr := company.Load(filepath.Join(content, "company"), "nebula")
+	if coErr != nil {
+		slog.Warn("company simulation not loaded", "err", coErr)
+		co = nil
 	}
 	cat, err := learning.LoadCatalog(content)
 	if err != nil {
@@ -98,6 +104,7 @@ func main() {
 	if mode == "all" || mode == "labplane" {
 		svc = orchestrator.New(cat.Labs, router, st)
 		svc.Lib = lib
+		svc.Company = co
 		svc.GraderURL = os.Getenv("GRADER_URL")
 		svc.RunJanitor(30 * time.Second)
 		defer svc.Close()
@@ -115,8 +122,8 @@ func main() {
 			log.Warn("JWT_SECRET not set: tokens will not survive restarts")
 		}
 		f2m, _ := strconv.Atoi(env("F2_MONTHLY", "10"))
-		srv := &api.Server{Cat: cat, Engine: &learning.Engine{Cat: cat}, Store: st, Labs: lp, Tokens: &learning.Tokens{Secret: []byte(secret), TTL: 12 * time.Hour},
-			Pool: pool, WebDir: env("WEB_DIR", "web/out"), Log: log, F2Monthly: f2m, Lib: lib}
+		srv := &api.Server{Cat: cat, Engine: &learning.Engine{Cat: cat, Lib: lib}, Store: st, Labs: lp, Tokens: &learning.Tokens{Secret: []byte(secret), TTL: 12 * time.Hour},
+			Pool: pool, WebDir: env("WEB_DIR", "web/out"), Log: log, F2Monthly: f2m, Lib: lib, Company: co}
 		srv.LoadGenerated()
 		if iss := os.Getenv("OIDC_ISSUER"); iss != "" {
 			srv.OIDC = &learning.OIDC{Issuer: iss, ClientID: os.Getenv("OIDC_CLIENT_ID"), ClientSecret: os.Getenv("OIDC_CLIENT_SECRET"), RedirectURL: os.Getenv("OIDC_REDIRECT_URL")}

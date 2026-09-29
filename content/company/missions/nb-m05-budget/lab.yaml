@@ -1,0 +1,50 @@
+id: nb-m05-budget
+title: "COST: FinOps wants spend visibility on the storefront"
+summary: Configure a budget with alert thresholds and explain what budgets can and cannot do.
+level: intermediate
+branch: finops
+type: challenge
+mode: career
+skills: [foundations.billing, finops.visibility]
+difficulty: 2
+minutes: 25
+company: {stage: engineer, project: prod-web, kind: COST, after: [nb-m01-orientation]}
+ticket:
+  id: COST-12
+  kind: COST
+  priority: P3
+  summary: "We need an alert before the storefront project exceeds 1,000 EUR per month — at 50%, 90% and 100%."
+  reporter: Marta (FinOps)
+actors:
+  - role: finance
+    name: Marta (FinOps)
+    facts:
+      - {keywords: [[cap, stop, limit, limite, corta]], answer: "Will the budget stop the spending automatically? We need to know, the board asked."}
+story: |
+  Create a budget named `storefront-monthly` of **1000 EUR** on `{{.prod_web}}` with thresholds 50%, 90% and 100%,
+  check the current estimate, and answer Marta's question on the ticket.
+objectives:
+  - Estimate current spend
+  - Budget with three thresholds
+  - Explain budgets vs caps
+solution: |
+  gcloud billing estimate
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=storefront-monthly --budget-amount=1000EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+  ticket update "Budget storefront-monthly created at 1000 EUR with alerts at 50, 90 and 100 percent. Budgets only alert, they do not cap spending."
+rubric:
+  - name: Budget
+    validator: cost
+    points: 50
+    all: true
+    checks:
+      - {type: exists, path: "budgets[\"storefront-monthly\"]", expect: {amount: 1000, thresholds: {minLen: 3}}, desc: "1000 EUR budget with three thresholds"}
+  - name: Measured
+    validator: diagnosis
+    points: 20
+    checks:
+      - {type: command, regex: "billing estimate|budgets list", desc: "Checked current spend"}
+  - name: Explained
+    validator: evidence
+    points: 30
+    checks:
+      - {type: ticket_update, public: false, keywords: [[alert, alerta], [cap, limit, stop, no corta, do not]], desc: "Explained that budgets alert but do not cap"}

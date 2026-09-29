@@ -51,6 +51,9 @@ func Verify(l *scenario.Lab, seed int64) Report {
 		project = project[:24] + fmt.Sprintf("-%05d", seed%100000)
 	}
 	project = strings.TrimSuffix(project, "-")
+	if l.FixedProject != "" {
+		project = l.FixedProject
+	}
 	if len(l.Rubric) == 0 {
 		r.Problems = append(r.Problems, "rubric is empty")
 	}

