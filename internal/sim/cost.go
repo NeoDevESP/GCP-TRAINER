@@ -146,6 +146,60 @@ func (s *State) CostEstimate(project string) ([]CostLine, float64) {
 			}
 		}
 	}
+	p.EnsureServices()
+	for _, n := range SortedKeys(p.Functions) {
+		fn := p.Functions[n]
+		add("functions/"+n, "invocations + min instances", float64(fn.Invocations)*30*0.0000004+float64(fn.MinInstances)*0.03*h)
+	}
+	for _, n := range SortedKeys(p.SchedulerJobs) {
+		add("scheduler/"+n, "job", 0.10)
+	}
+	if app := p.AppEngine; app != nil {
+		for _, sn := range SortedKeys(app.Services) {
+			for _, vn := range SortedKeys(app.Services[sn].Versions) {
+				if v := app.Services[sn].Versions[vn]; v.Status == "SERVING" && (v.Scaling == "manual" || v.Env == "flexible") {
+					add("appengine/"+sn+"/"+vn, v.Env+" "+v.Scaling, 0.07*h)
+				}
+			}
+		}
+	}
+	for _, n := range SortedKeys(p.Redis) {
+		r := p.Redis[n]
+		rate := 0.049
+		if r.Tier == "STANDARD" {
+			rate = 0.064
+		}
+		add("redis/"+n, fmt.Sprintf("%s %d GB", r.Tier, r.SizeGB), float64(r.SizeGB)*rate*h)
+	}
+	for _, n := range SortedKeys(p.Spanner) {
+		in := p.Spanner[n]
+		add("spanner/"+n, fmt.Sprintf("%d processing units", in.ProcessingUnits), float64(in.ProcessingUnits)/1000*0.90*h)
+	}
+	for _, j := range p.DataflowJobs {
+		if j.State == "JOB_STATE_RUNNING" {
+			add("dataflow/"+j.Name, fmt.Sprintf("%d streaming workers", max(1, j.Workers)), float64(max(1, j.Workers))*0.27*h)
+		}
+	}
+	for _, n := range SortedKeys(p.DataprocClusters) {
+		cl := p.DataprocClusters[n]
+		if cl.State != "RUNNING" {
+			continue
+		}
+		vms := 1 + cl.Workers
+		rate := MachineHourly(cl.MasterType)
+		add("dataproc/"+n, fmt.Sprintf("%d VMs + Dataproc fee", vms), (float64(vms)*(rate+0.04)+float64(cl.Preemptible)*rate*0.3)*h)
+	}
+	for _, n := range SortedKeys(p.Composer) {
+		add("composer/"+n, "environment "+p.Composer[n].Size, 0.52*h)
+	}
+	for _, n := range SortedKeys(p.Filestore) {
+		f := p.Filestore[n]
+		rate := 0.16
+		if f.Tier != "BASIC_HDD" {
+			rate = 0.30
+		}
+		add("filestore/"+n, fmt.Sprintf("%s %d GB", f.Tier, f.CapacityGB), float64(f.CapacityGB)*rate)
+	}
 	var qbytes int64
 	for _, j := range p.BQJobs {
 		if !j.DryRun {

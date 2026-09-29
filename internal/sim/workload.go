@@ -744,6 +744,7 @@ type HTTPRequest struct {
 	Principal string // identity token subject ("" = anonymous)
 	URL       string
 	Method    string
+	Body      string
 	ViaLB     bool
 	Internal  bool
 	SourceIP  string
@@ -787,6 +788,18 @@ func (s *State) HTTP(req HTTPRequest) HTTPResponse {
 			if vm := p.Instances[req.From.Name]; vm != nil {
 				return s.callVMPortLocal(req.From.Project, vm, port, path, res, true)
 			}
+		}
+	}
+	if host == "firestore.googleapis.com" {
+		return s.firestoreREST(path+"?"+u.RawQuery, req)
+	}
+	// Cloud Functions and App Engine URLs
+	if strings.HasSuffix(host, ".cloudfunctions.net") || strings.HasSuffix(host, ".run.app") || strings.HasSuffix(host, ".appspot.com") {
+		if r, ok := s.callServiceURL(host, path, req); ok {
+			return r
+		}
+		if strings.HasSuffix(host, ".cloudfunctions.net") || strings.HasSuffix(host, ".appspot.com") {
+			return HTTPResponse{Status: 404, Body: "Error: Page not found", Error: "The requested URL was not found on this server."}
 		}
 	}
 	// Cloud Run URLs

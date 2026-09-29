@@ -287,6 +287,7 @@ func (s *Session) storageCp(c *Cmd, src, dst string) (string, error) {
 		}
 		b.Objects[obj] = &sim.Object{Name: obj, Size: len(content), Content: content, StorageClass: b.StorageClass, Generation: gen, Updated: s.State.Now()}
 		s.State.Audit(b.Project, c.Principal(), "storage.googleapis.com", "storage.objects.create", "projects/_/buckets/"+b.Name+"/objects/"+obj)
+		s.State.OnObjectFinalize(b.Project, b.Name, obj)
 		return fmt.Sprintf("Copying %s to gs://%s/%s\n  Completed files 1/1 | %dB\n", src, b.Name, obj, len(content)), nil
 	case strings.HasPrefix(src, "gs://"):
 		b, _, err := c.bucket(src)

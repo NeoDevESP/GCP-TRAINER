@@ -130,6 +130,19 @@ type Project struct {
 	AIModels    map[string]*AIModel    `json:"aiModels"`
 	AIEndpoints map[string]*AIEndpoint `json:"aiEndpoints"`
 
+	Functions        map[string]*Function          `json:"functions,omitempty"`
+	SchedulerJobs    map[string]*SchedulerJob      `json:"schedulerJobs,omitempty"`
+	TaskQueues       map[string]*TaskQueue         `json:"taskQueues,omitempty"`
+	AppEngine        *AppEngineApp                 `json:"appEngine,omitempty"`
+	Firestore        map[string]*FirestoreDB       `json:"firestore,omitempty"`
+	Redis            map[string]*RedisInstance     `json:"redis,omitempty"`
+	Spanner          map[string]*SpannerInstance   `json:"spanner,omitempty"`
+	DataflowJobs     []*DataflowJob                `json:"dataflowJobs,omitempty"`
+	DataprocClusters map[string]*DataprocCluster   `json:"dataprocClusters,omitempty"`
+	DataprocJobs     []*DataprocJob                `json:"dataprocJobs,omitempty"`
+	Composer         map[string]*ComposerEnv       `json:"composer,omitempty"`
+	Filestore        map[string]*FilestoreInstance `json:"filestore,omitempty"`
+
 	LogMetrics    map[string]*LogMetric           `json:"logMetrics"`
 	AlertPolicies map[string]*AlertPolicy         `json:"alertPolicies"`
 	Channels      map[string]*NotificationChannel `json:"notificationChannels"`
@@ -1053,6 +1066,7 @@ func (s *State) NewProject(id, parent string) *Project {
 		Channels: map[string]*NotificationChannel{}, UptimeChecks: map[string]*UptimeCheck{},
 		Budgets: map[string]*Budget{}, LogSinks: map[string]*LogSink{}, Perimeters: map[string]*Perimeter{},
 	}
+	p.EnsureServices()
 	for _, svc := range DefaultEnabledAPIs {
 		p.Services[svc] = true
 	}

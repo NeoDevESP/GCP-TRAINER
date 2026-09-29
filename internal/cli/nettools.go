@@ -33,6 +33,7 @@ func (s *Session) curl(args []string, from sim.Endpoint, defaultPrincipal string
 	var writeOut string
 	showHead := false
 	fail2 := false
+	method, data := "", ""
 	for i := 1; i < len(args); i++ {
 		a := args[i]
 		switch {
@@ -51,7 +52,16 @@ func (s *Session) curl(args []string, from sim.Endpoint, defaultPrincipal string
 				writeOut = args[i+1]
 				i++
 			}
-		case a == "-X" || a == "-d" || a == "--data" || a == "--max-time" || a == "-m" || a == "--connect-timeout" || a == "-u" || a == "-T":
+		case (a == "-X" || a == "--request") && i+1 < len(args):
+			method = strings.ToUpper(args[i+1])
+			i++
+		case (a == "-d" || a == "--data" || a == "--data-raw" || a == "--json") && i+1 < len(args):
+			data = args[i+1]
+			if method == "" {
+				method = "POST"
+			}
+			i++
+		case a == "--max-time" || a == "-m" || a == "--connect-timeout" || a == "-u" || a == "-T":
 			i++
 		case a == "-I" || a == "--head" || a == "-i":
 			showHead = true
@@ -71,8 +81,12 @@ func (s *Session) curl(args []string, from sim.Endpoint, defaultPrincipal string
 	principal := defaultPrincipal
 	for _, h := range headers {
 		if strings.HasPrefix(strings.ToLower(h), "authorization: bearer ") {
-			if p := principalFromToken(strings.TrimSpace(h[len("authorization: bearer "):])); p != "" {
+			tok := strings.TrimSpace(h[len("authorization: bearer "):])
+			if p := principalFromToken(tok); p != "" {
 				principal = p
+			} else if strings.HasPrefix(tok, "ya29.") && principal == "" {
+				// OAuth access token of the active gcloud account.
+				principal = s.Principal()
 			}
 		}
 	}
@@ -82,7 +96,10 @@ func (s *Session) curl(args []string, from sim.Endpoint, defaultPrincipal string
 		}
 		return s.metadata(from, url, headers)
 	}
-	res := s.State.HTTP(sim.HTTPRequest{From: from, Principal: principal, URL: url, SourceIP: from.IP})
+	if method == "" {
+		method = "GET"
+	}
+	res := s.State.HTTP(sim.HTTPRequest{From: from, Principal: principal, URL: url, SourceIP: from.IP, Method: method, Body: data})
 	if res.Status == 0 {
 		code := 7
 		if strings.Contains(res.Error, "timed out") {
@@ -403,6 +420,8 @@ func (s *Session) vmCommand(p *sim.Project, vm *sim.Instance, from sim.Endpoint,
 		return s.dig(toks, from)
 	case "psql":
 		return s.psqlFrom(toks, from)
+	case "redis-cli":
+		return s.redisCLI(vm, toks)
 	case "hostname":
 		return vm.Name + "\n", nil
 	case "ip":

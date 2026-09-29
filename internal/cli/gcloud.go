@@ -16,6 +16,7 @@ type Cmd struct {
 	Args  []string
 	F     Flags
 	Stdin string
+	Rest  []string // arguments after "--" (also included in Args)
 }
 
 type handler func(c *Cmd) (any, error)
@@ -48,6 +49,12 @@ func (s *Session) gcloud(args []string, stdin string) (string, error) {
 		return "", fail(2, "ERROR: (gcloud) Invalid choice: '%s'.\nThis command is not available in the simulator. Maybe you meant:\n%s", strings.Join(pos, " "), suggest(pos))
 	}
 	c := &Cmd{S: s, Path: path, Args: rest, F: f, Stdin: stdin}
+	for i, a := range args {
+		if a == "--" {
+			c.Rest = args[i+1:]
+			break
+		}
+	}
 	prev := s.Impersonate
 	if v := last(f["impersonate-service-account"]); v != "" {
 		s.Impersonate = v

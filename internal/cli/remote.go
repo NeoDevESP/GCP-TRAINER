@@ -20,6 +20,9 @@ type Remote struct {
 	DB       string `json:"db,omitempty"`
 	User     string `json:"user,omitempty"`
 	Buf      string `json:"buf,omitempty"`
+	// Redis is set while redis-cli runs interactively inside the SSH session.
+	Redis     string `json:"redis,omitempty"`
+	RedisAuth bool   `json:"redisAuth,omitempty"`
 }
 
 // Prompt is the prompt the terminal shows for the next line.
@@ -28,6 +31,8 @@ func (s *Session) Prompt() string {
 	switch {
 	case r == nil:
 		return fmt.Sprintf("student@cloudshell:~ (%s)$ ", s.Project)
+	case r.Kind == "ssh" && r.Redis != "":
+		return r.Redis + ":6379> "
 	case r.Kind == "ssh":
 		if s.RootShell {
 			return fmt.Sprintf("root@%s:~# ", r.VM)
@@ -78,6 +83,23 @@ func (s *Session) remoteLine(line string) (string, int, string) {
 	case "ssh":
 		if trim == "" {
 			return "", 0, ""
+		}
+		if r.Redis != "" {
+			if l := strings.ToLower(trim); l == "exit" || l == "quit" {
+				r.Redis = ""
+				return "", 0, ""
+			}
+			inst := s.findRedis(r.Redis)
+			if inst == nil {
+				r.Redis = ""
+				return "Error: Connection reset by peer\n", 1, ""
+			}
+			args, err := s.tokenize(trim)
+			if err != nil || len(args) == 0 {
+				return "Invalid argument(s)\n", 1, ""
+			}
+			o := redisExec(inst, &r.RedisAuth, args)
+			return o + "\n", 0, fmt.Sprintf("gcloud compute ssh %s --zone=%s --command=%s", r.VM, r.Zone, shellQuote("redis-cli -h "+r.Redis+" "+trim))
 		}
 		if trim == "exit" || trim == "logout" {
 			if s.RootShell {

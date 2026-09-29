@@ -102,6 +102,7 @@ func (s *State) tick() {
 			s.Metric("compute/"+n+"/cpu_utilization", cpu)
 		}
 	}
+	s.tickServices()
 }
 
 func (s *State) defaultProject() string {
@@ -273,6 +274,7 @@ func (s *State) Publish(project, topic, data string, attrs map[string]string) (s
 			}
 		}
 	}
+	s.OnPublish(project, topic, data)
 	return id, nil
 }
 
