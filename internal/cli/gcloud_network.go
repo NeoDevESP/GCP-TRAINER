@@ -177,6 +177,19 @@ func (c *Cmd) applyFW(fw *sim.Firewall, create bool) error {
 	return nil
 }
 
+// subnetByName resolves NAME in a region. Auto-mode subnets are stored as
+// NETWORK-REGION but, as in Google Cloud, are addressed by the network name
+// plus --region (e.g. `subnets update default --region=europe-west1`).
+func subnetByName(p *sim.Project, name, region string) *sim.Subnet {
+	if sn := p.Subnets[name]; sn != nil {
+		return sn
+	}
+	if sn := p.Subnets[name+"-"+region]; sn != nil && sn.Network == name && sn.Region == region {
+		return sn
+	}
+	return nil
+}
+
 func init() {
 	reg("compute networks create", func(c *Cmd) (any, error) {
 		if err := c.API("compute.googleapis.com"); err != nil {
@@ -392,7 +405,7 @@ func init() {
 			return nil, err
 		}
 		n, _ := c.Arg(0, "NAME")
-		sn := p.Subnets[n]
+		sn := subnetByName(p, n, c.Str("region", c.S.Region))
 		if sn == nil {
 			return nil, fmt.Errorf("subnetwork %s not found", n)
 		}
@@ -404,7 +417,7 @@ func init() {
 			return nil, err
 		}
 		n, _ := c.Arg(0, "NAME")
-		sn := p.Subnets[n]
+		sn := subnetByName(p, n, c.Str("region", c.S.Region))
 		if sn == nil {
 			return nil, fmt.Errorf("subnetwork %s not found", n)
 		}
@@ -429,7 +442,7 @@ func init() {
 			return nil, err
 		}
 		n, _ := c.Arg(0, "NAME")
-		sn := p.Subnets[n]
+		sn := subnetByName(p, n, c.Str("region", c.S.Region))
 		if sn == nil {
 			return nil, fmt.Errorf("subnetwork %s not found", n)
 		}

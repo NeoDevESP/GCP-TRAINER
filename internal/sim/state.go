@@ -682,6 +682,27 @@ type NodePool struct {
 	Max         int    `json:"maxNodeCount"`
 	SA          string `json:"serviceAccount"`
 	Spot        bool   `json:"spot"`
+	// WorkloadMetadata is GKE_METADATA (Workload Identity) or GCE_METADATA
+	// (pods see the node's identity). Empty means GKE_METADATA when the
+	// cluster has a workload pool.
+	WorkloadMetadata string `json:"workloadMetadataMode,omitempty"`
+}
+
+// WorkloadIdentityActive reports whether pods get Workload Identity: the
+// cluster has a workload pool and no node pool still exposes node metadata.
+func (c *Cluster) WorkloadIdentityActive() bool {
+	if c.Autopilot {
+		return true
+	}
+	if c.WorkloadPool == "" {
+		return false
+	}
+	for _, np := range c.NodePools {
+		if np.WorkloadMetadata == "GCE_METADATA" {
+			return false
+		}
+	}
+	return true
 }
 
 type ArtifactRepo struct {

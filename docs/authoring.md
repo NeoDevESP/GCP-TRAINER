@@ -66,7 +66,7 @@ it as the requirement, never as the answer.
 | Identity | `iam` (effective permission, conditions and org policies included), `no_basic_roles`, `org_policy`, `k8s_rbac` |
 | Security and cost | `policy` (Rego), `forbid_firewall`, `finding_absent`/`finding_present`, `cost_max`/`cost_min`, `bq_bytes_max`, `secret_rotated` |
 | Operations | `log_metric`, `alert_policy`, `log_contains`, `terraform_clean`, `tf_state`, `vm_file`, `vm_disk`, `subnet_plan`, `design` |
-| Process and communication | `command` (what the learner ran), `session_config`, `file_contains`, `ticket_update`, `ticket_resolved`, `asked`, `evidence` (keywords in the post-mortem fields), `quiz` |
+| Process and communication | `command` (what the learner ran; `min`, or `max` to forbid a command), `session_config`, `file_contains`, `ticket_update`, `ticket_resolved`, `asked`, `evidence` (keywords in the post-mortem fields), `quiz` |
 
 Any check can target another project with `on: <project-key>` (company missions).
 

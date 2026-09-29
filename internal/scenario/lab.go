@@ -51,6 +51,7 @@ type Lab struct {
 	Policy          cli.Policy          `yaml:"policy" json:"policy"`
 	Hints           []Hint              `yaml:"hints" json:"hints"`
 	Solution        string              `yaml:"solution" json:"-"`
+	Shortcuts       []Shortcut          `yaml:"shortcuts" json:"-"` // tempting wrong fixes CI proves do not pass
 	Evidence        *Evidence           `yaml:"evidence" json:"evidence,omitempty"`
 	Quiz            []Question          `yaml:"quiz" json:"quiz,omitempty"`
 	Rubric          []RubricItem        `yaml:"rubric" json:"rubric"`
@@ -108,6 +109,14 @@ type Evidence struct {
 	Keywords [][]string        `yaml:"keywords" json:"-"`
 	MinWords int               `yaml:"minWords" json:"minWords"`
 	Sample   map[string]string `yaml:"sample" json:"-"` // reference answer used by CI
+}
+
+// Shortcut is a plausible but wrong fix (disable the control, over-grant,
+// restart blindly...). Content CI applies it to a fresh environment and
+// requires the lab NOT to pass, so the rubric rewards the right change.
+type Shortcut struct {
+	Name string `yaml:"name" json:"name"`
+	Run  string `yaml:"run" json:"-"`
 }
 
 // Question is a quiz / architecture decision item.

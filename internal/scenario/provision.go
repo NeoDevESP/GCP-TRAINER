@@ -239,8 +239,14 @@ func heredocDelim(line string) string {
 
 // RunSolution executes the official solution as the student and reports failures.
 func RunSolution(w *World) (string, error) {
+	return RunScript(w, w.Lab.Solution)
+}
+
+// RunScript runs a learner-side script (solution or shortcut) in the world's
+// session. Steps prefixed with "!" may fail.
+func RunScript(w *World, script string) (string, error) {
 	var log strings.Builder
-	for _, chunk := range splitScript(w.Lab.Solution) {
+	for _, chunk := range splitScript(script) {
 		allowFail := strings.HasPrefix(strings.TrimSpace(chunk), "!")
 		if allowFail {
 			chunk = strings.TrimPrefix(strings.TrimSpace(chunk), "!")
@@ -248,7 +254,7 @@ func RunSolution(w *World) (string, error) {
 		r := w.Session.Exec(chunk)
 		log.WriteString("$ " + firstLine(chunk) + "\n" + r.Output)
 		if r.Exit != 0 && !allowFail {
-			return log.String(), fmt.Errorf("solution step failed: `%s`: %s", firstLine(chunk), strings.TrimSpace(r.Output))
+			return log.String(), fmt.Errorf("step failed: `%s`: %s", firstLine(chunk), strings.TrimSpace(r.Output))
 		}
 	}
 	return log.String(), nil

@@ -4,7 +4,7 @@ symptoms:
   - id: http-502
     name: HTTP 502 Bad Gateway
     description: The load balancer or proxy could not get a valid response from any backend.
-    layers: [dns, load-balancer, backend-health, firewall, timeout, application, k8s-readiness]
+    layers: [dns, load-balancer, backend-health, firewall, timeout, application, k8s-readiness, k8s-workload]
     vague:
       - "The website shows an error page for everyone."
       - "Customers see 'Bad Gateway' when they open the shop."
@@ -14,10 +14,12 @@ symptoms:
       load-balancer: "The app servers must be overloaded, please add more."
       application: "Looks like a network problem, nothing reaches the servers."
       tags: "Looks like the database is down."
+      k8s-readiness: "The cluster must be out of capacity, please add nodes."
+      k8s-workload: "Probably a network problem in front of the service."
   - id: http-500
     name: HTTP 500/503 on a business endpoint
     description: The service answers but a business path fails because a dependency is unavailable or rejects the request.
-    layers: [application, configuration, identity, network-path, database, quota]
+    layers: [application, release, configuration, identity, k8s-service, network-path, database, quota]
     vague:
       - "Checkout fails for some customers, other pages work."
       - "Orders cannot be placed; the home page is fine."
@@ -28,6 +30,7 @@ symptoms:
       configuration: "Looks like a network issue to the database."
       release: "Seems to be a permissions problem."
       network-path: "The database password probably expired."
+      k8s-service: "The new release must have broken the catalog."
   - id: timeout
     name: Timeouts / service unavailable under load
     description: Requests hang or return 503 when load increases.

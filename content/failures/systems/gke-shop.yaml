@@ -1,0 +1,445 @@
+# GKE shop: web (LoadBalancer) → catalog (ClusterIP, config from a ConfigMap);
+# reports reads gs://reports-* through Workload Identity; pdf renders reports
+# in memory. Cluster shop-gke with Workload Identity enabled.
+id: gke-shop
+title: storefront on GKE with Workload Identity
+branch: gke
+skills: [gke.troubleshooting, gke.workloads, observability.incident]
+baseline: [default-network]
+setup: |
+  gcloud compute networks subnets update default --region={{.region}} --enable-private-ip-google-access
+  gcloud container clusters create shop-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-4 --workload-pool={{.project}}.svc.id.goog
+  gcloud iam service-accounts create reports-sa --display-name="reports reader"
+  gcloud storage buckets create gs://reports-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  echo "day,orders" > report.csv
+  gcloud storage cp report.csv gs://reports-{{.project}}/data/report.csv
+  gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} --member=serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud iam service-accounts add-iam-policy-binding reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]"
+  cat > shop.yaml <<'YAML'
+  apiVersion: v1
+  kind: ConfigMap
+  metadata: {name: catalog-config}
+  data: {CATALOG_REGION: "{{.region}}", PAGE_SIZE: "50"}
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: catalog}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: catalog}}
+    template:
+      metadata: {labels: {app: catalog, tier: backend}}
+      spec:
+        containers:
+        - name: catalog
+          image: europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0
+          ports: [{containerPort: 8080}]
+          envFrom: [{configMapRef: {name: catalog-config}}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          resources: {requests: {cpu: 200m, memory: 128Mi}, limits: {memory: 256Mi}}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: catalog}
+  spec:
+    selector: {app: catalog}
+    ports: [{port: 8080, targetPort: 8080}]
+  ---
+  apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata: {name: catalog-from-web}
+  spec:
+    podSelector: {matchLabels: {app: catalog}}
+    ingress:
+    - from:
+      - podSelector: {matchLabels: {app: web}}
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: web}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: web}}
+    template:
+      metadata: {labels: {app: web}}
+      spec:
+        containers:
+        - name: web
+          image: europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0
+          ports: [{containerPort: 8080}]
+          env: [{name: BACKEND_URL, value: "http://catalog:8080"}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          resources: {requests: {cpu: 200m, memory: 128Mi}}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: web}
+  spec:
+    type: LoadBalancer
+    selector: {app: web}
+    ports: [{port: 80, targetPort: 8080}]
+  ---
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: reports-ksa
+    annotations: {iam.gke.io/gcp-service-account: "reports-sa@{{.project}}.iam.gserviceaccount.com"}
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: reports}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: reports}}
+    template:
+      metadata: {labels: {app: reports}}
+      spec:
+        serviceAccountName: reports-ksa
+        containers:
+        - name: reports
+          image: europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0
+          ports: [{containerPort: 8080}]
+          env: [{name: BUCKET, value: "reports-{{.project}}"}]
+          resources: {requests: {cpu: 100m, memory: 128Mi}}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: reports}
+  spec:
+    type: LoadBalancer
+    selector: {app: reports}
+    ports: [{port: 80, targetPort: 8080}]
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: pdf}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: pdf}}
+    template:
+      metadata: {labels: {app: pdf}}
+      spec:
+        containers:
+        - name: pdf
+          image: europe-docker.pkg.dev/gcplab-public/apps/report-generator:1.0
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 250m, memory: 768Mi}, limits: {memory: 1Gi}}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: pdf}
+  spec:
+    type: LoadBalancer
+    selector: {app: pdf}
+    ports: [{port: 80, targetPort: 8080}]
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: batch}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: batch}}
+    template:
+      metadata: {labels: {app: batch, owner: data-team}}
+      spec:
+        containers:
+        - name: batch
+          image: europe-docker.pkg.dev/gcplab-public/apps/hello:1.0
+          ports: [{containerPort: 8080}]
+          resources: {requests: {cpu: 100m, memory: 64Mi}}
+  YAML
+  gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+  kubectl apply -f shop.yaml
+topology: "Internet → web (LoadBalancer) → catalog (ClusterIP, NetworkPolicy from web, ConfigMap) · Internet → reports (Workload Identity → gs://reports-*) · Internet → pdf (report-generator) · batch (data team)"
+traffic:
+  - {name: shop, target: "k8s:shop-gke/web", path: /shop, rps: 30}
+  - {name: reports, target: "k8s:shop-gke/reports", path: /reports, rps: 5}
+  - {name: pdf, target: "k8s:shop-gke/pdf", path: /report, rps: 3}
+healthy:
+  - {type: http, target: "k8s:shop-gke/web", path: /shop, status: 200, desc: "The shop page loads the catalog"}
+  - {type: http, target: "k8s:shop-gke/reports", path: /reports, status: 200, desc: "Reports read from the reports bucket"}
+  - {type: http, target: "k8s:shop-gke/pdf", path: /report, status: 200, desc: "PDF rendering works"}
+safety:
+  - {type: k8s_ready, cluster: shop-gke, deployment: batch, min: 1, desc: "The data team's batch deployment keeps running"}
+  - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles for reports-sa"}
+  - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "The reports bucket stays private"}
+actors:
+  - role: developer
+    name: Kai (platform team)
+    persona: owns the cluster and the manifests in shop.yaml
+    fallback: "Everything is in shop.yaml; start from kubectl get pods and the events."
+    facts:
+      - {keywords: [[log, error, event, evento]], answer: "kubectl get events and kubectl describe pod tell you why a pod is not ready; the apps log dependency errors."}
+      - {keywords: [[recreate, delete, borrar, cluster]], answer: "Please don't recreate the cluster — the data team's batch jobs run there too."}
+  - role: sre
+    name: Sam (SRE on call)
+    persona: watches the dashboards
+    fallback: "Services with no ready endpoints return 503 — check readiness and selectors."
+    facts:
+      - {keywords: [[when, cuando, start, empez, time, hora]], answer: "Alerts fired at 08:52, right after the platform automation window (release-bot, cost-optimizer, policy-bot, cleanup-job)."}
+  - role: security
+    name: Aisha (security)
+    persona: owns network policies and IAM
+    fallback: "Keep least privilege and do not remove network policies — fix them."
+  - role: manager
+    name: Irene (engineering manager)
+    persona: needs an ETA
+    fallback: "Update the ticket, please. No cluster recreation, no cluster-admin for apps."
+noise:
+  - {type: log_noise, severity: WARNING, resourceType: k8s_container, lines: ["kube-dns: Waited for 1.2s due to client-side throttling", "cluster-autoscaler: Scale-down: node gke-shop-gke-default-pool-2 is not suitable for removal"]}
+failures:
+  - id: gk.bad-image
+    title: Catalog rolled out an image tag that was never pushed
+    symptom: http-500
+    layer: release
+    skills: [gke.workloads, devops.delivery]
+    summary: "The shop page fails with 5xx; catalog pods are not running."
+    faults:
+      - {type: k8s_image, cluster: shop-gke, deployment: catalog, image: "europe-docker.pkg.dev/{{.project}}/apps/catalog-api:2.1", actor: "release-bot@{{.project}}.iam.gserviceaccount.com"}
+    facts:
+      developer: [{keywords: [[release, deploy, image, imagen, version, 2.1]], answer: "release-bot rolled catalog to 2.1 from our private registry, but CI never pushed 2.1. 1.0 in the public registry is the last good one."}]
+    hints:
+      - text: "`kubectl get pods -l app=catalog` and `kubectl describe pod` — what does the kubelet say about the image?"
+    evidence:
+      commands: "kubectl (get pods|describe|get events|rollout)"
+      rootCause: [[image, imagen, pull, 2.1, tag], [catalog, release, rollout]]
+      sample: "release-bot changed the catalog deployment to image tag 2.1 that was never pushed, so the pods stayed in ImagePullBackOff, catalog had no endpoints and the shop page failed; rolling the image back to 1.0 fixed it."
+    dangerous: ["deleting the deployment", "recreating the cluster"]
+    fixes: ["kubectl rollout undo / set image back to catalog-api:1.0"]
+    solution: |
+      gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+      kubectl get pods -l app=catalog
+      kubectl describe pod -l app=catalog
+      kubectl set image deployment/catalog catalog=europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0
+      kubectl get pods -l app=catalog
+    checks:
+      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog back to 2 ready replicas"}
+  - id: gk.readiness
+    title: Readiness probe points at the wrong port
+    symptom: http-502
+    layer: k8s-readiness
+    skills: [gke.workloads, gke.troubleshooting]
+    summary: "The shop's external address returns 5xx for every request."
+    conflicts: [gk.bad-image]
+    faults:
+      - {type: k8s_probe_port, cluster: shop-gke, deployment: web, port: 8081, actor: "release-bot@{{.project}}.iam.gserviceaccount.com"}
+    facts:
+      developer: [{keywords: [[probe, readiness, health, port, puerto, change, cambio]], answer: "release-bot applied the new 'standard probes' template to web this morning. web listens on 8080."}]
+    hints:
+      - text: "Pods are Running but not READY. What does the readiness probe check?"
+    evidence:
+      commands: "kubectl (get pods|describe|get endpoints|get events)"
+      rootCause: [[readiness, probe, sonda], [port, puerto, 8081, 8080]]
+      sample: "release-bot changed the web readiness probe to port 8081 while the container listens on 8080, so no web pod became ready and the load balancer had no endpoints; the probe was pointed back to 8080."
+    dangerous: ["removing the readiness probe", "deleting pods in a loop"]
+    fixes: ["point the readiness probe back to port 8080"]
+    solution: |
+      gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+      kubectl get pods -l app=web
+      kubectl describe pod -l app=web
+      cat > web-probe.yaml <<'YAML'
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: {name: web}
+      spec:
+        replicas: 2
+        selector: {matchLabels: {app: web}}
+        template:
+          metadata: {labels: {app: web}}
+          spec:
+            containers:
+            - name: web
+              image: europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0
+              ports: [{containerPort: 8080}]
+              env: [{name: BACKEND_URL, value: "http://catalog:8080"}]
+              readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+              resources: {requests: {cpu: 200m, memory: 128Mi}}
+      YAML
+      kubectl apply -f web-probe.yaml
+    checks:
+      - {type: k8s_ready, cluster: shop-gke, deployment: web, min: 2, desc: "web pods ready"}
+  - id: gk.selector
+    title: Service selector no longer matches the catalog pods
+    symptom: http-500
+    layer: k8s-service
+    skills: [gke.workloads, networking.lb]
+    summary: "The shop page fails; catalog pods look healthy."
+    conflicts: [gk.bad-image]
+    faults:
+      - type: command
+        actor: "policy-bot@{{.project}}.iam.gserviceaccount.com"
+        run: |
+          gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+          cat > catalog-svc.yaml <<'YAML'
+          apiVersion: v1
+          kind: Service
+          metadata: {name: catalog}
+          spec:
+            selector: {app: catalog-api}
+            ports: [{port: 8080, targetPort: 8080}]
+          YAML
+          kubectl apply -f catalog-svc.yaml
+    facts:
+      security: [{keywords: [[label, etiqueta, selector, policy, change, cambio]], answer: "policy-bot 'normalised' Service selectors to the app-name convention this morning. Pod labels were not changed."}]
+    hints:
+      - text: "`kubectl get endpoints catalog` — does the Service select any pod? Compare with `kubectl get pods --show-labels`."
+    evidence:
+      commands: "kubectl (get endpoints|describe svc|describe service|get svc|get pods --show-labels|get service)"
+      rootCause: [[selector, label, etiqueta], [endpoint, service, servicio, catalog]]
+      sample: "policy-bot changed the catalog Service selector to app=catalog-api while the pods are labelled app=catalog, so the Service had no endpoints and web could not reach the catalog; the selector was restored to app=catalog."
+    dangerous: ["relabelling pods by hand (the deployment would undo it)", "deleting the NetworkPolicy"]
+    fixes: ["restore the Service selector app=catalog"]
+    solution: |
+      gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+      kubectl get endpoints catalog
+      kubectl get pods --show-labels
+      cat > catalog-svc.yaml <<'YAML'
+      apiVersion: v1
+      kind: Service
+      metadata: {name: catalog}
+      spec:
+        selector: {app: catalog}
+        ports: [{port: 8080, targetPort: 8080}]
+      YAML
+      kubectl apply -f catalog-svc.yaml
+  - id: gk.netpol
+    title: NetworkPolicy rewritten to allow only the admin tier
+    symptom: timeout
+    layer: network-path
+    skills: [gke.workloads, security.armor, networking.firewall]
+    summary: "The shop page hangs and then times out."
+    conflicts: [gk.selector, gk.bad-image]
+    faults:
+      - type: command
+        actor: "policy-bot@{{.project}}.iam.gserviceaccount.com"
+        run: |
+          gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+          cat > netpol.yaml <<'YAML'
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata: {name: catalog-from-web}
+          spec:
+            podSelector: {matchLabels: {app: catalog}}
+            ingress:
+            - from:
+              - podSelector: {matchLabels: {app: admin}}
+          YAML
+          kubectl apply -f netpol.yaml
+    facts:
+      security: [{keywords: [[network, red, policy, netpol, change, cambio]], answer: "policy-bot pushed the new zero-trust NetworkPolicies at 08:50. Our rule: backends accept traffic only from their direct callers — never remove the policy."}]
+    hints:
+      - text: "The request does not fail fast, it times out. What sits between web and catalog inside the cluster?"
+    evidence:
+      commands: "kubectl (get networkpolicy|get netpol|describe networkpolicy|describe netpol|logs)"
+      rootCause: [[networkpolicy, network policy, netpol, politica de red], [web, from, ingress, admin]]
+      sample: "policy-bot rewrote the catalog-from-web NetworkPolicy to allow only app=admin, so traffic from web to catalog was dropped and requests timed out; the policy was fixed to allow app=web instead of being deleted."
+    dangerous: ["deleting the NetworkPolicy", "allowing all ingress to catalog"]
+    fixes: ["allow ingress from app=web in the catalog policy"]
+    solution: |
+      gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+      kubectl get networkpolicy
+      kubectl describe networkpolicy catalog-from-web
+      cat > netpol.yaml <<'YAML'
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata: {name: catalog-from-web}
+      spec:
+        podSelector: {matchLabels: {app: catalog}}
+        ingress:
+        - from:
+          - podSelector: {matchLabels: {app: web}}
+      YAML
+      kubectl apply -f netpol.yaml
+    checks:
+      - {type: command, regex: "kubectl delete (networkpolicy|netpol)", max: 0, desc: "The NetworkPolicy was fixed, not deleted"}
+  - id: gk.oom
+    title: Memory limit lowered below the working set
+    symptom: http-502
+    layer: k8s-workload
+    kind: COST
+    skills: [gke.troubleshooting, gke.workloads, finops.optimization]
+    summary: "PDF downloads fail; the pdf pods keep restarting."
+    faults:
+      - type: command
+        actor: "cost-optimizer@{{.project}}.iam.gserviceaccount.com"
+        run: |
+          gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+          kubectl set resources deployment pdf --requests=cpu=250m,memory=256Mi --limits=memory=384Mi
+    facts:
+      developer: [{keywords: [[memory, memoria, oom, limit, pdf, restart]], answer: "The PDF renderer holds the whole document in memory — about 700Mi for the monthly report."}]
+      manager: [{keywords: [[cost, coste, optim, finops]], answer: "The cost-optimizer bot right-sizes requests and limits nightly. Finance wants savings, but not broken downloads."}]
+    hints:
+      - text: "`kubectl describe pod -l app=pdf` — look at the last state and exit code."
+    evidence:
+      commands: "kubectl (describe|get pods|get events|top)"
+      rootCause: [[oom, memory, memoria, 137], [limit, 384, cost-optimizer, optimi]]
+      sample: "cost-optimizer lowered the pdf memory limit to 384Mi while the renderer needs about 700Mi, so the container was OOMKilled (exit 137) in a loop; the limit was raised to 1Gi with a matching request."
+    dangerous: ["removing all resource limits", "scaling pdf to many replicas"]
+    fixes: ["raise the memory request/limit above the ~700Mi working set"]
+    solution: |
+      gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+      kubectl get pods -l app=pdf
+      kubectl describe pod -l app=pdf
+      kubectl set resources deployment pdf --requests=cpu=250m,memory=768Mi --limits=memory=1Gi
+    checks:
+      - {type: k8s_ready, cluster: shop-gke, deployment: pdf, min: 1, desc: "pdf running without OOM"}
+  - id: gk.wi-binding
+    title: Workload Identity binding removed from the reports service account
+    symptom: http-500
+    layer: identity
+    skills: [gke.workloads, iam.serviceaccounts, iam.leastprivilege]
+    summary: "Reports return 403 errors reading the reports bucket."
+    faults:
+      - type: command
+        actor: "cleanup-job@{{.project}}.iam.gserviceaccount.com"
+        run: |
+          gcloud iam service-accounts remove-iam-policy-binding reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]"
+    facts:
+      security: [{keywords: [[iam, workload, identity, binding, cleanup, role, rol]], answer: "cleanup-job removes IAM bindings it considers unused — it doesn't understand Workload Identity principals."}]
+    hints:
+      - text: "Which Google identity does the reports pod use? `kubectl get serviceaccount reports-ksa -o yaml` and the IAM policy of that Google service account."
+    evidence:
+      commands: "get-iam-policy|kubectl (get sa|get serviceaccount|describe|logs)|logging read"
+      rootCause: [[workload identity, workloadidentityuser, workload], [reports-sa, reports-ksa, service account, cuenta de servicio]]
+      sample: "cleanup-job removed roles/iam.workloadIdentityUser for default/reports-ksa on reports-sa, so the pod could no longer act as reports-sa and reading the bucket returned 403; the binding was restored."
+    dangerous: ["granting storage access to the node service account", "granting roles/editor to reports-sa", "making the bucket public"]
+    fixes: ["restore roles/iam.workloadIdentityUser for the KSA on reports-sa"]
+    solution: |
+      gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+      kubectl logs deployment/reports
+      kubectl get serviceaccount reports-ksa -o yaml
+      gcloud iam service-accounts get-iam-policy reports-sa@{{.project}}.iam.gserviceaccount.com
+      gcloud iam service-accounts add-iam-policy-binding reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]"
+    checks:
+      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "reports-sa stays read-only on the bucket"}
+  - id: gk.configmap
+    title: ConfigMap deleted by a cleanup job
+    symptom: http-500
+    layer: configuration
+    skills: [gke.workloads, gke.troubleshooting]
+    summary: "The shop page fails after the nightly cleanup; new catalog pods do not start."
+    conflicts: [gk.bad-image, gk.selector, gk.netpol]
+    faults:
+      - type: command
+        actor: "cleanup-job@{{.project}}.iam.gserviceaccount.com"
+        run: |
+          gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+          kubectl delete configmap catalog-config
+    facts:
+      developer: [{keywords: [[config, configmap, region, page, setting]], answer: "catalog reads CATALOG_REGION (our region) and PAGE_SIZE=50 from the catalog-config ConfigMap."}]
+    hints:
+      - text: "`kubectl describe pod -l app=catalog` — what is the container waiting for?"
+    evidence:
+      commands: "kubectl (describe|get pods|get events|get configmap|get cm)"
+      rootCause: [[configmap, config map, catalog-config], [deleted, borrad, missing, not found, cleanup]]
+      sample: "cleanup-job deleted the catalog-config ConfigMap, so catalog pods failed with CreateContainerConfigError and the shop lost its backend; the ConfigMap was recreated with CATALOG_REGION and PAGE_SIZE."
+    dangerous: ["removing envFrom from the deployment", "recreating the cluster"]
+    fixes: ["recreate catalog-config with CATALOG_REGION and PAGE_SIZE"]
+    solution: |
+      gcloud container clusters get-credentials shop-gke --zone={{.zone}}
+      kubectl get pods -l app=catalog
+      kubectl describe pod -l app=catalog
+      kubectl create configmap catalog-config --from-literal=CATALOG_REGION={{.region}} --from-literal=PAGE_SIZE=50
+      kubectl rollout restart deployment/catalog
+    checks:
+      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog back to 2 ready replicas"}

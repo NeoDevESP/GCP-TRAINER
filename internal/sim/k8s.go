@@ -485,7 +485,7 @@ func (s *State) podPrincipal(project string, c *Cluster, ns, ksaName string) (st
 	if ksaName == "" {
 		ksaName = "default"
 	}
-	if c.WorkloadPool == "" && !c.Autopilot {
+	if !c.WorkloadIdentityActive() {
 		return "serviceAccount:" + s.clusterNodeSA(project, c), []string{"default"}
 	}
 	pool := c.WorkloadPool

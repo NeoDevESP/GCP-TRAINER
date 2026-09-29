@@ -445,6 +445,12 @@ func init() {
 			if v != p.ID+".svc.id.goog" {
 				return nil, fmt.Errorf("INVALID_ARGUMENT: workload pool must be %s.svc.id.goog", p.ID)
 			}
+			if cl.WorkloadPool == "" {
+				// existing node pools keep node metadata until they are updated
+				for i := range cl.NodePools {
+					cl.NodePools[i].WorkloadMetadata = "GCE_METADATA"
+				}
+			}
 			cl.WorkloadPool = v
 		}
 		if c.Bool("enable-master-authorized-networks") || c.Has("master-authorized-networks") {
@@ -513,7 +519,11 @@ func init() {
 				return nil, err
 			}
 		}
-		cl.NodePools = append(cl.NodePools, sim.NodePool{Name: n, MachineType: mt, Count: c.Int("num-nodes", 3), Autoscaling: c.Bool("enable-autoscaling"), Min: c.Int("min-nodes", 0), Max: c.Int("max-nodes", 0), SA: sa, Spot: c.Bool("spot")})
+		wm := c.Str("workload-metadata", "")
+		if wm == "" && cl.WorkloadPool == "" {
+			wm = "GCE_METADATA"
+		}
+		cl.NodePools = append(cl.NodePools, sim.NodePool{Name: n, MachineType: mt, Count: c.Int("num-nodes", 3), Autoscaling: c.Bool("enable-autoscaling"), Min: c.Int("min-nodes", 0), Max: c.Int("max-nodes", 0), SA: sa, Spot: c.Bool("spot"), WorkloadMetadata: wm})
 		return "Creating node pool " + n + "...done.\n", nil
 	})
 	reg("container node-pools list", func(c *Cmd) (any, error) {
@@ -543,6 +553,15 @@ func init() {
 		}
 		for i := range cl.NodePools {
 			if cl.NodePools[i].Name == n {
+				if wm := c.Str("workload-metadata", ""); wm != "" {
+					if wm != "GKE_METADATA" && wm != "GCE_METADATA" {
+						return nil, fmt.Errorf("argument --workload-metadata: Invalid choice: '%s' (GKE_METADATA, GCE_METADATA)", wm)
+					}
+					if wm == "GKE_METADATA" && cl.WorkloadPool == "" {
+						return nil, fmt.Errorf("FAILED_PRECONDITION: Workload Identity must be enabled on the cluster (--workload-pool) before node pools can use GKE_METADATA")
+					}
+					cl.NodePools[i].WorkloadMetadata = wm
+				}
 				if c.Bool("enable-autoscaling") {
 					cl.NodePools[i].Autoscaling = true
 					cl.NodePools[i].Min, cl.NodePools[i].Max = c.Int("min-nodes", 1), c.Int("max-nodes", 3)

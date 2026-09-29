@@ -33,6 +33,7 @@ var PredefinedRoles = map[string][]string{
 
 	"roles/iam.serviceAccountUser":            {"iam.serviceAccounts.actAs", "iam.serviceAccounts.get", "iam.serviceAccounts.list"},
 	"roles/iam.serviceAccountTokenCreator":    {"iam.serviceAccounts.getAccessToken", "iam.serviceAccounts.getOpenIdToken", "iam.serviceAccounts.signBlob", "iam.serviceAccounts.signJwt", "iam.serviceAccounts.implicitDelegation"},
+	"roles/iam.workloadIdentityUser":          {"iam.serviceAccounts.getAccessToken", "iam.serviceAccounts.getOpenIdToken"},
 	"roles/iam.serviceAccountAdmin":           {"iam.serviceAccounts.create", "iam.serviceAccounts.delete", "iam.serviceAccounts.get", "iam.serviceAccounts.list", "iam.serviceAccounts.update", "iam.serviceAccounts.setIamPolicy", "iam.serviceAccounts.getIamPolicy", "iam.serviceAccounts.disable", "iam.serviceAccounts.enable"},
 	"roles/iam.serviceAccountKeyAdmin":        {"iam.serviceAccountKeys.*"},
 	"roles/iam.roleAdmin":                     {"iam.roles.*"},

@@ -1,0 +1,180 @@
+id: gke-k02-workload-identity
+title: "Workload Identity: replace a service-account key the right way"
+summary: Give a GKE workload its own Google identity with Workload Identity — no keys, no node-wide permissions.
+track: gke
+day: 2
+level: intermediate
+branch: gke
+type: challenge
+skills: [gke.workloads, iam.serviceaccounts, iam.leastprivilege, security.secrets]
+wellArchitected: [security]
+certs: [ACE, PCSE, PCDE]
+difficulty: 3
+minutes: 45
+baseline: [default-network]
+setup: |
+  gcloud compute networks subnets update default --region={{.region}} --enable-private-ip-google-access
+  gcloud iam service-accounts create gke-nodes --display-name="GKE nodes (minimal)"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com --role=roles/logging.logWriter
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com --role=roles/monitoring.metricWriter
+  gcloud container clusters create apps-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-4 --service-account=gke-nodes@{{.project}}.iam.gserviceaccount.com
+  gcloud storage buckets create gs://reports-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  echo "day,orders" > report.csv
+  gcloud storage cp report.csv gs://reports-{{.project}}/data/report.csv
+  cat > reports.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: reports}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: reports}}
+    template:
+      metadata: {labels: {app: reports}}
+      spec:
+        containers:
+        - name: reports
+          image: europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0
+          ports: [{containerPort: 8080}]
+          env: [{name: BUCKET, value: "reports-{{.project}}"}]
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: reports}
+  spec:
+    type: LoadBalancer
+    selector: {app: reports}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl apply -f reports.yaml
+traffic:
+  - {name: reports, target: "k8s:apps-gke/reports", path: /reports, rps: 5}
+story: |
+  The **reports** service on `apps-gke` must read `gs://reports-{{.project}}`. In staging a developer
+  downloaded a JSON key for a service account and mounted it as a Kubernetes Secret. Security has
+  banned service-account keys, and the cluster's nodes run as `gke-nodes`, a minimal identity that
+  must stay minimal.
+
+  Give **only the reports workload** read access to the bucket with **Workload Identity**:
+  a dedicated Google service account, a Kubernetes service account mapped to it, and a cluster whose
+  nodes actually hand pods that identity.
+constraints: [no-basic-roles]
+objectives:
+  - Enable Workload Identity on the cluster and on its node pool
+  - Create a dedicated Google service account with read-only access to the bucket
+  - Map a Kubernetes service account to it and run reports with it
+  - No keys, no bucket access for the node identity
+hints:
+  - text: "Workload Identity has three parts: the cluster's workload pool, the node pool's metadata mode, and an IAM binding that lets `PROJECT.svc.id.goog[NAMESPACE/KSA]` impersonate the Google service account."
+  - text: "`gcloud container node-pools update default-pool --cluster=apps-gke --workload-metadata=GKE_METADATA`; the KSA needs the annotation `iam.gke.io/gcp-service-account`."
+  - text: "Grant `roles/iam.workloadIdentityUser` on the Google service account (not on the project) to `serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]`."
+evidence:
+  prompt: Explain why Workload Identity is safer than the key and than granting the node identity.
+  fields: [explanation]
+  minWords: 25
+  sample:
+    explanation: "Workload Identity gives only the reports pods the reports-sa identity through short-lived tokens, so there is no long-lived key to leak or rotate, and the node service account stays minimal instead of giving every pod on the node access to the bucket."
+solution: |
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl logs deployment/reports
+  gcloud container clusters update apps-gke --zone={{.zone}} --workload-pool={{.project}}.svc.id.goog
+  gcloud container node-pools update default-pool --cluster=apps-gke --zone={{.zone}} --workload-metadata=GKE_METADATA
+  gcloud iam service-accounts create reports-sa --display-name="reports reader"
+  gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} --member=serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud iam service-accounts add-iam-policy-binding reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]"
+  cat > wi.yaml <<'YAML'
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: reports-ksa
+    annotations: {iam.gke.io/gcp-service-account: "reports-sa@{{.project}}.iam.gserviceaccount.com"}
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: reports}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: reports}}
+    template:
+      metadata: {labels: {app: reports}}
+      spec:
+        serviceAccountName: reports-ksa
+        containers:
+        - name: reports
+          image: europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0
+          ports: [{containerPort: 8080}]
+          env: [{name: BUCKET, value: "reports-{{.project}}"}]
+  YAML
+  kubectl apply -f wi.yaml
+  kubectl logs deployment/reports
+shortcuts:
+  - name: grant the bucket to the node identity
+    run: |
+      gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} --member=serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  - name: forget the node pool metadata mode
+    run: |
+      gcloud container clusters update apps-gke --zone={{.zone}} --workload-pool={{.project}}.svc.id.goog
+      gcloud iam service-accounts create reports-sa
+      gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} --member=serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+      gcloud iam service-accounts add-iam-policy-binding reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]"
+      gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+      cat > ksa.yaml <<'YAML'
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: reports-ksa
+        annotations: {iam.gke.io/gcp-service-account: "reports-sa@{{.project}}.iam.gserviceaccount.com"}
+      ---
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: {name: reports}
+      spec:
+        replicas: 1
+        selector: {matchLabels: {app: reports}}
+        template:
+          metadata: {labels: {app: reports}}
+          spec:
+            serviceAccountName: reports-ksa
+            containers:
+            - name: reports
+              image: europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0
+              ports: [{containerPort: 8080}]
+              env: [{name: BUCKET, value: "reports-{{.project}}"}]
+      YAML
+      kubectl apply -f ksa.yaml
+  - name: use a service-account key
+    run: |
+      gcloud iam service-accounts create reports-sa
+      gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} --member=serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+      gcloud iam service-accounts keys create key.json --iam-account=reports-sa@{{.project}}.iam.gserviceaccount.com
+rubric:
+  - name: Reports read the bucket
+    validator: functional
+    points: 30
+    checks:
+      - {type: http, target: "k8s:apps-gke/reports", path: /reports, status: 200, desc: "reports serves /reports from the bucket"}
+  - name: Workload Identity configured
+    validator: state
+    points: 25
+    all: true
+    checks:
+      - {type: exists, path: "clusters[\"apps-gke\"]", expect: {workloadPool: {eq: "{{.project}}.svc.id.goog"}}, desc: "Cluster has a workload pool"}
+      - {type: exists, path: "clusters[\"apps-gke\"]", expect: {nodePools: {regex: "GKE_METADATA"}}, desc: "Node pool exposes the GKE metadata server"}
+  - name: No keys, no node-wide access
+    validator: security
+    points: 30
+    critical: true
+    checks:
+      - {type: policy, package: gcplab.security, ids: [SA_USER_MANAGED_KEY], desc: "No user-managed service-account keys"}
+      - {type: iam, principal: "serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "The node identity cannot read the bucket"}
+      - {type: no_basic_roles, members: ["serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com"], desc: "The node identity has no basic roles"}
+  - name: Least privilege
+    validator: security
+    points: 5
+    checks:
+      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "reports-sa is read-only"}
+  - name: Explanation
+    validator: evidence
+    points: 10
+    checks:
+      - {type: evidence, fields: [explanation], keywords: [[key, clave], [node, nodo], [token, short-lived, temporal, pod]], desc: "Explains the risks avoided"}

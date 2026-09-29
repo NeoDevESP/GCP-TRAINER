@@ -55,6 +55,14 @@ tracks:
     certs: [PCDE]
     phase: V1
     labs: [gke-k01-nightmare, sre-c01-zone-chaos]
+  - id: gke
+    title: GKE & Kubernetes operations
+    description: Workloads, autoscaling and Workload Identity, then Kubernetes incidents. Generate more with the incident generator (system gke-shop).
+    level: professional
+    certs: [ACE, PCDE, PCSE]
+    phase: V1
+    reference: https://cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+    labs: [ace-d16-gke-two-services, ace-d17-gke-hpa, gke-k02-workload-identity, gke-k01-nightmare]
   - id: finops
     title: FinOps
     description: Read the bill, find anomalies, act on recommendations with the owners, add guardrails.

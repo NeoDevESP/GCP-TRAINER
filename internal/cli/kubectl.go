@@ -17,6 +17,7 @@ var kindAlias = map[string]string{
 	"cm": "configmaps", "configmap": "configmaps", "configmaps": "configmaps", "secret": "secrets", "secrets": "secrets",
 	"sa": "serviceaccounts", "serviceaccount": "serviceaccounts", "serviceaccounts": "serviceaccounts", "ing": "ingresses", "ingress": "ingresses", "ingresses": "ingresses",
 	"netpol": "networkpolicies", "networkpolicy": "networkpolicies", "networkpolicies": "networkpolicies", "all": "all", "events": "events", "ev": "events", "rs": "replicasets", "replicasets": "replicasets",
+	"ep": "endpoints", "endpoints": "endpoints",
 	"pvc": "persistentvolumeclaims", "persistentvolumeclaim": "persistentvolumeclaims", "persistentvolumeclaims": "persistentvolumeclaims",
 	"role": "roles", "roles": "roles", "rolebinding": "rolebindings", "rolebindings": "rolebindings", "sc": "storageclasses", "storageclass": "storageclasses", "storageclasses": "storageclasses",
 }
@@ -101,6 +102,7 @@ func (s *Session) kubectl(args []string, stdin string) (string, error) {
 	}
 	allNS := f["A"] != nil || f["all-namespaces"] != nil
 	k := c.K8s
+	opts := kubeOpts{sel: parseLabelSelector(firstNonEmptyStr(last(f["l"]), last(f["selector"]))), showLabels: f["show-labels"] != nil}
 	out := last(f["o"])
 	if out == "" {
 		out = last(f["output"])
@@ -196,7 +198,7 @@ func (s *Session) kubectl(args []string, stdin string) (string, error) {
 			if kind == "" {
 				return b.String(), fail(1, "error: the server doesn't have a resource type \"%s\"", kd)
 			}
-			o, err := s.kubectlGet(p, c, ns, allNS, kind, name, out)
+			o, err := s.kubectlGet(p, c, ns, allNS, kind, name, out, opts)
 			b.WriteString(o)
 			if err != nil {
 				return b.String(), err
@@ -213,7 +215,7 @@ func (s *Session) kubectl(args []string, stdin string) (string, error) {
 		} else if len(pos) > 2 {
 			name = pos[2]
 		}
-		return s.kubectlDescribe(p, c, ns, kindAlias[kd], name)
+		return s.kubectlDescribe(p, c, ns, kindAlias[kd], name, opts)
 	case "logs":
 		if len(pos) < 2 {
 			return "", fail(1, "error: expected POD")
@@ -655,7 +657,49 @@ func (s *Session) kubectlDelete(ns *sim.Namespace, kind, name string) (string, e
 
 func age() string { return "5m" }
 
-func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allNS bool, kind, name, out string) (string, error) {
+// kubeOpts carries list options shared by get and describe.
+type kubeOpts struct {
+	sel        map[string]string // -l / --selector (equality-based, comma-separated)
+	showLabels bool
+}
+
+// parseLabelSelector parses "app=web,tier=backend" (also "app==web").
+func parseLabelSelector(v string) map[string]string {
+	if v == "" {
+		return nil
+	}
+	out := map[string]string{}
+	for _, part := range strings.Split(v, ",") {
+		k, val, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if ok {
+			out[strings.TrimSpace(k)] = strings.TrimSpace(strings.TrimPrefix(val, "="))
+		}
+	}
+	return out
+}
+
+// matches reports whether labels satisfy the selector (an empty selector matches everything).
+func (o kubeOpts) matches(labels map[string]string) bool {
+	for k, v := range o.sel {
+		if labels[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func labelString(labels map[string]string) string {
+	if len(labels) == 0 {
+		return "<none>"
+	}
+	var parts []string
+	for _, k := range sim.SortedKeys(labels) {
+		parts = append(parts, k+"="+labels[k])
+	}
+	return strings.Join(parts, ",")
+}
+
+func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allNS bool, kind, name, out string, o kubeOpts) (string, error) {
 	k := c.K8s
 	var nss []string
 	if allNS {
@@ -670,15 +714,19 @@ func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allN
 	switch kind {
 	case "all":
 		for _, kk := range []string{"pods", "services", "deployments", "hpa"} {
-			o, _ := s.kubectlGet(p, c, nsName, allNS, kk, "", out)
-			b.WriteString(o + "\n")
+			txt, _ := s.kubectlGet(p, c, nsName, allNS, kk, "", out, o)
+			b.WriteString(txt + "\n")
 		}
 		return b.String(), nil
 	case "pods":
-		w("%-40s %-6s %-26s %-9s %s\n", "NAME", "READY", "STATUS", "RESTARTS", "AGE")
+		hdr := fmt.Sprintf("%-40s %-6s %-26s %-9s %s", "NAME", "READY", "STATUS", "RESTARTS", "AGE")
+		if o.showLabels {
+			hdr += "   LABELS"
+		}
+		w("%s\n", hdr)
 		for _, ns := range nss {
 			for _, pd := range pods[ns] {
-				if name != "" && pd.Name != name {
+				if name != "" && pd.Name != name || !o.matches(pd.Labels) {
 					continue
 				}
 				ready := "0/1"
@@ -691,7 +739,11 @@ func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allN
 					st = strings.SplitN(st, " ", 2)[0]
 				}
 				rows = append(rows, pd)
-				w("%-40s %-6s %-26s %-9d %s\n", pd.Name, ready, st, pd.Restarts, age())
+				line := fmt.Sprintf("%-40s %-6s %-26s %-9d %s", pd.Name, ready, st, pd.Restarts, age())
+				if o.showLabels {
+					line += "   " + labelString(pd.Labels)
+				}
+				w("%s\n", line)
 			}
 		}
 	case "deployments":
@@ -702,6 +754,9 @@ func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allN
 					continue
 				}
 				d := k.Namespaces[ns].Deployments[dn]
+				if !o.matches(d.Template.Labels) {
+					continue
+				}
 				rows = append(rows, d)
 				w("%-24s %-7s %-11d %-10d %s\n", dn, fmt.Sprintf("%d/%d", d.Available, d.Replicas), d.Replicas, d.Available, age())
 			}
@@ -728,6 +783,30 @@ func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allN
 		}
 		if !allNS && nsName == "default" && name == "" {
 			w("%-20s %-13s %-15s %-15s %-12s %s\n", "kubernetes", "ClusterIP", "10.112.0.1", "<none>", "443/TCP", "1d")
+		}
+	case "endpoints":
+		w("%-20s %-40s %s\n", "NAME", "ENDPOINTS", "AGE")
+		for _, ns := range nss {
+			for _, sn := range sim.SortedKeys(k.Namespaces[ns].Services) {
+				if name != "" && sn != name {
+					continue
+				}
+				sv := k.Namespaces[ns].Services[sn]
+				var eps []string
+				for _, pd := range pods[ns] {
+					if pd.Ready && selectorMatchesCLI(sv.Selector, pd.Labels) {
+						for _, pt := range sv.Ports {
+							eps = append(eps, fmt.Sprintf("%s:%d", pd.IP, pt.TargetPort))
+						}
+					}
+				}
+				ep := strings.Join(eps, ",")
+				if ep == "" {
+					ep = "<none>"
+				}
+				rows = append(rows, map[string]any{"name": sn, "endpoints": eps})
+				w("%-20s %-40s %s\n", sn, ep, age())
+			}
 		}
 	case "hpa":
 		w("%-18s %-28s %-22s %-8s %-8s %-9s %s\n", "NAME", "REFERENCE", "TARGETS", "MINPODS", "MAXPODS", "REPLICAS", "AGE")
@@ -885,17 +964,17 @@ func (s *Session) kubectlGet(p *sim.Project, c *sim.Cluster, nsName string, allN
 	return b.String(), nil
 }
 
-func (s *Session) kubectlDescribe(p *sim.Project, c *sim.Cluster, nsName, kind, name string) (string, error) {
+func (s *Session) kubectlDescribe(p *sim.Project, c *sim.Cluster, nsName, kind, name string, o kubeOpts) (string, error) {
 	ns := c.K8s.NS(nsName)
 	var b strings.Builder
 	switch kind {
 	case "pods":
 		for _, pd := range s.State.ComputePods(p.ID, c)[nsName] {
-			if pd.Name != name && pd.Owner != name {
+			if name != "" && pd.Name != name && pd.Owner != name || !o.matches(pd.Labels) {
 				continue
 			}
-			fmt.Fprintf(&b, "Name:         %s\nNamespace:    %s\nNode:         %s\nStatus:       %s\nIP:           %s\nService Account: %s\nContainers:\n  %s:\n    Image:      %s\n    Ports:      %v\n    Requests:   cpu=%s memory=%s\n    Limits:     cpu=%s memory=%s\n",
-				pd.Name, nsName, pd.Node, pd.Phase, pd.IP, pd.SA, pd.Spec.Name, pd.Spec.Image, pd.Spec.Ports, pd.Spec.Requests.CPU, pd.Spec.Requests.Memory, pd.Spec.Limits.CPU, pd.Spec.Limits.Memory)
+			fmt.Fprintf(&b, "Name:         %s\nNamespace:    %s\nLabels:       %s\nNode:         %s\nStatus:       %s\nIP:           %s\nService Account: %s\nContainers:\n  %s:\n    Image:      %s\n    Ports:      %v\n    Requests:   cpu=%s memory=%s\n    Limits:     cpu=%s memory=%s\n",
+				pd.Name, nsName, labelString(pd.Labels), pd.Node, pd.Phase, pd.IP, pd.SA, pd.Spec.Name, pd.Spec.Image, pd.Spec.Ports, pd.Spec.Requests.CPU, pd.Spec.Requests.Memory, pd.Spec.Limits.CPU, pd.Spec.Limits.Memory)
 			if pd.Spec.Readiness != nil {
 				fmt.Fprintf(&b, "    Readiness:  http-get :%d%s delay=%ds\n", pd.Spec.Readiness.Port, pd.Spec.Readiness.Path, pd.Spec.Readiness.InitialDelay)
 			}
@@ -952,6 +1031,28 @@ func (s *Session) kubectlDescribe(p *sim.Project, c *sim.Cluster, nsName, kind, 
 	case "nodes":
 		for _, np := range c.NodePools {
 			fmt.Fprintf(&b, "Name: gke-%s-%s\nAllocatable: cpu per node for %s\nNodes: %d\n", c.Name, np.Name, np.MachineType, np.Count)
+		}
+	case "networkpolicies":
+		for _, npn := range sim.SortedKeys(ns.NetworkPolicies) {
+			np := ns.NetworkPolicies[npn]
+			if name != "" && npn != name {
+				continue
+			}
+			from := "<none> (all ingress is denied)"
+			if len(np.From) > 0 {
+				from = "PodSelector: " + labelString(np.From)
+			}
+			fmt.Fprintf(&b, "Name:         %s\nNamespace:    %s\nSpec:\n  PodSelector:     %s\n  Allowing ingress traffic:\n    From:\n      %s\n  Policy Types: Ingress\n\n", np.Name, nsName, labelString(np.Selector), from)
+		}
+	case "configmaps":
+		for _, cn := range sim.SortedKeys(ns.ConfigMaps) {
+			if name != "" && cn != name {
+				continue
+			}
+			fmt.Fprintf(&b, "Name:         %s\nNamespace:    %s\n\nData\n====\n", cn, nsName)
+			for _, k := range sim.SortedKeys(ns.ConfigMaps[cn]) {
+				fmt.Fprintf(&b, "%s:\n----\n%s\n\n", k, ns.ConfigMaps[cn][k])
+			}
 		}
 	case "serviceaccounts":
 		sa := ns.ServiceAccounts[name]

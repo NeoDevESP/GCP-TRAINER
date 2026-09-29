@@ -1175,6 +1175,10 @@ func (c *Context) command(ch scenario.Check) (bool, string) {
 			n++
 		}
 	}
+	// `max` turns the check into a guard ("never ran X"); min then defaults to 0.
+	if _, capped := ch["max"]; capped {
+		return n >= int(num(ch, "min", 0)) && n <= int(num(ch, "max", 0)), fmt.Sprintf("%d matching commands (at most %d allowed)", n, int(num(ch, "max", 0)))
+	}
 	return n >= int(num(ch, "min", 1)), fmt.Sprintf("%d matching commands", n)
 }
 

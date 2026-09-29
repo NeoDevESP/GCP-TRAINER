@@ -91,6 +91,21 @@ func Verify(l *scenario.Lab, seed int64) Report {
 	if !after.Passed || after.Score < 90 {
 		r.Problems = append(r.Problems, fmt.Sprintf("official solution scores %d (critical failed=%v)", after.Score, after.CriticalFailed))
 	}
+	// every declared shortcut must run cleanly and still fail the lab
+	for _, sc := range w.Lab.Shortcuts {
+		sw, err := scenario.Provision(l, seed, project)
+		if err != nil {
+			r.Problems = append(r.Problems, "provision for shortcut: "+err.Error())
+			continue
+		}
+		if _, err := scenario.RunScript(sw, sc.Run); err != nil {
+			r.Problems = append(r.Problems, fmt.Sprintf("shortcut %q: %v", sc.Name, err))
+			continue
+		}
+		if res := grader.Grade(sw.Lab, sw.State, sw.Session, sw.Project, SampleSubmission(sw.Lab)); res.Passed {
+			r.Problems = append(r.Problems, fmt.Sprintf("shortcut %q passes the lab (score %d) — the rubric must reject it", sc.Name, res.Score))
+		}
+	}
 	r.OK = len(r.Problems) == 0
 	return r
 }
