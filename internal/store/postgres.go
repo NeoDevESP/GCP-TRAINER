@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,6 +22,10 @@ CREATE TABLE IF NOT EXISTS documents (
   PRIMARY KEY (coll, id)
 );
 CREATE INDEX IF NOT EXISTS documents_data_gin ON documents USING gin (data jsonb_path_ops);
+-- Supabase publishes the public schema through its REST API: row-level
+-- security with no policies closes it. The platform connects as the table
+-- owner, which RLS does not restrict.
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 `
 
 // Postgres stores documents in PostgreSQL / Cloud SQL / AlloyDB.
@@ -30,7 +35,19 @@ type Postgres struct {
 
 // NewPostgres connects and migrates.
 func NewPostgres(ctx context.Context, dsn string) (*Postgres, error) {
-	pool, err := pgxpool.New(ctx, dsn)
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	// Transaction-mode poolers (PgBouncer, Supabase on port 6543) do not keep
+	// prepared statements between transactions.
+	if cfg.ConnConfig.Port == 6543 && !strings.Contains(dsn, "default_query_exec_mode") {
+		cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	}
+	if !strings.Contains(dsn, "pool_max_conns") {
+		cfg.MaxConns = 5 // hosted free tiers limit connections
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +66,7 @@ func (p *Postgres) Put(coll, id string, v any) error {
 		return err
 	}
 	_, err = p.pool.Exec(context.Background(), `INSERT INTO documents (coll,id,data,updated_at) VALUES ($1,$2,$3,now())
-		ON CONFLICT (coll,id) DO UPDATE SET data=EXCLUDED.data, updated_at=now()`, coll, id, b)
+		ON CONFLICT (coll,id) DO UPDATE SET data=EXCLUDED.data, updated_at=now()`, coll, id, string(b)) // text works with the extended and the simple protocol
 	return err
 }
 

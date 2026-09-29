@@ -110,6 +110,13 @@ separados, con PostgreSQL y los emuladores de Pub/Sub y GCS (F1).
 | `MENTOR_LLM` | `off` | `on` activa el revisor de post-mortems con Claude (necesita `ANTHROPIC_API_KEY`); responde en el idioma de la sesión |
 | `CORS_ORIGIN` | — | permite un cliente web alojado aparte |
 
+## Publicarlo online en Render + Supabase
+
+Para practicar desde cualquier sitio sin instalar nada: un servicio Docker en
+Render (definido en [`render.yaml`](render.yaml)) y la base de datos en
+Supabase. Guía paso a paso:
+[docs/despliegue-render-supabase.md](docs/despliegue-render-supabase.md).
+
 ## Despliegue en Google Cloud
 
 `deploy/terraform` crea la carpeta de sandbox con barreras de políticas de

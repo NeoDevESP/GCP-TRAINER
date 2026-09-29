@@ -108,6 +108,12 @@ and the Pub/Sub and GCS emulators (F1).
 | `MENTOR_LLM` | `off` | `on` enables the Claude post-mortem reviewer (needs `ANTHROPIC_API_KEY`) |
 | `CORS_ORIGIN` | — | allow a separately hosted web client |
 
+## Online on Render + Supabase
+
+One Docker service on Render ([`render.yaml`](render.yaml)) with the database
+in Supabase; step-by-step guide (Spanish):
+[docs/despliegue-render-supabase.md](docs/despliegue-render-supabase.md).
+
 ## Deploying to Google Cloud
 
 `deploy/terraform` creates the sandbox folder with org-policy guardrails

@@ -98,7 +98,7 @@ func main() {
 	router := fidelity.NewRouter(runtimes...)
 
 	mode := env("MODE", "all")
-	addr := env("ADDR", ":8080")
+	addr := env("ADDR", ":"+env("PORT", "8080")) // PORT is set by Render, Cloud Run, Heroku-style hosts
 	var handler http.Handler
 	var svc *orchestrator.Service
 	if mode == "all" || mode == "labplane" {

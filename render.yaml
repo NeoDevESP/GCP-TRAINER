@@ -1,0 +1,23 @@
+# Render Blueprint: Cloud Mastery online with its data in Supabase.
+# Step-by-step guide: docs/despliegue-render-supabase.md
+#
+# One Docker web service runs everything (web client, API, lab plane and
+# grader); Supabase provides PostgreSQL through DATABASE_URL.
+services:
+  - type: web
+    name: cloud-mastery
+    runtime: docker
+    plan: free                      # sleeps after 15 min idle; "starter" stays awake
+    region: frankfurt               # keep it next to the Supabase region (eu-central-1)
+    branch: claude/bold-turing-acsitj   # change to main once the branch is merged
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL           # Supabase > Connect > Session pooler (port 5432)
+        sync: false                 # Render asks for it when the Blueprint is created
+      - key: JWT_SECRET             # signs sessions and transcripts; keep it stable
+        generateValue: true
+      - key: PORT
+        value: "8080"
