@@ -497,7 +497,7 @@ func init() {
 			return nil, err
 		}
 		id := fmt.Sprintf("17%011d", len(in.Backups)+1)
-		in.Backups = append(in.Backups, sim.SQLBackup{ID: id, Status: "SUCCESSFUL", Time: c.S.State.Now()})
+		in.Backups = append(in.Backups, sim.SQLBackup{ID: id, Status: "SUCCESSFUL", Time: c.S.State.Now(), Databases: append([]string{}, in.Databases...)})
 		c.Audit("cloudsql.googleapis.com", "cloudsql.backupRuns.create", "projects/"+p.ID+"/instances/"+in.Name)
 		return "Backing up Cloud SQL instance...done.\n[" + id + "] Backup created.\n", nil
 	})
@@ -525,8 +525,15 @@ func init() {
 		}
 		for _, b := range src.Backups {
 			if b.ID == id {
+				if target.Master != "" {
+					return nil, fmt.Errorf("HTTPError 400: cannot restore a backup to a read replica")
+				}
 				target.State = "RUNNABLE"
 				target.SlowQueries = nil
+				if b.Databases != nil {
+					// a restore overwrites all data on the target instance
+					target.Databases = append([]string{}, b.Databases...)
+				}
 				c.Audit("cloudsql.googleapis.com", "cloudsql.instances.restoreBackup", "projects/"+p.ID+"/instances/"+target.Name)
 				return "Restoring Cloud SQL instance...done.\n", nil
 			}

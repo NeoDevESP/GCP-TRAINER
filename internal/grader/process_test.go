@@ -8,8 +8,11 @@ import (
 )
 
 func TestReadOnlyClassification(t *testing.T) {
-	ro := []string{"gcloud compute instances list", "gcloud logging read 'severity>=ERROR'", "kubectl get pods", "curl -s http://x", "gcloud projects get-iam-policy p", "bq query --dry_run 'x'", "terraform plan"}
-	rw := []string{"gcloud compute instances delete vm", "gcloud projects add-iam-policy-binding p --member=user:a --role=roles/viewer", "kubectl delete pod x", "gcloud run services update s --region=r"}
+	ro := []string{"gcloud compute instances list", "gcloud logging read 'severity>=ERROR'", "kubectl get pods", "curl -s http://x", "gcloud projects get-iam-policy p", "bq query --dry_run 'x'", "terraform plan",
+		"gcloud compute ssh app-1 --zone=z --tunnel-through-iap --command='nc -zv license-1 27000'", `gcloud compute ssh web --command="curl -s localhost && df -h"`,
+		"sudo journalctl -u nginx", "systemctl status nginx", "find /var/log -size +1G"}
+	rw := []string{"gcloud compute instances delete vm", "gcloud projects add-iam-policy-binding p --member=user:a --role=roles/viewer", "kubectl delete pod x", "gcloud run services update s --region=r",
+		"gcloud compute ssh web --command='sudo systemctl restart nginx'", "gcloud compute ssh web --zone=z", "sudo systemctl restart nginx", "find /var/log -name '*.gz' -delete"}
 	for _, l := range ro {
 		if !isReadOnly(l) {
 			t.Errorf("%q should be read-only", l)

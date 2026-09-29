@@ -32,7 +32,7 @@ var boolFlags = map[string]bool{
 	"auto-allocate-nat-external-ips": true, "nat-all-subnet-ip-ranges": true, "versioning": true, "auto-ack": true,
 	"dry-run": true, "dry_run": true, "tunnel-through-iap": true, "spot": true, "preemptible": true, "all": true, "recursive": true,
 	"r": true, "R": true, "require-ssl": true, "to-latest": true, "preview": true, "deletion-protection": true, "shielded-secure-boot": true,
-	"autopilot": true, "use_legacy_sql": true, "nouse_legacy_sql": true, "force": true, "d": true, "t": true, "enable-cdn": true,
+	"autopilot": true, "use_legacy_sql": true, "nouse_legacy_sql": true, "require_partition_filter": true, "norequire_partition_filter": true, "force": true, "d": true, "t": true, "enable-cdn": true,
 	"internal-ip": true, "log-http": true, "no-user-output-enabled": true, "watch": true, "w": true, "A": true, "all-namespaces": true,
 	"auto-approve": true, "sort-by-created": true, "verbose": true, "include-deleted": true, "json": true, "stream": true,
 	"enable-autorepair": true, "enable-autoupgrade": true, "private-network-only": true, "disable-default-snat": false,

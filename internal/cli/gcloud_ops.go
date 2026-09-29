@@ -1191,12 +1191,23 @@ func init() {
 				return nil, err
 			}
 		}
-		for i := range e.Deployed {
-			e.Deployed[i].Traffic = 0
+		dm := sim.DeployedModel{ID: fmt.Sprint(1000000000 + len(e.Deployed)*7919 + len(p.AIModels)), ModelID: mid, ModelName: p.AIModels[mid].DisplayName, MachineType: mt, MinReplicas: c.Int("min-replica-count", 1), MaxReplicas: c.Int("max-replica-count", 1), GPUs: gpus, SA: sa}
+		// --traffic-split=0=10,EXISTING_ID=90: "0" is the model being deployed.
+		// Without it the new model takes all traffic.
+		split := map[string]int{"0": 100}
+		if c.Has("traffic-split") {
+			var err error
+			if split, err = parseTrafficSplit(c.KV("traffic-split")); err != nil {
+				return nil, err
+			}
 		}
-		e.Deployed = append(e.Deployed, sim.DeployedModel{ModelID: mid, MachineType: mt, MinReplicas: c.Int("min-replica-count", 1), MaxReplicas: c.Int("max-replica-count", 1), Traffic: 100, GPUs: gpus, SA: sa})
+		next := append(append([]sim.DeployedModel{}, e.Deployed...), dm)
+		if err := applyTrafficSplit(next, split, dm.ID); err != nil {
+			return nil, err
+		}
+		e.Deployed = next
 		c.Audit("aiplatform.googleapis.com", "google.cloud.aiplatform.v1.EndpointService.DeployModel", "projects/"+p.Number+"/locations/"+e.Region+"/endpoints/"+e.ID)
-		return "Deployed a model to the endpoint " + e.ID + ". Id of the deployed model: " + c.S.State.ID(10) + ".\n", nil
+		return "Deployed a model to the endpoint " + e.ID + ". Id of the deployed model: " + dm.ID + ".\n", nil
 	})
 	reg("ai endpoints undeploy-model", func(c *Cmd) (any, error) {
 		p, err := c.P()
@@ -1208,8 +1219,39 @@ func init() {
 		if e == nil {
 			return nil, fmt.Errorf("NOT_FOUND: endpoint %s", n)
 		}
-		e.Deployed = nil
-		return "Undeployed model from endpoint " + e.ID + ".\n", nil
+		id := c.Str("deployed-model-id", "")
+		if id == "" {
+			return nil, fmt.Errorf("argument --deployed-model-id: Must be specified.")
+		}
+		var keep []sim.DeployedModel
+		var removed *sim.DeployedModel
+		for i := range e.Deployed {
+			if e.Deployed[i].ID == id {
+				removed = &e.Deployed[i]
+				continue
+			}
+			keep = append(keep, e.Deployed[i])
+		}
+		if removed == nil {
+			return nil, fmt.Errorf("NOT_FOUND: deployed model %s not found on endpoint %s", id, e.ID)
+		}
+		if c.Has("traffic-split") {
+			split, err := parseTrafficSplit(c.KV("traffic-split"))
+			if err != nil {
+				return nil, err
+			}
+			if err := applyTrafficSplit(keep, split, ""); err != nil {
+				return nil, err
+			}
+		} else if removed.Traffic > 0 && len(keep) > 0 {
+			if len(keep) > 1 {
+				return nil, fmt.Errorf("FAILED_PRECONDITION: deployed model %s receives %d%% of traffic; pass --traffic-split for the remaining models", id, removed.Traffic)
+			}
+			keep[0].Traffic = 100
+		}
+		e.Deployed = keep
+		c.Audit("aiplatform.googleapis.com", "google.cloud.aiplatform.v1.EndpointService.UndeployModel", "projects/"+p.Number+"/locations/"+e.Region+"/endpoints/"+e.ID)
+		return "Undeployed model " + id + " from endpoint " + e.ID + ".\n", nil
 	})
 	reg("ai endpoints predict", func(c *Cmd) (any, error) {
 		p, err := c.P()
@@ -1258,6 +1300,16 @@ func init() {
 		if c.Bool("enable-monitoring") || c.Has("monitoring") {
 			e.Monitoring = true
 		}
+		if c.Has("traffic-split") {
+			split, err := parseTrafficSplit(c.KV("traffic-split"))
+			if err != nil {
+				return nil, err
+			}
+			if err := applyTrafficSplit(e.Deployed, split, ""); err != nil {
+				return nil, err
+			}
+			c.Audit("aiplatform.googleapis.com", "google.cloud.aiplatform.v1.EndpointService.UpdateEndpoint", "projects/"+p.Number+"/locations/"+e.Region+"/endpoints/"+e.ID)
+		}
 		return "Updated endpoint.\n", nil
 	})
 	reg("ai model-monitoring-jobs create", func(c *Cmd) (any, error) {
@@ -1283,6 +1335,52 @@ func lastRelease(p *sim.Project, target string) string {
 		}
 	}
 	return ""
+}
+
+func parseTrafficSplit(kv map[string]string) (map[string]int, error) {
+	out := map[string]int{}
+	for k, v := range kv {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 100 {
+			return nil, fmt.Errorf("argument --traffic-split: invalid percentage %q for %s", v, k)
+		}
+		out[k] = n
+	}
+	return out, nil
+}
+
+// applyTrafficSplit sets traffic on deployed models; newID is the id the key
+// "0" refers to (the model being deployed). Percentages must total 100 and
+// every key must name a deployed model; unlisted models get 0.
+func applyTrafficSplit(models []sim.DeployedModel, split map[string]int, newID string) error {
+	sum := 0
+	for k, v := range split {
+		id := k
+		if k == "0" && newID != "" {
+			id = newID
+		}
+		found := false
+		for i := range models {
+			if models[i].ID == id {
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("INVALID_ARGUMENT: traffic split references deployed model %s, which is not on the endpoint", k)
+		}
+		sum += v
+	}
+	if sum != 100 {
+		return fmt.Errorf("INVALID_ARGUMENT: traffic split percentages must sum to 100 (got %d)", sum)
+	}
+	for i := range models {
+		key := models[i].ID
+		if key == newID {
+			key = "0"
+		}
+		models[i].Traffic = split[key]
+	}
+	return nil
 }
 
 func findEndpoint(p *sim.Project, n string) *sim.AIEndpoint {

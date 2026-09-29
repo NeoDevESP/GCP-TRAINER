@@ -27,11 +27,11 @@ tracks:
     labs: [ace-d01-context, ace-d02-iam-storage-read, ace-d03-secure-bucket, ace-d04-web-vm, ace-d05-subnet-isolation, ace-d06-cloud-run, ace-d07-cloud-sql, ace-d08-logs-alert, ace-d09-health-check, ace-d10-checkpoint, ace-d11-app-403, ace-d12-private-egress, ace-d13-lb-dns, ace-d14-terraform, ace-d15-cloud-build, ace-d16-gke-two-services, ace-d17-gke-hpa, ace-d18-api-db-firewall, ace-d19-secret-env, ace-d20-sql-saturated, ace-d21-bigquery-cost, ace-d22-pubsub-ingestion, ace-d23-ml-endpoint, ace-d24-cmek, ace-d25-public-exposure, ace-d26-hybrid-design, ace-d27-deploy-rollback, ace-d28-architecture-review, ace-d29-capstone-orders, ace-d30-boss-incident]
   - id: capstones
     title: Career capstones
-    description: One capstone per career stage (Blueprint §22) — Junior, Cloud Engineer, DevOps, Senior (company boss) and Architect/SRE.
+    description: One capstone per career stage (Blueprint §22) — Junior, Cloud Engineer, DevOps, Senior (company boss), Architect/SRE — plus the professional data & ML platform.
     level: professional
-    certs: [ACE, PCA, PCDE]
+    certs: [ACE, PCA, PCDE, PDE, PMLE]
     phase: V1
-    labs: [cap-junior-secure-app, cap-engineer-migration, cap-devops-platform, cap-architect-global]
+    labs: [cap-junior-secure-app, cap-engineer-migration, cap-devops-platform, cap-architect-global, cap-data-ml-platform]
   - id: architect
     title: Architecture & disaster recovery
     description: Architecture Simulator case studies and a real regional failover.
@@ -63,6 +63,37 @@ tracks:
     phase: V1
     reference: https://cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
     labs: [ace-d16-gke-two-services, ace-d17-gke-hpa, gke-k02-workload-identity, gke-k01-nightmare]
+  - id: security
+    title: Security engineering
+    description: Least privilege, secrets and keys, encryption, exposure and a full incident response to a leaked credential.
+    level: professional
+    certs: [PCSE]
+    phase: V1
+    reference: https://cloud.google.com/learn/certification/cloud-security-engineer
+    labs: [ace-d02-iam-storage-read, ace-d19-secret-env, ace-d24-cmek, ace-d25-public-exposure, gke-k02-workload-identity, sec-s01-leaked-key]
+  - id: network
+    title: Network engineering
+    description: Addressing, VPC design, private egress, load balancing, hybrid connectivity and peering with shared services.
+    level: professional
+    certs: [PCNE]
+    phase: V2
+    reference: https://cloud.google.com/learn/certification/cloud-network-engineer
+    labs: [netfund-n01-address-plan, ace-d05-subnet-isolation, ace-d12-private-egress, ace-d13-lb-dns, ace-d18-api-db-firewall, net-n02-shared-services-peering, ace-d26-hybrid-design]
+  - id: data
+    title: Data & databases
+    description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
+    level: professional
+    certs: [PCDE, PCA]
+    phase: V2
+    labs: [ace-d07-cloud-sql, ace-d20-sql-saturated, data-d01-sql-recovery, ace-d21-bigquery-cost, ace-d22-pubsub-ingestion]
+  - id: ml
+    title: ML serving & MLOps
+    description: Serve models with least privilege and monitoring, then roll out new versions as canaries.
+    level: professional
+    certs: [PMLE]
+    phase: V2
+    reference: https://cloud.google.com/learn/certification/machine-learning-engineer
+    labs: [ace-d23-ml-endpoint, ml-m01-canary-model]
   - id: finops
     title: FinOps
     description: Read the bill, find anomalies, act on recommendations with the owners, add guardrails.

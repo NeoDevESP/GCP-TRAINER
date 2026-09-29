@@ -1,0 +1,119 @@
+id: ml-m01-canary-model
+title: "Ship churn v2 as a canary, not a big bang"
+summary: Deploy a new model version next to the one in production, send it 10% of traffic, watch it and define when to promote or roll back.
+track: ml
+day: 1
+level: intermediate
+branch: data
+type: challenge
+skills: [data.ml, devops.delivery, observability.slo]
+wellArchitected: [reliability, operations]
+certs: [PMLE, PCA]
+difficulty: 3
+minutes: 45
+baseline: [default-network]
+setup: |
+  gcloud storage buckets create gs://models-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  echo "model v1" > model.bst
+  gcloud storage cp model.bst gs://models-{{.project}}/churn/v1/model.bst
+  echo "model v2" > model.bst
+  gcloud storage cp model.bst gs://models-{{.project}}/churn/v2/model.bst
+  gcloud iam service-accounts create predictor-sa
+  gcloud ai models upload --region={{.region}} --display-name=churn --container-image-uri=europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest --artifact-uri=gs://models-{{.project}}/churn/v1/
+  gcloud ai endpoints create --region={{.region}} --display-name=churn-endpoint
+  gcloud ai endpoints deploy-model churn-endpoint --region={{.region}} --model=$(gcloud ai models list --region={{.region}} --format='value(id)') --display-name=churn-v1 --machine-type=n1-standard-2 --min-replica-count=1 --max-replica-count=2 --service-account=predictor-sa@{{.project}}.iam.gserviceaccount.com --traffic-split=0=100
+files:
+  request.json: |
+    {"instances": [{"tenure": 12, "plan": "pro", "tickets": 3}, {"tenure": 2, "plan": "basic", "tickets": 9}]}
+ticket:
+  id: CHG-341
+  kind: CHG
+  priority: P3
+  sla: 2d
+  summary: "Deploy churn v2 (artifacts in gs://models-{{.project}}/churn/v2/) to churn-endpoint. Offline AUC is better, but it has never seen production traffic."
+  reporter: Priya (data science)
+actors:
+  - role: developer
+    name: Priya (data science)
+    fallback: "v2 uses the same XGBoost serving image as v1."
+    facts:
+      - {keywords: [[metric, auc, quality, calidad, promote, rollback]], answer: "We'd promote if v2's error rate and latency match v1 for a week and its score distribution doesn't drift. Otherwise roll back."}
+  - role: sre
+    name: Omar (SRE)
+    fallback: "The CRM calls churn-endpoint thousands of times per hour — no downtime, please."
+    facts:
+      - {keywords: [[traffic, split, percent, canary]], answer: "Start v2 at 10% and keep v1 at 90%. `gcloud ai endpoints describe` shows the deployed-model ids you need for --traffic-split."}
+  - role: finance
+    name: Marta (FinOps)
+    fallback: "Two models on the endpoint double the serving cost for a while — no GPUs, and remove the loser when you decide."
+story: |
+  Data science trained **churn v2**. Production calls `churn-endpoint`, currently serving v1 (`churn`) with
+  100% of traffic. Ship v2 safely:
+
+  - upload the model as **`churn-v2`** (same serving image as v1, artifacts in `gs://models-{{.project}}/churn/v2/`)
+  - deploy it to the **same endpoint** as `predictor-sa`, CPU only, and give it **10%** of the traffic; v1 keeps 90%
+  - turn on model monitoring and send a test request (`request.json`)
+  - write down the promotion and rollback criteria on the change ticket
+constraints: [no-downtime]
+objectives:
+  - v2 uploaded and deployed next to v1 without interrupting it
+  - 10% / 90% traffic split
+  - Monitoring on and a successful test prediction
+  - Promotion and rollback criteria documented
+hints:
+  - text: "`gcloud ai endpoints deploy-model` accepts `--traffic-split=0=10,DEPLOYED_MODEL_ID=90`, where `0` is the model being deployed."
+  - text: "The deployed-model id of v1 is in `gcloud ai endpoints describe churn-endpoint --region={{.region}}` (deployedModels[].id)."
+evidence:
+  fields: [rolloutPlan]
+  sample:
+    rolloutPlan: "Canary: churn-v2 gets 10% of traffic on churn-endpoint and churn v1 keeps 90%. Promote to 50% and then 100% if error rate and latency match v1 for a week and the score distribution does not drift; roll back by setting the traffic split to 100% v1 and undeploying v2."
+solution: |
+  gcloud ai endpoints describe churn-endpoint --region={{.region}}
+  gcloud ai models upload --region={{.region}} --display-name=churn-v2 --container-image-uri=europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest --artifact-uri=gs://models-{{.project}}/churn/v2/
+  gcloud ai endpoints deploy-model churn-endpoint --region={{.region}} --model=$(gcloud ai models list --region={{.region}} --filter=displayName=churn-v2 --format='value(id)') --display-name=churn-v2 --machine-type=n1-standard-2 --min-replica-count=1 --max-replica-count=2 --service-account=predictor-sa@{{.project}}.iam.gserviceaccount.com --traffic-split=0=10,$(gcloud ai endpoints describe churn-endpoint --region={{.region}} --format='value(deployedModels[0].id)')=90
+  gcloud ai endpoints describe churn-endpoint --region={{.region}}
+  gcloud ai model-monitoring-jobs create --region={{.region}} --endpoint=churn-endpoint --display-name=churn-monitoring
+  gcloud ai endpoints predict churn-endpoint --region={{.region}} --json-request=request.json
+  ticket update "churn-v2 deployed as a 10% canary next to v1 (90%). Promote after a week if error rate, latency and score drift match v1; rollback = 100% to v1 and undeploy v2."
+shortcuts:
+  - name: deploy v2 with all the traffic
+    run: |
+      gcloud ai models upload --region={{.region}} --display-name=churn-v2 --container-image-uri=europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest --artifact-uri=gs://models-{{.project}}/churn/v2/
+      gcloud ai endpoints deploy-model churn-endpoint --region={{.region}} --model=$(gcloud ai models list --region={{.region}} --filter=displayName=churn-v2 --format='value(id)') --display-name=churn-v2 --machine-type=n1-standard-2 --service-account=predictor-sa@{{.project}}.iam.gserviceaccount.com
+      gcloud ai model-monitoring-jobs create --region={{.region}} --endpoint=churn-endpoint --display-name=churn-monitoring
+      gcloud ai endpoints predict churn-endpoint --region={{.region}} --json-request=request.json
+      ticket update "churn-v2 deployed."
+rubric:
+  - name: v2 deployed next to v1
+    validator: state
+    points: 25
+    all: true
+    checks:
+      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "\"modelDisplayName\":\"churn-v2\""}}, min: 1, desc: "churn-v2 is deployed on churn-endpoint"}
+      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "\"modelDisplayName\":\"churn\""}}, min: 1, desc: "v1 is still deployed"}
+  - name: Canary split
+    validator: reliability
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"modelDisplayName\":\"churn-v2\"[^}]*\"trafficPercent\":10[,}]"}}, min: 1, desc: "churn-v2 receives 10% of traffic"}
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"modelDisplayName\":\"churn\"[^}]*\"trafficPercent\":90[,}]"}}, min: 1, desc: "v1 keeps 90% of traffic"}
+  - name: Observed and verified
+    validator: functional
+    points: 20
+    all: true
+    checks:
+      - {type: count, collection: aiEndpoints, where: {modelMonitoring: true}, min: 1, desc: "Model monitoring enabled"}
+      - {type: count, collection: aiEndpoints, where: {predictionCount: {gte: 1}}, min: 1, desc: "A test prediction was served"}
+  - name: Cost bounded
+    validator: cost
+    points: 5
+    checks:
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"acceleratorCount\":[1-9]"}}, max: 0, desc: "No GPUs"}
+  - name: Rollout plan
+    validator: evidence
+    points: 20
+    checks:
+      - {type: ticket_update, desc: "Change ticket updated"}
+      - {type: evidence, fields: [rolloutPlan], keywords: [[promot, increase, 50, 100], [rollback, roll back, revert], [latency, error, drift, metric]], desc: "Promotion and rollback criteria"}

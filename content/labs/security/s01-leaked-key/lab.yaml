@@ -1,0 +1,151 @@
+id: sec-s01-leaked-key
+title: "SEC P1: a service-account key leaked on GitHub"
+summary: Respond to a leaked key end to end — preserve evidence, contain, remove the attacker's persistence, prevent recurrence and report.
+track: security
+day: 1
+level: advanced
+branch: security
+type: incident
+mode: production
+skills: [security.incident, security.audit, iam.serviceaccounts, iam.leastprivilege, compute.disks]
+wellArchitected: [security, operations]
+certs: [PCSE, ACE]
+difficulty: 4
+minutes: 60
+params:
+  suffix: [7f3a, c21d, 9b0e]
+baseline: [default-network]
+setup: |
+  gcloud iam service-accounts create ci-deployer --display-name="CI deployer (GitHub Actions)"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:ci-deployer@{{.project}}.iam.gserviceaccount.com --role=roles/compute.instanceAdmin.v1
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:ci-deployer@{{.project}}.iam.gserviceaccount.com --role=roles/iam.serviceAccountUser
+  gcloud compute instances create web-1 --zone={{.zone}} --machine-type=e2-small --tags=http-server --labels=team=web --image-family=debian-12 --image-project=debian-cloud
+files:
+  secret-scanning-alert.txt: |
+    GitHub secret scanning alert #214 — partner notification
+    Secret type:   Google Cloud service account credentials
+    Service account: ci-deployer@{{.project}}.iam.gserviceaccount.com
+    Location:      public repository acme-labs/ci-scripts, file deploy/key.json, commit 3f9e2a1
+    Pushed:        2026-08-30 22:02 UTC (repository made public at 21:58 UTC)
+faults:
+  - {type: leaked_key_miner, serviceAccount: "ci-deployer@{{.project}}.iam.gserviceaccount.com", zone: "{{.zone}}", vm: "gke-worker-{{.suffix}}", gpus: 4}
+  - {type: iam_add, resource: project, role: roles/editor, member: "user:ci-backup@proton.example", actor: "ci-deployer@{{.project}}.iam.gserviceaccount.com"}
+  - {type: log_noise, severity: WARNING, resourceType: gce_instance, lines: ["google_guest_agent: Created user ci-backup on gke-worker-{{.suffix}}", "kernel: xmrig[2231]: huge pages 100% 1024/1024"]}
+ticket:
+  id: SEC-512
+  kind: SEC
+  priority: P1
+  sla: 30m
+  summary: "GitHub reported our CI service-account key in a public repo. Billing shows GPU usage we don't recognise."
+  impact: Unknown access with a deployment identity; GPU costs accumulating every hour.
+  reporter: Security Command Center / GitHub secret scanning
+actors:
+  - role: developer
+    name: Tom (CI owner)
+    persona: maintains the GitHub Actions pipeline
+    fallback: "The pipeline deploys web-1 with ci-deployer. Please don't delete the service account, releases depend on it."
+    facts:
+      - {keywords: [[key, clave, json, github, repo]], answer: "I pushed ci-scripts to a public repo by mistake last night — deploy/key.json was in it. That's the only key I created."}
+      - {keywords: [[gke, worker, instance, vm, gpu]], answer: "We don't run GKE or GPUs in this project. Only web-1."}
+  - role: security
+    name: Aisha (security)
+    persona: incident commander
+    fallback: "Order matters: preserve evidence, contain, eradicate, then recover and prevent."
+    facts:
+      - {keywords: [[evidence, forense, disk, disco, snapshot]], answer: "Snapshot the attacker's boot disk before you delete anything — deleting the VM deletes its boot disk."}
+      - {keywords: [[persist, backdoor, iam, user, usuario, access]], answer: "Attackers with a deployment key usually add themselves somewhere so they can come back. Check the IAM policy and the audit log for SetIamPolicy."}
+      - {keywords: [[prevent, policy, politica, again, future]], answer: "We want the org policy that forbids new service-account keys on this project. The pipeline can move to Workload Identity Federation."}
+  - role: finance
+    name: Marta (FinOps)
+    fallback: "Every hour those GPUs run costs us real money."
+story: |
+  GitHub secret scanning found the key of **ci-deployer** in a public repository (see `secret-scanning-alert.txt`),
+  and billing shows GPU usage nobody recognises. You are the incident responder.
+
+  Work like a professional: **preserve evidence first**, then contain, remove every foothold the attacker left,
+  keep the business running (`web-1`, and the `ci-deployer` identity the pipeline needs), prevent recurrence,
+  and keep stakeholders informed.
+constraints: [protect:web-1]
+objectives:
+  - Identify what the leaked identity did (audit logs, findings)
+  - Snapshot the attacker's disk, then remove the attacker's workloads
+  - Revoke the leaked key without breaking the pipeline identity
+  - Remove any persistence the attacker added
+  - Prevent new service-account keys on this project
+  - Update the ticket and write the postmortem
+hints:
+  - text: "`gcloud logging read 'logName:cloudaudit protoPayload.authenticationInfo.principalEmail:ci-deployer'` shows everything the key did — not only instance creation."
+  - text: "Names lie: find the attacker's VM by who created it, its GPUs and its startup script, not by its name."
+  - text: "`gcloud compute disks snapshot DISK --zone=ZONE` before `instances delete`; `resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --project=...` to prevent recurrence."
+evidence:
+  fields: [rootCause, postmortem]
+  sample:
+    rootCause: "The ci-deployer service-account key was committed to a public GitHub repository; the attacker used the leaked key from 185.220.101.7 to create a GPU cryptomining VM disguised as a GKE worker and granted roles/editor to an external user for persistence."
+    postmortem: "Timeline: 21:58 repo made public, 22:02 key pushed, 22:14 key used to create the miner and add the external editor, 08:00 alert. Impact: GPU cost and editor access for an external account. Response: snapshot for forensics, miner deleted, key revoked, backdoor binding removed. Action items: org policy forbidding keys, Workload Identity Federation for CI, secret scanning pre-commit hooks."
+solution: |
+  cat secret-scanning-alert.txt
+  gcloud scc findings list --format='table(category,severity,resourceName)'
+  gcloud logging read 'logName:cloudaudit protoPayload.authenticationInfo.principalEmail:ci-deployer' --limit=10 --format='value(protoPayload.methodName,protoPayload.resourceName,protoPayload.requestMetadata.callerIp)'
+  gcloud compute instances list --format='table(name,zone,status,labels)'
+  gcloud compute disks snapshot gke-worker-{{.suffix}} --zone={{.zone}} --snapshot-names=evidence-gke-worker-{{.suffix}}
+  gcloud compute instances delete gke-worker-{{.suffix}} --zone={{.zone}} --quiet
+  gcloud iam service-accounts keys list --iam-account=ci-deployer@{{.project}}.iam.gserviceaccount.com
+  gcloud iam service-accounts keys delete $(gcloud iam service-accounts keys list --iam-account=ci-deployer@{{.project}}.iam.gserviceaccount.com --format='value(name)' --limit=1) --iam-account=ci-deployer@{{.project}}.iam.gserviceaccount.com --quiet
+  gcloud projects get-iam-policy {{.project}} --flatten='bindings[].members' --format='table(bindings.role,bindings.members)'
+  gcloud projects remove-iam-policy-binding {{.project}} --member=user:ci-backup@proton.example --role=roles/editor
+  gcloud resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --project={{.project}}
+  ticket update "Contained: attacker VM snapshotted for forensics and deleted, leaked key revoked, external editor removed, key creation blocked by org policy. web-1 unaffected. Next update in 30 minutes."
+shortcuts:
+  - name: delete the whole service account
+    run: |
+      gcloud compute disks snapshot gke-worker-{{.suffix}} --zone={{.zone}} --snapshot-names=evidence
+      gcloud compute instances delete gke-worker-{{.suffix}} --zone={{.zone}} --quiet
+      gcloud iam service-accounts delete ci-deployer@{{.project}}.iam.gserviceaccount.com --quiet
+      gcloud projects remove-iam-policy-binding {{.project}} --member=user:ci-backup@proton.example --role=roles/editor
+      gcloud resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --project={{.project}}
+      ticket update "Deleted the compromised service account and the miner; external editor removed."
+  - name: contain without preserving evidence or removing persistence
+    run: |
+      gcloud compute instances delete gke-worker-{{.suffix}} --zone={{.zone}} --quiet
+      gcloud iam service-accounts keys delete $(gcloud iam service-accounts keys list --iam-account=ci-deployer@{{.project}}.iam.gserviceaccount.com --format='value(name)' --limit=1) --iam-account=ci-deployer@{{.project}}.iam.gserviceaccount.com --quiet
+      ticket update "Miner deleted and key revoked."
+rubric:
+  - name: Evidence preserved
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: count, collection: snapshots, where: {sourceDisk: {eq: "gke-worker-{{.suffix}}"}}, min: 1, desc: "The attacker's disk was snapshotted for forensics"}
+  - name: Contained
+    validator: security
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: finding_absent, category: CRYPTOMINING_SUSPECTED, desc: "Attacker workload removed"}
+      - {type: finding_absent, category: LEAKED_SERVICE_ACCOUNT_KEY, desc: "Leaked key revoked"}
+  - name: Persistence removed
+    validator: security
+    points: 20
+    critical: true
+    checks:
+      - {type: iam, principal: "user:ci-backup@proton.example", permission: resourcemanager.projects.get, resource: project, expect: false, desc: "No access left for the attacker's account"}
+  - name: Recurrence prevented
+    validator: security
+    points: 10
+    checks:
+      - {type: org_policy, constraint: iam.disableServiceAccountKeyCreation, desc: "New service-account keys are blocked on the project"}
+  - name: Business intact
+    validator: functional
+    points: 10
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "instances[\"web-1\"]", expect: {status: RUNNING}, desc: "web-1 still running"}
+      - {type: exists, path: "serviceAccounts[\"ci-deployer@{{.project}}.iam.gserviceaccount.com\"]", desc: "The pipeline identity still exists"}
+  - name: Communication & postmortem
+    validator: evidence
+    points: 15
+    checks:
+      - {type: ticket_update, desc: "Stakeholder update"}
+      - {type: evidence, fields: [rootCause], keywords: [[key, clave], [github, repo, public, publico]], desc: "Root cause"}
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto], [action, accion, prevent]], desc: "Postmortem"}

@@ -38,6 +38,7 @@ type ProcessReport struct {
 }
 
 var (
+	reSSHCommand  = regexp.MustCompile(`compute ssh .*--command[= ](?:'([^']*)'|"([^"]*)"|(\S+))`)
 	reReadOnly    = regexp.MustCompile(`(^|\s)(list|describe|get-iam-policy|get-health|get-serial-port-output|read|logs|troubleshoot-policy|search-all-resources|findings|estimate|get|top|explain|events|status|plan|show|validate|dry_run|dry-run|print-access-token|get-value|ls|cat|versions list)(\s|$)|^(curl|dig|nslookup|host|nc|ping|psql|whoami|history|help|jq|kubectl (get|describe|logs|top|explain)|gcloud (config list|info|auth list)|bq (show|ls|query --dry_run))`)
 	reDestructive = regexp.MustCompile(`(^|\s)(delete|destroy|reset|stop|disable|remove-iam-policy-binding|drain|rollback|failover|restart|delete-access-config|rm)(\s|$)|--force\b|terraform (destroy|apply -replace)|kubectl (delete|drain|rollout restart)|gsutil (rm|-m rm)`)
 	reRestart     = regexp.MustCompile(`instances (reset|stop|start)|rollout restart|sql instances restart|services update .*--update-labels=restart|systemctl restart|delete pod`)
@@ -54,11 +55,28 @@ func isReadOnly(line string) bool {
 	switch first {
 	case "why", "whatif", "ticket", "team", "ask", "arch", "interview", "answer":
 		return true
-	case "echo", "printf", "export", "unset", "sleep", "cd", "pwd", "date", "env", "printenv", "cat", "ls", "grep", "head", "tail", "wc", "sort", "uniq", "awk", "cut", "base64", "openssl", "uuidgen", "watch", "help", "history", "whoami", "hostname", "jq", "dig", "nslookup", "host", "ping", "nc", "ncat", "telnet":
+	case "echo", "printf", "export", "unset", "sleep", "cd", "pwd", "date", "env", "printenv", "cat", "ls", "grep", "head", "tail", "wc", "sort", "uniq", "awk", "cut", "base64", "openssl", "uuidgen", "watch", "help", "history", "whoami", "hostname", "jq", "dig", "nslookup", "host", "ping", "nc", "ncat", "telnet",
+		"df", "du", "free", "ps", "ss", "netstat", "uptime", "id", "groups", "stat", "journalctl", "lsof", "file":
 		return !strings.Contains(l, ">")
+	case "find":
+		return !strings.Contains(l, ">") && !strings.Contains(l, "-delete") && !strings.Contains(l, "-exec")
+	case "systemctl", "service":
+		return regexp.MustCompile(`^(systemctl|service)\s+(status|is-active|is-enabled|list-units)\b|^service\s+\S+\s+status\b`).MatchString(l)
+	case "sudo":
+		return isReadOnly(strings.TrimSpace(strings.TrimPrefix(l, "sudo")))
 	}
 	if strings.Contains(l, "config set") || strings.Contains(l, "auth login") || strings.Contains(l, "get-credentials") {
 		return true // context configuration is not a change to the environment
+	}
+	// `gcloud compute ssh VM --command='...'` is as read-only as the command it runs
+	if m := reSSHCommand.FindStringSubmatch(l); m != nil {
+		inner := m[1] + m[2] + m[3]
+		for _, part := range regexp.MustCompile(`&&|;|\|`).Split(inner, -1) {
+			if !isReadOnly(part) {
+				return false
+			}
+		}
+		return true
 	}
 	return reReadOnly.MatchString(l) && !reDestructive.MatchString(l) && !strings.Contains(l, " create") && !strings.Contains(l, " update") && !strings.Contains(l, " add-")
 }

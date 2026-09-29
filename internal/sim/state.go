@@ -583,6 +583,9 @@ type SQLBackup struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
 	Time   string `json:"windowStartTime"`
+	// Databases is the content captured by the backup; restoring replaces
+	// every database of the target instance with it (nil: legacy backup).
+	Databases []string `json:"databases,omitempty"`
 }
 
 type Topic struct {
@@ -839,7 +842,9 @@ type AIEndpoint struct {
 }
 
 type DeployedModel struct {
+	ID          string `json:"id"` // deployed-model id (keys of --traffic-split)
 	ModelID     string `json:"model"`
+	ModelName   string `json:"modelDisplayName,omitempty"`
 	MachineType string `json:"machineType"`
 	MinReplicas int    `json:"minReplicaCount"`
 	MaxReplicas int    `json:"maxReplicaCount"`

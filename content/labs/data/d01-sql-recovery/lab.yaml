@@ -1,0 +1,135 @@
+id: data-d01-sql-recovery
+title: "A migration job dropped the orders database"
+summary: Recover one lost database from last night's backup without destroying the data written since, then make the next recovery precise.
+track: data
+day: 1
+level: intermediate
+branch: databases
+type: incident
+skills: [databases.cloudsql, databases.ha, storage.access, observability.incident]
+wellArchitected: [reliability, operations]
+certs: [PCDBE, ACE, PCA]
+difficulty: 3
+minutes: 50
+baseline: [default-network]
+setup: |
+  gcloud sql instances create orders-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --backup-start-time=02:00
+  gcloud sql databases create orders --instance=orders-db
+  gcloud sql databases create inventory --instance=orders-db
+  gcloud sql backups create --instance=orders-db
+  gcloud sql databases create analytics --instance=orders-db
+  gcloud storage buckets create gs://dumps-{{.project}} --location={{.region}} --uniform-bucket-level-access
+  gcloud iam service-accounts create migration-job --display-name="schema migration job"
+faults:
+  - type: command
+    actor: "migration-job@{{.project}}.iam.gserviceaccount.com"
+    run: |
+      gcloud sql databases delete orders --instance=orders-db --quiet
+ticket:
+  id: INC-2207
+  kind: INC
+  priority: P1
+  sla: 1h
+  summary: "Order history is gone! The app says 'database orders does not exist' since the 09:00 migration."
+  impact: Customers cannot see or place orders; the analytics team keeps writing to orders-db.
+  reporter: Store support
+actors:
+  - role: developer
+    name: Nora (backend)
+    fallback: "The migration job ran at 09:00. It was supposed to drop a temp database, not orders."
+    facts:
+      - {keywords: [[migration, script, drop, delete, borrar]], answer: "The migration dropped `orders` instead of `orders_tmp`. Nothing else was touched."}
+  - role: sre
+    name: Omar (DBA on call)
+    persona: owns orders-db
+    fallback: "There is a nightly backup at 02:00. Remember a restore replaces everything on the target instance."
+    facts:
+      - {keywords: [[analytics, since, after, desde, new]], answer: "The analytics database was created at 07:30 — after the backup — and the analysts have been loading data into it all morning."}
+      - {keywords: [[restore, backup, overwrite, target, clone]], answer: "Never restore straight onto production in this case: it would wipe analytics. Restore to a temporary instance and move only orders back."}
+      - {keywords: [[export, import, bucket, permission, permiso]], answer: "Exports and imports are done by the Cloud SQL service agent, not by you — it needs access to the dumps bucket."}
+  - role: manager
+    name: Irene (engineering manager)
+    fallback: "Updates on the ticket every 30 minutes, please. And tell me how we avoid losing a morning of data next time."
+story: |
+  A migration job dropped the **orders** database of `orders-db` at 09:00. There is a nightly backup from 02:00,
+  but the **analytics** database was created and loaded *after* that backup — it must survive the recovery.
+
+  Recover `orders` into `orders-db` using the backup and the dumps bucket `gs://dumps-{{.project}}`, keep every
+  other database intact, clean up what you create, and make sure the next recovery can target the minute before
+  a mistake.
+constraints: [no-public]
+objectives:
+  - Confirm what was lost and when (audit log, database list)
+  - Restore the backup somewhere safe and move only orders back
+  - Keep analytics and inventory intact
+  - Enable point-in-time recovery and remove temporary resources
+  - Keep stakeholders informed
+hints:
+  - text: "`gcloud sql backups restore` replaces all databases of the *target* instance. What would that do to analytics?"
+  - text: "Restore into a new instance (`--restore-instance=NEW --backup-instance=orders-db`), then `gcloud sql export sql` the orders database to the bucket."
+  - text: "The service agent is in `gcloud sql instances describe ... --format='value(serviceAccountEmailAddress)'`. Import needs the target database to exist first."
+evidence:
+  fields: [rootCause, prevention]
+  sample:
+    rootCause: "The migration job deleted the orders database instead of orders_tmp at 09:00. Restoring the 02:00 backup directly onto orders-db would have wiped the analytics database created after the backup, so the backup was restored to a temporary instance and only orders was exported and imported back."
+    prevention: "Enable point-in-time recovery to restore to the minute before a mistake, run migrations with least privilege and a dry run, and require review before destructive database operations."
+solution: |
+  gcloud logging read 'protoPayload.methodName:databases.delete' --limit=3 --format='value(protoPayload.authenticationInfo.principalEmail,protoPayload.resourceName)'
+  gcloud sql databases list --instance=orders-db
+  gcloud sql backups list --instance=orders-db
+  ticket update "Investigating: the 09:00 migration dropped the orders database. Restoring last night's backup to a temporary instance so analytics is not affected. Next update in 30 minutes."
+  gcloud sql instances create orders-restore --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}}
+  gcloud sql backups restore $(gcloud sql backups list --instance=orders-db --format='value(id)' --limit=1) --restore-instance=orders-restore --backup-instance=orders-db --quiet
+  gcloud sql databases list --instance=orders-restore
+  gcloud storage buckets add-iam-policy-binding gs://dumps-{{.project}} --member=serviceAccount:$(gcloud sql instances describe orders-restore --format='value(serviceAccountEmailAddress)') --role=roles/storage.objectAdmin
+  gcloud sql export sql orders-restore gs://dumps-{{.project}}/orders.sql --database=orders
+  gcloud sql databases create orders --instance=orders-db
+  gcloud sql import sql orders-db gs://dumps-{{.project}}/orders.sql --database=orders --quiet
+  gcloud sql databases list --instance=orders-db
+  gcloud sql instances patch orders-db --enable-point-in-time-recovery
+  gcloud sql instances delete orders-restore --quiet
+  ticket update "Recovered: orders restored from the 02:00 backup via a temporary instance; analytics and inventory untouched. Orders created between 02:00 and 09:00 must be re-entered from the payment provider. PITR is now enabled."
+shortcuts:
+  - name: restore the backup straight onto production
+    run: |
+      gcloud sql backups restore $(gcloud sql backups list --instance=orders-db --format='value(id)' --limit=1) --restore-instance=orders-db --quiet
+      gcloud sql instances patch orders-db --enable-point-in-time-recovery
+      ticket update "Restored last night's backup onto orders-db; orders is back."
+  - name: recreate an empty orders database
+    run: |
+      gcloud sql databases create orders --instance=orders-db
+      gcloud sql instances patch orders-db --enable-point-in-time-recovery
+      ticket update "Recreated the orders database."
+rubric:
+  - name: Orders recovered
+    validator: functional
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: orders}}, desc: "orders exists again on orders-db"}
+      - {type: command, regex: "sql import sql orders-db .*--database[= ]orders", desc: "orders was loaded with the backed-up data, not recreated empty"}
+  - name: Nothing else lost
+    validator: reliability
+    points: 20
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: analytics}}, desc: "analytics (written after the backup) survived"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: inventory}}, desc: "inventory intact"}
+  - name: Precise recovery next time
+    validator: reliability
+    points: 15
+    checks:
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "Point-in-time recovery enabled on orders-db"}
+  - name: Cleanup
+    validator: cost
+    points: 10
+    checks:
+      - {type: count, collection: sqlInstances, max: 1, desc: "Temporary restore instance removed"}
+  - name: Communication
+    validator: evidence
+    points: 20
+    checks:
+      - {type: ticket_update, desc: "Stakeholder updates"}
+      - {type: evidence, fields: [rootCause], keywords: [[orders, migration], [backup, restore, restaur], [analytics, overwrite, sobrescrib, temporary, temporal]], desc: "Explains the loss and why the recovery path was chosen"}
