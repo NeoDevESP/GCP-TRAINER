@@ -110,14 +110,18 @@ separados, con PostgreSQL y los emuladores de Pub/Sub y GCS (F1).
 | `MENTOR_LLM` | `off` | `on` activa el revisor de post-mortems con Claude (necesita `ANTHROPIC_API_KEY`); responde en el idioma de la sesión |
 | `CORS_ORIGIN` | — | permite un cliente web alojado aparte |
 
-## Publicarlo online en Render + Supabase
+## Publicarlo online para practicar
 
-Para practicar desde cualquier sitio sin instalar nada: un servicio Docker en
-Render (definido en [`render.yaml`](render.yaml)) y la base de datos en
-Supabase. Guía paso a paso:
-[docs/despliegue-render-supabase.md](docs/despliegue-render-supabase.md).
+Un único servicio con la imagen Docker del repositorio y la base de datos en
+Supabase. Elige dónde:
 
-## Despliegue en Google Cloud
+| Dónde | Cómo | Guía |
+|---|---|---|
+| **Google Cloud Run** (recomendado para preparar la ACE) | Script para Cloud Shell o PowerShell (`deploy/cloudrun/`) | [docs/despliegue-cloud-run.md](docs/despliegue-cloud-run.md) |
+| **Render** | Blueprint [`render.yaml`](render.yaml) desde el panel | [docs/despliegue-render-supabase.md](docs/despliegue-render-supabase.md) |
+| **Koyeb** | Servicio Docker desde GitHub en el panel | [docs/despliegue-koyeb.md](docs/despliegue-koyeb.md) |
+
+## Despliegue completo en Google Cloud (organización y pool de sandboxes)
 
 `deploy/terraform` crea la carpeta de sandbox con barreras de políticas de
 organización (ubicaciones permitidas, sin claves de cuentas de servicio,

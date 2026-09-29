@@ -1,0 +1,13 @@
+# Files not uploaded by `gcloud builds submit` (the image is built in Cloud Build).
+.gcloudignore
+.git
+.github
+.demo
+**/node_modules
+web/.next
+web/out
+data
+bin
+*.test
+coverage.out
+deploy/terraform

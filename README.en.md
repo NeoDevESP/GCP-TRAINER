@@ -108,13 +108,18 @@ and the Pub/Sub and GCS emulators (F1).
 | `MENTOR_LLM` | `off` | `on` enables the Claude post-mortem reviewer (needs `ANTHROPIC_API_KEY`) |
 | `CORS_ORIGIN` | — | allow a separately hosted web client |
 
-## Online on Render + Supabase
+## Online for practice
 
-One Docker service on Render ([`render.yaml`](render.yaml)) with the database
-in Supabase; step-by-step guide (Spanish):
-[docs/despliegue-render-supabase.md](docs/despliegue-render-supabase.md).
+One service running the repository's Docker image, with the database in
+Supabase. Step-by-step guides (Spanish):
 
-## Deploying to Google Cloud
+| Where | How | Guide |
+|---|---|---|
+| **Google Cloud Run** (recommended for ACE preparation) | Script for Cloud Shell or PowerShell (`deploy/cloudrun/`) | [docs/despliegue-cloud-run.md](docs/despliegue-cloud-run.md) |
+| **Render** | [`render.yaml`](render.yaml) Blueprint | [docs/despliegue-render-supabase.md](docs/despliegue-render-supabase.md) |
+| **Koyeb** | Docker service from GitHub | [docs/despliegue-koyeb.md](docs/despliegue-koyeb.md) |
+
+## Full Google Cloud deployment (organisation and sandbox pool)
 
 `deploy/terraform` creates the sandbox folder with org-policy guardrails
 (allowed locations, no service-account keys, public access prevention, no VM
