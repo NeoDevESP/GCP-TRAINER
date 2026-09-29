@@ -148,11 +148,11 @@ type RedisInstance struct {
 
 // SpannerInstance is a Cloud Spanner instance.
 type SpannerInstance struct {
-	Name            string                 `json:"name"`
-	Config          string                 `json:"config"`
-	DisplayName     string                 `json:"displayName"`
-	ProcessingUnits int                    `json:"processingUnits"`
-	State           string                 `json:"state"`
+	Name            string                `json:"name"`
+	Config          string                `json:"config"`
+	DisplayName     string                `json:"displayName"`
+	ProcessingUnits int                   `json:"processingUnits"`
+	State           string                `json:"state"`
 	Databases       map[string]*SpannerDB `json:"databases"`
 }
 

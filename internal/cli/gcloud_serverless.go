@@ -638,14 +638,14 @@ func init() {
 			return nil, fmt.Errorf("An app.yaml (or appengine-web.xml) file is required to deploy this directory as an App Engine application. (%s not found; create it in Cloud Shell)", file)
 		}
 		var spec struct {
-			Runtime        string         `yaml:"runtime"`
-			Service        string         `yaml:"service"`
-			Env            string         `yaml:"env"`
-			InstanceClass  string         `yaml:"instance_class"`
-			AutoScaling    map[string]any `yaml:"automatic_scaling"`
-			ManualScaling  map[string]any `yaml:"manual_scaling"`
-			BasicScaling   map[string]any `yaml:"basic_scaling"`
-			EnvVariables   map[string]any `yaml:"env_variables"`
+			Runtime       string         `yaml:"runtime"`
+			Service       string         `yaml:"service"`
+			Env           string         `yaml:"env"`
+			InstanceClass string         `yaml:"instance_class"`
+			AutoScaling   map[string]any `yaml:"automatic_scaling"`
+			ManualScaling map[string]any `yaml:"manual_scaling"`
+			BasicScaling  map[string]any `yaml:"basic_scaling"`
+			EnvVariables  map[string]any `yaml:"env_variables"`
 		}
 		if err := yaml.Unmarshal([]byte(raw), &spec); err != nil {
 			return nil, fmt.Errorf("An error occurred while parsing file: [%s]: %v", file, err)
