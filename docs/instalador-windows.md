@@ -79,7 +79,7 @@ Desinstalar*. Si además quieres borrar tu progreso, borra la carpeta
 
 ## Para desarrolladores: construir el MSI
 
-Desde Linux o macOS, con Go, Node y msitools (`sudo apt-get install wixl` o
+Desde Linux o macOS, con Go, Node y msitools (`sudo apt-get install wixl msitools` o
 `brew install msitools`):
 
 ```sh

@@ -32,7 +32,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Install msitools
-        run: sudo apt-get update -q && sudo apt-get install -y -q wixl
+        run: sudo apt-get update -q && sudo apt-get install -y -q wixl msitools
       - name: Version
         id: version
         run: |
@@ -43,7 +43,7 @@ jobs:
       - name: Check the package
         run: |
           msi=dist/CloudMastery-${{ steps.version.outputs.version }}-x64.msi
-          msiinfo export "$msi" Property | grep -q "ProductVersion.${{ steps.version.outputs.version }}"
+          msiinfo export "$msi" Property | grep "ProductVersion.${{ steps.version.outputs.version }}"
           mkdir extracted && (cd extracted && msiextract -C . "../$msi" > /dev/null)
           diff -r "extracted/Cloud Mastery/content" content
           test -f "extracted/Cloud Mastery/gcplab.exe"

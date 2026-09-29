@@ -6,7 +6,7 @@
 #   SKIP_WEB=1 ./deploy/windows/build-msi.sh  # reuse an existing web/out build
 #
 # Requires Go, Node (for the web client) and msitools (wixl, wixl-heat):
-#   sudo apt-get install wixl        # Debian/Ubuntu
+#   sudo apt-get install wixl msitools   # Debian/Ubuntu
 #   brew install msitools            # macOS
 set -euo pipefail
 cd "$(dirname "$0")/../.."
