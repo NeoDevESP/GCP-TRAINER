@@ -1,6 +1,6 @@
 id: ace-d12-private-egress
-title: "Day 12 · INC: a private VM cannot download dependencies"
-summary: A build VM without public IP lost internet egress. Restore egress without giving it a public IP.
+title: "Día 12 · INC: una VM privada no puede descargar dependencias"
+summary: Una VM de compilación sin IP pública ha perdido la salida a internet. Restablece la salida sin darle una IP pública.
 track: ace-30
 day: 12
 level: intermediate
@@ -24,16 +24,16 @@ setup: |
 faults:
   - {type: nat_delete, router: ops-router, actor: "cost-cleanup@{{.project}}.iam.gserviceaccount.com"}
 story: |
-  **INC-2210** — *"{{.vm}} cannot `apt-get install` anything since last night. Just give it a
-  public IP?"* — Security policy forbids public IPs on build machines.
+  **INC-2210** — *«{{.vm}} no puede hacer `apt-get install` de nada desde anoche. ¿Le damos una
+  IP pública y ya?»* — La política de seguridad prohíbe IP públicas en las máquinas de compilación.
 objectives:
-  - Identify why egress stopped (use the serial console and audit logs)
-  - Restore egress without a public IP
-  - Keep SSH restricted to IAP
-  - Prove the VM can reach the internet
+  - Identifica por qué se ha cortado la salida (usa la consola serie y los registros de auditoría)
+  - Restablece la salida sin IP pública
+  - Mantén el SSH restringido a IAP
+  - Demuestra que la VM llega a internet
 hints:
-  - text: "`gcloud compute instances get-serial-port-output {{.vm}}` shows the startup errors."
-  - text: "Check the audit log for changes on routers: `gcloud logging read 'protoPayload.methodName:routers'`."
+  - text: "`gcloud compute instances get-serial-port-output {{.vm}}` muestra los errores de arranque."
+  - text: "Revisa el registro de auditoría para ver cambios en los routers: `gcloud logging read 'protoPayload.methodName:routers'`."
 solution: |
   gcloud compute instances get-serial-port-output {{.vm}} --zone={{.zone}}
   gcloud logging read 'logName:cloudaudit protoPayload.methodName:routers' --limit=3 --format='value(protoPayload.authenticationInfo.principalEmail,protoPayload.methodName)'
@@ -42,30 +42,55 @@ solution: |
 evidence:
   fields: [rootCause]
   sample:
-    rootCause: The Cloud NAT configuration ops-nat was removed from ops-router by cost-cleanup, so the private VM without external IP lost its egress route to the internet.
+    rootCause: La configuración de Cloud NAT ops-nat se eliminó de ops-router en la limpieza de costes (cost-cleanup), así que la VM privada sin IP externa perdió su ruta de salida a internet.
 rubric:
-  - name: Cause
+  - name: Causa
     validator: evidence
     points: 30
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[nat], [egress, salida, internet, router]], desc: "Explain the missing egress path"}
-  - name: NAT restored
+      - {type: evidence, fields: [rootCause], keywords: [[nat], [egress, salida, internet, router]], desc: "Explica qué camino de salida falta"}
+  - name: NAT restablecido
     validator: functional
     points: 30
     all: true
     checks:
-      - {type: egress, from: "vm:{{.vm}}", desc: "The VM reaches the internet"}
-      - {type: exists, path: "routers[\"ops-router\"].nats[0]", desc: "Cloud NAT configured"}
-  - name: Security
+      - {type: egress, from: "vm:{{.vm}}", desc: "La VM llega a internet"}
+      - {type: exists, path: "routers[\"ops-router\"].nats[0]", desc: "Cloud NAT configurado"}
+  - name: Seguridad
     validator: security
     points: 20
     critical: true
     all: true
     checks:
-      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {natIP: {empty: true}}, desc: "No public IP on the build VM"}
-      - {type: forbid_firewall, port: 22, desc: "SSH only via IAP"}
-  - name: Test
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {natIP: {empty: true}}, desc: "Sin IP pública en la VM de compilación"}
+      - {type: forbid_firewall, port: 22, desc: "SSH solo a través de IAP"}
+  - name: Prueba
     validator: functional
     points: 20
     checks:
-      - {type: command, regex: "ssh .*(apt|curl)", desc: "Prove egress from the VM"}
+      - {type: command, regex: "ssh .*(apt|curl)", desc: "Demuestra la salida desde la VM"}
+en:
+  title: 'Day 12 · INC: a private VM cannot download dependencies'
+  summary: A build VM without public IP lost internet egress. Restore egress without giving it a public IP.
+  story: |
+    **INC-2210** — *"{{.vm}} cannot `apt-get install` anything since last night. Just give it a
+    public IP?"* — Security policy forbids public IPs on build machines.
+  objectives:
+    - Identify why egress stopped (use the serial console and audit logs)
+    - Restore egress without a public IP
+    - Keep SSH restricted to IAP
+    - Prove the VM can reach the internet
+  hints:
+    - '`gcloud compute instances get-serial-port-output {{.vm}}` shows the startup errors.'
+    - 'Check the audit log for changes on routers: `gcloud logging read ''protoPayload.methodName:routers''`.'
+  text:
+    Causa: Cause
+    Explica qué camino de salida falta: Explain the missing egress path
+    NAT restablecido: NAT restored
+    La VM llega a internet: The VM reaches the internet
+    Cloud NAT configurado: Cloud NAT configured
+    Seguridad: Security
+    Sin IP pública en la VM de compilación: No public IP on the build VM
+    SSH solo a través de IAP: SSH only via IAP
+    Prueba: Test
+    Demuestra la salida desde la VM: Prove egress from the VM

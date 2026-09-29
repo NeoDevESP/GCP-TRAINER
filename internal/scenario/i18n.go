@@ -265,18 +265,21 @@ func (l *Lab) translatableWithSlots() []slot {
 		for _, c := range l.Ticket.Comments {
 			add(false, c.From, c.Text)
 		}
+		// attachments are usually tool output (logs, configs): translation optional
 		for _, a := range l.Ticket.Attachments {
-			add(false, a.Content)
+			add(true, a.Content)
 		}
 	}
 	for _, a := range l.Actors {
 		add(false, a.Name, a.Persona, a.Fallback)
 		for _, f := range a.Facts {
-			add(false, f.Answer, f.Content)
+			add(false, f.Answer)
+			add(true, f.Content) // shared files: translation optional
 		}
 	}
+	// workspace files are mostly code: translation optional
 	for _, v := range l.Files {
-		add(false, v)
+		add(true, v)
 	}
 	// shortcut names are only shown to authors: translation optional
 	for _, sc := range l.Shortcuts {

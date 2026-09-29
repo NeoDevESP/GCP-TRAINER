@@ -1,6 +1,6 @@
 id: ace-d30-boss-incident
-title: "Day 30 · BOSS: Black Friday cascade"
-summary: Multiple simultaneous faults under time pressure — restore service, avoid collateral damage, communicate and write the postmortem.
+title: "Día 30 · JEFE FINAL: cascada de Black Friday"
+summary: 'Varios fallos simultáneos con presión de tiempo: restablece el servicio, evita daños colaterales, comunica y escribe el post-mortem.'
 track: ace-30
 day: 30
 level: professional
@@ -23,25 +23,25 @@ traffic:
   - {name: checkout, target: "run:checkout", path: /checkout, rps: 40}
   - {name: stock, target: "run:stock-api", path: /stock, rps: 60}
 timeline:
-  - {at: "08:50", from: "PagerDuty", text: "P1: checkout error rate 100%"}
-  - {at: "08:55", from: "Security", text: "External scan reports a public bucket named exports-*"}
-  - {at: "09:05", from: "Finance", text: "Do NOT touch legacy-batch, it is running quarter-close jobs."}
+  - {at: "08:50", from: "PagerDuty", text: "P1: tasa de errores del checkout al 100 %"}
+  - {at: "08:55", from: "Seguridad", text: "Un escaneo externo informa de un bucket público llamado exports-*"}
+  - {at: "09:05", from: "Finanzas", text: "NO toquéis legacy-batch: está ejecutando los procesos del cierre trimestral."}
 story: |
-  **Black Friday, 08:50.** Checkout is down, stock pages time out and security reports a public bucket.
-  Two overnight jobs ran (`release-bot`, `cleanup-job`). You are incident commander and fixer.
+  **Black Friday, 08:50.** El checkout está caído, las páginas de stock dan timeout y seguridad informa de un bucket público.
+  Esta noche se ejecutaron dos procesos (`release-bot`, `cleanup-job`). Eres a la vez responsable del incidente y quien lo arregla.
 
-  - Restore `checkout` and `stock-api` with the minimum change
-  - Close the data exposure
-  - Do not touch unrelated resources (read the timeline)
-  - Post an incident update and the postmortem
+  - Restablece `checkout` y `stock-api` con el cambio mínimo
+  - Cierra la exposición de datos
+  - No toques recursos ajenos (lee la cronología)
+  - Publica una actualización del incidente y el post-mortem
 objectives:
-  - Triage and prioritise simultaneous problems
-  - Fix every root cause with minimum privilege
-  - Avoid collateral damage
-  - Communicate and document
+  - Clasifica y prioriza problemas simultáneos
+  - Corrige cada causa raíz con el mínimo privilegio
+  - Evita daños colaterales
+  - Comunica y documenta
 hints:
-  - text: "The audit log shows every change made overnight — filter by the two bot identities."
-  - text: "Three different root causes; three different services."
+  - text: "El registro de auditoría muestra todos los cambios de esta noche: filtra por las dos identidades de los bots."
+  - text: "Tres causas raíz distintas; tres servicios distintos."
 solution: |
   gcloud logging read 'logName:cloudaudit protoPayload.authenticationInfo.principalEmail:bot OR protoPayload.authenticationInfo.principalEmail:cleanup' --limit=20 --format='table(timestamp,protoPayload.methodName,protoPayload.resourceName)'
   gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
@@ -52,40 +52,81 @@ solution: |
 evidence:
   fields: [update, rootCause, prevention]
   sample:
-    update: "09:20 update: checkout and stock restored; the public exports bucket is closed. Customer impact 30 minutes. Next update in 30 minutes."
-    rootCause: The cleanup job removed cloudsql.client from checkout-sa and made the exports bucket public; the release bot raised DB_POOL_SIZE on stock-api which exhausted Cloud SQL connections.
-    prevention: Run bots with least privilege, require review for IAM changes, cap pool size times instances under max_connections and enforce public access prevention.
+    update: "Actualización de las 09:20: checkout y stock restablecidos; el bucket público de exportaciones está cerrado. Impacto para los clientes: 30 minutos. Próxima actualización en 30 minutos."
+    rootCause: El proceso de limpieza quitó cloudsql.client a checkout-sa e hizo público el bucket de exportaciones; el bot de versiones subió DB_POOL_SIZE en stock-api, lo que agotó las conexiones de Cloud SQL.
+    prevention: Ejecutar los bots con mínimo privilegio, exigir revisión para los cambios de IAM, limitar el tamaño del pool por el número de instancias por debajo de max_connections y aplicar la prevención de acceso público.
 rubric:
-  - name: Service restored
+  - name: Servicio restablecido
     validator: functional
     points: 30
     all: true
     checks:
-      - {type: http, target: "run:checkout", path: /checkout, status: 200, desc: "Checkout works"}
-      - {type: http, target: "run:stock-api", path: /stock, status: 200, desc: "Stock works"}
-      - {type: sql_healthy, instance: shop-db, settle: 2, desc: "Database connections healthy"}
-  - name: Exposure closed
+      - {type: http, target: "run:checkout", path: /checkout, status: 200, desc: "El checkout funciona"}
+      - {type: http, target: "run:stock-api", path: /stock, status: 200, desc: "El stock funciona"}
+      - {type: sql_healthy, instance: shop-db, settle: 2, desc: "Conexiones de base de datos sanas"}
+  - name: Exposición cerrada
     validator: security
     points: 20
     critical: true
     checks:
-      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.project}}/x", expect: false, desc: "Exports bucket private"}
-  - name: No collateral damage
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.project}}/x", expect: false, desc: "Bucket de exportaciones privado"}
+  - name: Sin daños colaterales
     validator: security
     points: 15
     critical: true
     all: true
     checks:
-      - {type: exists, path: "instances[\"legacy-batch\"]", expect: {status: RUNNING}, desc: "Decoy left running"}
-      - {type: no_basic_roles, members: ["serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Fix did not use basic roles"}
-  - name: Diagnosis
+      - {type: exists, path: "instances[\"legacy-batch\"]", expect: {status: RUNNING}, desc: "El señuelo sigue en marcha"}
+      - {type: no_basic_roles, members: ["serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com"], desc: "La corrección no usó roles básicos"}
+  - name: Diagnóstico
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "logging read", desc: "Audit log investigated"}
-  - name: Communication & postmortem
+      - {type: command, regex: "logging read", desc: "Registro de auditoría investigado"}
+  - name: Comunicación y post-mortem
     validator: evidence
     points: 25
     checks:
-      - {type: evidence, fields: [update], keywords: [[restor, restabl, recover], [next update, proxima], [impact, impacto]], desc: "Incident update"}
-      - {type: evidence, fields: [rootCause, prevention], keywords: [[cloudsql.client, iam], [pool, connection], [public, allusers]], desc: "All root causes and prevention"}
+      - {type: evidence, fields: [update], keywords: [[restor, restabl, recover, restaur, recuper], [next update, proxima, proxima actualizacion, siguiente actualizacion], [impact, impacto]], desc: "Actualización del incidente"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[cloudsql.client, iam], [pool, connection, conexion, conexiones], [public, allusers]], desc: "Todas las causas raíz y la prevención"}
+en:
+  title: 'Day 30 · BOSS: Black Friday cascade'
+  summary: Multiple simultaneous faults under time pressure — restore service, avoid collateral damage, communicate and write the postmortem.
+  story: |
+    **Black Friday, 08:50.** Checkout is down, stock pages time out and security reports a public bucket.
+    Two overnight jobs ran (`release-bot`, `cleanup-job`). You are incident commander and fixer.
+
+    - Restore `checkout` and `stock-api` with the minimum change
+    - Close the data exposure
+    - Do not touch unrelated resources (read the timeline)
+    - Post an incident update and the postmortem
+  objectives:
+    - Triage and prioritise simultaneous problems
+    - Fix every root cause with minimum privilege
+    - Avoid collateral damage
+    - Communicate and document
+  hints:
+    - The audit log shows every change made overnight — filter by the two bot identities.
+    - Three different root causes; three different services.
+  timeline:
+    - 'P1: checkout error rate 100%'
+    - External scan reports a public bucket named exports-*
+    - Do NOT touch legacy-batch, it is running quarter-close jobs.
+  text:
+    Servicio restablecido: Service restored
+    El checkout funciona: Checkout works
+    El stock funciona: Stock works
+    Conexiones de base de datos sanas: Database connections healthy
+    Exposición cerrada: Exposure closed
+    Bucket de exportaciones privado: Exports bucket private
+    Sin daños colaterales: No collateral damage
+    El señuelo sigue en marcha: Decoy left running
+    La corrección no usó roles básicos: Fix did not use basic roles
+    Diagnóstico: Diagnosis
+    Registro de auditoría investigado: Audit log investigated
+    Comunicación y post-mortem: Communication & postmortem
+    Actualización del incidente: Incident update
+    Todas las causas raíz y la prevención: All root causes and prevention
+    PagerDuty: PagerDuty
+    Seguridad: Security
+    Finanzas: Finance

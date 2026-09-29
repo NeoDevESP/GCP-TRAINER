@@ -1,6 +1,6 @@
 id: ace-d18-api-db-firewall
-title: "INC-2048: checkout-api cannot reach PostgreSQL"
-summary: Customers get HTTP 503 on checkout. Find the conflicting firewall rule and restore traffic without opening the database.
+title: "INC-2048: checkout-api no llega a PostgreSQL"
+summary: Los clientes reciben HTTP 503 al pagar. Encuentra la regla de cortafuegos en conflicto y restablece el tráfico sin abrir la base de datos.
 track: ace-30
 day: 18
 level: intermediate
@@ -24,21 +24,21 @@ params:
   priority: ["900", "800", "950"]
 baseline: [three-tier-app]
 story: |
-  **INC-2048 · SEV-2 · opened 09:02 by PagerDuty**
+  **INC-2048 · SEV-2 · abierto a las 09:02 por PagerDuty**
 
   `checkout-api cannot reach PostgreSQL. Customers report HTTP 503 on /checkout.`
 
-  The security team applied a "network hardening baseline" last night. Nobody
-  admits to having touched the database path.
+  El equipo de seguridad aplicó anoche una «línea base de bastionado de red». Nadie
+  reconoce haber tocado el camino hacia la base de datos.
 timeline:
-  - {at: "08:51", from: "audit log", text: "firewall change by deploy-bot"}
-  - {at: "09:02", from: "PagerDuty", text: "checkout 5xx ratio > 80%"}
-  - {at: "09:05", from: "Support", text: "Customers cannot pay"}
+  - {at: "08:51", from: "Registro de auditoría", text: "cambio de cortafuegos hecho por deploy-bot"}
+  - {at: "09:02", from: "PagerDuty", text: "ratio de 5xx en checkout > 80 %"}
+  - {at: "09:05", from: "Soporte", text: "Los clientes no pueden pagar"}
 objectives:
-  - Identify the root cause using logs, firewall rules and connectivity tests
-  - Restore /checkout through the load balancer
-  - Preserve least privilege (the database must never be reachable from 0.0.0.0/0)
-  - Provide evidence and a short postmortem
+  - Identifica la causa raíz con registros, reglas de cortafuegos y pruebas de conectividad
+  - Restablece /checkout a través del balanceador de carga
+  - Mantén el mínimo privilegio (la base de datos nunca debe ser accesible desde 0.0.0.0/0)
+  - Aporta evidencias y un post-mortem breve
 faults:
   - type: firewall_deny
     name: "{{.denyRule}}"
@@ -58,9 +58,9 @@ policy:
   allowGpus: false
   maxInstances: 6
 hints:
-  - text: "The API VM is healthy for the load balancer (/healthz) but /checkout needs the database. Look at the application error in Cloud Logging."
-  - text: "Compare the firewall rules that target the `database` tag. Lower number = higher priority, and on equal priority DENY wins."
-  - text: "Partial solution: an INGRESS DENY rule with a priority lower than 1000 matches traffic from 10.10.0.0/16 to tcp:5432."
+  - text: "La VM de la API está sana para el balanceador (/healthz), pero /checkout necesita la base de datos. Mira el error de la aplicación en Cloud Logging."
+  - text: "Compara las reglas de cortafuegos dirigidas a la etiqueta `database`. Un número menor es más prioridad y, a igual prioridad, gana DENY."
+  - text: "Solución parcial: una regla INGRESS DENY con prioridad menor que 1000 coincide con el tráfico de 10.10.0.0/16 a tcp:5432."
     kind: partial
 solution: |
   gcloud logging read 'severity>=ERROR' --limit=5 --format='value(textPayload)'
@@ -71,52 +71,95 @@ solution: |
   gcloud compute firewall-rules delete {{.denyRule}} --quiet
   gcloud compute ssh api-1 --zone={{.zone}} --tunnel-through-iap --command='nc -zv 10.10.3.5 5432'
 evidence:
-  prompt: Explain the root cause, the fix, how you verified recovery and how to prevent it.
+  prompt: Explica la causa raíz, la corrección, cómo verificaste la recuperación y cómo evitar que se repita.
   fields: [rootCause, fix, verification, prevention]
   minWords: 25
   keywords:
     - [firewall, cortafuegos]
     - [priority, prioridad]
-    - [deny, denegar, bloque]
+    - [deny, denegar, bloque, deneg]
     - ["5432", postgres]
   sample:
-    rootCause: A deny firewall rule with priority 900 matched 10.10.0.0/16 to tcp 5432 on the database tag and overrode the allow rule with priority 1000.
-    fix: Deleted the conflicting deny rule; the allow rule from the api tag to the database tag on 5432 now applies.
-    verification: nc from api-1 to 10.10.3.5 5432 succeeds and /checkout through the load balancer returns 200; errors stopped in Cloud Logging.
-    prevention: Review firewall changes in CI with policy checks and alert on 5xx ratio; document rule priorities.
+    rootCause: Una regla de cortafuegos de denegación con prioridad 900 coincidía con 10.10.0.0/16 hacia tcp 5432 en la etiqueta database y anulaba la regla de permiso con prioridad 1000.
+    fix: Borré la regla de denegación en conflicto; ahora se aplica la regla de permiso de la etiqueta api a la etiqueta database en el 5432.
+    verification: nc desde api-1 a 10.10.3.5 5432 funciona y /checkout a través del balanceador devuelve 200; los errores han cesado en Cloud Logging.
+    prevention: Revisar los cambios de cortafuegos en CI con comprobaciones de políticas y alertar sobre el ratio de 5xx; documentar las prioridades de las reglas.
 rubric:
-  - name: Symptom detected
+  - name: Síntoma detectado
     validator: diagnosis
     points: 15
     checks:
-      - {type: command, regex: "(logging read|firewall-rules (list|describe))", desc: "Inspect logs or firewall rules before changing things"}
-  - name: Root cause identified
+      - {type: command, regex: "(logging read|firewall-rules (list|describe))", desc: "Inspecciona registros o reglas de cortafuegos antes de cambiar nada"}
+  - name: Causa raíz identificada
     validator: evidence
     points: 30
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[firewall, cortafuegos], [priority, prioridad, "900", "800", "950"], [deny, denegar, bloque]], desc: "Root cause must name the conflicting rule mechanism"}
-  - name: Fixed without regressions
+      - {type: evidence, fields: [rootCause], keywords: [[firewall, cortafuegos], [priority, prioridad, "900", "800", "950"], [deny, denegar, bloque, deneg]], desc: "La causa raíz debe nombrar el mecanismo de la regla en conflicto"}
+  - name: Corregido sin regresiones
     validator: functional
     points: 30
     all: true
     checks:
-      - {type: tcp, from: "vm:api-1", to: "vm:sql-1", port: 5432, desc: "api-1 must reach PostgreSQL on 5432"}
-      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "/checkout through the load balancer must return 200"}
-      - {type: forbid_firewall, port: 5432, network: prod-vpc, desc: "The database must not be exposed to 0.0.0.0/0", critical: true}
-      - {type: tcp, from: internet, to: "vm:sql-1", port: 5432, expect: false, desc: "Database must stay unreachable from the internet"}
-  - name: Least privilege preserved
+      - {type: tcp, from: "vm:api-1", to: "vm:sql-1", port: 5432, desc: "api-1 debe llegar a PostgreSQL en el 5432"}
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "/checkout a través del balanceador debe devolver 200"}
+      - {type: forbid_firewall, port: 5432, network: prod-vpc, desc: "La base de datos no debe estar expuesta a 0.0.0.0/0", critical: true}
+      - {type: tcp, from: internet, to: "vm:sql-1", port: 5432, expect: false, desc: "La base de datos debe seguir siendo inaccesible desde internet"}
+  - name: Mínimo privilegio preservado
     validator: security
     points: 10
     critical: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT, DB_PUBLIC_IP], desc: "No administrative/database port open to the internet"}
-  - name: Recovery verified
+      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT, DB_PUBLIC_IP], desc: "Ningún puerto administrativo o de base de datos abierto a internet"}
+  - name: Recuperación verificada
     validator: functional
     points: 5
     checks:
-      - {type: evidence, fields: [verification], keywords: [[nc, curl, "200", logs, logging, http]], desc: "Describe how you verified recovery"}
-  - name: Postmortem & prevention
+      - {type: evidence, fields: [verification], keywords: [[nc, curl, "200", logs, logging, http, registros]], desc: "Describe cómo verificaste la recuperación"}
+  - name: Post-mortem y prevención
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [prevention], keywords: [[review, revisar, ci, policy, politica, alert, alerta, test]], desc: "Propose a preventive control"}
+      - {type: evidence, fields: [prevention], keywords: [[review, revisar, ci, policy, politica, alert, alerta, test, revis, prueba]], desc: "Propón un control preventivo"}
+en:
+  title: 'INC-2048: checkout-api cannot reach PostgreSQL'
+  summary: Customers get HTTP 503 on checkout. Find the conflicting firewall rule and restore traffic without opening the database.
+  story: |
+    **INC-2048 · SEV-2 · opened 09:02 by PagerDuty**
+
+    `checkout-api cannot reach PostgreSQL. Customers report HTTP 503 on /checkout.`
+
+    The security team applied a "network hardening baseline" last night. Nobody
+    admits to having touched the database path.
+  evidencePrompt: Explain the root cause, the fix, how you verified recovery and how to prevent it.
+  objectives:
+    - Identify the root cause using logs, firewall rules and connectivity tests
+    - Restore /checkout through the load balancer
+    - Preserve least privilege (the database must never be reachable from 0.0.0.0/0)
+    - Provide evidence and a short postmortem
+  hints:
+    - The API VM is healthy for the load balancer (/healthz) but /checkout needs the database. Look at the application error in Cloud Logging.
+    - Compare the firewall rules that target the `database` tag. Lower number = higher priority, and on equal priority DENY wins.
+    - 'Partial solution: an INGRESS DENY rule with a priority lower than 1000 matches traffic from 10.10.0.0/16 to tcp:5432.'
+  timeline:
+    - firewall change by deploy-bot
+    - checkout 5xx ratio > 80%
+    - Customers cannot pay
+  text:
+    Síntoma detectado: Symptom detected
+    Inspecciona registros o reglas de cortafuegos antes de cambiar nada: Inspect logs or firewall rules before changing things
+    Causa raíz identificada: Root cause identified
+    La causa raíz debe nombrar el mecanismo de la regla en conflicto: Root cause must name the conflicting rule mechanism
+    Corregido sin regresiones: Fixed without regressions
+    api-1 debe llegar a PostgreSQL en el 5432: api-1 must reach PostgreSQL on 5432
+    /checkout a través del balanceador debe devolver 200: /checkout through the load balancer must return 200
+    La base de datos no debe estar expuesta a 0.0.0.0/0: The database must not be exposed to 0.0.0.0/0
+    La base de datos debe seguir siendo inaccesible desde internet: Database must stay unreachable from the internet
+    Mínimo privilegio preservado: Least privilege preserved
+    Ningún puerto administrativo o de base de datos abierto a internet: No administrative/database port open to the internet
+    Recuperación verificada: Recovery verified
+    Describe cómo verificaste la recuperación: Describe how you verified recovery
+    Post-mortem y prevención: Postmortem & prevention
+    Propón un control preventivo: Propose a preventive control
+    Registro de auditoría: audit log
+    PagerDuty: PagerDuty
+    Soporte: Support

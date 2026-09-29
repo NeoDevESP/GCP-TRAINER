@@ -1,6 +1,6 @@
 id: ace-d27-deploy-rollback
-title: "Day 27 · Progressive delivery with automatic rollback"
-summary: Build a Cloud Deploy pipeline with verification and automatic rollback, prove it with a bad release and ship the good one.
+title: "Día 27 · Entrega progresiva con marcha atrás automática"
+summary: Construye un pipeline de Cloud Deploy con verificación y marcha atrás automática, demuéstralo con una versión mala y publica la buena.
 track: ace-30
 day: 27
 level: advanced
@@ -42,20 +42,20 @@ files:
 traffic:
   - {name: prod, target: "run:checkout-prod", path: /search, rps: 30}
 story: |
-  Last month version 1.3 of `shop-api` broke `/search` in production for 40 minutes. Change the
-  release process so that:
+  El mes pasado la versión 1.3 de `shop-api` rompió `/search` en producción durante 40 minutos. Cambia el
+  proceso de publicación para que:
 
-  - releases go staging → prod through the Cloud Deploy pipeline `checkout` (draft in `clouddeploy.yaml`)
-  - every stage **verifies** the release and failed verifications **roll back automatically**
-  - prove it: create release `r13` with `shop-api:1.3` (must be rolled back in staging), then release
-    `r14` with `shop-api:1.4` and promote it to prod.
+  - las versiones pasen de staging → prod a través del pipeline de Cloud Deploy `checkout` (borrador en `clouddeploy.yaml`)
+  - cada etapa **verifique** la versión y las verificaciones fallidas **vuelvan atrás automáticamente**
+  - lo demuestres: crea la versión `r13` con `shop-api:1.3` (debe revertirse en staging) y después la versión
+    `r14` con `shop-api:1.4` y promociónala a prod.
 objectives:
-  - Pipeline with verification per stage
-  - Automatic rollback on failure
-  - Good release in production, bad release stopped
+  - Pipeline con verificación en cada etapa
+  - Marcha atrás automática ante un fallo
+  - Versión buena en producción, versión mala detenida
 hints:
-  - text: "Add `strategy: {standard: {verify: true}}` to each stage."
-  - text: "An `Automation` resource with a repairRollout rule enables automatic rollback."
+  - text: "Añade `strategy: {standard: {verify: true}}` a cada etapa."
+  - text: "Un recurso `Automation` con una regla repairRollout activa la marcha atrás automática."
 solution: |
   cat > clouddeploy.yaml <<'YAML'
   apiVersion: deploy.cloud.google.com/v1
@@ -110,20 +110,49 @@ rubric:
     validator: state
     points: 25
     checks:
-      - {type: exists, path: "deliveryPipelines.checkout.stages", expect: {"": {regex: "\"verify\":true.*\"verify\":true"}}, desc: "Verification in both stages"}
-      - {type: exists, path: "deliveryPipelines.checkout", expect: {automaticRollback: true}, desc: "Automatic rollback automation"}
-  - name: Bad release contained
+      - {type: exists, path: "deliveryPipelines.checkout.stages", expect: {"": {regex: "\"verify\":true.*\"verify\":true"}}, desc: "Verificación en las dos etapas"}
+      - {type: exists, path: "deliveryPipelines.checkout", expect: {automaticRollback: true}, desc: "Automatización de la marcha atrás"}
+  - name: Versión mala contenida
     validator: functional
     points: 35
     all: true
     checks:
-      - {type: rollout, target: checkout-staging, imageContains: "1.3", state: FAILED, detailContains: "rolled back", desc: "r13 failed verification and was rolled back"}
-      - {type: rollout, target: checkout-prod, imageContains: "1.3", state: SUCCEEDED, not: true, desc: "r13 never reached prod"}
-  - name: Good release shipped
+      - {type: rollout, target: checkout-staging, imageContains: "1.3", state: FAILED, detailContains: "rolled back", desc: "r13 falló la verificación y se revirtió"}
+      - {type: rollout, target: checkout-prod, imageContains: "1.3", state: SUCCEEDED, not: true, desc: "r13 nunca llegó a prod"}
+  - name: Versión buena publicada
     validator: functional
     points: 40
     all: true
     checks:
-      - {type: rollout, target: checkout-prod, imageContains: "1.4", state: SUCCEEDED, desc: "r14 promoted to prod"}
-      - {type: http, target: "run:checkout-prod", path: /search, status: 200, desc: "/search healthy in prod"}
-      - {type: http, target: "run:checkout-staging", path: /search, status: 200, desc: "Staging healthy"}
+      - {type: rollout, target: checkout-prod, imageContains: "1.4", state: SUCCEEDED, desc: "r14 promocionada a prod"}
+      - {type: http, target: "run:checkout-prod", path: /search, status: 200, desc: "/search sano en prod"}
+      - {type: http, target: "run:checkout-staging", path: /search, status: 200, desc: "Staging sano"}
+en:
+  title: Day 27 · Progressive delivery with automatic rollback
+  summary: Build a Cloud Deploy pipeline with verification and automatic rollback, prove it with a bad release and ship the good one.
+  story: |
+    Last month version 1.3 of `shop-api` broke `/search` in production for 40 minutes. Change the
+    release process so that:
+
+    - releases go staging → prod through the Cloud Deploy pipeline `checkout` (draft in `clouddeploy.yaml`)
+    - every stage **verifies** the release and failed verifications **roll back automatically**
+    - prove it: create release `r13` with `shop-api:1.3` (must be rolled back in staging), then release
+      `r14` with `shop-api:1.4` and promote it to prod.
+  objectives:
+    - Pipeline with verification per stage
+    - Automatic rollback on failure
+    - Good release in production, bad release stopped
+  hints:
+    - 'Add `strategy: {standard: {verify: true}}` to each stage.'
+    - An `Automation` resource with a repairRollout rule enables automatic rollback.
+  text:
+    Pipeline: Pipeline
+    Verificación en las dos etapas: Verification in both stages
+    Automatización de la marcha atrás: Automatic rollback automation
+    Versión mala contenida: Bad release contained
+    r13 falló la verificación y se revirtió: r13 failed verification and was rolled back
+    r13 nunca llegó a prod: r13 never reached prod
+    Versión buena publicada: Good release shipped
+    r14 promocionada a prod: r14 promoted to prod
+    /search sano en prod: /search healthy in prod
+    Staging sano: Staging healthy

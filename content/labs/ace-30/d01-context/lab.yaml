@@ -1,6 +1,6 @@
 id: ace-d01-context
-title: "Day 1 · Where am I? Organisation, project, region and CLI context"
-summary: Find the right project among several, configure gcloud defaults and verify your identity before operating.
+title: "Día 1 · ¿Dónde estoy? Organización, proyecto, región y contexto de la CLI"
+summary: Encuentra el proyecto correcto entre varios, configura los valores por defecto de gcloud y verifica tu identidad antes de operar.
 track: ace-30
 day: 1
 level: basic
@@ -17,24 +17,24 @@ baseline: [default-network, decoy-projects]
 student:
   unconfigured: true
 story: |
-  You joined the platform team today. Your manager wrote in the onboarding ticket:
+  Hoy te incorporas al equipo de plataforma. Tu responsable ha escrito en el ticket de bienvenida:
 
-  > "Your sandbox is the project labelled `purpose=training-lab`. Never operate on
-  > production. All our workloads run in **{{.region}}**, zone **{{.zone}}**."
+  > «Tu sandbox es el proyecto con la etiqueta `purpose=training-lab`. Nunca operes en
+  > producción. Todas nuestras cargas se ejecutan en **{{.region}}**, zona **{{.zone}}**».
 instructions: |
-  1. List the organisations and projects you can see (`gcloud organizations list`, `gcloud projects list --format="table(projectId,labels)"`).
-  2. Identify the project whose label is `purpose=training-lab` and set it as the default project.
-  3. Set the default compute region and zone requested in the ticket.
-  4. Verify the active account and configuration (`gcloud auth list`, `gcloud config list`).
-  5. Explain where your project lives in the resource hierarchy (organisation → folder → project).
+  1. Lista las organizaciones y proyectos que puedes ver (`gcloud organizations list`, `gcloud projects list --format="table(projectId,labels)"`).
+  2. Identifica el proyecto cuya etiqueta es `purpose=training-lab` y configúralo como proyecto por defecto.
+  3. Configura la región y la zona de cómputo por defecto que pide el ticket.
+  4. Verifica la cuenta activa y la configuración (`gcloud auth list`, `gcloud config list`).
+  5. Explica dónde vive tu proyecto en la jerarquía de recursos (organización → carpeta → proyecto).
 objectives:
-  - Select the correct project (not production)
-  - Configure default region and zone
-  - Verify identity and context before operating
-  - Explain the resource hierarchy of your project
+  - Selecciona el proyecto correcto (no el de producción)
+  - Configura la región y la zona por defecto
+  - Verifica tu identidad y el contexto antes de operar
+  - Explica la jerarquía de recursos de tu proyecto
 hints:
-  - text: "`gcloud projects list --format='table(projectId,labels.purpose)'` shows the labels."
-  - text: "`gcloud projects get-ancestors PROJECT_ID` shows the folder and organisation."
+  - text: "`gcloud projects list --format='table(projectId,labels.purpose)'` muestra las etiquetas."
+  - text: "`gcloud projects get-ancestors PROJECT_ID` muestra la carpeta y la organización."
 solution: |
   gcloud organizations list
   gcloud projects list --format='table(projectId,labels.purpose)'
@@ -45,32 +45,66 @@ solution: |
   gcloud config list
   gcloud projects get-ancestors {{.project}}
 evidence:
-  prompt: Describe the hierarchy of your project and how you verified the context.
+  prompt: Describe la jerarquía de tu proyecto y cómo has verificado el contexto.
   fields: [explanation]
   minWords: 12
   sample:
-    explanation: The project {{.project}} is inside the folder lab-sandboxes of the organisation training.gcplab.dev; I verified with gcloud config list and gcloud auth list before operating.
+    explanation: El proyecto {{.project}} está dentro de la carpeta lab-sandboxes de la organización training.gcplab.dev; verifiqué el contexto con gcloud config list y gcloud auth list antes de operar.
 rubric:
-  - name: Correct project selected
+  - name: Proyecto correcto seleccionado
     validator: state
     points: 40
     critical: true
     checks:
-      - {type: session_config, project: "{{.project}}", desc: "The default project must be the training lab project"}
-  - name: CLI defaults configured
+      - {type: session_config, project: "{{.project}}", desc: "El proyecto por defecto debe ser el del laboratorio de formación"}
+  - name: Valores por defecto de la CLI configurados
     validator: state
     points: 30
     checks:
-      - {type: session_config, region: "{{.region}}", desc: "Default compute region as requested"}
-      - {type: session_config, zone: "{{.zone}}", desc: "Default compute zone as requested"}
-  - name: Context verified before operating
+      - {type: session_config, region: "{{.region}}", desc: "Región de cómputo por defecto según lo pedido"}
+      - {type: session_config, zone: "{{.zone}}", desc: "Zona de cómputo por defecto según lo pedido"}
+  - name: Contexto verificado antes de operar
     validator: diagnosis
     points: 20
     checks:
-      - {type: command, regex: "gcloud (auth list|config list)", desc: "Verify identity/configuration"}
-      - {type: command, regex: "gcloud projects (list|get-ancestors|describe)", desc: "Inspect the projects you can access"}
-  - name: Explanation
+      - {type: command, regex: "gcloud (auth list|config list)", desc: "Verifica la identidad y la configuración"}
+      - {type: command, regex: "gcloud projects (list|get-ancestors|describe)", desc: "Revisa los proyectos a los que tienes acceso"}
+  - name: Explicación
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[folder, carpeta, lab-sandboxes], [organi]], desc: "Mention folder and organisation"}
+      - {type: evidence, fields: [explanation], keywords: [[folder, carpeta, lab-sandboxes], [organi]], desc: "Menciona la carpeta y la organización"}
+en:
+  title: Day 1 · Where am I? Organisation, project, region and CLI context
+  summary: Find the right project among several, configure gcloud defaults and verify your identity before operating.
+  story: |
+    You joined the platform team today. Your manager wrote in the onboarding ticket:
+
+    > "Your sandbox is the project labelled `purpose=training-lab`. Never operate on
+    > production. All our workloads run in **{{.region}}**, zone **{{.zone}}**."
+  instructions: |
+    1. List the organisations and projects you can see (`gcloud organizations list`, `gcloud projects list --format="table(projectId,labels)"`).
+    2. Identify the project whose label is `purpose=training-lab` and set it as the default project.
+    3. Set the default compute region and zone requested in the ticket.
+    4. Verify the active account and configuration (`gcloud auth list`, `gcloud config list`).
+    5. Explain where your project lives in the resource hierarchy (organisation → folder → project).
+  evidencePrompt: Describe the hierarchy of your project and how you verified the context.
+  objectives:
+    - Select the correct project (not production)
+    - Configure default region and zone
+    - Verify identity and context before operating
+    - Explain the resource hierarchy of your project
+  hints:
+    - '`gcloud projects list --format=''table(projectId,labels.purpose)''` shows the labels.'
+    - '`gcloud projects get-ancestors PROJECT_ID` shows the folder and organisation.'
+  text:
+    Proyecto correcto seleccionado: Correct project selected
+    El proyecto por defecto debe ser el del laboratorio de formación: The default project must be the training lab project
+    Valores por defecto de la CLI configurados: CLI defaults configured
+    Región de cómputo por defecto según lo pedido: Default compute region as requested
+    Zona de cómputo por defecto según lo pedido: Default compute zone as requested
+    Contexto verificado antes de operar: Context verified before operating
+    Verifica la identidad y la configuración: Verify identity/configuration
+    Revisa los proyectos a los que tienes acceso: Inspect the projects you can access
+    Explicación: Explanation
+    Menciona la carpeta y la organización: Mention folder and organisation

@@ -1,6 +1,6 @@
 id: ace-d16-gke-two-services
-title: "Day 16 · Deploy a two-service app on GKE"
-summary: Deploy frontend and catalog Deployments with probes and Services and prove internal communication.
+title: "Día 16 · Desplegar una aplicación de dos servicios en GKE"
+summary: Despliega los Deployments frontend y catalog con sondas y Services y demuestra la comunicación interna.
 track: ace-30
 day: 16
 level: intermediate
@@ -15,22 +15,22 @@ baseline: [default-network]
 setup: |
   gcloud container clusters create shop-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-2
 story: |
-  Deploy the shop on cluster **shop-gke** ({{.zone}}):
+  Despliega la tienda en el clúster **shop-gke** ({{.zone}}):
 
-  | Deployment | Image | Replicas | Port | Probes |
+  | Deployment | Imagen | Réplicas | Puerto | Sondas |
   |---|---|---|---|---|
   | catalog | europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0 | 2 | 8080 | `/healthz` |
   | frontend | europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0 | 2 | 8080 | `/healthz` |
 
-  - `catalog` reachable inside the cluster as `http://catalog:8080`
-  - `frontend` gets `BACKEND_URL=http://catalog:8080/products` and is exposed publicly on port 80
+  - `catalog` accesible dentro del clúster como `http://catalog:8080`
+  - `frontend` recibe `BACKEND_URL=http://catalog:8080/products` y se expone públicamente en el puerto 80
 objectives:
-  - Correct Deployments and Services
-  - Readiness and liveness probes
-  - Internal communication frontend → catalog
+  - Deployments y Services correctos
+  - Sondas de readiness y liveness
+  - Comunicación interna frontend → catalog
 hints:
-  - text: "`gcloud container clusters get-credentials shop-gke --zone=...` first."
-  - text: "Service `targetPort` must match the container port."
+  - text: "Primero `gcloud container clusters get-credentials shop-gke --zone=...`."
+  - text: "El `targetPort` del Service debe coincidir con el puerto del contenedor."
 solution: |
   gcloud container clusters get-credentials shop-gke --zone={{.zone}}
   cat > app.yaml <<'YAML'
@@ -88,27 +88,58 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: Both deployments have 2 ready pods; the frontend calls http://catalog:8080 via the ClusterIP service and /shop returns 200 through the LoadBalancer service.
+    explanation: Los dos deployments tienen 2 pods listos; el frontend llama a http://catalog:8080 a través del servicio ClusterIP y /shop devuelve 200 a través del servicio LoadBalancer.
 rubric:
-  - name: Kubernetes state
+  - name: Estado de Kubernetes
     validator: state
     points: 35
     checks:
-      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog has 2 ready pods"}
-      - {type: k8s_ready, cluster: shop-gke, deployment: frontend, min: 2, desc: "frontend has 2 ready pods"}
-  - name: Probes
+      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog tiene 2 pods listos"}
+      - {type: k8s_ready, cluster: shop-gke, deployment: frontend, min: 2, desc: "frontend tiene 2 pods listos"}
+  - name: Sondas
     validator: state
     points: 25
     checks:
-      - {type: exists, path: "clusters[\"shop-gke\"].k8s.namespaces.default.deployments.catalog.template.containers[0].readinessProbe", expect: {port: 8080}, desc: "catalog readiness probe"}
-      - {type: exists, path: "clusters[\"shop-gke\"].k8s.namespaces.default.deployments.frontend.template.containers[0].livenessProbe", expect: {port: 8080}, desc: "frontend liveness probe"}
-  - name: Networking
+      - {type: exists, path: "clusters[\"shop-gke\"].k8s.namespaces.default.deployments.catalog.template.containers[0].readinessProbe", expect: {port: 8080}, desc: "Sonda de readiness de catalog"}
+      - {type: exists, path: "clusters[\"shop-gke\"].k8s.namespaces.default.deployments.frontend.template.containers[0].livenessProbe", expect: {port: 8080}, desc: "Sonda de liveness de frontend"}
+  - name: Red
     validator: functional
     points: 25
     checks:
-      - {type: http, target: "k8s:shop-gke/frontend", path: /shop, status: 200, desc: "frontend → catalog works end to end"}
-  - name: Evidence
+      - {type: http, target: "k8s:shop-gke/frontend", path: /shop, status: 200, desc: "frontend → catalog funciona de extremo a extremo"}
+  - name: Evidencias
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[service, servicio], [ready, listo, pods]], desc: "Explain how you verified"}
+      - {type: evidence, fields: [explanation], keywords: [[service, servicio], [ready, listo, pods, preparad]], desc: "Explica cómo lo has verificado"}
+en:
+  title: Day 16 · Deploy a two-service app on GKE
+  summary: Deploy frontend and catalog Deployments with probes and Services and prove internal communication.
+  story: |
+    Deploy the shop on cluster **shop-gke** ({{.zone}}):
+
+    | Deployment | Image | Replicas | Port | Probes |
+    |---|---|---|---|---|
+    | catalog | europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0 | 2 | 8080 | `/healthz` |
+    | frontend | europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0 | 2 | 8080 | `/healthz` |
+
+    - `catalog` reachable inside the cluster as `http://catalog:8080`
+    - `frontend` gets `BACKEND_URL=http://catalog:8080/products` and is exposed publicly on port 80
+  objectives:
+    - Correct Deployments and Services
+    - Readiness and liveness probes
+    - Internal communication frontend → catalog
+  hints:
+    - '`gcloud container clusters get-credentials shop-gke --zone=...` first.'
+    - Service `targetPort` must match the container port.
+  text:
+    Estado de Kubernetes: Kubernetes state
+    catalog tiene 2 pods listos: catalog has 2 ready pods
+    frontend tiene 2 pods listos: frontend has 2 ready pods
+    Sondas: Probes
+    Sonda de readiness de catalog: catalog readiness probe
+    Sonda de liveness de frontend: frontend liveness probe
+    Red: Networking
+    frontend → catalog funciona de extremo a extremo: frontend → catalog works end to end
+    Evidencias: Evidence
+    Explica cómo lo has verificado: Explain how you verified

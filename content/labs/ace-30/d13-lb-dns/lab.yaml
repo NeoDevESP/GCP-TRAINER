@@ -1,6 +1,6 @@
 id: ace-d13-lb-dns
-title: "Day 13 · Publish two backends behind one load balancer and DNS"
-summary: Route / to the web tier and /products to the API tier through a global HTTP load balancer and publish it in Cloud DNS.
+title: "Día 13 · Publicar dos backends tras un balanceador de carga y DNS"
+summary: Dirige / a la capa web y /products a la capa de API mediante un balanceador HTTP global y publícalo en Cloud DNS.
 track: ace-30
 day: 13
 level: intermediate
@@ -22,20 +22,20 @@ setup: |
   gcloud compute instance-groups unmanaged create api-ig --zone={{.zone}}
   gcloud compute instance-groups unmanaged add-instances api-ig --instances=api-a --zone={{.zone}}
 story: |
-  Publish the shop at **http://www.{{.domain}}**:
+  Publica la tienda en **http://www.{{.domain}}**:
 
-  - `/` → instance group `web-ig` (nginx, port 80)
-  - `/products` → instance group `api-ig` (catalog API, port 8080, health path `/healthz`)
-  - public DNS zone for `{{.domain}}` with an A record for `www`
-  - backends only accept traffic from Google's load balancers / health checkers
+  - `/` → grupo de instancias `web-ig` (nginx, puerto 80)
+  - `/products` → grupo de instancias `api-ig` (API de catálogo, puerto 8080, ruta de salud `/healthz`)
+  - zona DNS pública para `{{.domain}}` con un registro A para `www`
+  - los backends solo aceptan tráfico de los balanceadores y comprobadores de estado de Google
 objectives:
-  - Health checks, backend services and URL map with path routing
-  - Forwarding rule and DNS record
-  - Firewall scoped to the Google front-end ranges
-  - Both paths reachable through the DNS name
+  - Comprobaciones de estado, servicios de backend y mapa de URL con enrutamiento por ruta
+  - Regla de reenvío y registro DNS
+  - Cortafuegos limitado a los rangos del front-end de Google
+  - Las dos rutas accesibles a través del nombre DNS
 hints:
-  - text: "Named ports map the backend service port name to each group's port."
-  - text: "Health checks and proxied traffic come from 35.191.0.0/16 and 130.211.0.0/22."
+  - text: "Los puertos con nombre asocian el nombre de puerto del servicio de backend con el puerto de cada grupo."
+  - text: "Las comprobaciones de estado y el tráfico del proxy vienen de 35.191.0.0/16 y 130.211.0.0/22."
   - text: "`gcloud compute url-maps add-path-matcher shop-map --path-matcher-name=paths --default-service=web-be --path-rules=/products=api-be`"
 solution: |
   gcloud compute firewall-rules create allow-gfe --network=default --allow=tcp:80,tcp:8080 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=web,api
@@ -56,29 +56,60 @@ solution: |
   gcloud dns record-sets create www.{{.domain}}. --zone=shop-zone --type=A --ttl=300 --rrdatas=$(gcloud compute addresses describe shop-ip --global --format='value(address)')
   curl -s http://www.{{.domain}}/products
 rubric:
-  - name: Load balancer
+  - name: Balanceador de carga
     validator: state
     points: 35
     checks:
-      - {type: count, collection: backendHealth, where: {healthy: true}, min: 2, desc: "Both backends healthy"}
-      - {type: count, collection: urlMaps, where: {pathMatchers: {regex: "/products"}}, min: 1, desc: "Path rule for /products"}
-  - name: Health
+      - {type: count, collection: backendHealth, where: {healthy: true}, min: 2, desc: "Ambos backends sanos"}
+      - {type: count, collection: urlMaps, where: {pathMatchers: {regex: "/products"}}, min: 1, desc: "Regla de ruta para /products"}
+  - name: Salud
     validator: functional
     points: 20
     checks:
-      - {type: http, target: "http://www.{{.domain}}", path: /, status: 200, desc: "/ through DNS"}
+      - {type: http, target: "http://www.{{.domain}}", path: /, status: 200, desc: "/ a través del DNS"}
   - name: DNS
     validator: state
     points: 20
     checks:
-      - {type: count, collection: dnsZones, where: {dnsName: "{{.domain}}.", records: {regex: "www.{{.domain}}"}}, min: 1, desc: "A record for www"}
-  - name: Routing
+      - {type: count, collection: dnsZones, where: {dnsName: "{{.domain}}.", records: {regex: "www.{{.domain}}"}}, min: 1, desc: "Registro A para www"}
+  - name: Enrutamiento
     validator: functional
     points: 15
     checks:
-      - {type: http, target: "http://www.{{.domain}}", path: /products, status: 200, desc: "/products routed to the API"}
-  - name: Test & scope
+      - {type: http, target: "http://www.{{.domain}}", path: /products, status: 200, desc: "/products dirigido a la API"}
+  - name: Prueba y alcance
     validator: security
     points: 10
     checks:
-      - {type: count, collection: firewalls, where: {sourceRanges: {contains: "0.0.0.0/0"}, targetTags: {regex: "web|api"}}, max: 0, desc: "Backends not exposed to the internet directly"}
+      - {type: count, collection: firewalls, where: {sourceRanges: {contains: "0.0.0.0/0"}, targetTags: {regex: "web|api"}}, max: 0, desc: "Los backends no están expuestos directamente a internet"}
+en:
+  title: Day 13 · Publish two backends behind one load balancer and DNS
+  summary: Route / to the web tier and /products to the API tier through a global HTTP load balancer and publish it in Cloud DNS.
+  story: |
+    Publish the shop at **http://www.{{.domain}}**:
+
+    - `/` → instance group `web-ig` (nginx, port 80)
+    - `/products` → instance group `api-ig` (catalog API, port 8080, health path `/healthz`)
+    - public DNS zone for `{{.domain}}` with an A record for `www`
+    - backends only accept traffic from Google's load balancers / health checkers
+  objectives:
+    - Health checks, backend services and URL map with path routing
+    - Forwarding rule and DNS record
+    - Firewall scoped to the Google front-end ranges
+    - Both paths reachable through the DNS name
+  hints:
+    - Named ports map the backend service port name to each group's port.
+    - Health checks and proxied traffic come from 35.191.0.0/16 and 130.211.0.0/22.
+    - '`gcloud compute url-maps add-path-matcher shop-map --path-matcher-name=paths --default-service=web-be --path-rules=/products=api-be`'
+  text:
+    Balanceador de carga: Load balancer
+    Ambos backends sanos: Both backends healthy
+    Regla de ruta para /products: Path rule for /products
+    Salud: Health
+    / a través del DNS: / through DNS
+    DNS: DNS
+    Registro A para www: A record for www
+    Enrutamiento: Routing
+    /products dirigido a la API: /products routed to the API
+    Prueba y alcance: Test & scope
+    Los backends no están expuestos directamente a internet: Backends not exposed to the internet directly

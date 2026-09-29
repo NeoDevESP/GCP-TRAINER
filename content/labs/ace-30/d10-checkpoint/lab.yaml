@@ -1,6 +1,6 @@
 id: ace-d10-checkpoint
-title: "Day 10 · ACE checkpoint: build a mini-stack from scratch"
-summary: Quiz plus a practical build combining VPC, Cloud Run, Storage, IAM and logging.
+title: "Día 10 · Punto de control ACE: construye un mini-stack desde cero"
+summary: Test más una construcción práctica que combina VPC, Cloud Run, Storage, IAM y registros.
 track: ace-30
 day: 10
 level: basic
@@ -17,43 +17,43 @@ files:
     quarter,revenue
     q3,42
 story: |
-  Build the **reports** mini-stack:
+  Construye el mini-stack de **informes**:
 
-  1. Custom VPC `ace-vpc` with subnet `ace-subnet` 10.30.0.0/24 in {{.region}} (future VMs).
-  2. Bucket `assets-{{.project}}` in {{.region}} with UBLA; upload `report.csv` to `data/report.csv`.
-  3. Service account `reports-sa` that can **only read** that bucket.
-  4. Cloud Run service `reports` (image `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) running as `reports-sa`, env `BUCKET=assets-{{.project}}`, public.
-  5. A log-based metric `reports-errors` for severity>=ERROR on Cloud Run.
+  1. VPC personalizada `ace-vpc` con la subred `ace-subnet` 10.30.0.0/24 en {{.region}} (para futuras VM).
+  2. Bucket `assets-{{.project}}` en {{.region}} con UBLA; sube `report.csv` a `data/report.csv`.
+  3. Cuenta de servicio `reports-sa` que **solo pueda leer** ese bucket.
+  4. Servicio de Cloud Run `reports` (imagen `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) ejecutándose como `reports-sa`, variable `BUCKET=assets-{{.project}}`, público.
+  5. Una métrica basada en registros `reports-errors` para severity>=ERROR en Cloud Run.
 
-  Then answer the checkpoint quiz.
+  Después responde al test del punto de control.
 objectives:
-  - Working /reports endpoint
-  - Least-privilege identity for the service
-  - Network foundation ready
-  - Observability in place and quiz answered
+  - Endpoint /reports funcionando
+  - Identidad con mínimo privilegio para el servicio
+  - Base de red preparada
+  - Observabilidad en marcha y test respondido
 quiz:
   - id: q1
-    question: A VM without an external IP must download packages. What is the recommended option?
-    options: ["Add an external IP", "Cloud NAT on the subnet's region", "VPC peering with a public VPC", "Private Google Access"]
+    question: Una VM sin IP externa tiene que descargar paquetes. ¿Cuál es la opción recomendada?
+    options: ["Añadir una IP externa", "Cloud NAT en la región de la subred", "Emparejamiento de VPC con una VPC pública", "Acceso privado a Google"]
     answer: [1]
   - id: q2
-    question: Which statement about budgets is true?
-    options: ["They stop resources when exceeded", "They only alert (optionally via Pub/Sub automation)", "They apply only to Compute Engine", "They require billing admin on every project"]
+    question: ¿Qué afirmación sobre los presupuestos es cierta?
+    options: ["Detienen los recursos cuando se superan", "Solo alertan (opcionalmente con automatización vía Pub/Sub)", "Solo se aplican a Compute Engine", "Requieren administrador de facturación en cada proyecto"]
     answer: [1]
   - id: q3
-    question: Where should you grant a role for reading a single bucket?
-    options: ["Organisation", "Folder", "Project", "The bucket"]
+    question: ¿Dónde deberías conceder un rol para leer un único bucket?
+    options: ["Organización", "Carpeta", "Proyecto", "El bucket"]
     answer: [3]
   - id: q4
-    question: Which firewall rule wins between ALLOW priority 1000 and DENY priority 900 matching the same traffic?
-    options: ["ALLOW", "DENY", "The newest", "Both are evaluated and ALLOW wins"]
+    question: ¿Qué regla de cortafuegos gana entre ALLOW con prioridad 1000 y DENY con prioridad 900 para el mismo tráfico?
+    options: ["ALLOW", "DENY", "La más reciente", "Se evalúan las dos y gana ALLOW"]
     answer: [1]
   - id: q5
-    question: Which command sets the default zone for gcloud?
+    question: ¿Qué comando configura la zona por defecto de gcloud?
     options: ["gcloud config set compute/zone ZONE", "gcloud compute zones set ZONE", "gcloud init --zone", "export ZONE"]
     answer: [0]
 hints:
-  - text: "Grant `roles/storage.objectViewer` on the bucket to `serviceAccount:reports-sa@...`."
+  - text: "Concede `roles/storage.objectViewer` en el bucket a `serviceAccount:reports-sa@...`."
 solution: |
   gcloud compute networks create ace-vpc --subnet-mode=custom
   gcloud compute networks subnets create ace-subnet --network=ace-vpc --range=10.30.0.0/24 --region={{.region}}
@@ -64,33 +64,92 @@ solution: |
   gcloud run deploy reports --image=europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0 --region={{.region}} --service-account=reports-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BUCKET=assets-{{.project}} --allow-unauthenticated
   gcloud logging metrics create reports-errors --log-filter='resource.type="cloud_run_revision" AND severity>=ERROR'
 rubric:
-  - name: Functional
+  - name: Funcional
     validator: functional
     points: 40
     checks:
-      - {type: http, target: "run:reports", path: /reports, status: 200, desc: "/reports returns the report"}
+      - {type: http, target: "run:reports", path: /reports, status: 200, desc: "/reports devuelve el informe"}
   - name: IAM
     validator: security
     points: 20
     critical: true
     all: true
     checks:
-      - {type: iam, principal: "run:reports", permission: storage.objects.get, resource: "bucket:assets-{{.project}}/data/report.csv", desc: "Service reads the bucket"}
-      - {type: iam, principal: "run:reports", permission: storage.objects.create, resource: "bucket:assets-{{.project}}/data/x", expect: false, desc: "Service cannot write"}
-      - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
-  - name: Network
+      - {type: iam, principal: "run:reports", permission: storage.objects.get, resource: "bucket:assets-{{.project}}/data/report.csv", desc: "El servicio lee el bucket"}
+      - {type: iam, principal: "run:reports", permission: storage.objects.create, resource: "bucket:assets-{{.project}}/data/x", expect: false, desc: "El servicio no puede escribir"}
+      - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos"}
+  - name: Red
     validator: state
     points: 20
     checks:
-      - {type: exists, path: "networks[\"ace-vpc\"]", expect: {subnetMode: custom}, desc: "Custom VPC"}
-      - {type: exists, path: "subnets[\"ace-subnet\"]", expect: {ipCidrRange: 10.30.0.0/24, region: "{{.region}}"}, desc: "Subnet"}
-  - name: Observability
+      - {type: exists, path: "networks[\"ace-vpc\"]", expect: {subnetMode: custom}, desc: "VPC personalizada"}
+      - {type: exists, path: "subnets[\"ace-subnet\"]", expect: {ipCidrRange: 10.30.0.0/24, region: "{{.region}}"}, desc: "Subred"}
+  - name: Observabilidad
     validator: state
     points: 10
     checks:
-      - {type: log_metric, name: reports-errors, filterContains: [severity>=ERROR], desc: "Error metric"}
-  - name: Checkpoint quiz
+      - {type: log_metric, name: reports-errors, filterContains: [severity>=ERROR], desc: "Métrica de errores"}
+  - name: Test del punto de control
     validator: quiz
     points: 10
     checks:
-      - {type: quiz, ratio: 0.8, desc: "At least 4 of 5 correct"}
+      - {type: quiz, ratio: 0.8, desc: "Al menos 4 de 5 correctas"}
+en:
+  title: 'Day 10 · ACE checkpoint: build a mini-stack from scratch'
+  summary: Quiz plus a practical build combining VPC, Cloud Run, Storage, IAM and logging.
+  story: |
+    Build the **reports** mini-stack:
+
+    1. Custom VPC `ace-vpc` with subnet `ace-subnet` 10.30.0.0/24 in {{.region}} (future VMs).
+    2. Bucket `assets-{{.project}}` in {{.region}} with UBLA; upload `report.csv` to `data/report.csv`.
+    3. Service account `reports-sa` that can **only read** that bucket.
+    4. Cloud Run service `reports` (image `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) running as `reports-sa`, env `BUCKET=assets-{{.project}}`, public.
+    5. A log-based metric `reports-errors` for severity>=ERROR on Cloud Run.
+
+    Then answer the checkpoint quiz.
+  objectives:
+    - Working /reports endpoint
+    - Least-privilege identity for the service
+    - Network foundation ready
+    - Observability in place and quiz answered
+  hints:
+    - Grant `roles/storage.objectViewer` on the bucket to `serviceAccount:reports-sa@...`.
+  text:
+    Una VM sin IP externa tiene que descargar paquetes. ¿Cuál es la opción recomendada?: A VM without an external IP must download packages. What is the recommended option?
+    Añadir una IP externa: Add an external IP
+    Cloud NAT en la región de la subred: Cloud NAT on the subnet's region
+    Emparejamiento de VPC con una VPC pública: VPC peering with a public VPC
+    Acceso privado a Google: Private Google Access
+    ¿Qué afirmación sobre los presupuestos es cierta?: Which statement about budgets is true?
+    Detienen los recursos cuando se superan: They stop resources when exceeded
+    Solo alertan (opcionalmente con automatización vía Pub/Sub): They only alert (optionally via Pub/Sub automation)
+    Solo se aplican a Compute Engine: They apply only to Compute Engine
+    Requieren administrador de facturación en cada proyecto: They require billing admin on every project
+    ¿Dónde deberías conceder un rol para leer un único bucket?: Where should you grant a role for reading a single bucket?
+    Organización: Organisation
+    Carpeta: Folder
+    Proyecto: Project
+    El bucket: The bucket
+    ¿Qué regla de cortafuegos gana entre ALLOW con prioridad 1000 y DENY con prioridad 900 para el mismo tráfico?: Which firewall rule wins between ALLOW priority 1000 and DENY priority 900 matching the same traffic?
+    ALLOW: ALLOW
+    DENY: DENY
+    La más reciente: The newest
+    Se evalúan las dos y gana ALLOW: Both are evaluated and ALLOW wins
+    ¿Qué comando configura la zona por defecto de gcloud?: Which command sets the default zone for gcloud?
+    gcloud config set compute/zone ZONE: gcloud config set compute/zone ZONE
+    gcloud compute zones set ZONE: gcloud compute zones set ZONE
+    gcloud init --zone: gcloud init --zone
+    export ZONE: export ZONE
+    Funcional: Functional
+    /reports devuelve el informe: /reports returns the report
+    IAM: IAM
+    El servicio lee el bucket: Service reads the bucket
+    El servicio no puede escribir: Service cannot write
+    Sin roles básicos: No basic roles
+    Red: Network
+    VPC personalizada: Custom VPC
+    Subred: Subnet
+    Observabilidad: Observability
+    Métrica de errores: Error metric
+    Test del punto de control: Checkpoint quiz
+    Al menos 4 de 5 correctas: At least 4 of 5 correct

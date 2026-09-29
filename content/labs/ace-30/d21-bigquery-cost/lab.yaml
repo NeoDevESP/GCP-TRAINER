@@ -1,6 +1,6 @@
 id: ace-d21-bigquery-cost
-title: "Day 21 · Cut the cost of a BigQuery report"
-summary: Redesign a table with partitioning and clustering and rewrite the query to process less data, proving it with dry runs.
+title: "Día 21 · Reducir el coste de un informe de BigQuery"
+summary: Rediseña una tabla con particiones y clústeres y reescribe la consulta para procesar menos datos, demostrándolo con dry runs.
 track: ace-30
 day: 21
 level: advanced
@@ -18,21 +18,21 @@ setup: |
   bq mk --dataset --location=EU analytics
   bq mk --table --sim_rows=2000000000 analytics.events event_ts:TIMESTAMP:8,user_id:STRING:16,country:STRING:4,event_type:STRING:12,payload:STRING:900,revenue:NUMERIC:16
 story: |
-  Finance runs this report **30 times a day** and BigQuery is now the top line of the bill:
+  Finanzas ejecuta este informe **30 veces al día** y BigQuery es ahora la primera línea de la factura:
 
   ```sql
   SELECT * FROM analytics.events
   WHERE country = '{{.country}}'
   ```
-  They only need **weekly revenue per country** for the last 7 days (2026-08-25..2026-08-31).
-  `analytics.events` has 2 billion rows (~1.9 TB), one year of history, and is not partitioned.
+  Solo necesitan los **ingresos semanales por país** de los últimos 7 días (2026-08-25..2026-08-31).
+  `analytics.events` tiene 2.000 millones de filas (~1,9 TB), un año de histórico y no está particionada.
 objectives:
-  - Query only the needed columns and partitions
-  - A partitioned (by day on event_ts) and clustered (by country) table
-  - Measure bytes processed before and after (dry run)
-  - Explain the design
+  - Consulta solo las columnas y particiones necesarias
+  - Una tabla particionada (por día sobre event_ts) y agrupada en clústeres (por country)
+  - Mide los bytes procesados antes y después (dry run)
+  - Explica el diseño
 hints:
-  - text: "`bq query --dry_run --use_legacy_sql=false '...'` reports bytes without running."
+  - text: "`bq query --dry_run --use_legacy_sql=false '...'` informa de los bytes sin ejecutar la consulta."
   - text: "`CREATE TABLE analytics.events_p PARTITION BY DATE(event_ts) CLUSTER BY country AS SELECT * FROM analytics.events`"
 solution: |
   bq query --dry_run --use_legacy_sql=false "SELECT * FROM analytics.events WHERE country = '{{.country}}'"
@@ -42,25 +42,54 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: Selecting three columns instead of SELECT * and filtering on the daily partition of event_ts plus clustering by country reduced bytes processed from about 1.9 TB to a few hundred MB, measured with dry run.
+    explanation: Seleccionar tres columnas en lugar de SELECT * y filtrar por la partición diaria de event_ts, junto con el clúster por country, redujo los bytes procesados de unos 1,9 TB a unos cientos de MB, medido con dry run.
 rubric:
   - name: SQL
     validator: cost
     points: 30
     checks:
-      - {type: bq_bytes_max, queryContains: revenue, bytes: 1000000000, desc: "Report query processes less than 1 GB"}
-  - name: Design
+      - {type: bq_bytes_max, queryContains: revenue, bytes: 1000000000, desc: "La consulta del informe procesa menos de 1 GB"}
+  - name: Diseño
     validator: state
     points: 30
     checks:
-      - {type: count, collection: datasets.analytics.tables, where: {partitionField: event_ts, clustering: {contains: country}}, min: 1, desc: "Partitioned and clustered table"}
-  - name: Measurement
+      - {type: count, collection: datasets.analytics.tables, where: {partitionField: event_ts, clustering: {contains: country}}, min: 1, desc: "Tabla particionada y agrupada en clústeres"}
+  - name: Medición
     validator: diagnosis
     points: 25
     checks:
-      - {type: command, regex: "dry_run|dry-run", min: 2, desc: "Before/after dry runs"}
-  - name: Explanation
+      - {type: command, regex: "dry_run|dry-run", min: 2, desc: "Dry runs de antes y después"}
+  - name: Explicación
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[partition, particion], [cluster], [bytes, TB, GB, MB]], desc: "Explain the saving"}
+      - {type: evidence, fields: [explanation], keywords: [[partition, particion], [cluster], [bytes, TB, GB, MB]], desc: "Explica el ahorro"}
+en:
+  title: Day 21 · Cut the cost of a BigQuery report
+  summary: Redesign a table with partitioning and clustering and rewrite the query to process less data, proving it with dry runs.
+  story: |
+    Finance runs this report **30 times a day** and BigQuery is now the top line of the bill:
+
+    ```sql
+    SELECT * FROM analytics.events
+    WHERE country = '{{.country}}'
+    ```
+    They only need **weekly revenue per country** for the last 7 days (2026-08-25..2026-08-31).
+    `analytics.events` has 2 billion rows (~1.9 TB), one year of history, and is not partitioned.
+  objectives:
+    - Query only the needed columns and partitions
+    - A partitioned (by day on event_ts) and clustered (by country) table
+    - Measure bytes processed before and after (dry run)
+    - Explain the design
+  hints:
+    - '`bq query --dry_run --use_legacy_sql=false ''...''` reports bytes without running.'
+    - '`CREATE TABLE analytics.events_p PARTITION BY DATE(event_ts) CLUSTER BY country AS SELECT * FROM analytics.events`'
+  text:
+    SQL: SQL
+    La consulta del informe procesa menos de 1 GB: Report query processes less than 1 GB
+    Diseño: Design
+    Tabla particionada y agrupada en clústeres: Partitioned and clustered table
+    Medición: Measurement
+    Dry runs de antes y después: Before/after dry runs
+    Explicación: Explanation
+    Explica el ahorro: Explain the saving

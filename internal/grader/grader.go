@@ -1489,7 +1489,7 @@ func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
 			hit := false
 			alts, _ := g.([]any)
 			for _, a := range alts {
-				if strings.Contains(t, normalize(fmt.Sprint(a))) {
+				if i18n.ContainsAny(t, fmt.Sprint(a)) { // Spanish or English
 					hit = true
 				}
 			}

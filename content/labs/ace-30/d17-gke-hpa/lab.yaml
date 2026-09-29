@@ -1,6 +1,6 @@
 id: ace-d17-gke-hpa
-title: "Day 17 · The app does not scale during the peak"
-summary: Make the Horizontal Pod Autoscaler work, generate load and demonstrate scale-out and scale-in.
+title: "Día 17 · La aplicación no escala durante el pico"
+summary: Haz que funcione el Horizontal Pod Autoscaler, genera carga y demuestra el escalado hacia fuera y hacia dentro.
 track: ace-30
 day: 17
 level: intermediate
@@ -52,16 +52,16 @@ setup: |
 traffic:
   - {name: api, target: "k8s:peak-gke/api", rps: 2}
 story: |
-  Black Friday rehearsal: `api` stayed at 1 replica while latency exploded.
-  The HPA exists (min 1, max 6, 50% CPU). Make it work and **demonstrate** scale-out
-  under load and scale-in when the load stops.
+  Ensayo del Black Friday: `api` se quedó en 1 réplica mientras la latencia se disparaba.
+  El HPA existe (mín. 1, máx. 6, 50 % de CPU). Haz que funcione y **demuestra** que escala hacia fuera
+  con carga y hacia dentro cuando la carga se detiene.
 objectives:
-  - Resource requests/limits so the HPA can compute utilisation
-  - HPA scaling out under generated load
-  - Scale-in after the load stops
+  - Requests/limits de recursos para que el HPA pueda calcular la utilización
+  - El HPA escala hacia fuera con la carga generada
+  - Escalado hacia dentro cuando se detiene la carga
 hints:
-  - text: "`kubectl describe hpa api` explains why it cannot compute metrics."
-  - text: "`kubectl run load --image=busybox -- /bin/sh -c 'while true; do wget -q -O- http://api:8080; done'`, then `sleep` to let time pass."
+  - text: "`kubectl describe hpa api` explica por qué no puede calcular las métricas."
+  - text: "`kubectl run load --image=busybox -- /bin/sh -c 'while true; do wget -q -O- http://api:8080; done'` y después `sleep` para dejar pasar el tiempo."
 solution: |
   gcloud container clusters get-credentials peak-gke --zone={{.zone}}
   kubectl describe hpa api
@@ -75,25 +75,48 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: Without CPU requests the HPA showed unknown utilisation; after setting requests it scaled out to 6 replicas under load and scaled in after I deleted the load generator.
+    explanation: Sin requests de CPU el HPA mostraba una utilización desconocida; tras configurar los requests escaló hasta 6 réplicas con la carga y volvió a reducir cuando borré el generador de carga.
 rubric:
-  - name: Resources
+  - name: Recursos
     validator: state
     points: 30
     checks:
-      - {type: exists, path: "clusters[\"peak-gke\"].k8s.namespaces.default.deployments.api.template.containers[0].requests", expect: {cpu: {regex: "m$|^[0-9.]+$"}}, desc: "CPU requests set"}
+      - {type: exists, path: "clusters[\"peak-gke\"].k8s.namespaces.default.deployments.api.template.containers[0].requests", expect: {cpu: {regex: "m$|^[0-9.]+$"}}, desc: "Requests de CPU configurados"}
   - name: HPA
     validator: functional
     points: 30
     checks:
-      - {type: hpa_scaled, cluster: peak-gke, deployment: api, desc: "HPA scaled out"}
-  - name: Validation
+      - {type: hpa_scaled, cluster: peak-gke, deployment: api, desc: "El HPA escaló hacia fuera"}
+  - name: Validación
     validator: functional
     points: 30
     checks:
-      - {type: hpa_scaled, cluster: peak-gke, deployment: api, requireScaleIn: true, desc: "Scale-in demonstrated"}
-  - name: Explanation
+      - {type: hpa_scaled, cluster: peak-gke, deployment: api, requireScaleIn: true, desc: "Escalado hacia dentro demostrado"}
+  - name: Explicación
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[request, solicitud], [scale, escal]], desc: "Explain the cause and demonstration"}
+      - {type: evidence, fields: [explanation], keywords: [[request, solicitud, peticion], [scale, escal]], desc: "Explica la causa y la demostración"}
+en:
+  title: Day 17 · The app does not scale during the peak
+  summary: Make the Horizontal Pod Autoscaler work, generate load and demonstrate scale-out and scale-in.
+  story: |
+    Black Friday rehearsal: `api` stayed at 1 replica while latency exploded.
+    The HPA exists (min 1, max 6, 50% CPU). Make it work and **demonstrate** scale-out
+    under load and scale-in when the load stops.
+  objectives:
+    - Resource requests/limits so the HPA can compute utilisation
+    - HPA scaling out under generated load
+    - Scale-in after the load stops
+  hints:
+    - '`kubectl describe hpa api` explains why it cannot compute metrics.'
+    - '`kubectl run load --image=busybox -- /bin/sh -c ''while true; do wget -q -O- http://api:8080; done''`, then `sleep` to let time pass.'
+  text:
+    Recursos: Resources
+    Requests de CPU configurados: CPU requests set
+    HPA: HPA
+    El HPA escaló hacia fuera: HPA scaled out
+    Validación: Validation
+    Escalado hacia dentro demostrado: Scale-in demonstrated
+    Explicación: Explanation
+    Explica la causa y la demostración: Explain the cause and demonstration

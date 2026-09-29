@@ -1,6 +1,6 @@
 id: ace-d05-subnet-isolation
-title: "Day 5 · Isolate frontend and backend"
-summary: Build a custom VPC with two subnets and allow only the traffic the application needs.
+title: "Día 5 · Aislar frontend y backend"
+summary: Construye una VPC personalizada con dos subredes y permite solo el tráfico que necesita la aplicación.
 track: ace-30
 day: 5
 level: basic
@@ -16,24 +16,24 @@ params:
   port: ["8080", "9000"]
 baseline: [empty]
 story: |
-  Design for the new shop:
+  Diseño de la nueva tienda:
 
-  | Tier | Subnet | Range | Exposure |
+  | Capa | Subred | Rango | Exposición |
   |---|---|---|---|
-  | frontend | `frontend` | 10.20.1.0/24 | HTTP 80 from the internet |
-  | backend  | `backend`  | 10.20.2.0/24 | tcp:{{.port}} **only from the frontend**, no public IP |
+  | frontend | `frontend` | 10.20.1.0/24 | HTTP 80 desde internet |
+  | backend  | `backend`  | 10.20.2.0/24 | tcp:{{.port}} **solo desde el frontend**, sin IP pública |
 
-  Network **{{.vpc}}** (custom mode) in {{.region}}. Create `fe-1` (nginx, tag `frontend`) and
-  `be-1` (`python3 -m http.server {{.port}}`, tag `backend`). Administrators connect through IAP only.
+  Red **{{.vpc}}** (modo personalizado) en {{.region}}. Crea `fe-1` (nginx, etiqueta `frontend`) y
+  `be-1` (`python3 -m http.server {{.port}}`, etiqueta `backend`). Los administradores se conectan solo a través de IAP.
 objectives:
-  - Custom VPC with non-overlapping subnets
-  - VMs in the right subnets; backend without external IP
-  - Only required traffic authorised (tags, not wide ranges)
-  - Evidence that frontend reaches backend
+  - VPC personalizada con subredes que no se solapan
+  - VM en las subredes correctas; backend sin IP externa
+  - Solo se autoriza el tráfico necesario (etiquetas, no rangos amplios)
+  - Evidencia de que el frontend llega al backend
 hints:
-  - text: "`--subnet-mode=custom`, then `gcloud compute networks subnets create`."
-  - text: "Backend VMs need no external IP (`--no-address`). IAP uses 35.235.240.0/20 on tcp:22."
-  - text: "Use `--source-tags=frontend --target-tags=backend` for the internal rule."
+  - text: "`--subnet-mode=custom` y después `gcloud compute networks subnets create`."
+  - text: "Las VM de backend no necesitan IP externa (`--no-address`). IAP usa 35.235.240.0/20 en tcp:22."
+  - text: "Usa `--source-tags=frontend --target-tags=backend` para la regla interna."
 solution: |
   gcloud compute networks create {{.vpc}} --subnet-mode=custom
   gcloud compute networks subnets create frontend --network={{.vpc}} --range=10.20.1.0/24 --region={{.region}}
@@ -47,32 +47,69 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: fe-1 reached be-1 on port {{.port}} using curl through IAP ssh; the rule uses source tag frontend and target tag backend.
+    explanation: fe-1 llegó a be-1 en el puerto {{.port}} con curl a través de ssh por IAP; la regla usa la etiqueta de origen frontend y la etiqueta de destino backend.
 rubric:
-  - name: Topology
+  - name: Topología
     validator: state
     points: 35
     checks:
-      - {type: exists, path: "networks[\"{{.vpc}}\"]", expect: {subnetMode: custom}, desc: "Custom-mode VPC"}
-      - {type: exists, path: "subnets.frontend", expect: {ipCidrRange: 10.20.1.0/24, network: "{{.vpc}}"}, desc: "frontend subnet"}
-      - {type: exists, path: "subnets.backend", expect: {ipCidrRange: 10.20.2.0/24, network: "{{.vpc}}"}, desc: "backend subnet"}
-      - {type: exists, path: "instances[\"be-1\"]", expect: {subnetwork: backend, natIP: {empty: true}}, desc: "Backend VM private in backend subnet"}
-  - name: Routing
+      - {type: exists, path: "networks[\"{{.vpc}}\"]", expect: {subnetMode: custom}, desc: "VPC en modo personalizado"}
+      - {type: exists, path: "subnets.frontend", expect: {ipCidrRange: 10.20.1.0/24, network: "{{.vpc}}"}, desc: "Subred frontend"}
+      - {type: exists, path: "subnets.backend", expect: {ipCidrRange: 10.20.2.0/24, network: "{{.vpc}}"}, desc: "Subred backend"}
+      - {type: exists, path: "instances[\"be-1\"]", expect: {subnetwork: backend, natIP: {empty: true}}, desc: "VM de backend privada en la subred backend"}
+  - name: Enrutamiento
     validator: functional
     points: 20
     checks:
-      - {type: tcp, from: "vm:fe-1", to: "vm:be-1", port: "{{.port}}", desc: "Frontend reaches backend"}
-      - {type: http, target: "vm:fe-1:80", status: 200, desc: "Frontend serves HTTP"}
-  - name: Firewall
+      - {type: tcp, from: "vm:fe-1", to: "vm:be-1", port: "{{.port}}", desc: "El frontend llega al backend"}
+      - {type: http, target: "vm:fe-1:80", status: 200, desc: "El frontend sirve HTTP"}
+  - name: Cortafuegos
     validator: security
     points: 35
     all: true
     checks:
-      - {type: forbid_firewall, port: "{{.port}}", desc: "Backend port not open to the internet"}
-      - {type: forbid_firewall, port: 22, desc: "SSH only through IAP"}
-      - {type: count, collection: firewalls, where: {sourceTags: {contains: frontend}, targetTags: {contains: backend}}, min: 1, desc: "Internal rule uses tags"}
-  - name: Evidence
+      - {type: forbid_firewall, port: "{{.port}}", desc: "El puerto del backend no está abierto a internet"}
+      - {type: forbid_firewall, port: 22, desc: "SSH solo a través de IAP"}
+      - {type: count, collection: firewalls, where: {sourceTags: {contains: frontend}, targetTags: {contains: backend}}, min: 1, desc: "La regla interna usa etiquetas"}
+  - name: Evidencias
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[curl, nc, ssh], [tag, etiqueta]], desc: "How you verified the path"}
+      - {type: evidence, fields: [explanation], keywords: [[curl, nc, ssh], [tag, etiqueta]], desc: "Cómo has verificado el camino"}
+en:
+  title: Day 5 · Isolate frontend and backend
+  summary: Build a custom VPC with two subnets and allow only the traffic the application needs.
+  story: |
+    Design for the new shop:
+
+    | Tier | Subnet | Range | Exposure |
+    |---|---|---|---|
+    | frontend | `frontend` | 10.20.1.0/24 | HTTP 80 from the internet |
+    | backend  | `backend`  | 10.20.2.0/24 | tcp:{{.port}} **only from the frontend**, no public IP |
+
+    Network **{{.vpc}}** (custom mode) in {{.region}}. Create `fe-1` (nginx, tag `frontend`) and
+    `be-1` (`python3 -m http.server {{.port}}`, tag `backend`). Administrators connect through IAP only.
+  objectives:
+    - Custom VPC with non-overlapping subnets
+    - VMs in the right subnets; backend without external IP
+    - Only required traffic authorised (tags, not wide ranges)
+    - Evidence that frontend reaches backend
+  hints:
+    - '`--subnet-mode=custom`, then `gcloud compute networks subnets create`.'
+    - Backend VMs need no external IP (`--no-address`). IAP uses 35.235.240.0/20 on tcp:22.
+    - Use `--source-tags=frontend --target-tags=backend` for the internal rule.
+  text:
+    Topología: Topology
+    VPC en modo personalizado: Custom-mode VPC
+    Subred frontend: frontend subnet
+    Subred backend: backend subnet
+    VM de backend privada en la subred backend: Backend VM private in backend subnet
+    Enrutamiento: Routing
+    El frontend llega al backend: Frontend reaches backend
+    El frontend sirve HTTP: Frontend serves HTTP
+    Cortafuegos: Firewall
+    El puerto del backend no está abierto a internet: Backend port not open to the internet
+    SSH solo a través de IAP: SSH only through IAP
+    La regla interna usa etiquetas: Internal rule uses tags
+    Evidencias: Evidence
+    Cómo has verificado el camino: How you verified the path

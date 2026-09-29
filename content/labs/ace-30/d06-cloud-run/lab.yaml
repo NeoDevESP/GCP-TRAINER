@@ -1,6 +1,6 @@
 id: ace-d06-cloud-run
-title: "Day 6 · Containerise and deploy an API on Cloud Run"
-summary: Build an image into Artifact Registry and deploy it to Cloud Run with the right configuration.
+title: "Día 6 · Contenerizar y desplegar una API en Cloud Run"
+summary: Construye una imagen en Artifact Registry y despliégala en Cloud Run con la configuración adecuada.
 track: ace-30
 day: 6
 level: basic
@@ -26,21 +26,21 @@ files:
 setup: |
   gcloud run deploy hello-test --image=us-docker.pkg.dev/cloudrun/container/hello --region={{.region}} --allow-unauthenticated
 story: |
-  The catalogue team handed over a `Dockerfile` (see the Files tab). Publish it as
-  **{{.svc}}** on Cloud Run in {{.region}}:
+  El equipo de catálogo te ha pasado un `Dockerfile` (míralo en la pestaña Archivos). Publícalo como
+  **{{.svc}}** en Cloud Run en {{.region}}:
 
-  - image stored in an Artifact Registry Docker repository named `apps` in {{.region}}, tag `v1`
-  - environment variable `APP_ENV={{.env}}`
-  - publicly reachable (it is a public catalogue)
-  - delete the forgotten `hello-test` service used for a demo
+  - imagen guardada en un repositorio Docker de Artifact Registry llamado `apps` en {{.region}}, etiqueta `v1`
+  - variable de entorno `APP_ENV={{.env}}`
+  - accesible públicamente (es un catálogo público)
+  - borra el servicio olvidado `hello-test` que se usó para una demo
 objectives:
-  - Artifact Registry repository and image
-  - Cloud Run service deployed and healthy
-  - Configuration via environment variables
-  - Remove the demo service
+  - Repositorio de Artifact Registry e imagen
+  - Servicio de Cloud Run desplegado y sano
+  - Configuración mediante variables de entorno
+  - Elimina el servicio de demo
 hints:
   - text: "`gcloud artifacts repositories create apps --repository-format=docker --location=REGION`"
-  - text: "`gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT/apps/IMAGE:v1` builds the Dockerfile in Cloud Build."
+  - text: "`gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT/apps/IMAGE:v1` construye el Dockerfile en Cloud Build."
 solution: |
   gcloud artifacts repositories create apps --repository-format=docker --location={{.region}}
   gcloud builds submit --tag {{.region}}-docker.pkg.dev/{{.project}}/apps/{{.svc}}:v1
@@ -48,24 +48,53 @@ solution: |
   curl -s $(gcloud run services describe {{.svc}} --region={{.region}} --format='value(status.url)')/products
   gcloud run services delete hello-test --region={{.region}} --quiet
 rubric:
-  - name: Deploy
+  - name: Despliegue
     validator: state
     points: 40
     checks:
-      - {type: exists, path: "artifactRepos.apps", expect: {format: DOCKER, location: "{{.region}}"}, desc: "Docker repository apps in the region"}
-      - {type: exists, path: "runServices[\"{{.svc}}\"]", expect: {image: {regex: "docker.pkg.dev/{{.project}}/apps/{{.svc}}:v1"}, region: "{{.region}}"}, desc: "Service uses the built image"}
-  - name: Application
+      - {type: exists, path: "artifactRepos.apps", expect: {format: DOCKER, location: "{{.region}}"}, desc: "Repositorio Docker apps en la región"}
+      - {type: exists, path: "runServices[\"{{.svc}}\"]", expect: {image: {regex: "docker.pkg.dev/{{.project}}/apps/{{.svc}}:v1"}, region: "{{.region}}"}, desc: "El servicio usa la imagen construida"}
+  - name: Aplicación
     validator: functional
     points: 30
     checks:
-      - {type: http, target: "run:{{.svc}}", path: /products, status: 200, desc: "The API answers /products"}
-  - name: Configuration
+      - {type: http, target: "run:{{.svc}}", path: /products, status: 200, desc: "La API responde en /products"}
+  - name: Configuración
     validator: state
     points: 20
     checks:
-      - {type: exists, path: "runServices[\"{{.svc}}\"]", expect: {"env.APP_ENV": "{{.env}}"}, desc: "APP_ENV configured"}
-  - name: Cleanup
+      - {type: exists, path: "runServices[\"{{.svc}}\"]", expect: {"env.APP_ENV": "{{.env}}"}, desc: "APP_ENV configurada"}
+  - name: Limpieza
     validator: cost
     points: 10
     checks:
-      - {type: absent, path: "runServices[\"hello-test\"]", desc: "Demo service removed"}
+      - {type: absent, path: "runServices[\"hello-test\"]", desc: "Servicio de demo eliminado"}
+en:
+  title: Day 6 · Containerise and deploy an API on Cloud Run
+  summary: Build an image into Artifact Registry and deploy it to Cloud Run with the right configuration.
+  story: |
+    The catalogue team handed over a `Dockerfile` (see the Files tab). Publish it as
+    **{{.svc}}** on Cloud Run in {{.region}}:
+
+    - image stored in an Artifact Registry Docker repository named `apps` in {{.region}}, tag `v1`
+    - environment variable `APP_ENV={{.env}}`
+    - publicly reachable (it is a public catalogue)
+    - delete the forgotten `hello-test` service used for a demo
+  objectives:
+    - Artifact Registry repository and image
+    - Cloud Run service deployed and healthy
+    - Configuration via environment variables
+    - Remove the demo service
+  hints:
+    - '`gcloud artifacts repositories create apps --repository-format=docker --location=REGION`'
+    - '`gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT/apps/IMAGE:v1` builds the Dockerfile in Cloud Build.'
+  text:
+    Despliegue: Deploy
+    Repositorio Docker apps en la región: Docker repository apps in the region
+    El servicio usa la imagen construida: Service uses the built image
+    Aplicación: Application
+    La API responde en /products: The API answers /products
+    Configuración: Configuration
+    APP_ENV configurada: APP_ENV configured
+    Limpieza: Cleanup
+    Servicio de demo eliminado: Demo service removed

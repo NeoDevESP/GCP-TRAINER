@@ -1,6 +1,6 @@
 id: ace-d28-architecture-review
-title: "Day 28 · Architecture review: reliable and affordable"
-summary: Redesign an over-provisioned, fragile stack to meet reliability and budget targets, justifying each trade-off.
+title: "Día 28 · Revisión de arquitectura: fiable y asequible"
+summary: Rediseña un stack sobredimensionado y frágil para cumplir los objetivos de fiabilidad y presupuesto, justificando cada compromiso.
 track: ace-30
 day: 28
 level: advanced
@@ -22,32 +22,32 @@ setup: |
   gcloud compute addresses create old-lb-ip --region={{.region}}
   gcloud sql instances create orders-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --availability-type=ZONAL --no-backup
 story: |
-  The review board flagged `{{.project}}`:
+  El comité de revisión ha señalado `{{.project}}`:
 
-  - `web-mig` runs a single VM without autohealing — one crash means downtime
-  - `orders-db` is zonal and has **no backups** (RPO target 24 h, must survive a zone outage)
-  - `reports-vm` is an `e2-standard-32` running a nightly report at 3% CPU
-  - a static IP `old-lb-ip` has been reserved and unused for months
+  - `web-mig` ejecuta una sola VM sin autorreparación: un fallo supone una caída
+  - `orders-db` es zonal y **no tiene copias de seguridad** (objetivo de RPO 24 h, debe sobrevivir a la caída de una zona)
+  - `reports-vm` es una `e2-standard-32` que ejecuta un informe nocturno al 3 % de CPU
+  - hay una IP estática `old-lb-ip` reservada y sin usar desde hace meses
 
-  Fix the design so the monthly estimate stays **under {{.budget}} EUR** and answer the review questions.
+  Corrige el diseño para que la estimación mensual se quede **por debajo de {{.budget}} EUR** y responde a las preguntas de la revisión.
 objectives:
-  - Meet reliability requirements (HA database with backups, resilient web tier)
-  - Rightsize and remove waste
-  - Justify trade-offs
+  - Cumple los requisitos de fiabilidad (base de datos en HA con copias de seguridad, capa web resiliente)
+  - Ajusta el tamaño y elimina el desperdicio
+  - Justifica los compromisos
 quiz:
   - id: q1
-    question: Which Cloud SQL configuration survives a zone outage with an RPO of 24 hours?
-    options: ["Zonal with read replica in the same zone", "Regional (HA) with automated backups", "Zonal without backups plus snapshots of the VM", "Export to Cloud Storage once per month"]
+    question: ¿Qué configuración de Cloud SQL sobrevive a la caída de una zona con un RPO de 24 horas?
+    options: ["Zonal con réplica de lectura en la misma zona", "Regional (HA) con copias de seguridad automáticas", "Zonal sin copias de seguridad más snapshots de la VM", "Exportar a Cloud Storage una vez al mes"]
     answer: [1]
     justify: true
-    keywords: [[regional, ha, standby], [backup, copia]]
+    keywords: [[regional, ha, standby], [backup, copia, copia de seguridad, copias de seguridad, respaldo]]
   - id: q2
-    question: What is the best action for reports-vm?
-    options: ["Keep it — it may be needed", "Rightsize to a small machine type (or schedule it)", "Add GPUs", "Move it to a bigger region"]
+    question: ¿Cuál es la mejor acción para reports-vm?
+    options: ["Mantenerla: puede que haga falta", "Ajustar su tamaño a un tipo de máquina pequeño (o programarla)", "Añadirle GPU", "Moverla a una región más grande"]
     answer: [1]
 hints:
   - text: "`gcloud sql instances patch orders-db --availability-type=REGIONAL --backup-start-time=02:00`"
-  - text: "Autohealing: `gcloud compute instance-groups managed update web-mig --health-check=web-hc --initial-delay=120`"
+  - text: "Autorreparación: `gcloud compute instance-groups managed update web-mig --health-check=web-hc --initial-delay=120`"
 solution: |
   gcloud billing estimate
   gcloud sql instances patch orders-db --availability-type=REGIONAL --backup-start-time=02:00
@@ -59,26 +59,65 @@ solution: |
   gcloud compute addresses delete old-lb-ip --region={{.region}} --quiet
   gcloud billing estimate
 rubric:
-  - name: Reliability
+  - name: Fiabilidad
     validator: reliability
     points: 35
     all: true
     checks:
-      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db], resilientGroups: [web-mig]}, desc: "HA database with backups, resilient web tier"}
-  - name: Cost
+      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db], resilientGroups: [web-mig]}, desc: "Base de datos en HA con copias de seguridad y capa web resiliente"}
+  - name: Coste
     validator: cost
     points: 30
     all: true
     checks:
-      - {type: policy, package: gcplab.cost, params: {maxMonthlyEur: "{{.budget}}"}, desc: "No waste and within budget"}
-      - {type: exists, path: "instances[\"reports-vm\"]", desc: "Report VM kept (rightsized, not deleted)"}
-  - name: Trade-offs
+      - {type: policy, package: gcplab.cost, params: {maxMonthlyEur: "{{.budget}}"}, desc: "Sin desperdicio y dentro del presupuesto"}
+      - {type: exists, path: "instances[\"reports-vm\"]", desc: "VM de informes conservada (redimensionada, no borrada)"}
+  - name: Compromisos
     validator: quiz
     points: 25
     checks:
-      - {type: quiz, ratio: 1, desc: "Review questions answered and justified"}
-  - name: Measurement
+      - {type: quiz, ratio: 1, desc: "Preguntas de la revisión respondidas y justificadas"}
+  - name: Medición
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "billing estimate", min: 2, desc: "Cost measured before and after"}
+      - {type: command, regex: "billing estimate", min: 2, desc: "Coste medido antes y después"}
+en:
+  title: 'Day 28 · Architecture review: reliable and affordable'
+  summary: Redesign an over-provisioned, fragile stack to meet reliability and budget targets, justifying each trade-off.
+  story: |
+    The review board flagged `{{.project}}`:
+
+    - `web-mig` runs a single VM without autohealing — one crash means downtime
+    - `orders-db` is zonal and has **no backups** (RPO target 24 h, must survive a zone outage)
+    - `reports-vm` is an `e2-standard-32` running a nightly report at 3% CPU
+    - a static IP `old-lb-ip` has been reserved and unused for months
+
+    Fix the design so the monthly estimate stays **under {{.budget}} EUR** and answer the review questions.
+  objectives:
+    - Meet reliability requirements (HA database with backups, resilient web tier)
+    - Rightsize and remove waste
+    - Justify trade-offs
+  hints:
+    - '`gcloud sql instances patch orders-db --availability-type=REGIONAL --backup-start-time=02:00`'
+    - 'Autohealing: `gcloud compute instance-groups managed update web-mig --health-check=web-hc --initial-delay=120`'
+  text:
+    ¿Qué configuración de Cloud SQL sobrevive a la caída de una zona con un RPO de 24 horas?: Which Cloud SQL configuration survives a zone outage with an RPO of 24 hours?
+    Zonal con réplica de lectura en la misma zona: Zonal with read replica in the same zone
+    Regional (HA) con copias de seguridad automáticas: Regional (HA) with automated backups
+    Zonal sin copias de seguridad más snapshots de la VM: Zonal without backups plus snapshots of the VM
+    Exportar a Cloud Storage una vez al mes: Export to Cloud Storage once per month
+    ¿Cuál es la mejor acción para reports-vm?: What is the best action for reports-vm?
+    'Mantenerla: puede que haga falta': Keep it — it may be needed
+    Ajustar su tamaño a un tipo de máquina pequeño (o programarla): Rightsize to a small machine type (or schedule it)
+    Añadirle GPU: Add GPUs
+    Moverla a una región más grande: Move it to a bigger region
+    Fiabilidad: Reliability
+    Base de datos en HA con copias de seguridad y capa web resiliente: HA database with backups, resilient web tier
+    Coste: Cost
+    Sin desperdicio y dentro del presupuesto: No waste and within budget
+    VM de informes conservada (redimensionada, no borrada): Report VM kept (rightsized, not deleted)
+    Compromisos: Trade-offs
+    Preguntas de la revisión respondidas y justificadas: Review questions answered and justified
+    Medición: Measurement
+    Coste medido antes y después: Cost measured before and after

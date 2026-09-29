@@ -123,6 +123,20 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("✓ %d labs, %d tracks, %d badges, %d certification blueprints\n", len(cat.Labs), len(cat.Tracks), len(cat.Badges), len(cat.Certs))
+	case "i18n":
+		// Spanish is the primary language: every text needs its English overlay.
+		cat, err := learning.LoadCatalog(*content)
+		if err != nil {
+			fail(err)
+		}
+		problems := translationProblems(cat, *content)
+		for _, p := range problems {
+			fmt.Println("✗", p)
+		}
+		if len(problems) > 0 {
+			os.Exit(1)
+		}
+		fmt.Println("✓ all content has its English translation")
 	case "test":
 		labs, err := scenario.LoadAll(filepath.Join(*content, "labs"))
 		if err != nil {
@@ -401,4 +415,17 @@ func playLab(l *scenario.Lab, seed int64) {
 		}
 		fmt.Print(w.Session.Exec(line).Output)
 	}
+}
+
+// translationProblems lists content without its English overlay.
+func translationProblems(cat *learning.Catalog, content string) []string {
+	problems := cat.TranslationProblems()
+	if lib, err := scenario.LoadLibrary(filepath.Join(content, "failures")); err == nil {
+		problems = append(problems, lib.TranslationProblems()...)
+	}
+	if co, err := company.Load(filepath.Join(content, "company"), "nebula"); err == nil {
+		problems = append(problems, co.TranslationProblems()...)
+	}
+	sort.Strings(problems)
+	return problems
 }

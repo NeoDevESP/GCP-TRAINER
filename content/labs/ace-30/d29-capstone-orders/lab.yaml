@@ -1,6 +1,6 @@
 id: ace-d29-capstone-orders
-title: "Day 29 · Capstone: orders platform"
-summary: Build an end-to-end orders platform — API, database, events, analytics sink, least privilege, observability and budget.
+title: "Día 29 · Proyecto final: plataforma de pedidos"
+summary: 'Construye una plataforma de pedidos de extremo a extremo: API, base de datos, eventos, destino analítico, mínimo privilegio, observabilidad y presupuesto.'
 track: ace-30
 day: 29
 level: advanced
@@ -19,23 +19,23 @@ setup: |
 traffic:
   - {name: shoppers, target: "run:orders-api", path: /orders, rps: 25}
 story: |
-  Build the **orders platform** for launch day. Images (already in the public registry):
-  `europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0` and `.../orders-worker:1.0`.
+  Construye la **plataforma de pedidos** para el día del lanzamiento. Imágenes (ya en el registro público):
+  `europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0` y `.../orders-worker:1.0`.
 
-  | Component | Requirement |
+  | Componente | Requisito |
   |---|---|
-  | `orders-api` (Cloud Run, public) | reads/writes `orders-db` via the Cloud SQL connector (`DB_HOST=/cloudsql/...`, `DB_USER=orders-app`, `DB_NAME=orders`), password from Secret Manager secret `orders-db-password` (value `Pr0d-Orders-{{.project}}`), publishes to topic `orders` (`TOPIC=orders`) |
-  | `orders-worker` (Cloud Run, **private**) | receives push from subscription `orders-to-bq` (authenticated as `orders-push`), writes to BigQuery `sales.orders` (`BQ_TABLE=sales.orders`) |
-  | Identities | `orders-api-sa`, `orders-worker-sa`, `orders-push` — no basic roles |
-  | Operations | alert on 5xx of `orders-api`, monthly estimate under 250 EUR |
+  | `orders-api` (Cloud Run, público) | lee y escribe en `orders-db` mediante el conector de Cloud SQL (`DB_HOST=/cloudsql/...`, `DB_USER=orders-app`, `DB_NAME=orders`), contraseña desde el secreto de Secret Manager `orders-db-password` (valor `Pr0d-Orders-{{.project}}`), publica en el tema `orders` (`TOPIC=orders`) |
+  | `orders-worker` (Cloud Run, **privado**) | recibe push de la suscripción `orders-to-bq` (autenticada como `orders-push`), escribe en BigQuery `sales.orders` (`BQ_TABLE=sales.orders`) |
+  | Identidades | `orders-api-sa`, `orders-worker-sa`, `orders-push`: sin roles básicos |
+  | Operaciones | alerta sobre los 5xx de `orders-api`, estimación mensual por debajo de 250 EUR |
 objectives:
-  - Working end-to-end flow (API → DB → Pub/Sub → worker → BigQuery)
-  - Least privilege and no plaintext secrets
-  - Observability and cost control
-  - Architecture note
+  - Flujo de extremo a extremo funcionando (API → BD → Pub/Sub → worker → BigQuery)
+  - Mínimo privilegio y ningún secreto en claro
+  - Observabilidad y control de costes
+  - Nota de arquitectura
 hints:
-  - text: "orders-api-sa needs cloudsql.client, pubsub publisher on the topic and secretAccessor on the secret."
-  - text: "orders-worker-sa needs bigquery.dataEditor on the dataset (or table) — create `sales` dataset and `orders` table first."
+  - text: "orders-api-sa necesita cloudsql.client, publicador de Pub/Sub en el tema y secretAccessor en el secreto."
+  - text: "orders-worker-sa necesita bigquery.dataEditor en el dataset (o la tabla): crea antes el dataset `sales` y la tabla `orders`."
 solution: |
   gcloud iam service-accounts create orders-api-sa
   gcloud iam service-accounts create orders-worker-sa
@@ -59,33 +59,68 @@ solution: |
 evidence:
   fields: [architecture]
   sample:
-    architecture: Cloud Run orders-api writes to a regional Cloud SQL instance through the connector using a Secret Manager password and publishes events to Pub/Sub; an authenticated push subscription invokes the private orders-worker which writes to BigQuery. Each component has its own service account with least privilege, and a log-based metric alerts on 5xx.
+    architecture: orders-api en Cloud Run escribe en una instancia regional de Cloud SQL a través del conector usando una contraseña de Secret Manager y publica eventos en Pub/Sub; una suscripción push autenticada invoca al orders-worker privado, que escribe en BigQuery. Cada componente tiene su propia cuenta de servicio con mínimo privilegio y una métrica basada en registros alerta sobre los 5xx.
 rubric:
-  - name: End-to-end flow
+  - name: Flujo de extremo a extremo
     validator: functional
     points: 35
     all: true
     checks:
-      - {type: http, target: "run:orders-api", path: /orders, status: 200, desc: "API serves orders"}
-      - {type: pubsub, subscription: orders-to-bq, ackedMin: 10, backlogMax: 50, settle: 3, desc: "Events reach the worker"}
-      - {type: exists, path: "datasets.sales.tables.orders", desc: "Analytics sink"}
-  - name: Security
+      - {type: http, target: "run:orders-api", path: /orders, status: 200, desc: "La API sirve pedidos"}
+      - {type: pubsub, subscription: orders-to-bq, ackedMin: 10, backlogMax: 50, settle: 3, desc: "Los eventos llegan al worker"}
+      - {type: exists, path: "datasets.sales.tables.orders", desc: "Destino analítico"}
+  - name: Seguridad
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV, BASIC_ROLE_SERVICE_ACCOUNT, PUBLIC_SQL], desc: "No plaintext secrets, basic roles or public DB"}
-      - {type: http, target: "run:orders-worker", path: /push, status: 403, desc: "Worker is private"}
-      - {type: iam, principal: "serviceAccount:orders-api-sa@{{.project}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: project, expect: false, desc: "API cannot write analytics"}
-  - name: Operations
+      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV, BASIC_ROLE_SERVICE_ACCOUNT, PUBLIC_SQL], desc: "Sin secretos en claro, roles básicos ni base de datos pública"}
+      - {type: http, target: "run:orders-worker", path: /push, status: 403, desc: "El worker es privado"}
+      - {type: iam, principal: "serviceAccount:orders-api-sa@{{.project}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: project, expect: false, desc: "La API no puede escribir en analítica"}
+  - name: Operaciones
     validator: state
     points: 15
     checks:
-      - {type: alert_policy, filterContains: orders_5xx, desc: "5xx alert"}
-      - {type: cost_max, eur: 250, desc: "Within budget"}
-  - name: Architecture note
+      - {type: alert_policy, filterContains: orders_5xx, desc: "Alerta de 5xx"}
+      - {type: cost_max, eur: 250, desc: "Dentro del presupuesto"}
+  - name: Nota de arquitectura
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [architecture], keywords: [[pub/sub, pubsub], [service account, cuenta de servicio], [secret], [bigquery]], desc: "Architecture explained"}
+      - {type: evidence, fields: [architecture], keywords: [[pub/sub, pubsub], [service account, cuenta de servicio], [secret, secreto], [bigquery]], desc: "Arquitectura explicada"}
+en:
+  title: 'Day 29 · Capstone: orders platform'
+  summary: Build an end-to-end orders platform — API, database, events, analytics sink, least privilege, observability and budget.
+  story: |
+    Build the **orders platform** for launch day. Images (already in the public registry):
+    `europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0` and `.../orders-worker:1.0`.
+
+    | Component | Requirement |
+    |---|---|
+    | `orders-api` (Cloud Run, public) | reads/writes `orders-db` via the Cloud SQL connector (`DB_HOST=/cloudsql/...`, `DB_USER=orders-app`, `DB_NAME=orders`), password from Secret Manager secret `orders-db-password` (value `Pr0d-Orders-{{.project}}`), publishes to topic `orders` (`TOPIC=orders`) |
+    | `orders-worker` (Cloud Run, **private**) | receives push from subscription `orders-to-bq` (authenticated as `orders-push`), writes to BigQuery `sales.orders` (`BQ_TABLE=sales.orders`) |
+    | Identities | `orders-api-sa`, `orders-worker-sa`, `orders-push` — no basic roles |
+    | Operations | alert on 5xx of `orders-api`, monthly estimate under 250 EUR |
+  objectives:
+    - Working end-to-end flow (API → DB → Pub/Sub → worker → BigQuery)
+    - Least privilege and no plaintext secrets
+    - Observability and cost control
+    - Architecture note
+  hints:
+    - orders-api-sa needs cloudsql.client, pubsub publisher on the topic and secretAccessor on the secret.
+    - orders-worker-sa needs bigquery.dataEditor on the dataset (or table) — create `sales` dataset and `orders` table first.
+  text:
+    Flujo de extremo a extremo: End-to-end flow
+    La API sirve pedidos: API serves orders
+    Los eventos llegan al worker: Events reach the worker
+    Destino analítico: Analytics sink
+    Seguridad: Security
+    Sin secretos en claro, roles básicos ni base de datos pública: No plaintext secrets, basic roles or public DB
+    El worker es privado: Worker is private
+    La API no puede escribir en analítica: API cannot write analytics
+    Operaciones: Operations
+    Alerta de 5xx: 5xx alert
+    Dentro del presupuesto: Within budget
+    Nota de arquitectura: Architecture note
+    Arquitectura explicada: Architecture explained

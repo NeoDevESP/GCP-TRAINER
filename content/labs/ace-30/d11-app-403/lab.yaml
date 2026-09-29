@@ -1,6 +1,6 @@
 id: ace-d11-app-403
-title: "Day 11 · The application gets 403 reading a bucket"
-summary: Identify the effective service account of a workload and grant exactly the read permission it needs.
+title: "Día 11 · La aplicación recibe 403 al leer un bucket"
+summary: Identifica la cuenta de servicio efectiva de una carga de trabajo y concede exactamente el permiso de lectura que necesita.
 track: ace-30
 day: 11
 level: intermediate
@@ -25,15 +25,15 @@ setup: |
 traffic:
   - {name: reports, target: "run:report-worker", path: /reports, rps: 10}
 story: |
-  **Ticket OPS-588** — *"report-worker returns 403 since the migration. We already gave
-  `report-sa` access to the bucket, so IAM is fine."* Is it?
+  **Ticket OPS-588** — *«report-worker devuelve 403 desde la migración. Ya dimos acceso al bucket a
+  `report-sa`, así que IAM está bien».* ¿Seguro?
 objectives:
-  - Identify the identity the service really uses
-  - Grant only the read permission required, at the right level
-  - Validate the fix
+  - Identifica la identidad que usa realmente el servicio
+  - Concede solo el permiso de lectura necesario, al nivel adecuado
+  - Valida la corrección
 hints:
-  - text: "The application logs contain the principal that was denied."
-  - text: "`gcloud run services describe report-worker --region=...` shows the service account."
+  - text: "Los registros de la aplicación contienen el principal al que se denegó el acceso."
+  - text: "`gcloud run services describe report-worker --region=...` muestra la cuenta de servicio."
 solution: |
   gcloud logging read 'severity>=ERROR' --limit=1 --format='value(textPayload)'
   gcloud run services describe report-worker --region={{.region}} --format='value(serviceAccount)'
@@ -42,29 +42,53 @@ solution: |
 evidence:
   fields: [rootCause]
   sample:
-    rootCause: The service runs as {{.sa}}, not report-sa, and {{.sa}} lacked storage.objects.get, so Cloud Storage returned 403 permission denied.
+    rootCause: El servicio se ejecuta como {{.sa}}, no como report-sa, y {{.sa}} no tenía storage.objects.get, así que Cloud Storage devolvía 403 permission denied (permiso denegado).
 rubric:
-  - name: Effective identity
+  - name: Identidad efectiva
     validator: evidence
     points: 25
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [["{{.sa}}"]], desc: "Name the identity the service runs as"}
-  - name: Cause
+      - {type: evidence, fields: [rootCause], keywords: [["{{.sa}}"]], desc: "Nombra la identidad con la que se ejecuta el servicio"}
+  - name: Causa
     validator: evidence
     points: 25
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [["403", permission, permiso, denied, denegado]], desc: "Explain the denial"}
-  - name: Least privilege
+      - {type: evidence, fields: [rootCause], keywords: [["403", permission, permiso, denied, denegado, denegad]], desc: "Explica la denegación"}
+  - name: Mínimo privilegio
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: iam, principal: "serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:exports-{{.project}}/data/report.csv", desc: "Service can read the report"}
-      - {type: iam, principal: "serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:exports-{{.project}}/data/report.csv", expect: false, desc: "Service cannot delete"}
-      - {type: no_basic_roles, members: ["serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
-  - name: Validation
+      - {type: iam, principal: "serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:exports-{{.project}}/data/report.csv", desc: "El servicio puede leer el informe"}
+      - {type: iam, principal: "serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:exports-{{.project}}/data/report.csv", expect: false, desc: "El servicio no puede borrar"}
+      - {type: no_basic_roles, members: ["serviceAccount:{{.sa}}@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos"}
+  - name: Validación
     validator: functional
     points: 20
     checks:
-      - {type: http, target: "run:report-worker", path: /reports, status: 200, desc: "/reports works"}
+      - {type: http, target: "run:report-worker", path: /reports, status: 200, desc: "/reports funciona"}
+en:
+  title: Day 11 · The application gets 403 reading a bucket
+  summary: Identify the effective service account of a workload and grant exactly the read permission it needs.
+  story: |
+    **Ticket OPS-588** — *"report-worker returns 403 since the migration. We already gave
+    `report-sa` access to the bucket, so IAM is fine."* Is it?
+  objectives:
+    - Identify the identity the service really uses
+    - Grant only the read permission required, at the right level
+    - Validate the fix
+  hints:
+    - The application logs contain the principal that was denied.
+    - '`gcloud run services describe report-worker --region=...` shows the service account.'
+  text:
+    Identidad efectiva: Effective identity
+    Nombra la identidad con la que se ejecuta el servicio: Name the identity the service runs as
+    Causa: Cause
+    Explica la denegación: Explain the denial
+    Mínimo privilegio: Least privilege
+    El servicio puede leer el informe: Service can read the report
+    El servicio no puede borrar: Service cannot delete
+    Sin roles básicos: No basic roles
+    Validación: Validation
+    /reports funciona: /reports works

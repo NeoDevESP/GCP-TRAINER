@@ -1,6 +1,6 @@
 id: ace-d04-web-vm
-title: "Day 4 · A minimal web VM"
-summary: Deploy a small VM that serves HTTP from a startup script, exposed only on port 80 by network tag.
+title: "Día 4 · Una VM web mínima"
+summary: Despliega una VM pequeña que sirva HTTP desde un script de arranque, expuesta solo en el puerto 80 mediante una etiqueta de red.
 track: ace-30
 day: 4
 level: basic
@@ -16,19 +16,19 @@ params:
   zone: [europe-west1-c, europe-west1-d]
 baseline: [default-network]
 story: |
-  Marketing needs a landing page **today**. Requirements:
+  Marketing necesita una página de aterrizaje **hoy**. Requisitos:
 
-  - VM **{{.vm}}** in zone **{{.zone}}**, the smallest general-purpose shared-core machine that can run nginx (e2-micro or e2-small)
-  - nginx installed automatically at boot (startup script)
-  - HTTP (80) reachable from the internet **only for this VM**, using the network tag `web`
+  - VM **{{.vm}}** en la zona **{{.zone}}**, la máquina de uso general con núcleo compartido más pequeña que pueda ejecutar nginx (e2-micro o e2-small)
+  - nginx instalado automáticamente al arrancar (script de arranque)
+  - HTTP (80) accesible desde internet **solo para esta VM**, usando la etiqueta de red `web`
 objectives:
-  - VM with the requested name, zone and a small machine type
-  - nginx installed by a startup script
-  - Firewall rule for tcp:80 targeting the `web` tag
-  - Positive HTTP health test from the internet
+  - VM con el nombre y la zona pedidos y un tipo de máquina pequeño
+  - nginx instalado mediante un script de arranque
+  - Regla de cortafuegos para tcp:80 dirigida a la etiqueta `web`
+  - Prueba HTTP positiva desde internet
 hints:
-  - text: "`--metadata=startup-script='apt-get install -y nginx'` or `--metadata-from-file=startup-script=FILE`."
-  - text: "A firewall rule without target tags applies to every VM in the network."
+  - text: "`--metadata=startup-script='apt-get install -y nginx'` o `--metadata-from-file=startup-script=ARCHIVO`."
+  - text: "Una regla de cortafuegos sin etiquetas de destino se aplica a todas las VM de la red."
 solution: |
   gcloud compute instances create {{.vm}} --zone={{.zone}} --machine-type=e2-small --tags=web --metadata=startup-script='apt-get update && apt-get install -y nginx'
   gcloud compute firewall-rules create allow-web-http --network=default --allow=tcp:80 --target-tags=web --source-ranges=0.0.0.0/0
@@ -38,22 +38,51 @@ rubric:
     validator: state
     points: 35
     checks:
-      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {zone: "{{.zone}}", status: RUNNING}, desc: "VM in the requested zone"}
-      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {tags: {contains: web}}, desc: "VM tagged web"}
-  - name: Application
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {zone: "{{.zone}}", status: RUNNING}, desc: "VM en la zona pedida"}
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {tags: {contains: web}}, desc: "VM con la etiqueta web"}
+  - name: Aplicación
     validator: functional
     points: 30
     checks:
-      - {type: http, target: "vm:{{.vm}}:80", path: /, status: 200, desc: "HTTP 200 from the internet"}
-  - name: Network scope
+      - {type: http, target: "vm:{{.vm}}:80", path: /, status: 200, desc: "HTTP 200 desde internet"}
+  - name: Alcance de red
     validator: security
     points: 20
     checks:
-      - {type: count, collection: firewalls, where: {targetTags: {contains: web}, action: ALLOW}, min: 1, desc: "A rule targets the web tag"}
-      - {type: count, collection: firewalls, where: {rules: {regex: "\"80\""}, targetTags: {empty: true}, action: ALLOW, sourceRanges: {contains: "0.0.0.0/0"}}, max: 0, desc: "Port 80 must not be opened to every VM"}
-  - name: Cost
+      - {type: count, collection: firewalls, where: {targetTags: {contains: web}, action: ALLOW}, min: 1, desc: "Una regla se dirige a la etiqueta web"}
+      - {type: count, collection: firewalls, where: {rules: {regex: "\"80\""}, targetTags: {empty: true}, action: ALLOW, sourceRanges: {contains: "0.0.0.0/0"}}, max: 0, desc: "El puerto 80 no debe abrirse a todas las VM"}
+  - name: Coste
     validator: cost
     points: 15
     checks:
-      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {machineType: {in: [e2-micro, e2-small]}}, desc: "Small machine type"}
-      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {gpus: 0}, desc: "No accelerators"}
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {machineType: {in: [e2-micro, e2-small]}}, desc: "Tipo de máquina pequeño"}
+      - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {gpus: 0}, desc: "Sin aceleradores"}
+en:
+  title: Day 4 · A minimal web VM
+  summary: Deploy a small VM that serves HTTP from a startup script, exposed only on port 80 by network tag.
+  story: |
+    Marketing needs a landing page **today**. Requirements:
+
+    - VM **{{.vm}}** in zone **{{.zone}}**, the smallest general-purpose shared-core machine that can run nginx (e2-micro or e2-small)
+    - nginx installed automatically at boot (startup script)
+    - HTTP (80) reachable from the internet **only for this VM**, using the network tag `web`
+  objectives:
+    - VM with the requested name, zone and a small machine type
+    - nginx installed by a startup script
+    - Firewall rule for tcp:80 targeting the `web` tag
+    - Positive HTTP health test from the internet
+  hints:
+    - '`--metadata=startup-script=''apt-get install -y nginx''` or `--metadata-from-file=startup-script=FILE`.'
+    - A firewall rule without target tags applies to every VM in the network.
+  text:
+    VM: VM
+    VM en la zona pedida: VM in the requested zone
+    VM con la etiqueta web: VM tagged web
+    Aplicación: Application
+    HTTP 200 desde internet: HTTP 200 from the internet
+    Alcance de red: Network scope
+    Una regla se dirige a la etiqueta web: A rule targets the web tag
+    El puerto 80 no debe abrirse a todas las VM: Port 80 must not be opened to every VM
+    Coste: Cost
+    Tipo de máquina pequeño: Small machine type
+    Sin aceleradores: No accelerators

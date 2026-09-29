@@ -1,6 +1,6 @@
 id: ace-d26-hybrid-design
-title: "Day 26 · Case study: connect the on-prem datacenter"
-summary: Choose and justify the hybrid connectivity design, then build the HA VPN with dynamic routing.
+title: "Día 26 · Caso práctico: conectar el centro de datos on-premise"
+summary: Elige y justifica el diseño de conectividad híbrida y después construye la HA VPN con enrutamiento dinámico.
 track: ace-30
 day: 26
 level: advanced
@@ -15,40 +15,40 @@ params:
   peerasn: ["65010", "65020"]
 baseline: [default-network]
 story: |
-  **Case study — Tallerix Logistics.** The Madrid datacenter (`10.50.0.0/16`, BGP ASN {{.peerasn}}) must
-  reach the application VPC `app-vpc` in {{.region}}. Requirements:
+  **Caso práctico — Tallerix Logistics.** El centro de datos de Madrid (`10.50.0.0/16`, ASN de BGP {{.peerasn}}) tiene que
+  llegar a la VPC de aplicaciones `app-vpc` en {{.region}}. Requisitos:
 
-  - 99.99% availability SLA for the link, encrypted, available **this week**
-  - expected traffic 300 Mbps, growing to 5 Gbps in two years
-  - no manual route maintenance when on-prem adds subnets
+  - SLA de disponibilidad del 99,99 % para el enlace, cifrado y disponible **esta semana**
+  - tráfico previsto de 300 Mbps, creciendo a 5 Gbps en dos años
+  - sin mantenimiento manual de rutas cuando on-premise añada subredes
 
-  Build the first phase: VPC `app-vpc` (custom, subnet `app` 10.10.0.0/20), Cloud Router `onprem-router`
-  (ASN 64514), HA VPN gateway `onprem-gw` with **two tunnels** (interfaces 0 and 1) towards the peer
-  gateway `madrid-peer` (IPs 203.0.113.10 and 203.0.113.11) and one BGP session per tunnel.
-  Then answer the design questions with justification.
+  Construye la primera fase: VPC `app-vpc` (personalizada, subred `app` 10.10.0.0/20), Cloud Router `onprem-router`
+  (ASN 64514), pasarela HA VPN `onprem-gw` con **dos túneles** (interfaces 0 y 1) hacia la pasarela
+  par `madrid-peer` (IP 203.0.113.10 y 203.0.113.11) y una sesión BGP por túnel.
+  Después responde a las preguntas de diseño justificando tus respuestas.
 objectives:
-  - Choose the connectivity option and justify it
-  - HA VPN with two tunnels and BGP
-  - Plan the evolution (Interconnect)
+  - Elige la opción de conectividad y justifícala
+  - HA VPN con dos túneles y BGP
+  - Planifica la evolución (Interconnect)
 quiz:
   - id: q1
-    question: Which option meets the requirements for phase 1?
-    options: ["Classic VPN with static routes", "HA VPN with two tunnels and Cloud Router (BGP)", "Dedicated Interconnect", "VPC peering"]
+    question: ¿Qué opción cumple los requisitos de la fase 1?
+    options: ["VPN clásica con rutas estáticas", "HA VPN con dos túneles y Cloud Router (BGP)", "Dedicated Interconnect", "Emparejamiento de VPC"]
     answer: [1]
     justify: true
     keywords: [[99.99, sla], [bgp, dynamic, dinamic]]
   - id: q2
-    question: What is the right evolution when traffic reaches 5 Gbps sustained?
-    options: ["Add more classic VPN tunnels", "Partner or Dedicated Interconnect with redundant attachments", "Move to public IPs", "Cloud NAT"]
+    question: ¿Cuál es la evolución adecuada cuando el tráfico alcance 5 Gbps sostenidos?
+    options: ["Añadir más túneles de VPN clásica", "Partner o Dedicated Interconnect con conexiones redundantes", "Pasar a IP públicas", "Cloud NAT"]
     answer: [1]
     justify: true
-    keywords: [[interconnect], [bandwidth, ancho de banda, gbps, throughput]]
+    keywords: [[interconnect], [bandwidth, ancho de banda, gbps, throughput, rendimiento]]
   - id: q3
-    question: What avoids manual route maintenance when on-prem adds subnets?
-    options: ["Static routes per subnet", "BGP advertisements through Cloud Router", "Firewall rules", "Private Google Access"]
+    question: ¿Qué evita el mantenimiento manual de rutas cuando on-premise añade subredes?
+    options: ["Rutas estáticas por subred", "Anuncios BGP a través de Cloud Router", "Reglas de cortafuegos", "Acceso privado a Google"]
     answer: [1]
 hints:
-  - text: "HA VPN needs an external VPN gateway resource (peer), a Cloud Router and one tunnel per interface."
+  - text: "La HA VPN necesita un recurso de pasarela VPN externa (el par), un Cloud Router y un túnel por interfaz."
 solution: |
   gcloud compute networks create app-vpc --subnet-mode=custom
   gcloud compute networks subnets create app --network=app-vpc --region={{.region}} --range=10.10.0.0/20
@@ -59,22 +59,68 @@ solution: |
   gcloud compute routers add-bgp-peer onprem-router --peer-name=madrid-0 --interface=if-tunnel-0 --peer-asn={{.peerasn}} --region={{.region}}
   gcloud compute routers add-bgp-peer onprem-router --peer-name=madrid-1 --interface=if-tunnel-1 --peer-asn={{.peerasn}} --region={{.region}}
 rubric:
-  - name: Design decisions
+  - name: Decisiones de diseño
     validator: quiz
     points: 40
     checks:
-      - {type: quiz, ratio: 1, desc: "All design questions correct and justified"}
+      - {type: quiz, ratio: 1, desc: "Todas las preguntas de diseño correctas y justificadas"}
   - name: HA VPN
     validator: state
     points: 35
     all: true
     checks:
-      - {type: exists, path: "networks[\"app-vpc\"]", desc: "Application VPC"}
-      - {type: exists, path: "vpnGateways[\"onprem-gw\"]", expect: {network: app-vpc, tunnels: {minLen: 2}}, desc: "Two tunnels on the HA gateway"}
-      - {type: exists, path: "vpnGateways[\"onprem-gw\"].tunnels", expect: {"": {regex: "\"interface\":1"}}, desc: "Both interfaces used"}
-  - name: Dynamic routing
+      - {type: exists, path: "networks[\"app-vpc\"]", desc: "VPC de aplicaciones"}
+      - {type: exists, path: "vpnGateways[\"onprem-gw\"]", expect: {network: app-vpc, tunnels: {minLen: 2}}, desc: "Dos túneles en la pasarela HA"}
+      - {type: exists, path: "vpnGateways[\"onprem-gw\"].tunnels", expect: {"": {regex: "\"interface\":1"}}, desc: "Se usan ambas interfaces"}
+  - name: Enrutamiento dinámico
     validator: state
     points: 25
     checks:
-      - {type: exists, path: "routers[\"onprem-router\"]", expect: {asn: 64514, bgpPeers: {minLen: 2}}, desc: "One BGP session per tunnel"}
-      - {type: exists, path: "routers[\"onprem-router\"].bgpPeers", expect: {"": {regex: "\"peerAsn\":{{.peerasn}}"}}, desc: "Peer ASN matches on-prem"}
+      - {type: exists, path: "routers[\"onprem-router\"]", expect: {asn: 64514, bgpPeers: {minLen: 2}}, desc: "Una sesión BGP por túnel"}
+      - {type: exists, path: "routers[\"onprem-router\"].bgpPeers", expect: {"": {regex: "\"peerAsn\":{{.peerasn}}"}}, desc: "El ASN del par coincide con el de on-premise"}
+en:
+  title: 'Day 26 · Case study: connect the on-prem datacenter'
+  summary: Choose and justify the hybrid connectivity design, then build the HA VPN with dynamic routing.
+  story: |
+    **Case study — Tallerix Logistics.** The Madrid datacenter (`10.50.0.0/16`, BGP ASN {{.peerasn}}) must
+    reach the application VPC `app-vpc` in {{.region}}. Requirements:
+
+    - 99.99% availability SLA for the link, encrypted, available **this week**
+    - expected traffic 300 Mbps, growing to 5 Gbps in two years
+    - no manual route maintenance when on-prem adds subnets
+
+    Build the first phase: VPC `app-vpc` (custom, subnet `app` 10.10.0.0/20), Cloud Router `onprem-router`
+    (ASN 64514), HA VPN gateway `onprem-gw` with **two tunnels** (interfaces 0 and 1) towards the peer
+    gateway `madrid-peer` (IPs 203.0.113.10 and 203.0.113.11) and one BGP session per tunnel.
+    Then answer the design questions with justification.
+  objectives:
+    - Choose the connectivity option and justify it
+    - HA VPN with two tunnels and BGP
+    - Plan the evolution (Interconnect)
+  hints:
+    - HA VPN needs an external VPN gateway resource (peer), a Cloud Router and one tunnel per interface.
+  text:
+    ¿Qué opción cumple los requisitos de la fase 1?: Which option meets the requirements for phase 1?
+    VPN clásica con rutas estáticas: Classic VPN with static routes
+    HA VPN con dos túneles y Cloud Router (BGP): HA VPN with two tunnels and Cloud Router (BGP)
+    Dedicated Interconnect: Dedicated Interconnect
+    Emparejamiento de VPC: VPC peering
+    ¿Cuál es la evolución adecuada cuando el tráfico alcance 5 Gbps sostenidos?: What is the right evolution when traffic reaches 5 Gbps sustained?
+    Añadir más túneles de VPN clásica: Add more classic VPN tunnels
+    Partner o Dedicated Interconnect con conexiones redundantes: Partner or Dedicated Interconnect with redundant attachments
+    Pasar a IP públicas: Move to public IPs
+    Cloud NAT: Cloud NAT
+    ¿Qué evita el mantenimiento manual de rutas cuando on-premise añade subredes?: What avoids manual route maintenance when on-prem adds subnets?
+    Rutas estáticas por subred: Static routes per subnet
+    Anuncios BGP a través de Cloud Router: BGP advertisements through Cloud Router
+    Reglas de cortafuegos: Firewall rules
+    Acceso privado a Google: Private Google Access
+    Decisiones de diseño: Design decisions
+    Todas las preguntas de diseño correctas y justificadas: All design questions correct and justified
+    HA VPN: HA VPN
+    VPC de aplicaciones: Application VPC
+    Dos túneles en la pasarela HA: Two tunnels on the HA gateway
+    Se usan ambas interfaces: Both interfaces used
+    Enrutamiento dinámico: Dynamic routing
+    Una sesión BGP por túnel: One BGP session per tunnel
+    El ASN del par coincide con el de on-premise: Peer ASN matches on-prem

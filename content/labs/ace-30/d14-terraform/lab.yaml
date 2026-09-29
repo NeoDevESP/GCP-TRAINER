@@ -1,6 +1,6 @@
 id: ace-d14-terraform
-title: "Day 14 · Reproduce the environment with Terraform"
-summary: Codify a network, firewall and VM in idempotent Terraform with variables and outputs.
+title: "Día 14 · Reproducir el entorno con Terraform"
+summary: Codifica una red, un cortafuegos y una VM en Terraform idempotente con variables y outputs.
 track: ace-30
 day: 14
 level: intermediate
@@ -13,22 +13,22 @@ difficulty: 3
 minutes: 90
 baseline: [empty]
 story: |
-  The staging environment was built by hand and nobody can reproduce it. Write Terraform
-  (in the Files tab or with `cat > main.tf`) that creates:
+  El entorno de staging se construyó a mano y nadie puede reproducirlo. Escribe Terraform
+  (en la pestaña Archivos o con `cat > main.tf`) que cree:
 
-  - network `stg-vpc` (custom) and subnet `stg-app` 10.50.0.0/24 in the region given by a **variable `region`**
-  - firewall `stg-allow-http` tcp:80 from anywhere to tag `app`
-  - VM `stg-app-1` (e2-small, tag `app`, nginx via startup script, public IP)
-  - an **output** with the VM name
+  - la red `stg-vpc` (personalizada) y la subred `stg-app` 10.50.0.0/24 en la región indicada por una **variable `region`**
+  - el cortafuegos `stg-allow-http` tcp:80 desde cualquier origen hacia la etiqueta `app`
+  - la VM `stg-app-1` (e2-small, etiqueta `app`, nginx mediante script de arranque, IP pública)
+  - un **output** con el nombre de la VM
 
-  `terraform plan` after `apply` must show **no changes**. SSH must not be open to the internet.
+  `terraform plan` después de `apply` no debe mostrar **ningún cambio**. El SSH no puede estar abierto a internet.
 objectives:
-  - Declarative, idempotent code
-  - Variables and outputs
-  - Correct structure and security
+  - Código declarativo e idempotente
+  - Variables y outputs
+  - Estructura y seguridad correctas
 hints:
-  - text: "Reference attributes (`google_compute_network.vpc.id`) instead of hard-coding names."
-  - text: "`access_config {}` inside `network_interface` gives an ephemeral public IP."
+  - text: "Referencia atributos (`google_compute_network.vpc.id`) en lugar de escribir los nombres a mano."
+  - text: "`access_config {}` dentro de `network_interface` da una IP pública efímera."
 solution: |
   cat > main.tf <<'HCL'
   variable "region" {
@@ -84,26 +84,58 @@ solution: |
   terraform apply -auto-approve
   terraform plan
 rubric:
-  - name: IaC applied
+  - name: IaC aplicada
     validator: state
     points: 40
     checks:
-      - {type: exists, path: "networks[\"stg-vpc\"]", expect: {subnetMode: custom}, desc: "Network"}
-      - {type: exists, path: "subnets[\"stg-app\"]", expect: {ipCidrRange: 10.50.0.0/24}, desc: "Subnet"}
+      - {type: exists, path: "networks[\"stg-vpc\"]", expect: {subnetMode: custom}, desc: "Red"}
+      - {type: exists, path: "subnets[\"stg-app\"]", expect: {ipCidrRange: 10.50.0.0/24}, desc: "Subred"}
       - {type: exists, path: "instances[\"stg-app-1\"]", expect: {machineType: e2-small, tags: {contains: app}}, desc: "VM"}
-      - {type: http, target: "vm:stg-app-1:80", status: 200, desc: "The VM serves HTTP"}
-  - name: Idempotence
+      - {type: http, target: "vm:stg-app-1:80", status: 200, desc: "La VM sirve HTTP"}
+  - name: Idempotencia
     validator: functional
     points: 25
     checks:
-      - {type: terraform_clean, minResources: 4, desc: "Second plan shows no changes"}
-  - name: Structure
+      - {type: terraform_clean, minResources: 4, desc: "El segundo plan no muestra cambios"}
+  - name: Estructura
     validator: state
     points: 20
     checks:
-      - {type: terraform_clean, minResources: 4, requireVariables: [region], requireOutputs: true, desc: "Variables and outputs declared"}
-  - name: Security
+      - {type: terraform_clean, minResources: 4, requireVariables: [region], requireOutputs: true, desc: "Variables y outputs declarados"}
+  - name: Seguridad
     validator: security
     points: 15
     checks:
-      - {type: forbid_firewall, port: 22, desc: "SSH not open to the internet"}
+      - {type: forbid_firewall, port: 22, desc: "SSH no abierto a internet"}
+en:
+  title: Day 14 · Reproduce the environment with Terraform
+  summary: Codify a network, firewall and VM in idempotent Terraform with variables and outputs.
+  story: |
+    The staging environment was built by hand and nobody can reproduce it. Write Terraform
+    (in the Files tab or with `cat > main.tf`) that creates:
+
+    - network `stg-vpc` (custom) and subnet `stg-app` 10.50.0.0/24 in the region given by a **variable `region`**
+    - firewall `stg-allow-http` tcp:80 from anywhere to tag `app`
+    - VM `stg-app-1` (e2-small, tag `app`, nginx via startup script, public IP)
+    - an **output** with the VM name
+
+    `terraform plan` after `apply` must show **no changes**. SSH must not be open to the internet.
+  objectives:
+    - Declarative, idempotent code
+    - Variables and outputs
+    - Correct structure and security
+  hints:
+    - Reference attributes (`google_compute_network.vpc.id`) instead of hard-coding names.
+    - '`access_config {}` inside `network_interface` gives an ephemeral public IP.'
+  text:
+    IaC aplicada: IaC applied
+    Red: Network
+    Subred: Subnet
+    VM: VM
+    La VM sirve HTTP: The VM serves HTTP
+    Idempotencia: Idempotence
+    El segundo plan no muestra cambios: Second plan shows no changes
+    Estructura: Structure
+    Variables y outputs declarados: Variables and outputs declared
+    Seguridad: Security
+    SSH no abierto a internet: SSH not open to the internet

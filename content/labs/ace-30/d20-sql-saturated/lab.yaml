@@ -1,6 +1,6 @@
 id: ace-d20-sql-saturated
-title: "Day 20 · INC: Cloud SQL saturated after a release"
-summary: Correlate metrics, logs and configuration to find the connection-pool regression and restore the database.
+title: "Día 20 · INC: Cloud SQL saturado tras una versión"
+summary: Relaciona métricas, registros y configuración para encontrar la regresión del pool de conexiones y recuperar la base de datos.
 track: ace-30
 day: 20
 level: intermediate
@@ -27,16 +27,16 @@ faults:
 traffic:
   - {name: stock, target: "run:stock-api", path: /stock, rps: 60}
 story: |
-  **INC-2291** — Since release 7.3 (09:00) `stock-api` returns 503 and Cloud SQL CPU is at
-  100%. The release notes say *"performance improvements"*. Restore the service and explain.
+  **INC-2291** — Desde la versión 7.3 (09:00) `stock-api` devuelve 503 y la CPU de Cloud SQL está al
+  100 %. Las notas de la versión dicen *«mejoras de rendimiento»*. Recupera el servicio y explica qué ha pasado.
 objectives:
-  - Correlate metrics, logs and configuration
-  - Identify the defective setting
-  - Fix it and validate recovery
-  - Propose prevention
+  - Relaciona métricas, registros y configuración
+  - Identifica el ajuste defectuoso
+  - Corrígelo y valida la recuperación
+  - Propón medidas de prevención
 hints:
-  - text: "Cloud SQL logs mention the number of active connections and max_connections."
-  - text: "Connections ≈ pool size × running instances. Compare the release diff in the audit log."
+  - text: "Los registros de Cloud SQL mencionan el número de conexiones activas y max_connections."
+  - text: "Conexiones ≈ tamaño del pool × instancias en ejecución. Compara el diff de la versión en el registro de auditoría."
 solution: |
   gcloud logging read 'resource.type="cloudsql_database" severity>=ERROR' --limit=2 --format='value(textPayload)'
   gcloud logging read 'logName:cloudaudit protoPayload.methodName:ReplaceService' --limit=2 --format='value(protoPayload.authenticationInfo.principalEmail)'
@@ -47,28 +47,52 @@ solution: |
 evidence:
   fields: [rootCause, prevention]
   sample:
-    rootCause: Release 7.3 raised DB_POOL_SIZE to {{.pool}}; with several Cloud Run instances the pool opened more connections than max_connections of db-g1-small (50), so Postgres rejected clients and the API returned 503.
-    prevention: Load test releases, alert on Cloud SQL connections close to max_connections, and cap max-instances times pool size below the database limit.
+    rootCause: La versión 7.3 subió DB_POOL_SIZE a {{.pool}}; con varias instancias de Cloud Run, el pool abría más conexiones que el max_connections de db-g1-small (50), así que Postgres rechazaba clientes y la API devolvía 503.
+    prevention: Hacer pruebas de carga de las versiones, alertar cuando las conexiones de Cloud SQL se acerquen a max_connections y limitar max-instances por el tamaño del pool por debajo del límite de la base de datos.
 rubric:
-  - name: Diagnosis
+  - name: Diagnóstico
     validator: evidence
     points: 35
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[pool], [connection, conexion, max_connections]], desc: "Explain the saturation mechanism"}
-  - name: Remediation
+      - {type: evidence, fields: [rootCause], keywords: [[pool], [connection, conexion, max_connections, conexiones]], desc: "Explica el mecanismo de saturación"}
+  - name: Remediación
     validator: functional
     points: 30
     all: true
     checks:
-      - {type: sql_healthy, instance: stock-db, settle: 2, desc: "Connections under max_connections"}
-      - {type: http, target: "run:stock-api", path: /stock, status: 200, desc: "/stock recovered"}
-  - name: Validation
+      - {type: sql_healthy, instance: stock-db, settle: 2, desc: "Conexiones por debajo de max_connections"}
+      - {type: http, target: "run:stock-api", path: /stock, status: 200, desc: "/stock recuperado"}
+  - name: Validación
     validator: diagnosis
     points: 20
     checks:
-      - {type: command, regex: "logging read|sql instances describe|run services describe", desc: "Evidence gathered"}
-  - name: Prevention
+      - {type: command, regex: "logging read|sql instances describe|run services describe", desc: "Evidencias reunidas"}
+  - name: Prevención
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [prevention], keywords: [[alert, alerta, load test, prueba de carga, max-instances, limit]], desc: "Preventive control"}
+      - {type: evidence, fields: [prevention], keywords: [[alert, alerta, load test, prueba de carga, max-instances, limit, limite]], desc: "Control preventivo"}
+en:
+  title: 'Day 20 · INC: Cloud SQL saturated after a release'
+  summary: Correlate metrics, logs and configuration to find the connection-pool regression and restore the database.
+  story: |
+    **INC-2291** — Since release 7.3 (09:00) `stock-api` returns 503 and Cloud SQL CPU is at
+    100%. The release notes say *"performance improvements"*. Restore the service and explain.
+  objectives:
+    - Correlate metrics, logs and configuration
+    - Identify the defective setting
+    - Fix it and validate recovery
+    - Propose prevention
+  hints:
+    - Cloud SQL logs mention the number of active connections and max_connections.
+    - Connections ≈ pool size × running instances. Compare the release diff in the audit log.
+  text:
+    Diagnóstico: Diagnosis
+    Explica el mecanismo de saturación: Explain the saturation mechanism
+    Remediación: Remediation
+    Conexiones por debajo de max_connections: Connections under max_connections
+    /stock recuperado: /stock recovered
+    Validación: Validation
+    Evidencias reunidas: Evidence gathered
+    Prevención: Prevention
+    Control preventivo: Preventive control

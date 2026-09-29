@@ -1,6 +1,6 @@
 id: ace-d15-cloud-build
-title: "Day 15 · Automatic builds: commit → Cloud Build → Artifact Registry"
-summary: Create a trigger that builds every commit on main with a dedicated service account and publishes an image tagged with the commit SHA.
+title: "Día 15 · Compilaciones automáticas: commit → Cloud Build → Artifact Registry"
+summary: Crea un activador que compile cada commit en main con una cuenta de servicio dedicada y publique una imagen etiquetada con el SHA del commit.
 track: ace-30
 day: 15
 level: intermediate
@@ -23,22 +23,22 @@ files:
     ENTRYPOINT ["/app"]
   app: "(storefront binary)"
 story: |
-  Release engineering wants reproducible images:
+  El equipo de release engineering quiere imágenes reproducibles:
 
-  - Docker repository `releases` in {{.region}}
-  - trigger `storefront-main` on repository `storefront`, branch `main`
-  - the build runs as **builder-sa** (not the default Cloud Build account), which may only push images
-  - images tagged with the commit (`$SHORT_SHA`)
+  - repositorio Docker `releases` en {{.region}}
+  - activador `storefront-main` en el repositorio `storefront`, rama `main`
+  - la compilación se ejecuta como **builder-sa** (no con la cuenta por defecto de Cloud Build), que solo puede publicar imágenes
+  - imágenes etiquetadas con el commit (`$SHORT_SHA`)
 
-  Push your first commit and check the build.
+  Haz tu primer commit y comprueba la compilación.
 objectives:
-  - Pipeline from commit to artifact
-  - Reproducible, commit-tagged artifact
-  - Least-privilege build identity
-  - Evidence of the successful build
+  - Canal de despliegue del commit al artefacto
+  - Artefacto reproducible y etiquetado con el commit
+  - Identidad de compilación con mínimo privilegio
+  - Evidencia de la compilación correcta
 hints:
-  - text: "A `cloudbuild.yaml` with a docker build + push step and `images:` using `${SHORT_SHA}`."
-  - text: "`roles/artifactregistry.writer` lets builder-sa push."
+  - text: "Un `cloudbuild.yaml` con un paso docker build + push y `images:` usando `${SHORT_SHA}`."
+  - text: "`roles/artifactregistry.writer` permite a builder-sa publicar."
 solution: |
   gcloud artifacts repositories create releases --repository-format=docker --location={{.region}}
   gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:builder-sa@{{.project}}.iam.gserviceaccount.com --role=roles/artifactregistry.writer
@@ -61,27 +61,57 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: The trigger storefront-main built the commit with builder-sa and pushed storefront tagged with the short SHA; gcloud builds list shows SUCCESS.
+    explanation: El activador storefront-main compiló el commit con builder-sa y publicó storefront etiquetada con el SHA corto; gcloud builds list muestra SUCCESS.
 rubric:
-  - name: Pipeline
+  - name: Canal de despliegue
     validator: functional
     points: 40
     checks:
-      - {type: build, trigger: true, imageRegex: "releases/storefront", desc: "A triggered build succeeded"}
-  - name: Artifact
+      - {type: build, trigger: true, imageRegex: "releases/storefront", desc: "Una compilación activada terminó bien"}
+  - name: Artefacto
     validator: state
     points: 25
     checks:
-      - {type: build, trigger: true, imageRegex: "{{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:", shaTag: true, desc: "Image tagged with the commit SHA"}
+      - {type: build, trigger: true, imageRegex: "{{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:", shaTag: true, desc: "Imagen etiquetada con el SHA del commit"}
   - name: IAM
     validator: security
     points: 20
     all: true
     checks:
-      - {type: exists, path: "buildTriggers[\"storefront-main\"]", expect: {serviceAccount: "builder-sa@{{.project}}.iam.gserviceaccount.com"}, desc: "Trigger runs as builder-sa"}
-      - {type: no_basic_roles, members: ["serviceAccount:builder-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles for the builder"}
-  - name: Evidence
+      - {type: exists, path: "buildTriggers[\"storefront-main\"]", expect: {serviceAccount: "builder-sa@{{.project}}.iam.gserviceaccount.com"}, desc: "El activador se ejecuta como builder-sa"}
+      - {type: no_basic_roles, members: ["serviceAccount:builder-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos para la compilación"}
+  - name: Evidencias
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[build, compil], [sha, commit]], desc: "Explain the evidence"}
+      - {type: evidence, fields: [explanation], keywords: [[build, compil, compilacion], [sha, commit]], desc: "Explica las evidencias"}
+en:
+  title: 'Day 15 · Automatic builds: commit → Cloud Build → Artifact Registry'
+  summary: Create a trigger that builds every commit on main with a dedicated service account and publishes an image tagged with the commit SHA.
+  story: |
+    Release engineering wants reproducible images:
+
+    - Docker repository `releases` in {{.region}}
+    - trigger `storefront-main` on repository `storefront`, branch `main`
+    - the build runs as **builder-sa** (not the default Cloud Build account), which may only push images
+    - images tagged with the commit (`$SHORT_SHA`)
+
+    Push your first commit and check the build.
+  objectives:
+    - Pipeline from commit to artifact
+    - Reproducible, commit-tagged artifact
+    - Least-privilege build identity
+    - Evidence of the successful build
+  hints:
+    - A `cloudbuild.yaml` with a docker build + push step and `images:` using `${SHORT_SHA}`.
+    - '`roles/artifactregistry.writer` lets builder-sa push.'
+  text:
+    Canal de despliegue: Pipeline
+    Una compilación activada terminó bien: A triggered build succeeded
+    Artefacto: Artifact
+    Imagen etiquetada con el SHA del commit: Image tagged with the commit SHA
+    IAM: IAM
+    El activador se ejecuta como builder-sa: Trigger runs as builder-sa
+    Sin roles básicos para la compilación: No basic roles for the builder
+    Evidencias: Evidence
+    Explica las evidencias: Explain the evidence

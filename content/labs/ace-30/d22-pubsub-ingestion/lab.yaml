@@ -1,6 +1,6 @@
 id: ace-d22-pubsub-ingestion
-title: "Day 22 · Near-real-time event ingestion"
-summary: Connect producers to a private Cloud Run processor through Pub/Sub push with authentication and a dead-letter topic.
+title: "Día 22 · Ingesta de eventos casi en tiempo real"
+summary: Conecta los productores con un procesador privado en Cloud Run mediante push de Pub/Sub con autenticación y un tema de mensajes fallidos (dead-letter).
 track: ace-30
 day: 22
 level: advanced
@@ -20,21 +20,21 @@ setup: |
 traffic:
   - {name: producer, target: "pubsub:events", rps: 100}
 story: |
-  Producers publish order events to topic **events** (create it). Build the pipeline:
+  Los productores publican eventos de pedidos en el tema **events** (créalo). Construye el canal:
 
-  - push subscription `events-push` → `processor` service at path `/push`, authenticated as `push-sa`
-    (the processor must stay private)
-  - the processor writes to `gs://events-sink-{{.project}}` as `processor-sa`
-  - messages failing 5 times go to topic `events-dlq` (with a pull subscription `events-dlq-sub` for inspection)
-  - an alert on undelivered messages of `events-push`
+  - suscripción push `events-push` → servicio `processor` en la ruta `/push`, autenticada como `push-sa`
+    (el procesador debe seguir siendo privado)
+  - el procesador escribe en `gs://events-sink-{{.project}}` como `processor-sa`
+  - los mensajes que fallen 5 veces van al tema `events-dlq` (con una suscripción pull `events-dlq-sub` para inspeccionarlos)
+  - una alerta sobre los mensajes no entregados de `events-push`
 objectives:
-  - Producer → Pub/Sub → processing → sink
-  - Messages processed and stored
-  - Failure handling with a dead-letter topic
-  - Observability of the backlog
+  - Productor → Pub/Sub → procesamiento → destino
+  - Mensajes procesados y almacenados
+  - Gestión de fallos con un tema de dead-letter
+  - Observabilidad de la cola pendiente
 hints:
-  - text: "Grant `roles/run.invoker` on the service to push-sa and use `--push-auth-service-account`."
-  - text: "The Pub/Sub service agent needs publisher on the DLQ topic."
+  - text: "Concede `roles/run.invoker` en el servicio a push-sa y usa `--push-auth-service-account`."
+  - text: "El agente de servicio de Pub/Sub necesita permiso de publicación en el tema DLQ."
 solution: |
   gcloud pubsub topics create events
   gcloud pubsub topics create events-dlq
@@ -46,27 +46,58 @@ solution: |
   sleep 300
   gcloud pubsub subscriptions describe events-push
 rubric:
-  - name: Pipeline
+  - name: Canal
     validator: functional
     points: 35
     checks:
-      - {type: pubsub, subscription: events-push, ackedMin: 10, backlogMax: 50, settle: 3, desc: "Messages delivered and acknowledged"}
-  - name: Correctness
+      - {type: pubsub, subscription: events-push, ackedMin: 10, backlogMax: 50, settle: 3, desc: "Mensajes entregados y confirmados"}
+  - name: Corrección
     validator: security
     points: 30
     all: true
     checks:
-      - {type: http, target: "run:processor", path: /push, status: 403, desc: "Processor is not public"}
-      - {type: iam, principal: "serviceAccount:processor-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.create, resource: "bucket:events-sink-{{.project}}/data/x", desc: "Processor can write the sink"}
-      - {type: iam, principal: "serviceAccount:processor-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:events-sink-{{.project}}/data/x", expect: false, desc: "Processor cannot delete"}
-  - name: Resilience
+      - {type: http, target: "run:processor", path: /push, status: 403, desc: "El procesador no es público"}
+      - {type: iam, principal: "serviceAccount:processor-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.create, resource: "bucket:events-sink-{{.project}}/data/x", desc: "El procesador puede escribir en el destino"}
+      - {type: iam, principal: "serviceAccount:processor-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:events-sink-{{.project}}/data/x", expect: false, desc: "El procesador no puede borrar"}
+  - name: Resiliencia
     validator: state
     points: 20
     checks:
-      - {type: exists, path: "subscriptions[\"events-push\"]", expect: {deadLetterTopic: events-dlq, maxDeliveryAttempts: {gte: 5}}, desc: "Dead-letter policy"}
-      - {type: exists, path: "subscriptions[\"events-dlq-sub\"]", expect: {topic: events-dlq}, desc: "DLQ can be inspected"}
-  - name: Observability
+      - {type: exists, path: "subscriptions[\"events-push\"]", expect: {deadLetterTopic: events-dlq, maxDeliveryAttempts: {gte: 5}}, desc: "Política de dead-letter"}
+      - {type: exists, path: "subscriptions[\"events-dlq-sub\"]", expect: {topic: events-dlq}, desc: "Se puede inspeccionar la DLQ"}
+  - name: Observabilidad
     validator: state
     points: 15
     checks:
-      - {type: alert_policy, filterContains: num_undelivered_messages, desc: "Backlog alert"}
+      - {type: alert_policy, filterContains: num_undelivered_messages, desc: "Alerta sobre la cola pendiente"}
+en:
+  title: Day 22 · Near-real-time event ingestion
+  summary: Connect producers to a private Cloud Run processor through Pub/Sub push with authentication and a dead-letter topic.
+  story: |
+    Producers publish order events to topic **events** (create it). Build the pipeline:
+
+    - push subscription `events-push` → `processor` service at path `/push`, authenticated as `push-sa`
+      (the processor must stay private)
+    - the processor writes to `gs://events-sink-{{.project}}` as `processor-sa`
+    - messages failing 5 times go to topic `events-dlq` (with a pull subscription `events-dlq-sub` for inspection)
+    - an alert on undelivered messages of `events-push`
+  objectives:
+    - Producer → Pub/Sub → processing → sink
+    - Messages processed and stored
+    - Failure handling with a dead-letter topic
+    - Observability of the backlog
+  hints:
+    - Grant `roles/run.invoker` on the service to push-sa and use `--push-auth-service-account`.
+    - The Pub/Sub service agent needs publisher on the DLQ topic.
+  text:
+    Canal: Pipeline
+    Mensajes entregados y confirmados: Messages delivered and acknowledged
+    Corrección: Correctness
+    El procesador no es público: Processor is not public
+    El procesador puede escribir en el destino: Processor can write the sink
+    El procesador no puede borrar: Processor cannot delete
+    Resiliencia: Resilience
+    Política de dead-letter: Dead-letter policy
+    Se puede inspeccionar la DLQ: DLQ can be inspected
+    Observabilidad: Observability
+    Alerta sobre la cola pendiente: Backlog alert

@@ -1,6 +1,6 @@
 id: ace-d25-public-exposure
-title: "Day 25 · INC: admin portal and backups exposed to the internet"
-summary: Contain a public exposure, remove anonymous access, add a preventive guardrail and document the incident.
+title: "Día 25 · INC: portal de administración y copias de seguridad expuestos a internet"
+summary: Contén una exposición pública, elimina el acceso anónimo, añade una barrera preventiva y documenta el incidente.
 track: ace-30
 day: 25
 level: advanced
@@ -22,16 +22,16 @@ faults:
   - {type: run_iam_public, service: admin-portal, actor: "intern-script@{{.project}}.iam.gserviceaccount.com"}
   - {type: log_noise, severity: INFO, resourceType: gcs_bucket, lines: ["GET /backups-{{.project}}/2026-08-31/db.sql 200 from 185.220.101.4", "GET /backups-{{.project}}/2026-08-31/db.sql 200 from 45.155.205.9"]}
 story: |
-  **SEC-104 (P1)** — An external researcher reports that `admin-portal` opens without login and that a
-  database dump can be downloaded anonymously. Contain the exposure now, then make sure nobody in the
-  project can make a bucket public again. Admins will keep access through `group:platform-admins@gcplab.dev`.
+  **SEC-104 (P1)** — Un investigador externo informa de que `admin-portal` se abre sin iniciar sesión y de que
+  se puede descargar de forma anónima un volcado de la base de datos. Contén la exposición ya y después asegúrate de que nadie en el
+  proyecto pueda volver a hacer público un bucket. Los administradores conservarán el acceso a través de `group:platform-admins@gcplab.dev`.
 objectives:
-  - Detect every exposed resource (use Security Command Center)
-  - Remove anonymous access without breaking legitimate admins
-  - Add a preventive guardrail (organization policy)
-  - Document impact, root cause and prevention
+  - Detecta todos los recursos expuestos (usa Security Command Center)
+  - Elimina el acceso anónimo sin romper a los administradores legítimos
+  - Añade una barrera preventiva (política de organización)
+  - Documenta el impacto, la causa raíz y la prevención
 hints:
-  - text: "`gcloud scc findings list` shows PUBLIC_BUCKET_ACL and PUBLIC_SENSITIVE_SERVICE."
+  - text: "`gcloud scc findings list` muestra PUBLIC_BUCKET_ACL y PUBLIC_SENSITIVE_SERVICE."
   - text: "`gcloud resource-manager org-policies enable-enforce storage.publicAccessPrevention --project=...`"
 solution: |
   gcloud scc findings list --format='table(category,resourceName)'
@@ -43,36 +43,64 @@ solution: |
 evidence:
   fields: [impact, rootCause, prevention]
   sample:
-    impact: The database dump was downloaded anonymously from two external IP addresses and the admin portal was reachable without authentication; credentials in the dump must be rotated.
-    rootCause: The intern-script service account granted allUsers access to the backups bucket and to the admin-portal Cloud Run service.
-    prevention: Enforce the publicAccessPrevention organization policy, restrict setIamPolicy permissions, and alert on SCC public findings.
+    impact: El volcado de la base de datos se descargó de forma anónima desde dos IP externas y el portal de administración era accesible sin autenticación; hay que rotar las credenciales del volcado.
+    rootCause: La cuenta de servicio intern-script concedió acceso a allUsers al bucket de copias de seguridad y al servicio de Cloud Run admin-portal.
+    prevention: Aplicar la política de organización publicAccessPrevention, restringir los permisos setIamPolicy y alertar sobre los hallazgos públicos de SCC.
 rubric:
-  - name: Containment
+  - name: Contención
     validator: security
     points: 35
     critical: true
     all: true
     checks:
-      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:backups-{{.project}}/2026-08-31/db.sql", expect: false, desc: "Dump no longer anonymous"}
-      - {type: http, target: "run:admin-portal", path: /admin, status: 403, desc: "Admin portal requires authentication"}
-  - name: Legitimate access
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:backups-{{.project}}/2026-08-31/db.sql", expect: false, desc: "El volcado ya no es anónimo"}
+      - {type: http, target: "run:admin-portal", path: /admin, status: 403, desc: "El portal de administración exige autenticación"}
+  - name: Acceso legítimo
     validator: functional
     points: 15
     checks:
-      - {type: exists, path: "runServices[\"admin-portal\"].iamPolicy.bindings", expect: {"": {regex: "platform-admins"}}, desc: "Admins keep access"}
-  - name: Guardrail
+      - {type: exists, path: "runServices[\"admin-portal\"].iamPolicy.bindings", expect: {"": {regex: "platform-admins"}}, desc: "Los administradores mantienen el acceso"}
+  - name: Barrera preventiva
     validator: security
     points: 20
     checks:
-      - {type: exists, path: "orgPolicies[\"storage.publicAccessPrevention\"]", expect: {enforce: true}, desc: "Public access prevention enforced"}
-  - name: Detection
+      - {type: exists, path: "orgPolicies[\"storage.publicAccessPrevention\"]", expect: {enforce: true}, desc: "Prevención de acceso público aplicada"}
+  - name: Detección
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "scc findings list", desc: "Used Security Command Center"}
-  - name: Postmortem
+      - {type: command, regex: "scc findings list", desc: "Se ha usado Security Command Center"}
+  - name: Post-mortem
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [impact], keywords: [[download, descarg], [anonym, anonim, external, extern]], desc: "Impact"}
-      - {type: evidence, fields: [rootCause, prevention], keywords: [[allusers], [org policy, organization policy, organizacion, publicaccessprevention]], desc: "Root cause and prevention"}
+      - {type: evidence, fields: [impact], keywords: [[download, descarg], [anonym, anonim, external, extern]], desc: "Impacto"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[allusers], [org policy, organization policy, organizacion, publicaccessprevention, politica de organizacion]], desc: "Causa raíz y prevención"}
+en:
+  title: 'Day 25 · INC: admin portal and backups exposed to the internet'
+  summary: Contain a public exposure, remove anonymous access, add a preventive guardrail and document the incident.
+  story: |
+    **SEC-104 (P1)** — An external researcher reports that `admin-portal` opens without login and that a
+    database dump can be downloaded anonymously. Contain the exposure now, then make sure nobody in the
+    project can make a bucket public again. Admins will keep access through `group:platform-admins@gcplab.dev`.
+  objectives:
+    - Detect every exposed resource (use Security Command Center)
+    - Remove anonymous access without breaking legitimate admins
+    - Add a preventive guardrail (organization policy)
+    - Document impact, root cause and prevention
+  hints:
+    - '`gcloud scc findings list` shows PUBLIC_BUCKET_ACL and PUBLIC_SENSITIVE_SERVICE.'
+    - '`gcloud resource-manager org-policies enable-enforce storage.publicAccessPrevention --project=...`'
+  text:
+    Contención: Containment
+    El volcado ya no es anónimo: Dump no longer anonymous
+    El portal de administración exige autenticación: Admin portal requires authentication
+    Acceso legítimo: Legitimate access
+    Los administradores mantienen el acceso: Admins keep access
+    Barrera preventiva: Guardrail
+    Prevención de acceso público aplicada: Public access prevention enforced
+    Detección: Detection
+    Se ha usado Security Command Center: Used Security Command Center
+    Post-mortem: Postmortem
+    Impacto: Impact
+    Causa raíz y prevención: Root cause and prevention

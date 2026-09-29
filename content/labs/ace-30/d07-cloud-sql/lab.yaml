@@ -1,6 +1,6 @@
 id: ace-d07-cloud-sql
-title: "Day 7 · Connect an application to Cloud SQL"
-summary: Create a PostgreSQL instance, database and user, and connect a Cloud Run service securely through the Cloud SQL connector.
+title: "Día 7 · Conectar una aplicación a Cloud SQL"
+summary: Crea una instancia de PostgreSQL, una base de datos y un usuario, y conecta un servicio de Cloud Run de forma segura con el conector de Cloud SQL.
 track: ace-30
 day: 7
 level: basic
@@ -20,19 +20,19 @@ setup: |
 traffic:
   - {name: stock, target: "run:inventory", path: /stock, rps: 10}
 story: |
-  The `inventory` Cloud Run service (identity `inventory-sa`) needs PostgreSQL 15:
+  El servicio de Cloud Run `inventory` (identidad `inventory-sa`) necesita PostgreSQL 15:
 
-  - instance **{{.db}}** in {{.region}}, database `inventory`, user `app`
-  - no network may be authorised on the public IP: connect through the **Cloud SQL connector**
-    (`/cloudsql/PROJECT:REGION:INSTANCE`), authorised by IAM
-  - the service reads `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+  - instancia **{{.db}}** en {{.region}}, base de datos `inventory`, usuario `app`
+  - no se puede autorizar ninguna red en la IP pública: conéctate con el **conector de Cloud SQL**
+    (`/cloudsql/PROJECT:REGION:INSTANCE`), autorizado por IAM
+  - el servicio lee `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
 objectives:
-  - Instance, database and user created
-  - Service connected and /stock answering
-  - Secure connectivity with least privilege for inventory-sa
+  - Instancia, base de datos y usuario creados
+  - Servicio conectado y /stock respondiendo
+  - Conectividad segura con mínimo privilegio para inventory-sa
 hints:
-  - text: "`gcloud run services update inventory --add-cloudsql-instances=CONNECTION_NAME` mounts the socket."
-  - text: "The service account needs `roles/cloudsql.client`."
+  - text: "`gcloud run services update inventory --add-cloudsql-instances=CONNECTION_NAME` monta el socket."
+  - text: "La cuenta de servicio necesita `roles/cloudsql.client`."
 solution: |
   gcloud sql instances create {{.db}} --database-version=POSTGRES_15 --tier=db-custom-1-3840 --region={{.region}}
   gcloud sql databases create inventory --instance={{.db}}
@@ -41,28 +41,58 @@ solution: |
   gcloud run services update inventory --region={{.region}} --add-cloudsql-instances={{.project}}:{{.region}}:{{.db}} --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:{{.db}},DB_USER=app,DB_PASSWORD=S3cure-Pass-1,DB_NAME=inventory
   curl -s $(gcloud run services describe inventory --region={{.region}} --format='value(status.url)')/stock
 rubric:
-  - name: Database
+  - name: Base de datos
     validator: state
     points: 35
     checks:
-      - {type: exists, path: "sqlInstances[\"{{.db}}\"]", expect: {databaseVersion: {regex: "POSTGRES"}, region: "{{.region}}", state: RUNNABLE}, desc: "PostgreSQL instance in the region"}
-      - {type: exists, path: "sqlInstances[\"{{.db}}\"]", expect: {databases: {contains: inventory}}, desc: "inventory database"}
-      - {type: exists, path: "sqlInstances[\"{{.db}}\"].users.app", desc: "app user"}
-  - name: Connection
+      - {type: exists, path: "sqlInstances[\"{{.db}}\"]", expect: {databaseVersion: {regex: "POSTGRES"}, region: "{{.region}}", state: RUNNABLE}, desc: "Instancia de PostgreSQL en la región"}
+      - {type: exists, path: "sqlInstances[\"{{.db}}\"]", expect: {databases: {contains: inventory}}, desc: "Base de datos inventory"}
+      - {type: exists, path: "sqlInstances[\"{{.db}}\"].users.app", desc: "Usuario app"}
+  - name: Conexión
     validator: functional
     points: 35
     checks:
-      - {type: http, target: "run:inventory", path: /stock, status: 200, desc: "/stock returns data from PostgreSQL"}
-  - name: Security
+      - {type: http, target: "run:inventory", path: /stock, status: 200, desc: "/stock devuelve datos de PostgreSQL"}
+  - name: Seguridad
     validator: security
     points: 20
     critical: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [PUBLIC_SQL], desc: "No database open to the internet"}
-      - {type: iam, principal: "serviceAccount:inventory-sa@{{.project}}.iam.gserviceaccount.com", permission: cloudsql.instances.connect, resource: project, desc: "Service identity can connect"}
-      - {type: no_basic_roles, members: ["serviceAccount:inventory-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles for the service"}
-  - name: Test
+      - {type: policy, package: gcplab.security, ids: [PUBLIC_SQL], desc: "Ninguna base de datos abierta a internet"}
+      - {type: iam, principal: "serviceAccount:inventory-sa@{{.project}}.iam.gserviceaccount.com", permission: cloudsql.instances.connect, resource: project, desc: "La identidad del servicio puede conectarse"}
+      - {type: no_basic_roles, members: ["serviceAccount:inventory-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos para el servicio"}
+  - name: Prueba
     validator: functional
     points: 10
     checks:
-      - {type: exists, path: "sqlInstances[\"{{.db}}\"]", expect: {authorizedNetworks: {empty: true}}, desc: "No authorised networks"}
+      - {type: exists, path: "sqlInstances[\"{{.db}}\"]", expect: {authorizedNetworks: {empty: true}}, desc: "Sin redes autorizadas"}
+en:
+  title: Day 7 · Connect an application to Cloud SQL
+  summary: Create a PostgreSQL instance, database and user, and connect a Cloud Run service securely through the Cloud SQL connector.
+  story: |
+    The `inventory` Cloud Run service (identity `inventory-sa`) needs PostgreSQL 15:
+
+    - instance **{{.db}}** in {{.region}}, database `inventory`, user `app`
+    - no network may be authorised on the public IP: connect through the **Cloud SQL connector**
+      (`/cloudsql/PROJECT:REGION:INSTANCE`), authorised by IAM
+    - the service reads `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+  objectives:
+    - Instance, database and user created
+    - Service connected and /stock answering
+    - Secure connectivity with least privilege for inventory-sa
+  hints:
+    - '`gcloud run services update inventory --add-cloudsql-instances=CONNECTION_NAME` mounts the socket.'
+    - The service account needs `roles/cloudsql.client`.
+  text:
+    Base de datos: Database
+    Instancia de PostgreSQL en la región: PostgreSQL instance in the region
+    Base de datos inventory: inventory database
+    Usuario app: app user
+    Conexión: Connection
+    /stock devuelve datos de PostgreSQL: /stock returns data from PostgreSQL
+    Seguridad: Security
+    Ninguna base de datos abierta a internet: No database open to the internet
+    La identidad del servicio puede conectarse: Service identity can connect
+    Sin roles básicos para el servicio: No basic roles for the service
+    Prueba: Test
+    Sin redes autorizadas: No authorised networks

@@ -1,6 +1,6 @@
 id: ace-d19-secret-env
-title: "Day 19 · INC: an API key sits in a plain environment variable"
-summary: Move an exposed secret to Secret Manager, scope access to one identity and rotate the exposed value.
+title: "Día 19 · INC: una clave de API en una variable de entorno en claro"
+summary: Mueve un secreto expuesto a Secret Manager, limita el acceso a una sola identidad y rota el valor expuesto.
 track: ace-30
 day: 19
 level: intermediate
@@ -21,20 +21,20 @@ setup: |
 traffic:
   - {name: pay, target: "run:payments", path: /pay, rps: 10}
 story: |
-  **SEC-77 (high)** — A screenshot of `gcloud run services describe payments` was pasted in a
-  public chat. It shows the payment provider API key. The provider already issued a
-  replacement key for you: **`sk_live_ROTATED_{{.project}}`**.
+  **SEC-77 (alta)** — Alguien pegó en un chat público una captura de `gcloud run services describe payments`.
+  Se ve la clave de API del proveedor de pagos. El proveedor ya te ha emitido una
+  clave de sustitución: **`sk_live_ROTATED_{{.project}}`**.
 
-  Remove the secret from the configuration, serve the new key from Secret Manager to the
-  `payments` service only, and make sure the exposed value can never be served again.
+  Quita el secreto de la configuración, sirve la nueva clave desde Secret Manager solo al
+  servicio `payments` y asegúrate de que el valor expuesto no pueda servirse nunca más.
 objectives:
-  - Detect where the secret is exposed
-  - Migrate it to Secret Manager and mount it in Cloud Run
-  - Grant access only to pay-sa on that secret
-  - Rotate the exposed value
+  - Detecta dónde está expuesto el secreto
+  - Migra el secreto a Secret Manager y móntalo en Cloud Run
+  - Concede acceso solo a pay-sa sobre ese secreto
+  - Rota el valor expuesto
 hints:
-  - text: "`--set-secrets=API_KEY=SECRET:latest` together with `--remove-env-vars=API_KEY`."
-  - text: "Grant `roles/secretmanager.secretAccessor` on the secret, not on the project."
+  - text: "`--set-secrets=API_KEY=SECRET:latest` junto con `--remove-env-vars=API_KEY`."
+  - text: "Concede `roles/secretmanager.secretAccessor` en el secreto, no en el proyecto."
 solution: |
   gcloud run services describe payments --region={{.region}}
   echo -n "sk_live_ROTATED_{{.project}}" | gcloud secrets create payments-api-key --data-file=-
@@ -44,38 +44,71 @@ solution: |
 evidence:
   fields: [rootCause, prevention]
   sample:
-    rootCause: The API key was stored as a plain environment variable in the Cloud Run configuration, visible to anyone with run.services.get and in screenshots.
-    prevention: Keep secrets in Secret Manager with per-secret IAM, rotate on exposure and add a CI policy check against secrets in environment variables.
+    rootCause: La clave de API estaba guardada como variable de entorno en claro en la configuración de Cloud Run, visible para cualquiera con run.services.get y en las capturas de pantalla.
+    prevention: Guardar los secretos en Secret Manager con IAM por secreto, rotarlos cuando se expongan y añadir una comprobación de políticas en CI contra secretos en variables de entorno.
 rubric:
-  - name: Detection
+  - name: Detección
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[environment, entorno, env], [variable, config]], desc: "Where was the secret exposed?"}
-  - name: Migration
+      - {type: evidence, fields: [rootCause], keywords: [[environment, entorno, env], [variable, config]], desc: "¿Dónde estaba expuesto el secreto?"}
+  - name: Migración
     validator: functional
     points: 30
     all: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV], desc: "No secrets in plain environment variables"}
-      - {type: exists, path: "runServices.payments.secrets.API_KEY", desc: "API_KEY served from Secret Manager"}
-      - {type: http, target: "run:payments", path: /pay, status: 200, desc: "Payments still work"}
+      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV], desc: "Ningún secreto en variables de entorno en claro"}
+      - {type: exists, path: "runServices.payments.secrets.API_KEY", desc: "API_KEY servida desde Secret Manager"}
+      - {type: http, target: "run:payments", path: /pay, status: 200, desc: "Los pagos siguen funcionando"}
   - name: IAM
     validator: security
     points: 25
     critical: true
     all: true
     checks:
-      - {type: iam, principal: "serviceAccount:pay-sa@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:db-password", expect: false, desc: "pay-sa must not read other secrets"}
-      - {type: no_basic_roles, members: ["serviceAccount:pay-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
-  - name: Rotation
+      - {type: iam, principal: "serviceAccount:pay-sa@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:db-password", expect: false, desc: "pay-sa no debe poder leer otros secretos"}
+      - {type: no_basic_roles, members: ["serviceAccount:pay-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos"}
+  - name: Rotación
     validator: security
     points: 15
     checks:
-      - {type: count, collection: secrets, where: {versions: {regex: "sk_live_ROTATED"}}, min: 1, desc: "The new key is stored"}
-      - {type: count, collection: secrets, where: {versions: {regex: "{{.exposed}}\",\"state\":\"ENABLED"}}, max: 0, desc: "The exposed value is not served"}
-  - name: Evidence
+      - {type: count, collection: secrets, where: {versions: {regex: "sk_live_ROTATED"}}, min: 1, desc: "La nueva clave está guardada"}
+      - {type: count, collection: secrets, where: {versions: {regex: "{{.exposed}}\",\"state\":\"ENABLED"}}, max: 0, desc: "El valor expuesto ya no se sirve"}
+  - name: Evidencias
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [prevention], keywords: [[rotat, rota], [secret manager, secret]], desc: "Prevention"}
+      - {type: evidence, fields: [prevention], keywords: [[rotat, rota], [secret manager, secret, secreto]], desc: "Prevención"}
+en:
+  title: 'Day 19 · INC: an API key sits in a plain environment variable'
+  summary: Move an exposed secret to Secret Manager, scope access to one identity and rotate the exposed value.
+  story: |
+    **SEC-77 (high)** — A screenshot of `gcloud run services describe payments` was pasted in a
+    public chat. It shows the payment provider API key. The provider already issued a
+    replacement key for you: **`sk_live_ROTATED_{{.project}}`**.
+
+    Remove the secret from the configuration, serve the new key from Secret Manager to the
+    `payments` service only, and make sure the exposed value can never be served again.
+  objectives:
+    - Detect where the secret is exposed
+    - Migrate it to Secret Manager and mount it in Cloud Run
+    - Grant access only to pay-sa on that secret
+    - Rotate the exposed value
+  hints:
+    - '`--set-secrets=API_KEY=SECRET:latest` together with `--remove-env-vars=API_KEY`.'
+    - Grant `roles/secretmanager.secretAccessor` on the secret, not on the project.
+  text:
+    Detección: Detection
+    ¿Dónde estaba expuesto el secreto?: Where was the secret exposed?
+    Migración: Migration
+    Ningún secreto en variables de entorno en claro: No secrets in plain environment variables
+    API_KEY servida desde Secret Manager: API_KEY served from Secret Manager
+    Los pagos siguen funcionando: Payments still work
+    IAM: IAM
+    pay-sa no debe poder leer otros secretos: pay-sa must not read other secrets
+    Sin roles básicos: No basic roles
+    Rotación: Rotation
+    La nueva clave está guardada: The new key is stored
+    El valor expuesto ya no se sirve: The exposed value is not served
+    Evidencias: Evidence
+    Prevención: Prevention

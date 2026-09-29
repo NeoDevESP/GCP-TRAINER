@@ -1,6 +1,6 @@
 id: ace-d03-secure-bucket
-title: "Day 3 · A secure documents bucket with lifecycle"
-summary: Create a regional bucket that can never become public, keeps versions and moves old documents to cheaper storage.
+title: "Día 3 · Un bucket de documentos seguro con ciclo de vida"
+summary: Crea un bucket regional que nunca pueda hacerse público, conserve versiones y mueva los documentos antiguos a un almacenamiento más barato.
 track: ace-30
 day: 3
 level: basic
@@ -18,23 +18,23 @@ baseline: [default-network]
 setup: |
   gcloud storage buckets create gs://tmp-upload-{{.project}} --location={{.region}}
 story: |
-  Legal needs a bucket **docs-{{.project}}** for signed contracts:
+  El departamento legal necesita un bucket **docs-{{.project}}** para contratos firmados:
 
-  - data residency: region **{{.region}}** only
-  - it must be impossible to make any object public
-  - access controlled only with IAM (no ACLs)
-  - accidental overwrites must be recoverable
-  - after **{{.nearline}} days** documents move to Nearline; after 365 days they are deleted
+  - residencia de datos: solo la región **{{.region}}**
+  - debe ser imposible hacer público cualquier objeto
+  - acceso controlado únicamente con IAM (sin ACL)
+  - las sobrescrituras accidentales deben poder recuperarse
+  - a los **{{.nearline}} días** los documentos pasan a Nearline; a los 365 días se borran
 
-  The temporary bucket `tmp-upload-{{.project}}` used during the migration must be removed.
+  Hay que eliminar el bucket temporal `tmp-upload-{{.project}}` que se usó durante la migración.
 objectives:
-  - Bucket in the required region with uniform bucket-level access
-  - Public access prevention enforced and versioning enabled
-  - Lifecycle rules for Nearline and deletion
-  - Remove the temporary bucket
+  - Bucket en la región requerida con acceso uniforme a nivel de bucket
+  - Prevención de acceso público aplicada y control de versiones activado
+  - Reglas de ciclo de vida para Nearline y borrado
+  - Elimina el bucket temporal
 hints:
-  - text: "`gcloud storage buckets create` accepts `--uniform-bucket-level-access` and `--public-access-prevention`."
-  - text: "A lifecycle file is JSON with a `rule` array; actions `SetStorageClass` and `Delete`, conditions `age`."
+  - text: "`gcloud storage buckets create` admite `--uniform-bucket-level-access` y `--public-access-prevention`."
+  - text: "Un archivo de ciclo de vida es un JSON con un array `rule`; acciones `SetStorageClass` y `Delete`, condiciones `age`."
 solution: |
   gcloud storage buckets create gs://docs-{{.project}} --location={{.region}} --uniform-bucket-level-access --public-access-prevention
   cat > lifecycle.json <<'JSON'
@@ -46,28 +46,62 @@ solution: |
   gcloud storage buckets update gs://docs-{{.project}} --versioning --lifecycle-file=lifecycle.json
   gcloud storage buckets delete gs://tmp-upload-{{.project}}
 rubric:
-  - name: Bucket state
+  - name: Estado del bucket
     validator: state
     points: 40
     checks:
-      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {location: {eq: "{{.region}}"}, locationType: region}, desc: "Bucket in the required region"}
-      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {versioning: true}, desc: "Versioning enabled"}
-  - name: Security
+      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {location: {eq: "{{.region}}"}, locationType: region}, desc: "Bucket en la región requerida"}
+      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {versioning: true}, desc: "Control de versiones activado"}
+  - name: Seguridad
     validator: security
     points: 30
     critical: true
     checks:
-      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {uniformBucketLevelAccess: true}, desc: "Uniform bucket-level access"}
-      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {publicAccessPrevention: enforced}, desc: "Public access prevention enforced"}
-      - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "No public bindings"}
-  - name: Lifecycle
+      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {uniformBucketLevelAccess: true}, desc: "Acceso uniforme a nivel de bucket"}
+      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {publicAccessPrevention: enforced}, desc: "Prevención de acceso público aplicada"}
+      - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "Sin permisos públicos"}
+  - name: Ciclo de vida
     validator: state
     points: 20
     checks:
-      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {"lifecycle": {regex: "SetStorageClass.*NEARLINE.*\"age\":{{.nearline}}"}}, desc: "Transition to Nearline at the requested age"}
-      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {"lifecycle": {regex: "Delete.*\"age\":365"}}, desc: "Deletion after 365 days"}
-  - name: Cleanup
+      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {"lifecycle": {regex: "SetStorageClass.*NEARLINE.*\"age\":{{.nearline}}"}}, desc: "Paso a Nearline a la edad indicada"}
+      - {type: exists, path: "buckets[\"docs-{{.project}}\"]", expect: {"lifecycle": {regex: "Delete.*\"age\":365"}}, desc: "Borrado a los 365 días"}
+  - name: Limpieza
     validator: cost
     points: 10
     checks:
-      - {type: absent, path: "buckets[\"tmp-upload-{{.project}}\"]", desc: "Temporary bucket removed"}
+      - {type: absent, path: "buckets[\"tmp-upload-{{.project}}\"]", desc: "Bucket temporal eliminado"}
+en:
+  title: Day 3 · A secure documents bucket with lifecycle
+  summary: Create a regional bucket that can never become public, keeps versions and moves old documents to cheaper storage.
+  story: |
+    Legal needs a bucket **docs-{{.project}}** for signed contracts:
+
+    - data residency: region **{{.region}}** only
+    - it must be impossible to make any object public
+    - access controlled only with IAM (no ACLs)
+    - accidental overwrites must be recoverable
+    - after **{{.nearline}} days** documents move to Nearline; after 365 days they are deleted
+
+    The temporary bucket `tmp-upload-{{.project}}` used during the migration must be removed.
+  objectives:
+    - Bucket in the required region with uniform bucket-level access
+    - Public access prevention enforced and versioning enabled
+    - Lifecycle rules for Nearline and deletion
+    - Remove the temporary bucket
+  hints:
+    - '`gcloud storage buckets create` accepts `--uniform-bucket-level-access` and `--public-access-prevention`.'
+    - A lifecycle file is JSON with a `rule` array; actions `SetStorageClass` and `Delete`, conditions `age`.
+  text:
+    Estado del bucket: Bucket state
+    Bucket en la región requerida: Bucket in the required region
+    Control de versiones activado: Versioning enabled
+    Seguridad: Security
+    Acceso uniforme a nivel de bucket: Uniform bucket-level access
+    Prevención de acceso público aplicada: Public access prevention enforced
+    Sin permisos públicos: No public bindings
+    Ciclo de vida: Lifecycle
+    Paso a Nearline a la edad indicada: Transition to Nearline at the requested age
+    Borrado a los 365 días: Deletion after 365 days
+    Limpieza: Cleanup
+    Bucket temporal eliminado: Temporary bucket removed

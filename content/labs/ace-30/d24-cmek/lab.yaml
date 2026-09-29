@@ -1,6 +1,6 @@
 id: ace-d24-cmek
-title: "Day 24 · Protect data with customer-managed keys"
-summary: Encrypt a bucket with a rotating Cloud KMS key, authorising only the Cloud Storage service agent.
+title: "Día 24 · Proteger los datos con claves gestionadas por el cliente"
+summary: Cifra un bucket con una clave de Cloud KMS con rotación, autorizando solo al agente de servicio de Cloud Storage.
 track: ace-30
 day: 24
 level: advanced
@@ -21,21 +21,21 @@ files:
     employee,salary
     1001,52000
 story: |
-  Compliance requires HR data in `gs://hr-records-{{.project}}` to be encrypted with a key the
-  company controls:
+  Cumplimiento normativo exige que los datos de RR. HH. de `gs://hr-records-{{.project}}` estén cifrados con una clave que
+  controle la empresa:
 
-  - key ring `hr` and key `hr-data` in {{.region}}, rotated every **{{.rotation}}**
-  - bucket default encryption with that key
-  - only the Cloud Storage service agent may use the key to encrypt/decrypt (no humans, no basic roles)
-  - upload `payroll.csv` afterwards
+  - llavero `hr` y clave `hr-data` en {{.region}}, rotada cada **{{.rotation}}**
+  - cifrado por defecto del bucket con esa clave
+  - solo el agente de servicio de Cloud Storage puede usar la clave para cifrar/descifrar (ni personas ni roles básicos)
+  - sube `payroll.csv` después
 objectives:
-  - Key with rotation, bucket using CMEK
-  - Least-privilege key usage
-  - Upload a file encrypted with the key
-  - Explain the model
+  - Clave con rotación y bucket usando CMEK
+  - Uso de la clave con mínimo privilegio
+  - Sube un archivo cifrado con la clave
+  - Explica el modelo
 hints:
-  - text: "`gcloud storage service-agent` prints the Cloud Storage service agent."
-  - text: "`roles/cloudkms.cryptoKeyEncrypterDecrypter` on the key."
+  - text: "`gcloud storage service-agent` muestra el agente de servicio de Cloud Storage."
+  - text: "`roles/cloudkms.cryptoKeyEncrypterDecrypter` en la clave."
 solution: |
   gcloud kms keyrings create hr --location={{.region}}
   gcloud kms keys create hr-data --keyring=hr --location={{.region}} --purpose=encryption --rotation-period={{.rotation}} --next-rotation-time=2026-10-01T00:00:00Z
@@ -45,31 +45,62 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: The bucket uses CMEK hr-data; only the Cloud Storage service agent has the encrypter decrypter role on the key, which rotates every {{.rotation}}; disabling the key makes the data unreadable.
+    explanation: El bucket usa la CMEK hr-data; solo el agente de servicio de Cloud Storage tiene el rol de cifrado/descifrado en la clave, que rota cada {{.rotation}}; si se desactiva la clave, los datos dejan de poder leerse.
 policy: {}
 rubric:
-  - name: Crypto & control
+  - name: Criptografía y control
     validator: state
     points: 30
     checks:
-      - {type: exists, path: "buckets[\"hr-records-{{.project}}\"]", expect: {defaultKmsKey: {regex: "keyRings/hr/cryptoKeys/hr-data"}}, desc: "Bucket uses the key"}
-      - {type: exists, path: "keyRings.hr.keys[\"hr-data\"]", expect: {rotationPeriod: "{{.rotation}}"}, desc: "Rotation period"}
+      - {type: exists, path: "buckets[\"hr-records-{{.project}}\"]", expect: {defaultKmsKey: {regex: "keyRings/hr/cryptoKeys/hr-data"}}, desc: "El bucket usa la clave"}
+      - {type: exists, path: "keyRings.hr.keys[\"hr-data\"]", expect: {rotationPeriod: "{{.rotation}}"}, desc: "Periodo de rotación"}
   - name: IAM
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: exists, path: "keyRings.hr.keys[\"hr-data\"].iamPolicy.bindings", expect: {"": {regex: "gs-project-accounts"}}, desc: "Service agent authorised"}
-      - {type: iam, principal: "user:student@gcplab.dev", permission: cloudkms.cryptoKeyVersions.useToDecrypt, resource: "key:hr/hr-data", expect: true, desc: "(owner inherits) — informational"}
-      - {type: exists, path: "keyRings.hr.keys[\"hr-data\"].iamPolicy.bindings", expect: {"": {notContains: "user:"}}, desc: "No human principals on the key"}
-  - name: Test
+      - {type: exists, path: "keyRings.hr.keys[\"hr-data\"].iamPolicy.bindings", expect: {"": {regex: "gs-project-accounts"}}, desc: "Agente de servicio autorizado"}
+      - {type: iam, principal: "user:student@gcplab.dev", permission: cloudkms.cryptoKeyVersions.useToDecrypt, resource: "key:hr/hr-data", expect: true, desc: "(el propietario hereda) — informativo"}
+      - {type: exists, path: "keyRings.hr.keys[\"hr-data\"].iamPolicy.bindings", expect: {"": {notContains: "user:"}}, desc: "Ninguna persona con permisos sobre la clave"}
+  - name: Prueba
     validator: functional
     points: 20
     checks:
-      - {type: exists, path: "buckets[\"hr-records-{{.project}}\"].objects[\"2026/payroll.csv\"]", desc: "File uploaded after encryption"}
-  - name: Explanation
+      - {type: exists, path: "buckets[\"hr-records-{{.project}}\"].objects[\"2026/payroll.csv\"]", desc: "Archivo subido tras el cifrado"}
+  - name: Explicación
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[cmek, kms, key, clave], [service agent, agente], [rotat, rota]], desc: "Explain the key model"}
+      - {type: evidence, fields: [explanation], keywords: [[cmek, kms, key, clave], [service agent, agente, agente de servicio], [rotat, rota]], desc: "Explica el modelo de claves"}
+en:
+  title: Day 24 · Protect data with customer-managed keys
+  summary: Encrypt a bucket with a rotating Cloud KMS key, authorising only the Cloud Storage service agent.
+  story: |
+    Compliance requires HR data in `gs://hr-records-{{.project}}` to be encrypted with a key the
+    company controls:
+
+    - key ring `hr` and key `hr-data` in {{.region}}, rotated every **{{.rotation}}**
+    - bucket default encryption with that key
+    - only the Cloud Storage service agent may use the key to encrypt/decrypt (no humans, no basic roles)
+    - upload `payroll.csv` afterwards
+  objectives:
+    - Key with rotation, bucket using CMEK
+    - Least-privilege key usage
+    - Upload a file encrypted with the key
+    - Explain the model
+  hints:
+    - '`gcloud storage service-agent` prints the Cloud Storage service agent.'
+    - '`roles/cloudkms.cryptoKeyEncrypterDecrypter` on the key.'
+  text:
+    Criptografía y control: Crypto & control
+    El bucket usa la clave: Bucket uses the key
+    Periodo de rotación: Rotation period
+    IAM: IAM
+    Agente de servicio autorizado: Service agent authorised
+    (el propietario hereda) — informativo: (owner inherits) — informational
+    Ninguna persona con permisos sobre la clave: No human principals on the key
+    Prueba: Test
+    Archivo subido tras el cifrado: File uploaded after encryption
+    Explicación: Explanation
+    Explica el modelo de claves: Explain the key model

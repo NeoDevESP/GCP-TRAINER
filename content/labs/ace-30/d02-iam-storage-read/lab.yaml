@@ -1,6 +1,6 @@
 id: ace-d02-iam-storage-read
-title: "Day 2 · Read access to reports without Owner or Editor"
-summary: Give an analyst read access to one bucket, applying least privilege, and prove access and denial.
+title: "Día 2 · Acceso de lectura a informes sin Owner ni Editor"
+summary: Da a una analista acceso de lectura a un único bucket aplicando mínimo privilegio, y demuestra tanto el acceso como la denegación.
 track: ace-30
 day: 2
 level: basic
@@ -15,9 +15,9 @@ params:
   analyst: [ana.analyst, luis.bi, marta.data]
 baseline: [default-network]
 story: |
-  Ticket FIN-311: *"{{.analyst}}@gcplab.dev needs to read the monthly reports in
-  `gs://reports-{{.project}}`. She must not modify or delete anything, and must
-  not see the finance exports bucket."*
+  Ticket FIN-311: *«{{.analyst}}@gcplab.dev necesita leer los informes mensuales de
+  `gs://reports-{{.project}}`. No debe modificar ni borrar nada, y no debe
+  ver el bucket de exportaciones de finanzas».*
 setup: |
   gcloud storage buckets create gs://reports-{{.project}} --location={{.region}} --uniform-bucket-level-access
   gcloud storage buckets create gs://finance-{{.project}} --location={{.region}} --uniform-bucket-level-access
@@ -25,13 +25,13 @@ setup: |
   gcloud storage cp report.csv gs://reports-{{.project}}/data/report.csv
   gcloud storage cp report.csv gs://finance-{{.project}}/exports/2026-08.csv
 objectives:
-  - Grant read-only access to the reports bucket only
-  - Do not use basic roles (Owner/Editor/Viewer)
-  - Prove that reading is allowed and deleting is denied
+  - Concede acceso de solo lectura únicamente al bucket de informes
+  - No uses roles básicos (Owner/Editor/Viewer)
+  - Demuestra que la lectura está permitida y el borrado denegado
 hints:
-  - text: "Look for a predefined Storage role that only contains storage.objects.get and storage.objects.list."
-  - text: "Grant it on the bucket (`gcloud storage buckets add-iam-policy-binding`), not on the project."
-  - text: "Use `gcloud policy-intelligence troubleshoot-policy iam` to prove access and denial."
+  - text: "Busca un rol predefinido de Storage que solo contenga storage.objects.get y storage.objects.list."
+  - text: "Concédelo en el bucket (`gcloud storage buckets add-iam-policy-binding`), no en el proyecto."
+  - text: "Usa `gcloud policy-intelligence troubleshoot-policy iam` para demostrar el acceso y la denegación."
     kind: partial
 solution: |
   gcloud iam roles describe roles/storage.objectViewer
@@ -39,23 +39,48 @@ solution: |
   gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/reports-{{.project}}/objects/data/report.csv --principal-email={{.analyst}}@gcplab.dev --permission=storage.objects.get
   gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/reports-{{.project}}/objects/data/report.csv --principal-email={{.analyst}}@gcplab.dev --permission=storage.objects.delete
 rubric:
-  - name: Read access granted
+  - name: Acceso de lectura concedido
     validator: state
     points: 50
     checks:
-      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", desc: "The analyst can read reports"}
-      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.list, resource: "bucket:reports-{{.project}}", desc: "The analyst can list reports"}
-  - name: Least privilege
+      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", desc: "La analista puede leer los informes"}
+      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.list, resource: "bucket:reports-{{.project}}", desc: "La analista puede listar los informes"}
+  - name: Mínimo privilegio
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "The analyst must not delete objects"}
-      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.get, resource: "bucket:finance-{{.project}}/exports/2026-08.csv", expect: false, desc: "The analyst must not read finance exports"}
-      - {type: no_basic_roles, members: ["user:{{.analyst}}@gcplab.dev"], desc: "No basic roles for the analyst"}
-  - name: Access verified
+      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "La analista no debe poder borrar objetos"}
+      - {type: iam, principal: "user:{{.analyst}}@gcplab.dev", permission: storage.objects.get, resource: "bucket:finance-{{.project}}/exports/2026-08.csv", expect: false, desc: "La analista no debe poder leer las exportaciones de finanzas"}
+      - {type: no_basic_roles, members: ["user:{{.analyst}}@gcplab.dev"], desc: "Sin roles básicos para la analista"}
+  - name: Acceso verificado
     validator: functional
     points: 20
     checks:
-      - {type: command, regex: "troubleshoot-policy|get-iam-policy", desc: "Verify the effective policy"}
+      - {type: command, regex: "troubleshoot-policy|get-iam-policy", desc: "Verifica la política efectiva"}
+en:
+  title: Day 2 · Read access to reports without Owner or Editor
+  summary: Give an analyst read access to one bucket, applying least privilege, and prove access and denial.
+  story: |
+    Ticket FIN-311: *"{{.analyst}}@gcplab.dev needs to read the monthly reports in
+    `gs://reports-{{.project}}`. She must not modify or delete anything, and must
+    not see the finance exports bucket."*
+  objectives:
+    - Grant read-only access to the reports bucket only
+    - Do not use basic roles (Owner/Editor/Viewer)
+    - Prove that reading is allowed and deleting is denied
+  hints:
+    - Look for a predefined Storage role that only contains storage.objects.get and storage.objects.list.
+    - Grant it on the bucket (`gcloud storage buckets add-iam-policy-binding`), not on the project.
+    - Use `gcloud policy-intelligence troubleshoot-policy iam` to prove access and denial.
+  text:
+    Acceso de lectura concedido: Read access granted
+    La analista puede leer los informes: The analyst can read reports
+    La analista puede listar los informes: The analyst can list reports
+    Mínimo privilegio: Least privilege
+    La analista no debe poder borrar objetos: The analyst must not delete objects
+    La analista no debe poder leer las exportaciones de finanzas: The analyst must not read finance exports
+    Sin roles básicos para la analista: No basic roles for the analyst
+    Acceso verificado: Access verified
+    Verifica la política efectiva: Verify the effective policy

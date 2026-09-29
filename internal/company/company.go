@@ -646,3 +646,31 @@ func (d *Definition) Localized(lang string) *Definition {
 	}
 	return &c
 }
+
+// TranslationProblems lists company texts without their English overlay.
+func (d *Definition) TranslationProblems() []string {
+	var p []string
+	if d.EN == nil {
+		p = append(p, fmt.Sprintf("company %s: missing `en:` translation", d.ID))
+	} else {
+		for _, pr := range d.Projects {
+			if d.EN.Projects[pr.Key] == "" {
+				p = append(p, fmt.Sprintf("company %s: project %s purpose not translated", d.ID, pr.Key))
+			}
+		}
+		for _, a := range d.Actors {
+			if a.Persona != "" && d.EN.Personas[a.Role] == "" {
+				p = append(p, fmt.Sprintf("company %s: persona of %s not translated", d.ID, a.Role))
+			}
+		}
+	}
+	for _, c := range d.Consequences {
+		if c.Note != "" && (c.EN == nil || c.EN.Note == "") {
+			p = append(p, fmt.Sprintf("company %s: consequence %s note not translated", d.ID, c.ID))
+		}
+	}
+	for _, id := range d.MissionOrder {
+		p = append(p, d.Missions[id].TranslationProblems()...)
+	}
+	return p
+}

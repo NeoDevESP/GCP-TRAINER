@@ -1,6 +1,6 @@
 id: ace-d09-health-check
-title: "Day 9 · INC: the VM 'is down' but nginx is running"
-summary: The load balancer returns 502 although the web server works. Find why health checks fail and fix only the necessary rule.
+title: "Día 9 · INC: la VM «está caída» pero nginx funciona"
+summary: El balanceador de carga devuelve 502 aunque el servidor web funciona. Averigua por qué fallan las comprobaciones de estado y corrige solo la regla necesaria.
 track: ace-30
 day: 9
 level: basic
@@ -32,15 +32,15 @@ faults:
 traffic:
   - {name: site, target: "lb:web-lb", path: /, rps: 30}
 story: |
-  **INC-1893** — *"The website shows 502 Bad Gateway. The VM must be down."*
-  SSH works and `systemctl status nginx` says active. Find the real cause.
+  **INC-1893** — *«La web muestra 502 Bad Gateway. La VM debe de estar caída».*
+  El SSH funciona y `systemctl status nginx` dice active. Encuentra la causa real.
 objectives:
-  - Identify why the load balancer considers the backend unhealthy
-  - Restore the site without exposing port 80 to the whole internet on the VM
-  - Validate recovery and write a short postmortem
+  - Identifica por qué el balanceador considera que el backend no está sano
+  - Restablece la web sin exponer el puerto 80 de la VM a todo internet
+  - Valida la recuperación y escribe un post-mortem breve
 hints:
-  - text: "`gcloud compute backend-services get-health web-be --global` tells you what the LB sees."
-  - text: "Health checks come from Google front-end ranges, not from IAP."
+  - text: "`gcloud compute backend-services get-health web-be --global` te dice lo que ve el balanceador."
+  - text: "Las comprobaciones de estado vienen de los rangos del front-end de Google, no de IAP."
 solution: |
   gcloud compute backend-services get-health web-be --global
   gcloud compute firewall-rules list --format='table(name,sourceRanges.list(),targetTags.list(),allowStr)'
@@ -49,28 +49,51 @@ solution: |
 evidence:
   fields: [rootCause, prevention]
   sample:
-    rootCause: The firewall rule for health checks allowed only 35.235.240.0/20 (IAP) instead of the health check ranges 35.191.0.0/16 and 130.211.0.0/22, so the backend was unhealthy and the LB returned 502.
-    prevention: Validate firewall changes in CI with a policy test and alert on unhealthy backends.
+    rootCause: La regla de cortafuegos para las comprobaciones de estado solo permitía 35.235.240.0/20 (IAP) en lugar de los rangos de health check 35.191.0.0/16 y 130.211.0.0/22, así que el backend no estaba sano y el balanceador devolvía 502.
+    prevention: Validar los cambios de cortafuegos en CI con un test de políticas y alertar cuando haya backends no sanos.
 rubric:
-  - name: Root cause
+  - name: Causa raíz
     validator: evidence
     points: 30
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[health], [firewall, cortafuegos], ["35.191", "130.211", rango, range]], desc: "Explain which traffic was blocked"}
-  - name: Fix
+      - {type: evidence, fields: [rootCause], keywords: [[health, salud, estado], [firewall, cortafuegos], ["35.191", "130.211", rango, range]], desc: "Explica qué tráfico estaba bloqueado"}
+  - name: Corrección
     validator: functional
     points: 30
     all: true
     checks:
-      - {type: http, target: "lb:web-lb", path: /, status: 200, desc: "The site answers 200 through the LB"}
-      - {type: count, collection: firewalls, where: {sourceRanges: {contains: "0.0.0.0/0"}, rules: {regex: "\"80\""}}, max: 0, desc: "Port 80 must not be opened to 0.0.0.0/0"}
-  - name: Validation
+      - {type: http, target: "lb:web-lb", path: /, status: 200, desc: "La web responde 200 a través del balanceador"}
+      - {type: count, collection: firewalls, where: {sourceRanges: {contains: "0.0.0.0/0"}, rules: {regex: "\"80\""}}, max: 0, desc: "El puerto 80 no debe abrirse a 0.0.0.0/0"}
+  - name: Validación
     validator: functional
     points: 25
     checks:
-      - {type: command, regex: "get-health|curl", desc: "Verify backend health / response"}
-  - name: Postmortem
+      - {type: command, regex: "get-health|curl", desc: "Verifica la salud del backend o la respuesta"}
+  - name: Post-mortem
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [prevention], keywords: [[test, alert, alerta, review, revis, policy, ci]], desc: "Preventive action"}
+      - {type: evidence, fields: [prevention], keywords: [[test, alert, alerta, review, revis, policy, ci, prueba, politica]], desc: "Acción preventiva"}
+en:
+  title: 'Day 9 · INC: the VM ''is down'' but nginx is running'
+  summary: The load balancer returns 502 although the web server works. Find why health checks fail and fix only the necessary rule.
+  story: |
+    **INC-1893** — *"The website shows 502 Bad Gateway. The VM must be down."*
+    SSH works and `systemctl status nginx` says active. Find the real cause.
+  objectives:
+    - Identify why the load balancer considers the backend unhealthy
+    - Restore the site without exposing port 80 to the whole internet on the VM
+    - Validate recovery and write a short postmortem
+  hints:
+    - '`gcloud compute backend-services get-health web-be --global` tells you what the LB sees.'
+    - Health checks come from Google front-end ranges, not from IAP.
+  text:
+    Causa raíz: Root cause
+    Explica qué tráfico estaba bloqueado: Explain which traffic was blocked
+    Corrección: Fix
+    La web responde 200 a través del balanceador: The site answers 200 through the LB
+    El puerto 80 no debe abrirse a 0.0.0.0/0: Port 80 must not be opened to 0.0.0.0/0
+    Validación: Validation
+    Verifica la salud del backend o la respuesta: Verify backend health / response
+    Post-mortem: Postmortem
+    Acción preventiva: Preventive action

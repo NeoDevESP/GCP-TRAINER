@@ -1,6 +1,6 @@
 id: ace-d08-logs-alert
-title: "Day 8 · Find the 500s and alert on them"
-summary: Query Cloud Logging to find the failing endpoint, then create a log-based metric and an alert that notifies the on-call team.
+title: "Día 8 · Encontrar los 500 y alertar sobre ellos"
+summary: Consulta Cloud Logging para encontrar el endpoint que falla y crea una métrica basada en registros y una alerta que avise al equipo de guardia.
 track: ace-30
 day: 8
 level: basic
@@ -21,17 +21,17 @@ traffic:
   - {name: search, target: "run:{{.svc}}", path: /search, rps: 8}
   - {name: checkout, target: "run:{{.svc}}", path: /checkout, rps: 10}
 story: |
-  Customer support: *"Some users get 'Internal Server Error' on the shop, not all of them."*
-  Find which endpoint of **{{.svc}}** fails, then make sure the on-call team
-  (`oncall@gcplab.dev`) is paged automatically next time.
+  Atención al cliente: *«Algunos usuarios ven 'Internal Server Error' en la tienda, pero no todos».*
+  Averigua qué endpoint de **{{.svc}}** falla y asegúrate de que la próxima vez se avise
+  automáticamente al equipo de guardia (`oncall@gcplab.dev`).
 objectives:
-  - Precise log query that isolates HTTP 5xx
-  - Identify the defective endpoint
-  - Log-based metric counting the errors
-  - Alert policy on that metric with an email notification channel
+  - Consulta de registros precisa que aísle los HTTP 5xx
+  - Identifica el endpoint defectuoso
+  - Métrica basada en registros que cuente los errores
+  - Política de alertas sobre esa métrica con un canal de notificación por correo
 hints:
   - text: "`gcloud logging read 'httpRequest.status>=500' --limit=10 --format='value(httpRequest.requestUrl)'`"
-  - text: "`gcloud logging metrics create NAME --log-filter=...`, then `gcloud alpha monitoring policies create` with `--condition-filter='metric.type=\"logging.googleapis.com/user/NAME\"'`."
+  - text: "`gcloud logging metrics create NOMBRE --log-filter=...` y después `gcloud alpha monitoring policies create` con `--condition-filter='metric.type=\"logging.googleapis.com/user/NOMBRE\"'`."
 solution: |
   gcloud logging read 'httpRequest.status>=500 resource.type="cloud_run_revision"' --limit=5 --format='value(httpRequest.requestUrl)'
   gcloud logging metrics create shop-5xx --description="5xx on {{.svc}}" --log-filter='resource.type="cloud_run_revision" AND httpRequest.status>=500'
@@ -40,26 +40,51 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: The endpoint /search returns HTTP 500 while /products and /checkout return 200; I filtered httpRequest.status>=500.
+    explanation: El endpoint /search devuelve HTTP 500 mientras que /products y /checkout devuelven 200; filtré por httpRequest.status>=500.
 rubric:
-  - name: Log query
+  - name: Consulta de registros
     validator: diagnosis
     points: 35
     checks:
-      - {type: command, regex: "logging read.*(status|severity)", desc: "Query logs filtering by status or severity"}
-  - name: Diagnosis
+      - {type: command, regex: "logging read.*(status|severity)", desc: "Consulta los registros filtrando por estado o gravedad"}
+  - name: Diagnóstico
     validator: evidence
     points: 30
     checks:
-      - {type: evidence, fields: [explanation], keywords: [["/search", search]], desc: "Name the failing endpoint"}
-  - name: Alerting
+      - {type: evidence, fields: [explanation], keywords: [["/search", search, busqueda, buscar]], desc: "Nombra el endpoint que falla"}
+  - name: Alertas
     validator: state
     points: 25
     checks:
-      - {type: log_metric, matchesErrors: true, desc: "A log-based metric counts the 5xx responses"}
-      - {type: alert_policy, filterContains: "logging.googleapis.com/user/", channel: true, desc: "Alert on the metric with a notification channel"}
-  - name: Explanation
+      - {type: log_metric, matchesErrors: true, desc: "Una métrica basada en registros cuenta las respuestas 5xx"}
+      - {type: alert_policy, filterContains: "logging.googleapis.com/user/", channel: true, desc: "Alerta sobre la métrica con un canal de notificación"}
+  - name: Explicación
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [explanation], keywords: [["500", "5xx"]], desc: "Mention the status code"}
+      - {type: evidence, fields: [explanation], keywords: [["500", "5xx"]], desc: "Menciona el código de estado"}
+en:
+  title: Day 8 · Find the 500s and alert on them
+  summary: Query Cloud Logging to find the failing endpoint, then create a log-based metric and an alert that notifies the on-call team.
+  story: |
+    Customer support: *"Some users get 'Internal Server Error' on the shop, not all of them."*
+    Find which endpoint of **{{.svc}}** fails, then make sure the on-call team
+    (`oncall@gcplab.dev`) is paged automatically next time.
+  objectives:
+    - Precise log query that isolates HTTP 5xx
+    - Identify the defective endpoint
+    - Log-based metric counting the errors
+    - Alert policy on that metric with an email notification channel
+  hints:
+    - '`gcloud logging read ''httpRequest.status>=500'' --limit=10 --format=''value(httpRequest.requestUrl)''`'
+    - '`gcloud logging metrics create NAME --log-filter=...`, then `gcloud alpha monitoring policies create` with `--condition-filter=''metric.type="logging.googleapis.com/user/NAME"''`.'
+  text:
+    Consulta de registros: Log query
+    Consulta los registros filtrando por estado o gravedad: Query logs filtering by status or severity
+    Diagnóstico: Diagnosis
+    Nombra el endpoint que falla: Name the failing endpoint
+    Alertas: Alerting
+    Una métrica basada en registros cuenta las respuestas 5xx: A log-based metric counts the 5xx responses
+    Alerta sobre la métrica con un canal de notificación: Alert on the metric with a notification channel
+    Explicación: Explanation
+    Menciona el código de estado: Mention the status code

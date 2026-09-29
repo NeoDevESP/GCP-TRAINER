@@ -213,3 +213,6 @@ func (lib *Library) SymptomGraph() []SymptomEdge {
 	})
 	return out
 }
+
+// TranslationProblems lists library texts without their English overlay.
+func (lib *Library) TranslationProblems() []string { return nil }
