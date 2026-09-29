@@ -1,160 +1,248 @@
 # Serverless shop: Cloud Run checkout and stock-api → Cloud SQL shop-db via the
 # connector, Secret Manager password, exports bucket, legacy batch VM.
 id: shop-platform
-title: serverless shop on Cloud Run and Cloud SQL
+title: tienda serverless en Cloud Run y Cloud SQL
 branch: compute
 skills: [compute.serverless, observability.incident]
 baseline: [default-network, shop-platform]
 decoys: [legacy-batch]
-topology: "Internet → Cloud Run checkout / stock-api → Cloud SQL connector → shop-db; Secret Manager shop-db-password; gs://exports-*"
+topology: "Internet → Cloud Run checkout / stock-api → conector de Cloud SQL → shop-db; Secret Manager shop-db-password; gs://exports-*"
 traffic:
   - {name: checkout, target: "run:checkout", path: /checkout, rps: 30}
   - {name: stock, target: "run:stock-api", path: /stock, rps: 40}
 healthy:
-  - {type: http, target: "run:checkout", path: /checkout, status: 200, desc: "Checkout works"}
-  - {type: http, target: "run:stock-api", path: /stock, status: 200, desc: "Stock works"}
-  - {type: sql_healthy, instance: shop-db, settle: 2, desc: "Database connections healthy"}
+  - {type: http, target: "run:checkout", path: /checkout, status: 200, desc: "El checkout funciona"}
+  - {type: http, target: "run:stock-api", path: /stock, status: 200, desc: "El stock funciona"}
+  - {type: sql_healthy, instance: shop-db, settle: 2, desc: "Conexiones de base de datos sanas"}
 safety:
-  - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV, PUBLIC_BUCKET, BASIC_ROLE_SERVICE_ACCOUNT, PUBLIC_SQL], desc: "No plaintext secrets, public buckets, basic roles or public database"}
-  - {type: exists, path: "instances[\"legacy-batch\"]", expect: {status: RUNNING}, desc: "legacy-batch untouched"}
+  - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV, PUBLIC_BUCKET, BASIC_ROLE_SERVICE_ACCOUNT, PUBLIC_SQL], desc: "Sin secretos en claro, buckets públicos, roles básicos ni base de datos pública"}
+  - {type: exists, path: "instances[\"legacy-batch\"]", expect: {status: RUNNING}, desc: "legacy-batch intacta"}
 actors:
   - role: developer
-    name: Nora (checkout team)
-    persona: owns checkout and stock-api
-    fallback: "I can tell you about releases and configuration of our services."
+    name: Nora (equipo de checkout)
+    persona: responsable de checkout y stock-api
+    fallback: "Puedo contarte cosas de las versiones y la configuración de nuestros servicios."
     facts:
-      - {keywords: [[log, error, message]], answer: "Our services log the exact dependency error at ERROR severity in Cloud Logging (resource cloud_run_revision)."}
+      - {keywords: [[log, error, message, registro]], answer: "Nuestros servicios registran el error exacto de la dependencia con gravedad ERROR en Cloud Logging (recurso cloud_run_revision)."}
   - role: sre
-    name: Omar (SRE on call)
-    persona: owns the platform
-    fallback: "Look at Cloud SQL and Cloud Run metrics first."
+    name: Omar (SRE de guardia)
+    persona: responsable de la plataforma
+    fallback: "Mira primero las métricas de Cloud SQL y de Cloud Run."
     facts:
-      - {keywords: [[when, cuando, start, empez]], answer: "The alerts fired at 08:52, after the nightly automation jobs (release-bot, cleanup-job, secret-rotator)."}
+      - {keywords: [[when, cuando, start, empez]], answer: "Las alertas saltaron a las 08:52, después de los procesos automáticos nocturnos (release-bot, cleanup-job, secret-rotator)."}
   - role: manager
-    name: Irene (engineering manager)
-    persona: needs an ETA
-    fallback: "Post a customer-facing update on the ticket, please."
+    name: Irene (responsable de ingeniería)
+    persona: necesita una hora estimada
+    fallback: "Publica en el ticket una actualización para los clientes, por favor."
     facts:
-      - {keywords: [[restart, reboot, reinici, delete, borrar]], answer: "No blind restarts and do not touch legacy-batch — Finance owns it."}
+      - {keywords: [[restart, reboot, reinici, delete, borrar, borr, elimin]], answer: "Nada de reinicios a ciegas y no toques legacy-batch: es de Finanzas."}
 noise:
   - {type: log_noise, severity: WARNING, resourceType: cloud_run_revision, lines: ["upstream connect error or disconnect/reset before headers (CDN edge)", "slow request /products took 2.3s"]}
 failures:
   - id: sp.sql-client
-    title: Cloud SQL client role removed from the service account
+    title: Rol de cliente de Cloud SQL retirado de la cuenta de servicio
     symptom: http-500
     layer: identity
     skills: [iam.serviceaccounts, iam.leastprivilege, databases.cloudsql]
-    summary: "Checkout returns 500: 'not authorized to connect' in the logs."
+    summary: "Checkout devuelve 500: 'not authorized to connect' en los registros."
     faults:
       - {type: iam_remove, role: roles/cloudsql.client, member: "serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com", actor: "cleanup-job@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      security: [{keywords: [[iam, role, rol, permission, permiso, cleanup]], answer: "cleanup-job removes project-level roles that were not used in 30 days; it runs at 08:45."}]
+      security: [{keywords: [[iam, role, rol, permission, permiso, cleanup]], answer: "cleanup-job quita los roles a nivel de proyecto que no se han usado en 30 días; se ejecuta a las 08:45."}]
     hints:
-      - text: "Which identity does checkout run as, and which role lets it use the Cloud SQL connector?"
+      - text: "¿Con qué identidad se ejecuta checkout y qué rol le permite usar el conector de Cloud SQL?"
     evidence:
       commands: "logging read|get-iam-policy|troubleshoot|services describe"
       rootCause: [[cloudsql.client, cloud sql client, iam, role, rol], [checkout-sa, service account, cuenta de servicio]]
-      sample: "cleanup-job removed roles/cloudsql.client from checkout-sa, so the Cloud SQL connector rejected the checkout service identity and checkout returned 500."
-    dangerous: ["granting roles/owner or roles/editor to the service account", "switching checkout to the default compute service account"]
-    fixes: ["grant roles/cloudsql.client to checkout-sa"]
+      sample: "cleanup-job quitó roles/cloudsql.client a checkout-sa, así que el conector de Cloud SQL rechazaba la identidad del servicio checkout y este devolvía 500."
+    dangerous: ["conceder roles/owner o roles/editor a la cuenta de servicio", "cambiar checkout a la cuenta de servicio de cómputo por defecto"]
+    fixes: ["conceder roles/cloudsql.client a checkout-sa"]
     solution: |
       gcloud logging read 'severity>=ERROR resource.type="cloud_run_revision"' --limit=3 --format='value(textPayload)'
       gcloud projects get-iam-policy {{.project}} --flatten='bindings[].members' --filter='bindings.members:checkout-sa' --format='value(bindings.role)'
       gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
     checks:
-      - {type: no_basic_roles, members: ["serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles for checkout-sa"}
+      - {type: no_basic_roles, members: ["serviceAccount:checkout-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos para checkout-sa"}
+    en:
+      title: Cloud SQL client role removed from the service account
+      summary: 'Checkout returns 500: ''not authorized to connect'' in the logs.'
+      sample: cleanup-job removed roles/cloudsql.client from checkout-sa, so the Cloud SQL connector rejected the checkout service identity and checkout returned 500.
+      hints:
+        - Which identity does checkout run as, and which role lets it use the Cloud SQL connector?
+      dangerous:
+        - granting roles/owner or roles/editor to the service account
+        - switching checkout to the default compute service account
+      fixes:
+        - grant roles/cloudsql.client to checkout-sa
+      text:
+        cleanup-job quita los roles a nivel de proyecto que no se han usado en 30 días; se ejecuta a las 08:45.: cleanup-job removes project-level roles that were not used in 30 days; it runs at 08:45.
+        Sin roles básicos para checkout-sa: No basic roles for checkout-sa
   - id: sp.pool
-    title: Connection pool exhausts Cloud SQL
+    title: El pool de conexiones agota Cloud SQL
     symptom: timeout
     layer: connection-pool
     skills: [databases.performance, compute.serverless]
-    summary: "Stock pages time out and Cloud SQL CPU is at 100%."
+    summary: "Las páginas de stock dan timeout y la CPU de Cloud SQL está al 100 %."
     params:
       pool: ["70", "90"]
     faults:
       - {type: run_env, service: stock-api, key: DB_POOL_SIZE, value: "{{.pool}}", actor: "release-bot@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      developer: [{keywords: [[release, deploy, change, cambio, config]], answer: "release-bot shipped 'performance improvements' for stock-api at 08:50 — it tuned the database settings."}]
+      developer: [{keywords: [[release, deploy, change, cambio, config, cambi]], answer: "release-bot publicó «mejoras de rendimiento» para stock-api a las 08:50: ajustó la configuración de la base de datos."}]
     hints:
-      - text: "Connections ≈ pool size × instances. Compare with max_connections of db-g1-small."
+      - text: "Conexiones ≈ tamaño del pool × instancias. Compáralo con el max_connections de db-g1-small."
     evidence:
       commands: "logging read|sql instances describe|services describe"
-      rootCause: [[pool, DB_POOL_SIZE], [connection, conexion, max_connections]]
-      sample: "release-bot raised DB_POOL_SIZE on stock-api, so the pool opened more connections than max_connections of shop-db and new connections were rejected."
-    dangerous: ["resizing the database without understanding the cause", "removing max-instances"]
-    fixes: ["restore DB_POOL_SIZE=5 and cap max-instances × pool below max_connections"]
+      rootCause: [[pool, DB_POOL_SIZE], [connection, conexion, max_connections, conexiones]]
+      sample: "release-bot subió DB_POOL_SIZE en stock-api, así que el pool abría más conexiones que el max_connections de shop-db y se rechazaban las conexiones nuevas."
+    dangerous: ["redimensionar la base de datos sin entender la causa", "quitar max-instances"]
+    fixes: ["volver a DB_POOL_SIZE=5 y limitar max-instances × pool por debajo de max_connections"]
     solution: |
       gcloud logging read 'resource.type="cloudsql_database" severity>=ERROR' --limit=2 --format='value(textPayload)'
       gcloud run services describe stock-api --region={{.region}}
       gcloud run services update stock-api --region={{.region}} --update-env-vars=DB_POOL_SIZE=5
     settle: 2
+    en:
+      title: Connection pool exhausts Cloud SQL
+      summary: Stock pages time out and Cloud SQL CPU is at 100%.
+      sample: release-bot raised DB_POOL_SIZE on stock-api, so the pool opened more connections than max_connections of shop-db and new connections were rejected.
+      hints:
+        - Connections ≈ pool size × instances. Compare with max_connections of db-g1-small.
+      dangerous:
+        - resizing the database without understanding the cause
+        - removing max-instances
+      fixes:
+        - restore DB_POOL_SIZE=5 and cap max-instances × pool below max_connections
+      text:
+        'release-bot publicó «mejoras de rendimiento» para stock-api a las 08:50: ajustó la configuración de la base de datos.': release-bot shipped 'performance improvements' for stock-api at 08:50 — it tuned the database settings.
   - id: sp.bad-release
-    title: Faulty release shipped to checkout
+    title: Versión defectuosa publicada en checkout
     symptom: http-500
     layer: release
     skills: [compute.serverless, devops.delivery]
-    summary: "Checkout returns 500 since 08:50; nothing else changed, supposedly."
+    summary: "Checkout devuelve 500 desde las 08:50; en teoría no ha cambiado nada más."
     faults:
       - {type: run_image, service: checkout, image: "europe-docker.pkg.dev/gcplab-public/apps/checkout-api:2.0-bad", actor: "release-bot@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      developer: [{keywords: [[release, deploy, version, revision, image, imagen]], answer: "2.0 was supposed to go to staging only. The previous stable image is checkout-api:1.4."}]
+      developer: [{keywords: [[release, deploy, version, revision, image, imagen]], answer: "La 2.0 solo tenía que ir a staging. La imagen estable anterior es checkout-api:1.4."}]
     hints:
-      - text: "`gcloud run revisions list --service=checkout` — what changed at 08:50?"
+      - text: "`gcloud run revisions list --service=checkout`: ¿qué cambió a las 08:50?"
     evidence:
       commands: "revisions list|services describe|logging read"
-      rootCause: [[release, revision, revision, image, imagen, 2.0, version], [rollback, 1.4, previous, anterior]]
-      sample: "release-bot deployed checkout-api 2.0 to production and the new revision failed /checkout; rolling back to the previous image 1.4 restored the service."
-    dangerous: ["deleting the service", "disabling authentication to test"]
-    fixes: ["route traffic back to the previous revision / redeploy 1.4"]
+      rootCause: [[release, revision, revision, image, imagen, 2.0, version], [rollback, 1.4, previous, anterior, marcha atras, revert]]
+      sample: "release-bot desplegó checkout-api 2.0 en producción y la nueva revisión fallaba en /checkout; volver a la imagen anterior 1.4 restableció el servicio."
+    dangerous: ["borrar el servicio", "desactivar la autenticación para probar"]
+    fixes: ["devolver el tráfico a la revisión anterior / volver a desplegar la 1.4"]
     solution: |
       gcloud run revisions list --service=checkout --region={{.region}}
       gcloud logging read 'severity>=ERROR resource.type="cloud_run_revision"' --limit=3 --format='value(textPayload)'
       gcloud run services update checkout --region={{.region}} --image=europe-docker.pkg.dev/gcplab-public/apps/checkout-api:1.4
+    en:
+      title: Faulty release shipped to checkout
+      summary: Checkout returns 500 since 08:50; nothing else changed, supposedly.
+      sample: release-bot deployed checkout-api 2.0 to production and the new revision failed /checkout; rolling back to the previous image 1.4 restored the service.
+      hints:
+        - '`gcloud run revisions list --service=checkout` — what changed at 08:50?'
+      dangerous:
+        - deleting the service
+        - disabling authentication to test
+      fixes:
+        - route traffic back to the previous revision / redeploy 1.4
+      text:
+        La 2.0 solo tenía que ir a staging. La imagen estable anterior es checkout-api:1.4.: 2.0 was supposed to go to staging only. The previous stable image is checkout-api:1.4.
   - id: sp.secret-disabled
-    title: Database password secret version disabled
+    title: Versión del secreto de la contraseña de la base de datos desactivada
     symptom: http-500
     layer: configuration
     skills: [security.secrets, compute.serverless]
-    summary: "Checkout and stock fail with database authentication errors."
+    summary: "Checkout y stock fallan con errores de autenticación en la base de datos."
     conflicts: [sp.sql-client]
     faults:
       - {type: secret_version_disable, secret: shop-db-password, version: "1", actor: "secret-rotator@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      security: [{keywords: [[secret, password, contrase, rotat]], answer: "secret-rotator disables old versions after a rotation — but last night the rotation step itself failed."}]
+      security: [{keywords: [[secret, password, contrase, rotat, secreto, contrasena, rota]], answer: "secret-rotator desactiva las versiones antiguas tras una rotación, pero anoche falló el propio paso de rotación."}]
     hints:
-      - text: "`gcloud secrets versions list shop-db-password` — is any version ENABLED?"
+      - text: "`gcloud secrets versions list shop-db-password`: ¿hay alguna versión ENABLED?"
     evidence:
       commands: "secrets versions list|secrets describe|logging read"
-      rootCause: [[secret, secreto, password], [disabled, deshabilit, version, rotat]]
-      sample: "The secret-rotator disabled version 1 of shop-db-password without adding a new version, so the services could not read the database password."
-    dangerous: ["putting the password in a plain environment variable", "granting secretmanager.admin to the services"]
-    fixes: ["re-enable the version (or add a new one) and fix the rotation job"]
+      rootCause: [[secret, secreto, password, contrasena], [disabled, deshabilit, version, rotat, rota]]
+      sample: "secret-rotator desactivó la versión 1 de shop-db-password sin añadir una versión nueva, así que los servicios no podían leer la contraseña de la base de datos."
+    dangerous: ["poner la contraseña en una variable de entorno en claro", "conceder secretmanager.admin a los servicios"]
+    fixes: ["volver a activar la versión (o añadir una nueva) y corregir el proceso de rotación"]
     solution: |
       gcloud logging read 'severity>=ERROR resource.type="cloud_run_revision"' --limit=3 --format='value(textPayload)'
       gcloud secrets versions list shop-db-password
       gcloud secrets versions enable 1 --secret=shop-db-password
+    en:
+      title: Database password secret version disabled
+      summary: Checkout and stock fail with database authentication errors.
+      sample: The secret-rotator disabled version 1 of shop-db-password without adding a new version, so the services could not read the database password.
+      hints:
+        - '`gcloud secrets versions list shop-db-password` — is any version ENABLED?'
+      dangerous:
+        - putting the password in a plain environment variable
+        - granting secretmanager.admin to the services
+      fixes:
+        - re-enable the version (or add a new one) and fix the rotation job
+      text:
+        secret-rotator desactiva las versiones antiguas tras una rotación, pero anoche falló el propio paso de rotación.: secret-rotator disables old versions after a rotation — but last night the rotation step itself failed.
   - id: sp.exports-public
-    title: Exports bucket made public
+    title: Bucket de exportaciones hecho público
     symptom: data-exposure
     layer: storage-iam
     kind: SEC
     skills: [storage.access, security.armor, security.audit]
-    summary: "A researcher reports that order exports can be downloaded without login."
+    summary: "Un investigador informa de que las exportaciones de pedidos se pueden descargar sin iniciar sesión."
     faults:
       - {type: bucket_public, bucket: "exports-{{.project}}", actor: "cleanup-job@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      security: [{keywords: [[who, quien, change, cambio, bucket, audit]], answer: "Check the audit log for SetIamPolicy on the exports bucket — only automation accounts have that permission."}]
+      security: [{keywords: [[who, quien, change, cambio, bucket, audit, cambi, auditor]], answer: "Revisa en el registro de auditoría los SetIamPolicy sobre el bucket de exportaciones: solo las cuentas de automatización tienen ese permiso."}]
     hints:
-      - text: "`gcloud storage buckets get-iam-policy gs://exports-...` and the Security Command Center findings."
+      - text: "`gcloud storage buckets get-iam-policy gs://exports-...` y los hallazgos de Security Command Center."
     evidence:
       commands: "get-iam-policy|scc findings|logging read"
-      rootCause: [[allusers, public, publico], [bucket, exports, storage]]
-      sample: "cleanup-job granted allUsers objectViewer on the exports bucket, making order exports public; the binding was removed."
-    dangerous: ["deleting the bucket (evidence and data loss)"]
-    fixes: ["remove allUsers from the bucket and enforce public access prevention"]
+      rootCause: [[allusers, public, publico], [bucket, exports, storage, almacenamiento]]
+      sample: "cleanup-job concedió objectViewer a allUsers sobre el bucket de exportaciones, lo que hizo públicas las exportaciones de pedidos; se eliminó el binding."
+    dangerous: ["borrar el bucket (pérdida de evidencias y de datos)"]
+    fixes: ["quitar allUsers del bucket y aplicar la prevención de acceso público"]
     solution: |
       gcloud scc findings list --format='table(category,resourceName)'
       gcloud storage buckets get-iam-policy gs://exports-{{.project}}
       gcloud storage buckets remove-iam-policy-binding gs://exports-{{.project}} --member=allUsers --role=roles/storage.objectViewer
     checks:
-      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.project}}/2026-09/orders.csv", expect: false, desc: "Exports are private"}
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.project}}/2026-09/orders.csv", expect: false, desc: "Las exportaciones son privadas"}
+    en:
+      title: Exports bucket made public
+      summary: A researcher reports that order exports can be downloaded without login.
+      sample: cleanup-job granted allUsers objectViewer on the exports bucket, making order exports public; the binding was removed.
+      hints:
+        - '`gcloud storage buckets get-iam-policy gs://exports-...` and the Security Command Center findings.'
+      dangerous:
+        - deleting the bucket (evidence and data loss)
+      fixes:
+        - remove allUsers from the bucket and enforce public access prevention
+      text:
+        ? 'Revisa en el registro de auditoría los SetIamPolicy sobre el bucket de exportaciones: solo las cuentas de automatización tienen ese permiso.'
+        : Check the audit log for SetIamPolicy on the exports bucket — only automation accounts have that permission.
+        Las exportaciones son privadas: Exports are private
+en:
+  title: serverless shop on Cloud Run and Cloud SQL
+  topology: Internet → Cloud Run checkout / stock-api → Cloud SQL connector → shop-db; Secret Manager shop-db-password; gs://exports-*
+  text:
+    Nora (equipo de checkout): Nora (checkout team)
+    responsable de checkout y stock-api: owns checkout and stock-api
+    Puedo contarte cosas de las versiones y la configuración de nuestros servicios.: I can tell you about releases and configuration of our services.
+    Nuestros servicios registran el error exacto de la dependencia con gravedad ERROR en Cloud Logging (recurso cloud_run_revision).: Our services log the exact dependency error at ERROR severity in Cloud Logging (resource cloud_run_revision).
+    Omar (SRE de guardia): Omar (SRE on call)
+    responsable de la plataforma: owns the platform
+    Mira primero las métricas de Cloud SQL y de Cloud Run.: Look at Cloud SQL and Cloud Run metrics first.
+    Las alertas saltaron a las 08:52, después de los procesos automáticos nocturnos (release-bot, cleanup-job, secret-rotator).: The alerts fired at 08:52, after the nightly automation jobs (release-bot, cleanup-job, secret-rotator).
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    necesita una hora estimada: needs an ETA
+    Publica en el ticket una actualización para los clientes, por favor.: Post a customer-facing update on the ticket, please.
+    'Nada de reinicios a ciegas y no toques legacy-batch: es de Finanzas.': No blind restarts and do not touch legacy-batch — Finance owns it.
+    El checkout funciona: Checkout works
+    El stock funciona: Stock works
+    Conexiones de base de datos sanas: Database connections healthy
+    Sin secretos en claro, buckets públicos, roles básicos ni base de datos pública: No plaintext secrets, public buckets, basic roles or public database
+    legacy-batch intacta: legacy-batch untouched

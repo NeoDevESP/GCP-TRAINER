@@ -2,7 +2,7 @@
 # reports reads gs://reports-* through Workload Identity; pdf renders reports
 # in memory. Cluster shop-gke with Workload Identity enabled.
 id: gke-shop
-title: storefront on GKE with Workload Identity
+title: tienda en GKE con Workload Identity
 branch: gke
 skills: [gke.troubleshooting, gke.workloads, observability.incident]
 baseline: [default-network]
@@ -150,62 +150,62 @@ setup: |
   YAML
   gcloud container clusters get-credentials shop-gke --zone={{.zone}}
   kubectl apply -f shop.yaml
-topology: "Internet → web (LoadBalancer) → catalog (ClusterIP, NetworkPolicy from web, ConfigMap) · Internet → reports (Workload Identity → gs://reports-*) · Internet → pdf (report-generator) · batch (data team)"
+topology: "Internet → web (LoadBalancer) → catalog (ClusterIP, NetworkPolicy desde web, ConfigMap) · Internet → reports (Workload Identity → gs://reports-*) · Internet → pdf (generador de informes) · batch (equipo de datos)"
 traffic:
   - {name: shop, target: "k8s:shop-gke/web", path: /shop, rps: 30}
   - {name: reports, target: "k8s:shop-gke/reports", path: /reports, rps: 5}
   - {name: pdf, target: "k8s:shop-gke/pdf", path: /report, rps: 3}
 healthy:
-  - {type: http, target: "k8s:shop-gke/web", path: /shop, status: 200, desc: "The shop page loads the catalog"}
-  - {type: http, target: "k8s:shop-gke/reports", path: /reports, status: 200, desc: "Reports read from the reports bucket"}
-  - {type: http, target: "k8s:shop-gke/pdf", path: /report, status: 200, desc: "PDF rendering works"}
+  - {type: http, target: "k8s:shop-gke/web", path: /shop, status: 200, desc: "La página de la tienda carga el catálogo"}
+  - {type: http, target: "k8s:shop-gke/reports", path: /reports, status: 200, desc: "Los informes se leen del bucket de informes"}
+  - {type: http, target: "k8s:shop-gke/pdf", path: /report, status: 200, desc: "La generación de PDF funciona"}
 safety:
-  - {type: k8s_ready, cluster: shop-gke, deployment: batch, min: 1, desc: "The data team's batch deployment keeps running"}
-  - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles for reports-sa"}
-  - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "The reports bucket stays private"}
+  - {type: k8s_ready, cluster: shop-gke, deployment: batch, min: 1, desc: "El deployment batch del equipo de datos sigue en marcha"}
+  - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos para reports-sa"}
+  - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "El bucket de informes sigue siendo privado"}
 actors:
   - role: developer
-    name: Kai (platform team)
-    persona: owns the cluster and the manifests in shop.yaml
-    fallback: "Everything is in shop.yaml; start from kubectl get pods and the events."
+    name: Kai (equipo de plataforma)
+    persona: responsable del clúster y de los manifiestos de shop.yaml
+    fallback: "Todo está en shop.yaml; empieza por kubectl get pods y los eventos."
     facts:
-      - {keywords: [[log, error, event, evento]], answer: "kubectl get events and kubectl describe pod tell you why a pod is not ready; the apps log dependency errors."}
-      - {keywords: [[recreate, delete, borrar, cluster]], answer: "Please don't recreate the cluster — the data team's batch jobs run there too."}
+      - {keywords: [[log, error, event, evento, registro]], answer: "kubectl get events y kubectl describe pod te dicen por qué un pod no está listo; las aplicaciones registran los errores de sus dependencias."}
+      - {keywords: [[recreate, delete, borrar, cluster, borr, elimin]], answer: "Por favor, no recreéis el clúster: ahí también se ejecutan los procesos por lotes del equipo de datos."}
   - role: sre
-    name: Sam (SRE on call)
-    persona: watches the dashboards
-    fallback: "Services with no ready endpoints return 503 — check readiness and selectors."
+    name: Sam (SRE de guardia)
+    persona: vigila los paneles
+    fallback: "Los Services sin endpoints listos devuelven 503: revisa la readiness y los selectores."
     facts:
-      - {keywords: [[when, cuando, start, empez, time, hora]], answer: "Alerts fired at 08:52, right after the platform automation window (release-bot, cost-optimizer, policy-bot, cleanup-job)."}
+      - {keywords: [[when, cuando, start, empez, time, hora]], answer: "Las alertas saltaron a las 08:52, justo después de la ventana de automatizaciones de la plataforma (release-bot, cost-optimizer, policy-bot, cleanup-job)."}
   - role: security
-    name: Aisha (security)
-    persona: owns network policies and IAM
-    fallback: "Keep least privilege and do not remove network policies — fix them."
+    name: Aisha (seguridad)
+    persona: responsable de las políticas de red y de IAM
+    fallback: "Mantén el mínimo privilegio y no borres las políticas de red: corrígelas."
   - role: manager
-    name: Irene (engineering manager)
-    persona: needs an ETA
-    fallback: "Update the ticket, please. No cluster recreation, no cluster-admin for apps."
+    name: Irene (responsable de ingeniería)
+    persona: necesita una hora estimada
+    fallback: "Actualiza el ticket, por favor. Ni recrear el clúster ni dar cluster-admin a las aplicaciones."
 noise:
   - {type: log_noise, severity: WARNING, resourceType: k8s_container, lines: ["kube-dns: Waited for 1.2s due to client-side throttling", "cluster-autoscaler: Scale-down: node gke-shop-gke-default-pool-2 is not suitable for removal"]}
 failures:
   - id: gk.bad-image
-    title: Catalog rolled out an image tag that was never pushed
+    title: Catalog ha desplegado una etiqueta de imagen que nunca se publicó
     symptom: http-500
     layer: release
     skills: [gke.workloads, devops.delivery]
-    summary: "The shop page fails with 5xx; catalog pods are not running."
+    summary: "La página de la tienda falla con 5xx; los pods de catalog no están en marcha."
     faults:
       - {type: k8s_image, cluster: shop-gke, deployment: catalog, image: "europe-docker.pkg.dev/{{.project}}/apps/catalog-api:2.1", actor: "release-bot@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      developer: [{keywords: [[release, deploy, image, imagen, version, 2.1]], answer: "release-bot rolled catalog to 2.1 from our private registry, but CI never pushed 2.1. 1.0 in the public registry is the last good one."}]
+      developer: [{keywords: [[release, deploy, image, imagen, version, 2.1]], answer: "release-bot pasó catalog a la 2.1 de nuestro registro privado, pero la CI nunca publicó la 2.1. La 1.0 del registro público es la última buena."}]
     hints:
-      - text: "`kubectl get pods -l app=catalog` and `kubectl describe pod` — what does the kubelet say about the image?"
+      - text: "`kubectl get pods -l app=catalog` y `kubectl describe pod`: ¿qué dice el kubelet sobre la imagen?"
     evidence:
       commands: "kubectl (get pods|describe|get events|rollout)"
-      rootCause: [[image, imagen, pull, 2.1, tag], [catalog, release, rollout]]
-      sample: "release-bot changed the catalog deployment to image tag 2.1 that was never pushed, so the pods stayed in ImagePullBackOff, catalog had no endpoints and the shop page failed; rolling the image back to 1.0 fixed it."
-    dangerous: ["deleting the deployment", "recreating the cluster"]
-    fixes: ["kubectl rollout undo / set image back to catalog-api:1.0"]
+      rootCause: [[image, imagen, pull, 2.1, tag, etiqueta], [catalog, release, rollout]]
+      sample: "release-bot cambió el deployment de catalog a la etiqueta de imagen 2.1, que nunca se publicó, así que los pods se quedaban en ImagePullBackOff, catalog no tenía endpoints y la página de la tienda fallaba; volver a la imagen 1.0 lo arregló."
+    dangerous: ["borrar el deployment", "recrear el clúster"]
+    fixes: ["kubectl rollout undo / volver a poner la imagen catalog-api:1.0"]
     solution: |
       gcloud container clusters get-credentials shop-gke --zone={{.zone}}
       kubectl get pods -l app=catalog
@@ -213,26 +213,41 @@ failures:
       kubectl set image deployment/catalog catalog=europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0
       kubectl get pods -l app=catalog
     checks:
-      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog back to 2 ready replicas"}
+      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog vuelve a tener 2 réplicas listas"}
+    en:
+      title: Catalog rolled out an image tag that was never pushed
+      summary: The shop page fails with 5xx; catalog pods are not running.
+      sample: release-bot changed the catalog deployment to image tag 2.1 that was never pushed, so the pods stayed in ImagePullBackOff, catalog had no endpoints and the shop page failed; rolling the image back to 1.0 fixed it.
+      hints:
+        - '`kubectl get pods -l app=catalog` and `kubectl describe pod` — what does the kubelet say about the image?'
+      dangerous:
+        - deleting the deployment
+        - recreating the cluster
+      fixes:
+        - kubectl rollout undo / set image back to catalog-api:1.0
+      text:
+        ? release-bot pasó catalog a la 2.1 de nuestro registro privado, pero la CI nunca publicó la 2.1. La 1.0 del registro público es la última buena.
+        : release-bot rolled catalog to 2.1 from our private registry, but CI never pushed 2.1. 1.0 in the public registry is the last good one.
+        catalog vuelve a tener 2 réplicas listas: catalog back to 2 ready replicas
   - id: gk.readiness
-    title: Readiness probe points at the wrong port
+    title: La sonda de readiness apunta al puerto equivocado
     symptom: http-502
     layer: k8s-readiness
     skills: [gke.workloads, gke.troubleshooting]
-    summary: "The shop's external address returns 5xx for every request."
+    summary: "La dirección externa de la tienda devuelve 5xx en todas las peticiones."
     conflicts: [gk.bad-image]
     faults:
       - {type: k8s_probe_port, cluster: shop-gke, deployment: web, port: 8081, actor: "release-bot@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      developer: [{keywords: [[probe, readiness, health, port, puerto, change, cambio]], answer: "release-bot applied the new 'standard probes' template to web this morning. web listens on 8080."}]
+      developer: [{keywords: [[probe, readiness, health, port, puerto, change, cambio, salud, estado, cambi]], answer: "release-bot aplicó esta mañana la nueva plantilla de «sondas estándar» a web. web escucha en el 8080."}]
     hints:
-      - text: "Pods are Running but not READY. What does the readiness probe check?"
+      - text: "Los pods están Running pero no READY. ¿Qué comprueba la sonda de readiness?"
     evidence:
       commands: "kubectl (get pods|describe|get endpoints|get events)"
       rootCause: [[readiness, probe, sonda], [port, puerto, 8081, 8080]]
-      sample: "release-bot changed the web readiness probe to port 8081 while the container listens on 8080, so no web pod became ready and the load balancer had no endpoints; the probe was pointed back to 8080."
-    dangerous: ["removing the readiness probe", "deleting pods in a loop"]
-    fixes: ["point the readiness probe back to port 8080"]
+      sample: "release-bot cambió la sonda de readiness de web al puerto 8081 mientras el contenedor escucha en el 8080, así que ningún pod de web llegaba a estar listo y el balanceador no tenía endpoints; se volvió a apuntar la sonda al 8080."
+    dangerous: ["quitar la sonda de readiness", "borrar pods en bucle"]
+    fixes: ["volver a apuntar la sonda de readiness al puerto 8080"]
     solution: |
       gcloud container clusters get-credentials shop-gke --zone={{.zone}}
       kubectl get pods -l app=web
@@ -257,13 +272,27 @@ failures:
       YAML
       kubectl apply -f web-probe.yaml
     checks:
-      - {type: k8s_ready, cluster: shop-gke, deployment: web, min: 2, desc: "web pods ready"}
+      - {type: k8s_ready, cluster: shop-gke, deployment: web, min: 2, desc: "Pods de web listos"}
+    en:
+      title: Readiness probe points at the wrong port
+      summary: The shop's external address returns 5xx for every request.
+      sample: release-bot changed the web readiness probe to port 8081 while the container listens on 8080, so no web pod became ready and the load balancer had no endpoints; the probe was pointed back to 8080.
+      hints:
+        - Pods are Running but not READY. What does the readiness probe check?
+      dangerous:
+        - removing the readiness probe
+        - deleting pods in a loop
+      fixes:
+        - point the readiness probe back to port 8080
+      text:
+        release-bot aplicó esta mañana la nueva plantilla de «sondas estándar» a web. web escucha en el 8080.: release-bot applied the new 'standard probes' template to web this morning. web listens on 8080.
+        Pods de web listos: web pods ready
   - id: gk.selector
-    title: Service selector no longer matches the catalog pods
+    title: El selector del Service ya no coincide con los pods de catalog
     symptom: http-500
     layer: k8s-service
     skills: [gke.workloads, networking.lb]
-    summary: "The shop page fails; catalog pods look healthy."
+    summary: "La página de la tienda falla; los pods de catalog parecen sanos."
     conflicts: [gk.bad-image]
     faults:
       - type: command
@@ -280,15 +309,15 @@ failures:
           YAML
           kubectl apply -f catalog-svc.yaml
     facts:
-      security: [{keywords: [[label, etiqueta, selector, policy, change, cambio]], answer: "policy-bot 'normalised' Service selectors to the app-name convention this morning. Pod labels were not changed."}]
+      security: [{keywords: [[label, etiqueta, selector, policy, change, cambio, politica, cambi]], answer: "policy-bot «normalizó» esta mañana los selectores de los Services a la convención de nombres de aplicación. Las etiquetas de los pods no cambiaron."}]
     hints:
-      - text: "`kubectl get endpoints catalog` — does the Service select any pod? Compare with `kubectl get pods --show-labels`."
+      - text: "`kubectl get endpoints catalog`: ¿selecciona el Service algún pod? Compáralo con `kubectl get pods --show-labels`."
     evidence:
       commands: "kubectl (get endpoints|describe svc|describe service|get svc|get pods --show-labels|get service)"
       rootCause: [[selector, label, etiqueta], [endpoint, service, servicio, catalog]]
-      sample: "policy-bot changed the catalog Service selector to app=catalog-api while the pods are labelled app=catalog, so the Service had no endpoints and web could not reach the catalog; the selector was restored to app=catalog."
-    dangerous: ["relabelling pods by hand (the deployment would undo it)", "deleting the NetworkPolicy"]
-    fixes: ["restore the Service selector app=catalog"]
+      sample: "policy-bot cambió el selector del Service catalog a app=catalog-api mientras los pods tienen la etiqueta app=catalog, así que el Service no tenía endpoints y web no podía llegar al catálogo; se restauró el selector app=catalog."
+    dangerous: ["volver a etiquetar los pods a mano (el deployment lo desharía)", "borrar la NetworkPolicy"]
+    fixes: ["restaurar el selector del Service app=catalog"]
     solution: |
       gcloud container clusters get-credentials shop-gke --zone={{.zone}}
       kubectl get endpoints catalog
@@ -302,12 +331,26 @@ failures:
         ports: [{port: 8080, targetPort: 8080}]
       YAML
       kubectl apply -f catalog-svc.yaml
+    en:
+      title: Service selector no longer matches the catalog pods
+      summary: The shop page fails; catalog pods look healthy.
+      sample: policy-bot changed the catalog Service selector to app=catalog-api while the pods are labelled app=catalog, so the Service had no endpoints and web could not reach the catalog; the selector was restored to app=catalog.
+      hints:
+        - '`kubectl get endpoints catalog` — does the Service select any pod? Compare with `kubectl get pods --show-labels`.'
+      dangerous:
+        - relabelling pods by hand (the deployment would undo it)
+        - deleting the NetworkPolicy
+      fixes:
+        - restore the Service selector app=catalog
+      text:
+        ? policy-bot «normalizó» esta mañana los selectores de los Services a la convención de nombres de aplicación. Las etiquetas de los pods no cambiaron.
+        : policy-bot 'normalised' Service selectors to the app-name convention this morning. Pod labels were not changed.
   - id: gk.netpol
-    title: NetworkPolicy rewritten to allow only the admin tier
+    title: NetworkPolicy reescrita para permitir solo la capa de administración
     symptom: timeout
     layer: network-path
     skills: [gke.workloads, security.armor, networking.firewall]
-    summary: "The shop page hangs and then times out."
+    summary: "La página de la tienda se queda colgada y acaba dando timeout."
     conflicts: [gk.selector, gk.bad-image]
     faults:
       - type: command
@@ -326,15 +369,15 @@ failures:
           YAML
           kubectl apply -f netpol.yaml
     facts:
-      security: [{keywords: [[network, red, policy, netpol, change, cambio]], answer: "policy-bot pushed the new zero-trust NetworkPolicies at 08:50. Our rule: backends accept traffic only from their direct callers — never remove the policy."}]
+      security: [{keywords: [[network, red, policy, netpol, change, cambio, politica, cambi]], answer: "policy-bot publicó las nuevas NetworkPolicies de confianza cero a las 08:50. Nuestra regla: los backends solo aceptan tráfico de quienes los llaman directamente; nunca se borra la política."}]
     hints:
-      - text: "The request does not fail fast, it times out. What sits between web and catalog inside the cluster?"
+      - text: "La petición no falla rápido, da timeout. ¿Qué hay entre web y catalog dentro del clúster?"
     evidence:
       commands: "kubectl (get networkpolicy|get netpol|describe networkpolicy|describe netpol|logs)"
       rootCause: [[networkpolicy, network policy, netpol, politica de red], [web, from, ingress, admin]]
-      sample: "policy-bot rewrote the catalog-from-web NetworkPolicy to allow only app=admin, so traffic from web to catalog was dropped and requests timed out; the policy was fixed to allow app=web instead of being deleted."
-    dangerous: ["deleting the NetworkPolicy", "allowing all ingress to catalog"]
-    fixes: ["allow ingress from app=web in the catalog policy"]
+      sample: "policy-bot reescribió la NetworkPolicy catalog-from-web para permitir solo app=admin, así que el tráfico de web a catalog se descartaba y las peticiones daban timeout; se corrigió la política para permitir app=web en lugar de borrarla."
+    dangerous: ["borrar la NetworkPolicy", "permitir toda la entrada a catalog"]
+    fixes: ["permitir la entrada desde app=web en la política de catalog"]
     solution: |
       gcloud container clusters get-credentials shop-gke --zone={{.zone}}
       kubectl get networkpolicy
@@ -351,14 +394,29 @@ failures:
       YAML
       kubectl apply -f netpol.yaml
     checks:
-      - {type: command, regex: "kubectl delete (networkpolicy|netpol)", max: 0, desc: "The NetworkPolicy was fixed, not deleted"}
+      - {type: command, regex: "kubectl delete (networkpolicy|netpol)", max: 0, desc: "La NetworkPolicy se ha corregido, no borrado"}
+    en:
+      title: NetworkPolicy rewritten to allow only the admin tier
+      summary: The shop page hangs and then times out.
+      sample: policy-bot rewrote the catalog-from-web NetworkPolicy to allow only app=admin, so traffic from web to catalog was dropped and requests timed out; the policy was fixed to allow app=web instead of being deleted.
+      hints:
+        - The request does not fail fast, it times out. What sits between web and catalog inside the cluster?
+      dangerous:
+        - deleting the NetworkPolicy
+        - allowing all ingress to catalog
+      fixes:
+        - allow ingress from app=web in the catalog policy
+      text:
+        ? 'policy-bot publicó las nuevas NetworkPolicies de confianza cero a las 08:50. Nuestra regla: los backends solo aceptan tráfico de quienes los llaman directamente; nunca se borra la política.'
+        : 'policy-bot pushed the new zero-trust NetworkPolicies at 08:50. Our rule: backends accept traffic only from their direct callers — never remove the policy.'
+        La NetworkPolicy se ha corregido, no borrado: The NetworkPolicy was fixed, not deleted
   - id: gk.oom
-    title: Memory limit lowered below the working set
+    title: Límite de memoria rebajado por debajo del conjunto de trabajo
     symptom: http-502
     layer: k8s-workload
     kind: COST
     skills: [gke.troubleshooting, gke.workloads, finops.optimization]
-    summary: "PDF downloads fail; the pdf pods keep restarting."
+    summary: "Las descargas de PDF fallan; los pods de pdf se reinician una y otra vez."
     faults:
       - type: command
         actor: "cost-optimizer@{{.project}}.iam.gserviceaccount.com"
@@ -366,44 +424,60 @@ failures:
           gcloud container clusters get-credentials shop-gke --zone={{.zone}}
           kubectl set resources deployment pdf --requests=cpu=250m,memory=256Mi --limits=memory=384Mi
     facts:
-      developer: [{keywords: [[memory, memoria, oom, limit, pdf, restart]], answer: "The PDF renderer holds the whole document in memory — about 700Mi for the monthly report."}]
-      manager: [{keywords: [[cost, coste, optim, finops]], answer: "The cost-optimizer bot right-sizes requests and limits nightly. Finance wants savings, but not broken downloads."}]
+      developer: [{keywords: [[memory, memoria, oom, limit, pdf, restart, limite]], answer: "El renderizador de PDF mantiene todo el documento en memoria: unos 700Mi para el informe mensual."}]
+      manager: [{keywords: [[cost, coste, optim, finops, costo]], answer: "El bot cost-optimizer ajusta cada noche los requests y los límites. Finanzas quiere ahorrar, pero no a costa de descargas rotas."}]
     hints:
-      - text: "`kubectl describe pod -l app=pdf` — look at the last state and exit code."
+      - text: "`kubectl describe pod -l app=pdf`: mira el último estado y el código de salida."
     evidence:
       commands: "kubectl (describe|get pods|get events|top)"
-      rootCause: [[oom, memory, memoria, 137], [limit, 384, cost-optimizer, optimi]]
-      sample: "cost-optimizer lowered the pdf memory limit to 384Mi while the renderer needs about 700Mi, so the container was OOMKilled (exit 137) in a loop; the limit was raised to 1Gi with a matching request."
-    dangerous: ["removing all resource limits", "scaling pdf to many replicas"]
-    fixes: ["raise the memory request/limit above the ~700Mi working set"]
+      rootCause: [[oom, memory, memoria, 137], [limit, 384, cost-optimizer, optimi, limite]]
+      sample: "cost-optimizer rebajó el límite de memoria de pdf a 384Mi cuando el renderizador necesita unos 700Mi, así que el contenedor sufría OOMKilled (exit 137) en bucle; el límite se subió a 1Gi con un request acorde."
+    dangerous: ["quitar todos los límites de recursos", "escalar pdf a muchas réplicas"]
+    fixes: ["subir el request/límite de memoria por encima del conjunto de trabajo de ~700Mi"]
     solution: |
       gcloud container clusters get-credentials shop-gke --zone={{.zone}}
       kubectl get pods -l app=pdf
       kubectl describe pod -l app=pdf
       kubectl set resources deployment pdf --requests=cpu=250m,memory=768Mi --limits=memory=1Gi
     checks:
-      - {type: k8s_ready, cluster: shop-gke, deployment: pdf, min: 1, desc: "pdf running without OOM"}
+      - {type: k8s_ready, cluster: shop-gke, deployment: pdf, min: 1, desc: "pdf en marcha sin OOM"}
+    en:
+      title: Memory limit lowered below the working set
+      summary: PDF downloads fail; the pdf pods keep restarting.
+      sample: cost-optimizer lowered the pdf memory limit to 384Mi while the renderer needs about 700Mi, so the container was OOMKilled (exit 137) in a loop; the limit was raised to 1Gi with a matching request.
+      hints:
+        - '`kubectl describe pod -l app=pdf` — look at the last state and exit code.'
+      dangerous:
+        - removing all resource limits
+        - scaling pdf to many replicas
+      fixes:
+        - raise the memory request/limit above the ~700Mi working set
+      text:
+        'El renderizador de PDF mantiene todo el documento en memoria: unos 700Mi para el informe mensual.': The PDF renderer holds the whole document in memory — about 700Mi for the monthly report.
+        ? El bot cost-optimizer ajusta cada noche los requests y los límites. Finanzas quiere ahorrar, pero no a costa de descargas rotas.
+        : The cost-optimizer bot right-sizes requests and limits nightly. Finance wants savings, but not broken downloads.
+        pdf en marcha sin OOM: pdf running without OOM
   - id: gk.wi-binding
-    title: Workload Identity binding removed from the reports service account
+    title: Binding de Workload Identity eliminado de la cuenta de servicio de reports
     symptom: http-500
     layer: identity
     skills: [gke.workloads, iam.serviceaccounts, iam.leastprivilege]
-    summary: "Reports return 403 errors reading the reports bucket."
+    summary: "Los informes devuelven errores 403 al leer el bucket de informes."
     faults:
       - type: command
         actor: "cleanup-job@{{.project}}.iam.gserviceaccount.com"
         run: |
           gcloud iam service-accounts remove-iam-policy-binding reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]"
     facts:
-      security: [{keywords: [[iam, workload, identity, binding, cleanup, role, rol]], answer: "cleanup-job removes IAM bindings it considers unused — it doesn't understand Workload Identity principals."}]
+      security: [{keywords: [[iam, workload, identity, binding, cleanup, role, rol, identidad]], answer: "cleanup-job borra los bindings de IAM que considera sin uso: no entiende los principales de Workload Identity."}]
     hints:
-      - text: "Which Google identity does the reports pod use? `kubectl get serviceaccount reports-ksa -o yaml` and the IAM policy of that Google service account."
+      - text: "¿Qué identidad de Google usa el pod de reports? `kubectl get serviceaccount reports-ksa -o yaml` y la política de IAM de esa cuenta de servicio de Google."
     evidence:
       commands: "get-iam-policy|kubectl (get sa|get serviceaccount|describe|logs)|logging read"
       rootCause: [[workload identity, workloadidentityuser, workload], [reports-sa, reports-ksa, service account, cuenta de servicio]]
-      sample: "cleanup-job removed roles/iam.workloadIdentityUser for default/reports-ksa on reports-sa, so the pod could no longer act as reports-sa and reading the bucket returned 403; the binding was restored."
-    dangerous: ["granting storage access to the node service account", "granting roles/editor to reports-sa", "making the bucket public"]
-    fixes: ["restore roles/iam.workloadIdentityUser for the KSA on reports-sa"]
+      sample: "cleanup-job quitó roles/iam.workloadIdentityUser para default/reports-ksa en reports-sa, así que el pod ya no podía actuar como reports-sa y leer el bucket devolvía 403; se restauró el binding."
+    dangerous: ["dar acceso al almacenamiento a la cuenta de servicio de los nodos", "conceder roles/editor a reports-sa", "hacer público el bucket"]
+    fixes: ["restaurar roles/iam.workloadIdentityUser para la KSA en reports-sa"]
     solution: |
       gcloud container clusters get-credentials shop-gke --zone={{.zone}}
       kubectl logs deployment/reports
@@ -411,13 +485,28 @@ failures:
       gcloud iam service-accounts get-iam-policy reports-sa@{{.project}}.iam.gserviceaccount.com
       gcloud iam service-accounts add-iam-policy-binding reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]"
     checks:
-      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "reports-sa stays read-only on the bucket"}
+      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "reports-sa sigue siendo de solo lectura sobre el bucket"}
+    en:
+      title: Workload Identity binding removed from the reports service account
+      summary: Reports return 403 errors reading the reports bucket.
+      sample: cleanup-job removed roles/iam.workloadIdentityUser for default/reports-ksa on reports-sa, so the pod could no longer act as reports-sa and reading the bucket returned 403; the binding was restored.
+      hints:
+        - Which Google identity does the reports pod use? `kubectl get serviceaccount reports-ksa -o yaml` and the IAM policy of that Google service account.
+      dangerous:
+        - granting storage access to the node service account
+        - granting roles/editor to reports-sa
+        - making the bucket public
+      fixes:
+        - restore roles/iam.workloadIdentityUser for the KSA on reports-sa
+      text:
+        'cleanup-job borra los bindings de IAM que considera sin uso: no entiende los principales de Workload Identity.': cleanup-job removes IAM bindings it considers unused — it doesn't understand Workload Identity principals.
+        reports-sa sigue siendo de solo lectura sobre el bucket: reports-sa stays read-only on the bucket
   - id: gk.configmap
-    title: ConfigMap deleted by a cleanup job
+    title: ConfigMap borrado por un proceso de limpieza
     symptom: http-500
     layer: configuration
     skills: [gke.workloads, gke.troubleshooting]
-    summary: "The shop page fails after the nightly cleanup; new catalog pods do not start."
+    summary: "La página de la tienda falla tras la limpieza nocturna; los nuevos pods de catalog no arrancan."
     conflicts: [gk.bad-image, gk.selector, gk.netpol]
     faults:
       - type: command
@@ -426,15 +515,15 @@ failures:
           gcloud container clusters get-credentials shop-gke --zone={{.zone}}
           kubectl delete configmap catalog-config
     facts:
-      developer: [{keywords: [[config, configmap, region, page, setting]], answer: "catalog reads CATALOG_REGION (our region) and PAGE_SIZE=50 from the catalog-config ConfigMap."}]
+      developer: [{keywords: [[config, configmap, region, page, setting]], answer: "catalog lee CATALOG_REGION (nuestra región) y PAGE_SIZE=50 del ConfigMap catalog-config."}]
     hints:
-      - text: "`kubectl describe pod -l app=catalog` — what is the container waiting for?"
+      - text: "`kubectl describe pod -l app=catalog`: ¿a qué está esperando el contenedor?"
     evidence:
       commands: "kubectl (describe|get pods|get events|get configmap|get cm)"
       rootCause: [[configmap, config map, catalog-config], [deleted, borrad, missing, not found, cleanup]]
-      sample: "cleanup-job deleted the catalog-config ConfigMap, so catalog pods failed with CreateContainerConfigError and the shop lost its backend; the ConfigMap was recreated with CATALOG_REGION and PAGE_SIZE."
-    dangerous: ["removing envFrom from the deployment", "recreating the cluster"]
-    fixes: ["recreate catalog-config with CATALOG_REGION and PAGE_SIZE"]
+      sample: "cleanup-job borró el ConfigMap catalog-config, así que los pods de catalog fallaban con CreateContainerConfigError y la tienda se quedó sin backend; se recreó el ConfigMap con CATALOG_REGION y PAGE_SIZE."
+    dangerous: ["quitar envFrom del deployment", "recrear el clúster"]
+    fixes: ["recrear catalog-config con CATALOG_REGION y PAGE_SIZE"]
     solution: |
       gcloud container clusters get-credentials shop-gke --zone={{.zone}}
       kubectl get pods -l app=catalog
@@ -442,4 +531,45 @@ failures:
       kubectl create configmap catalog-config --from-literal=CATALOG_REGION={{.region}} --from-literal=PAGE_SIZE=50
       kubectl rollout restart deployment/catalog
     checks:
-      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog back to 2 ready replicas"}
+      - {type: k8s_ready, cluster: shop-gke, deployment: catalog, min: 2, desc: "catalog vuelve a tener 2 réplicas listas"}
+    en:
+      title: ConfigMap deleted by a cleanup job
+      summary: The shop page fails after the nightly cleanup; new catalog pods do not start.
+      sample: cleanup-job deleted the catalog-config ConfigMap, so catalog pods failed with CreateContainerConfigError and the shop lost its backend; the ConfigMap was recreated with CATALOG_REGION and PAGE_SIZE.
+      hints:
+        - '`kubectl describe pod -l app=catalog` — what is the container waiting for?'
+      dangerous:
+        - removing envFrom from the deployment
+        - recreating the cluster
+      fixes:
+        - recreate catalog-config with CATALOG_REGION and PAGE_SIZE
+      text:
+        catalog lee CATALOG_REGION (nuestra región) y PAGE_SIZE=50 del ConfigMap catalog-config.: catalog reads CATALOG_REGION (our region) and PAGE_SIZE=50 from the catalog-config ConfigMap.
+        catalog vuelve a tener 2 réplicas listas: catalog back to 2 ready replicas
+en:
+  title: storefront on GKE with Workload Identity
+  topology: Internet → web (LoadBalancer) → catalog (ClusterIP, NetworkPolicy from web, ConfigMap) · Internet → reports (Workload Identity → gs://reports-*) · Internet → pdf (report-generator) · batch (data team)
+  text:
+    Kai (equipo de plataforma): Kai (platform team)
+    responsable del clúster y de los manifiestos de shop.yaml: owns the cluster and the manifests in shop.yaml
+    Todo está en shop.yaml; empieza por kubectl get pods y los eventos.: Everything is in shop.yaml; start from kubectl get pods and the events.
+    ? kubectl get events y kubectl describe pod te dicen por qué un pod no está listo; las aplicaciones registran los errores de sus dependencias.
+    : kubectl get events and kubectl describe pod tell you why a pod is not ready; the apps log dependency errors.
+    'Por favor, no recreéis el clúster: ahí también se ejecutan los procesos por lotes del equipo de datos.': Please don't recreate the cluster — the data team's batch jobs run there too.
+    Sam (SRE de guardia): Sam (SRE on call)
+    vigila los paneles: watches the dashboards
+    'Los Services sin endpoints listos devuelven 503: revisa la readiness y los selectores.': Services with no ready endpoints return 503 — check readiness and selectors.
+    ? Las alertas saltaron a las 08:52, justo después de la ventana de automatizaciones de la plataforma (release-bot, cost-optimizer, policy-bot, cleanup-job).
+    : Alerts fired at 08:52, right after the platform automation window (release-bot, cost-optimizer, policy-bot, cleanup-job).
+    Aisha (seguridad): Aisha (security)
+    responsable de las políticas de red y de IAM: owns network policies and IAM
+    'Mantén el mínimo privilegio y no borres las políticas de red: corrígelas.': Keep least privilege and do not remove network policies — fix them.
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    necesita una hora estimada: needs an ETA
+    Actualiza el ticket, por favor. Ni recrear el clúster ni dar cluster-admin a las aplicaciones.: Update the ticket, please. No cluster recreation, no cluster-admin for apps.
+    La página de la tienda carga el catálogo: The shop page loads the catalog
+    Los informes se leen del bucket de informes: Reports read from the reports bucket
+    La generación de PDF funciona: PDF rendering works
+    El deployment batch del equipo de datos sigue en marcha: The data team's batch deployment keeps running
+    Sin roles básicos para reports-sa: No basic roles for reports-sa
+    El bucket de informes sigue siendo privado: The reports bucket stays private

@@ -2,29 +2,45 @@
 contexts:
   - id: checkout
     company: Nebula Corporation
-    service: online checkout
-    impact: "Customers cannot pay; revenue loss is about 2,000 EUR per minute during the sales campaign."
-    reporter: Customer Support
+    service: checkout online
+    impact: "Los clientes no pueden pagar; la pérdida de ingresos es de unos 2.000 EUR por minuto durante la campaña de ventas."
+    reporter: Atención al cliente
     priority: P2
     constraints: [no-downtime, no-public]
+    en:
+      service: online checkout
+      impact: Customers cannot pay; revenue loss is about 2,000 EUR per minute during the sales campaign.
+      reporter: Customer Support
   - id: internal-reporting
     company: Nebula Corporation
-    service: internal reporting portal
-    impact: "Finance cannot run the quarter-close reports due tomorrow."
-    reporter: Finance (Marta)
+    service: portal interno de informes
+    impact: "Finanzas no puede ejecutar los informes del cierre trimestral que vencen mañana."
+    reporter: Finanzas (Marta)
     priority: P3
     constraints: [no-basic-roles]
+    en:
+      service: internal reporting portal
+      impact: Finance cannot run the quarter-close reports due tomorrow.
+      reporter: Finance (Marta)
   - id: partner-api
     company: Nebula Corporation
-    service: partner API
-    impact: "Three logistics partners cannot submit shipments; contractual SLA penalties start in 2 hours."
-    reporter: Partner Success
+    service: API de partners
+    impact: "Tres partners logísticos no pueden enviar expediciones; las penalizaciones contractuales del SLA empiezan dentro de 2 horas."
+    reporter: Éxito de partners
     priority: P2
     constraints: [no-public, no-basic-roles]
+    en:
+      service: partner API
+      impact: Three logistics partners cannot submit shipments; contractual SLA penalties start in 2 hours.
+      reporter: Partner Success
   - id: black-friday
     company: Nebula Corporation
-    service: shop platform
-    impact: "Black Friday traffic peak: every minute of outage is front-page news."
-    reporter: Incident Commander
+    service: plataforma de la tienda
+    impact: "Pico de tráfico de Black Friday: cada minuto de caída sale en portada."
+    reporter: Responsable del incidente
     priority: P1
     constraints: [no-downtime, no-public, no-basic-roles]
+    en:
+      service: shop platform
+      impact: 'Black Friday traffic peak: every minute of outage is front-page news.'
+      reporter: Incident Commander

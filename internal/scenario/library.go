@@ -26,6 +26,7 @@ type Symptom struct {
 	// Vague and misleading ticket summaries used at higher difficulty.
 	Vague      []string          `yaml:"vague" json:"vague"`
 	Misleading map[string]string `yaml:"misleading" json:"-"` // layer -> "looks like <other layer>" summary
+	EN         *LibEN            `yaml:"en,omitempty" json:"-"`
 }
 
 // Context is the business framing of a generated incident.
@@ -37,6 +38,7 @@ type Context struct {
 	Reporter    string   `yaml:"reporter" json:"reporter"`
 	Priority    string   `yaml:"priority" json:"priority"`
 	Constraints []string `yaml:"constraints" json:"constraints"`
+	EN          *LibEN   `yaml:"en,omitempty" json:"-"`
 }
 
 // EvidenceSpec says how a failure is diagnosed and explained.
@@ -67,6 +69,7 @@ type FailureMode struct {
 	Params    map[string][]string    `yaml:"params" json:"-"`
 	Conflicts []string               `yaml:"conflicts" json:"conflicts,omitempty"` // failures that cannot be combined
 	System    string                 `yaml:"-" json:"system"`
+	EN        *LibEN                 `yaml:"en,omitempty" json:"-"`
 }
 
 // System is a healthy baseline architecture that failures are injected into.
@@ -86,6 +89,7 @@ type System struct {
 	Decoys   []string          `yaml:"decoys" json:"decoys,omitempty"` // resources owned by other teams (protect:)
 	Student  Student           `yaml:"student" json:"-"`
 	Failures []*FailureMode    `yaml:"failures" json:"failures"`
+	EN       *LibEN            `yaml:"en,omitempty" json:"-"`
 }
 
 // Library is the loaded failure library.
@@ -213,6 +217,3 @@ func (lib *Library) SymptomGraph() []SymptomEdge {
 	})
 	return out
 }
-
-// TranslationProblems lists library texts without their English overlay.
-func (lib *Library) TranslationProblems() []string { return nil }

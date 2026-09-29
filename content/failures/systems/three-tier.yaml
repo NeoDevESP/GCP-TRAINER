@@ -1,241 +1,372 @@
 # Three-tier checkout: global HTTP LB → api-1 (checkout-api in Docker) →
 # sql-1 (PostgreSQL) in prod-vpc with Cloud NAT and IAP SSH.
 id: three-tier
-title: three-tier checkout behind a global load balancer
+title: checkout de tres capas tras un balanceador de carga global
 branch: networking
 skills: [compute.troubleshooting, observability.incident]
 baseline: [three-tier-app]
 setup: |
   gcloud compute instances create billing-batch --zone={{.zone}} --machine-type=e2-small --subnet=app-subnet --no-address --labels=owner=finance --image-family=debian-12 --image-project=debian-cloud
 decoys: [billing-batch]
-topology: "Internet → checkout-lb (global HTTP LB) → checkout-be → api-ig/api-1:8080 → sql-1:5432"
+topology: "Internet → checkout-lb (balanceador HTTP global) → checkout-be → api-ig/api-1:8080 → sql-1:5432"
 traffic:
   - {name: checkout, target: "lb:checkout-lb", path: /checkout, rps: 40}
   - {name: health, target: "lb:checkout-lb", path: /healthz, rps: 5}
 healthy:
-  - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "/checkout through the load balancer returns 200"}
-  - {type: http, target: "lb:checkout-lb", path: /healthz, status: 200, desc: "Health endpoint through the load balancer"}
+  - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "/checkout a través del balanceador devuelve 200"}
+  - {type: http, target: "lb:checkout-lb", path: /healthz, status: 200, desc: "Endpoint de salud a través del balanceador"}
 safety:
-  - {type: forbid_firewall, port: 5432, network: prod-vpc, desc: "Database never open to 0.0.0.0/0"}
-  - {type: forbid_firewall, port: 8080, network: prod-vpc, desc: "Backends not opened to the whole internet"}
-  - {type: tcp, from: internet, to: "vm:sql-1", port: 5432, expect: false, desc: "Database unreachable from the internet"}
-  - {type: exists, path: "instances[\"billing-batch\"]", expect: {status: RUNNING}, desc: "Finance's billing-batch VM untouched"}
+  - {type: forbid_firewall, port: 5432, network: prod-vpc, desc: "La base de datos nunca está abierta a 0.0.0.0/0"}
+  - {type: forbid_firewall, port: 8080, network: prod-vpc, desc: "Los backends no están abiertos a todo internet"}
+  - {type: tcp, from: internet, to: "vm:sql-1", port: 5432, expect: false, desc: "La base de datos es inaccesible desde internet"}
+  - {type: exists, path: "instances[\"billing-batch\"]", expect: {status: RUNNING}, desc: "La VM billing-batch de Finanzas sigue intacta"}
 actors:
   - role: developer
     name: Leo (backend)
-    persona: owns checkout-api
-    fallback: "The code hasn't changed since Friday's release. I can only tell you what the app logs say."
+    persona: responsable de checkout-api
+    fallback: "El código no ha cambiado desde la versión del viernes. Solo puedo decirte lo que dicen los registros de la aplicación."
     facts:
-      - {keywords: [[deploy, release, change, cambio, version]], answer: "No deployment since Friday 17:00. Release 1.4 has been stable all weekend."}
-      - {keywords: [[log, error, stack]], answer: "Check Cloud Logging for the checkout-api container — it logs database errors at ERROR severity."}
+      - {keywords: [[deploy, release, change, cambio, version, cambi]], answer: "No hay despliegues desde el viernes a las 17:00. La versión 1.4 ha estado estable todo el fin de semana."}
+      - {keywords: [[log, error, stack, registro]], answer: "Mira en Cloud Logging el contenedor checkout-api: registra los errores de base de datos con gravedad ERROR."}
   - role: security
-    name: Aisha (security)
-    persona: runs the network hardening programme
-    fallback: "We follow the hardening baseline; ask me about specific changes."
+    name: Aisha (seguridad)
+    persona: dirige el programa de bastionado de red
+    fallback: "Seguimos la línea base de bastionado; pregúntame por cambios concretos."
     facts:
-      - {keywords: [[open, abrir, 0.0.0.0, internet]], answer: "Do not open anything to 0.0.0.0/0 — health checks come from 35.191.0.0/16 and 130.211.0.0/22 only."}
+      - {keywords: [[open, abrir, 0.0.0.0, internet, abiert]], answer: "No abras nada a 0.0.0.0/0: las comprobaciones de estado vienen solo de 35.191.0.0/16 y 130.211.0.0/22."}
   - role: sre
-    name: Sam (SRE on call)
-    persona: watches dashboards
-    fallback: "I'd start from the load balancer backend health and the error logs."
+    name: Sam (SRE de guardia)
+    persona: vigila los paneles
+    fallback: "Yo empezaría por la salud de los backends del balanceador y los registros de errores."
     facts:
-      - {keywords: [[when, cuando, start, empez, time, hora]], answer: "Errors started around 08:50, right after the overnight automation window."}
+      - {keywords: [[when, cuando, start, empez, time, hora]], answer: "Los errores empezaron hacia las 08:50, justo después de la ventana de automatizaciones nocturnas."}
   - role: manager
-    name: Irene (engineering manager)
-    persona: needs an ETA for the business
-    fallback: "I need a customer-facing update on the ticket every 30 minutes."
+    name: Irene (responsable de ingeniería)
+    persona: necesita una hora estimada para el negocio
+    fallback: "Necesito una actualización para los clientes en el ticket cada 30 minutos."
     facts:
-      - {keywords: [[priority, prioridad, restart, reboot, reinici]], answer: "No blind restarts in production — tell me the hypothesis first. And do not touch billing-batch, Finance is running quarter close."}
+      - {keywords: [[priority, prioridad, restart, reboot, reinici]], answer: "Nada de reinicios a ciegas en producción: cuéntame primero la hipótesis. Y no toques billing-batch, Finanzas está haciendo el cierre trimestral."}
 noise:
   - {type: log_noise, severity: WARNING, resourceType: gce_instance, lines: ["sshd[812]: Connection closed by 45.155.205.9 port 51234 [preauth]", "kernel: TCP: request_sock_TCP: Possible SYN flooding on port 22. Sending cookies."]}
   - {type: log_noise, severity: ERROR, resourceType: gce_instance, lines: ["google_guest_agent: Error getting metadata: context deadline exceeded (retrying)"]}
 failures:
   - id: tt.hc-firewall
-    title: Health-check firewall rule deleted
+    title: Regla de cortafuegos de las comprobaciones de estado borrada
     symptom: http-502
     layer: firewall
     skills: [networking.firewall, networking.lb]
-    summary: "The load balancer returns 502 for every request; backends show UNHEALTHY."
+    summary: "El balanceador de carga devuelve 502 en todas las peticiones; los backends aparecen como UNHEALTHY."
     faults:
       - {type: firewall_delete, rule: allow-health, actor: "cleanup-bot@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      security: [{keywords: [[firewall, rule, regla, cleanup, change, cambio]], answer: "Our cleanup-bot deleted firewall rules it considered unused last night — it logs everything in the audit log."}]
+      security: [{keywords: [[firewall, rule, regla, cleanup, change, cambio, cortafuegos, cambi]], answer: "Nuestro cleanup-bot borró anoche las reglas de cortafuegos que consideraba sin uso; lo registra todo en el registro de auditoría."}]
     hints:
-      - text: "`gcloud compute backend-services get-health checkout-be --global` — why would a healthy app be UNHEALTHY?"
+      - text: "`gcloud compute backend-services get-health checkout-be --global`: ¿por qué una aplicación sana aparecería como UNHEALTHY?"
     evidence:
       commands: "get-health|firewall-rules (list|describe)|logging read"
-      rootCause: [[firewall, cortafuegos], [health, salud, 35.191, 130.211]]
-      sample: "The cleanup bot deleted the allow-health firewall rule, so load balancer health checks from 35.191.0.0/16 and 130.211.0.0/22 could not reach tcp:8080 and every backend was marked unhealthy."
-    dangerous: ["opening tcp:8080 to 0.0.0.0/0", "recreating the backend service or instance group"]
-    fixes: ["recreate an INGRESS allow for 35.191.0.0/16 and 130.211.0.0/22 on tcp:8080 targeting the api tag"]
+      rootCause: [[firewall, cortafuegos], [health, salud, 35.191, 130.211, estado]]
+      sample: "El bot de limpieza borró la regla de cortafuegos allow-health, así que las comprobaciones de estado del balanceador desde 35.191.0.0/16 y 130.211.0.0/22 no podían llegar a tcp:8080 y todos los backends se marcaron como no sanos."
+    dangerous: ["abrir tcp:8080 a 0.0.0.0/0", "recrear el servicio de backend o el grupo de instancias"]
+    fixes: ["recrear una regla INGRESS de permiso para 35.191.0.0/16 y 130.211.0.0/22 en tcp:8080 dirigida a la etiqueta api"]
     solution: |
       gcloud compute backend-services get-health checkout-be --global
       gcloud compute firewall-rules list --filter='network:prod-vpc'
       gcloud compute firewall-rules create allow-health --network=prod-vpc --allow=tcp:8080 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=api
     settle: 2
+    en:
+      title: Health-check firewall rule deleted
+      summary: The load balancer returns 502 for every request; backends show UNHEALTHY.
+      sample: The cleanup bot deleted the allow-health firewall rule, so load balancer health checks from 35.191.0.0/16 and 130.211.0.0/22 could not reach tcp:8080 and every backend was marked unhealthy.
+      hints:
+        - '`gcloud compute backend-services get-health checkout-be --global` — why would a healthy app be UNHEALTHY?'
+      dangerous:
+        - opening tcp:8080 to 0.0.0.0/0
+        - recreating the backend service or instance group
+      fixes:
+        - recreate an INGRESS allow for 35.191.0.0/16 and 130.211.0.0/22 on tcp:8080 targeting the api tag
+      text:
+        ? Nuestro cleanup-bot borró anoche las reglas de cortafuegos que consideraba sin uso; lo registra todo en el registro de auditoría.
+        : Our cleanup-bot deleted firewall rules it considered unused last night — it logs everything in the audit log.
   - id: tt.hc-path
-    title: Health check probes the wrong path
+    title: La comprobación de estado sondea la ruta equivocada
     symptom: http-502
     layer: backend-health
     skills: [networking.lb, compute.troubleshooting]
-    summary: "All backends are UNHEALTHY although the VMs are running."
+    summary: "Todos los backends están UNHEALTHY aunque las VM están en marcha."
     faults:
       - {type: health_check_path, name: api-hc, path: /health, actor: "terraform@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      developer: [{keywords: [[health, salud, endpoint, path, ruta]], answer: "The app exposes /healthz (with a z). /health returns 404."}]
+      developer: [{keywords: [[health, salud, endpoint, path, ruta, estado]], answer: "La aplicación expone /healthz (con z). /health devuelve 404."}]
     hints:
-      - text: "Compare the health check configuration with the endpoints the application actually serves."
+      - text: "Compara la configuración de la comprobación de estado con los endpoints que sirve realmente la aplicación."
     evidence:
       commands: "get-health|health-checks describe|health-checks list"
       rootCause: [[health check, healthcheck, comprobacion], [path, ruta, /healthz, /health, 404]]
-      sample: "A Terraform change set the api-hc health check request path to /health, which returns 404, instead of /healthz, so all backends were unhealthy."
-    dangerous: ["deleting the health check while it is attached", "pointing the health check at / which hides real failures"]
-    fixes: ["set the request path back to /healthz"]
+      sample: "Un cambio de Terraform puso la ruta de la comprobación de estado api-hc en /health, que devuelve 404, en lugar de /healthz, así que todos los backends quedaron no sanos."
+    dangerous: ["borrar la comprobación de estado mientras está asociada", "apuntar la comprobación de estado a /, que oculta los fallos reales"]
+    fixes: ["volver a poner la ruta de la petición en /healthz"]
     solution: |
       gcloud compute backend-services get-health checkout-be --global
       gcloud compute health-checks describe api-hc
       gcloud compute health-checks update http api-hc --request-path=/healthz
     settle: 2
+    en:
+      title: Health check probes the wrong path
+      summary: All backends are UNHEALTHY although the VMs are running.
+      sample: A Terraform change set the api-hc health check request path to /health, which returns 404, instead of /healthz, so all backends were unhealthy.
+      hints:
+        - Compare the health check configuration with the endpoints the application actually serves.
+      dangerous:
+        - deleting the health check while it is attached
+        - pointing the health check at / which hides real failures
+      fixes:
+        - set the request path back to /healthz
+      text:
+        La aplicación expone /healthz (con z). /health devuelve 404.: The app exposes /healthz (with a z). /health returns 404.
   - id: tt.named-port
-    title: Instance group lost its named port
+    title: El grupo de instancias ha perdido su puerto con nombre
     symptom: http-502
     layer: load-balancer
     skills: [networking.lb, compute.mig]
-    summary: "Load balancer 502 after the instance group was recreated by automation."
+    summary: "502 en el balanceador después de que una automatización recreara el grupo de instancias."
     faults:
       - {type: named_port_remove, group: api-ig}
     facts:
-      sre: [{keywords: [[group, grupo, instance, recreat]], answer: "The automation recreated api-ig at 08:45 from an old template of the group definition."}]
+      sre: [{keywords: [[group, grupo, instance, recreat, instancia]], answer: "La automatización recreó api-ig a las 08:45 a partir de una plantilla antigua de la definición del grupo."}]
     hints:
-      - text: "The backend service uses --port-name=http. What does the instance group map that name to?"
+      - text: "El servicio de backend usa --port-name=http. ¿Con qué puerto asocia ese nombre el grupo de instancias?"
     evidence:
       commands: "get-named-ports|backend-services describe|get-health"
       rootCause: [[named port, named-port, puerto con nombre, port-name], [http, 8080]]
-      sample: "The api-ig instance group lost its named port http:8080, so the backend service port-name http could not be resolved and the load balancer had no serving port."
-    dangerous: ["deleting and recreating the backend service"]
-    fixes: ["set named port http:8080 on api-ig"]
+      sample: "El grupo de instancias api-ig perdió su puerto con nombre http:8080, así que no se podía resolver el nombre de puerto http del servicio de backend y el balanceador no tenía puerto al que enviar tráfico."
+    dangerous: ["borrar y recrear el servicio de backend"]
+    fixes: ["configurar el puerto con nombre http:8080 en api-ig"]
     solution: |
       gcloud compute backend-services describe checkout-be --global
       gcloud compute instance-groups get-named-ports api-ig --zone={{.zone}}
       gcloud compute instance-groups set-named-ports api-ig --named-ports=http:8080 --zone={{.zone}}
     settle: 2
+    en:
+      title: Instance group lost its named port
+      summary: Load balancer 502 after the instance group was recreated by automation.
+      sample: The api-ig instance group lost its named port http:8080, so the backend service port-name http could not be resolved and the load balancer had no serving port.
+      hints:
+        - The backend service uses --port-name=http. What does the instance group map that name to?
+      dangerous:
+        - deleting and recreating the backend service
+      fixes:
+        - set named port http:8080 on api-ig
+      text:
+        La automatización recreó api-ig a las 08:45 a partir de una plantilla antigua de la definición del grupo.: The automation recreated api-ig at 08:45 from an old template of the group definition.
   - id: tt.app-stopped
-    title: Application container stopped
+    title: Contenedor de la aplicación detenido
     symptom: http-502
     layer: application
     skills: [compute.troubleshooting, linux.processes]
-    summary: "Checkout down; the VM itself is RUNNING."
+    summary: "Checkout caído; la VM en sí está RUNNING."
     faults:
       - {type: service_stop, vm: api-1, service: checkout-api}
     facts:
-      developer: [{keywords: [[container, docker, process, proceso, running]], answer: "The container is started by the startup script; if it stops, nothing restarts it."}]
+      developer: [{keywords: [[container, docker, process, proceso, running]], answer: "El contenedor lo arranca el script de inicio; si se detiene, nada lo vuelve a arrancar."}]
     hints:
-      - text: "SSH through IAP and check what is listening on 8080 (`ss -ltnp`, `systemctl status`)."
+      - text: "Entra por SSH con IAP y comprueba qué escucha en el 8080 (`ss -ltnp`, `systemctl status`)."
     evidence:
       commands: "compute ssh|get-health|get-serial-port-output"
       rootCause: [[stopped, detenido, parado, not running, no estaba], [checkout-api, container, contenedor, process, proceso, service, servicio]]
-      sample: "The checkout-api container on api-1 was stopped, so nothing listened on port 8080 and health checks failed."
-    dangerous: ["resetting or recreating the VM", "deleting the instance"]
-    fixes: ["start the checkout-api service/container and make it restart automatically"]
+      sample: "El contenedor checkout-api de api-1 estaba detenido, así que nada escuchaba en el puerto 8080 y las comprobaciones de estado fallaban."
+    dangerous: ["reiniciar o recrear la VM", "borrar la instancia"]
+    fixes: ["arrancar el servicio/contenedor checkout-api y hacer que se reinicie automáticamente"]
     solution: |
       gcloud compute backend-services get-health checkout-be --global
       gcloud compute ssh api-1 --zone={{.zone}} --tunnel-through-iap --command='sudo ss -ltnp'
       gcloud compute ssh api-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status checkout-api'
       gcloud compute ssh api-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart checkout-api'
     settle: 2
+    en:
+      title: Application container stopped
+      summary: Checkout down; the VM itself is RUNNING.
+      sample: The checkout-api container on api-1 was stopped, so nothing listened on port 8080 and health checks failed.
+      hints:
+        - SSH through IAP and check what is listening on 8080 (`ss -ltnp`, `systemctl status`).
+      dangerous:
+        - resetting or recreating the VM
+        - deleting the instance
+      fixes:
+        - start the checkout-api service/container and make it restart automatically
+      text:
+        El contenedor lo arranca el script de inicio; si se detiene, nada lo vuelve a arrancar.: The container is started by the startup script; if it stops, nothing restarts it.
   - id: tt.db-deny
-    title: Higher-priority DENY blocks the database
+    title: Una regla DENY de mayor prioridad bloquea la base de datos
     symptom: http-500
     layer: firewall
     skills: [networking.firewall, observability.logging]
-    summary: "Checkout returns 500; the rest of the site works."
+    summary: "Checkout devuelve 500; el resto de la web funciona."
     params:
       denyRule: [deny-internal, sec-baseline-deny, block-legacy-ranges]
     faults:
       - {type: firewall_deny, name: "{{.denyRule}}", network: prod-vpc, priority: "900", sourceRanges: [10.10.0.0/16], targetTags: [database], ports: ["5432"], description: network hardening baseline, actor: "sec-automation@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      security: [{keywords: [[firewall, rule, regla, hardening, baseline, change, cambio]], answer: "We rolled out the network hardening baseline last night. It adds DENY rules for legacy internal ranges."}]
+      security: [{keywords: [[firewall, rule, regla, hardening, baseline, change, cambio, cortafuegos, bastionado, endurecimiento, cambi]], answer: "Anoche desplegamos la línea base de bastionado de red. Añade reglas DENY para rangos internos heredados."}]
     hints:
-      - text: "List firewall rules that target the database tag and compare priorities (lower number wins; DENY wins ties)."
+      - text: "Lista las reglas de cortafuegos dirigidas a la etiqueta database y compara sus prioridades (gana el número menor; en empate gana DENY)."
     evidence:
       commands: "firewall-rules (list|describe)|logging read|nc -z"
-      rootCause: [[firewall, cortafuegos], [deny, denegar, priority, prioridad, "900"]]
-      sample: "A DENY firewall rule from the hardening baseline with priority 900 blocked 10.10.0.0/16 to tcp:5432 on the database tag, overriding the allow rule at priority 1000."
-    dangerous: ["allowing 5432 from 0.0.0.0/0", "disabling all firewall rules"]
-    fixes: ["delete or narrow the deny rule, or give the api→db allow a higher priority"]
+      rootCause: [[firewall, cortafuegos], [deny, denegar, priority, prioridad, "900", deneg]]
+      sample: "Una regla de cortafuegos DENY de la línea base de bastionado con prioridad 900 bloqueaba 10.10.0.0/16 hacia tcp:5432 en la etiqueta database, anulando la regla de permiso con prioridad 1000."
+    dangerous: ["permitir el 5432 desde 0.0.0.0/0", "desactivar todas las reglas de cortafuegos"]
+    fixes: ["borrar o acotar la regla de denegación, o dar más prioridad al permiso api→db"]
     solution: |
       gcloud logging read 'severity>=ERROR' --limit=5 --format='value(textPayload)'
       gcloud compute firewall-rules list --filter='network:prod-vpc'
       gcloud compute firewall-rules delete {{.denyRule}} --quiet
     settle: 2
+    en:
+      title: Higher-priority DENY blocks the database
+      summary: Checkout returns 500; the rest of the site works.
+      sample: A DENY firewall rule from the hardening baseline with priority 900 blocked 10.10.0.0/16 to tcp:5432 on the database tag, overriding the allow rule at priority 1000.
+      hints:
+        - List firewall rules that target the database tag and compare priorities (lower number wins; DENY wins ties).
+      dangerous:
+        - allowing 5432 from 0.0.0.0/0
+        - disabling all firewall rules
+      fixes:
+        - delete or narrow the deny rule, or give the api→db allow a higher priority
+      text:
+        Anoche desplegamos la línea base de bastionado de red. Añade reglas DENY para rangos internos heredados.: We rolled out the network hardening baseline last night. It adds DENY rules for legacy internal ranges.
   - id: tt.db-allow-deleted
-    title: API → database allow rule removed
+    title: Regla de permiso API → base de datos eliminada
     symptom: http-500
     layer: network-path
     skills: [networking.firewall]
-    summary: "Checkout fails with 500 since this morning."
+    summary: "Checkout falla con 500 desde esta mañana."
     conflicts: [tt.db-deny]
     faults:
       - {type: firewall_delete, rule: allow-api-to-db, actor: "cleanup-bot@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      security: [{keywords: [[firewall, rule, regla, cleanup, delete, borr]], answer: "cleanup-bot removes rules with no hits in 30 days. The DB rule might have looked idle over the weekend."}]
+      security: [{keywords: [[firewall, rule, regla, cleanup, delete, borr, cortafuegos, elimin]], answer: "cleanup-bot borra las reglas sin coincidencias en 30 días. La regla de la base de datos pudo parecer inactiva durante el fin de semana."}]
     hints:
-      - text: "From api-1, test the database port (`nc -zv 10.10.3.5 5432`). What allows that flow?"
+      - text: "Desde api-1, prueba el puerto de la base de datos (`nc -zv 10.10.3.5 5432`). ¿Qué permite ese flujo?"
     evidence:
       commands: "firewall-rules (list|describe)|logging read|nc -z"
       rootCause: [[firewall, cortafuegos], [5432, database, base de datos, allow-api-to-db, deleted, borrad]]
-      sample: "The cleanup bot deleted the allow-api-to-db firewall rule, so the implied deny-ingress blocked api-1 from reaching PostgreSQL on tcp:5432."
-    dangerous: ["allowing 5432 from 0.0.0.0/0 or from all internal ranges"]
-    fixes: ["recreate the allow from source tag api to target tag database on tcp:5432"]
+      sample: "El bot de limpieza borró la regla de cortafuegos allow-api-to-db, así que la denegación implícita de entrada impedía a api-1 llegar a PostgreSQL en tcp:5432."
+    dangerous: ["permitir el 5432 desde 0.0.0.0/0 o desde todos los rangos internos"]
+    fixes: ["recrear el permiso desde la etiqueta de origen api hacia la etiqueta de destino database en tcp:5432"]
     solution: |
       gcloud logging read 'severity>=ERROR' --limit=5 --format='value(textPayload)'
       gcloud compute firewall-rules list --filter='network:prod-vpc'
       gcloud compute firewall-rules create allow-api-to-db --network=prod-vpc --allow=tcp:5432 --source-tags=api --target-tags=database
     settle: 2
+    en:
+      title: API → database allow rule removed
+      summary: Checkout fails with 500 since this morning.
+      sample: The cleanup bot deleted the allow-api-to-db firewall rule, so the implied deny-ingress blocked api-1 from reaching PostgreSQL on tcp:5432.
+      hints:
+        - From api-1, test the database port (`nc -zv 10.10.3.5 5432`). What allows that flow?
+      dangerous:
+        - allowing 5432 from 0.0.0.0/0 or from all internal ranges
+      fixes:
+        - recreate the allow from source tag api to target tag database on tcp:5432
+      text:
+        ? cleanup-bot borra las reglas sin coincidencias en 30 días. La regla de la base de datos pudo parecer inactiva durante el fin de semana.
+        : cleanup-bot removes rules with no hits in 30 days. The DB rule might have looked idle over the weekend.
   - id: tt.db-stopped
-    title: PostgreSQL service stopped
+    title: Servicio de PostgreSQL detenido
     symptom: http-500
     layer: database
     skills: [compute.troubleshooting, linux.processes, databases.performance]
-    summary: "Checkout errors: 'connection refused' in the app logs."
+    summary: "Errores en el checkout: 'connection refused' en los registros de la aplicación."
     faults:
       - {type: service_stop, vm: sql-1, service: postgresql}
     facts:
-      sre: [{keywords: [[database, base de datos, postgres, maintenance, manten]], answer: "There was a kernel patching window on sql-1 last night. The VM came back but I didn't check the services."}]
+      sre: [{keywords: [[database, base de datos, postgres, maintenance, manten]], answer: "Anoche hubo una ventana de parches del kernel en sql-1. La VM volvió, pero no comprobé los servicios."}]
     hints:
-      - text: "'Connection refused' (not timeout) means the packet arrived but nothing listens on the port."
+      - text: "'Connection refused' (no un timeout) significa que el paquete llegó pero nada escucha en el puerto."
     evidence:
       commands: "logging read|compute ssh|nc -z"
       rootCause: [[postgres, database, base de datos], [stopped, detenido, parado, not running, refused, rechaz]]
-      sample: "PostgreSQL on sql-1 did not start after the patching window, so connections to 5432 were refused and checkout failed."
-    dangerous: ["recreating the database VM (data loss)", "opening the database to the internet to test"]
-    fixes: ["start and enable postgresql on sql-1"]
+      sample: "PostgreSQL no arrancó en sql-1 tras la ventana de parches, así que las conexiones al 5432 se rechazaban y el checkout fallaba."
+    dangerous: ["recrear la VM de la base de datos (pérdida de datos)", "abrir la base de datos a internet para probar"]
+    fixes: ["arrancar y habilitar postgresql en sql-1"]
     solution: |
       gcloud logging read 'severity>=ERROR' --limit=5 --format='value(textPayload)'
       gcloud compute ssh sql-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status postgresql'
       gcloud compute ssh sql-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl start postgresql'
     settle: 2
+    en:
+      title: PostgreSQL service stopped
+      summary: 'Checkout errors: ''connection refused'' in the app logs.'
+      sample: PostgreSQL on sql-1 did not start after the patching window, so connections to 5432 were refused and checkout failed.
+      hints:
+        - '''Connection refused'' (not timeout) means the packet arrived but nothing listens on the port.'
+      dangerous:
+        - recreating the database VM (data loss)
+        - opening the database to the internet to test
+      fixes:
+        - start and enable postgresql on sql-1
+      text:
+        Anoche hubo una ventana de parches del kernel en sql-1. La VM volvió, pero no comprobé los servicios.: There was a kernel patching window on sql-1 last night. The VM came back but I didn't check the services.
   - id: tt.api-tag
-    title: Network tag removed from the API VM
+    title: Etiqueta de red eliminada de la VM de la API
     symptom: http-502
     layer: tags
     skills: [networking.firewall, compute.vm]
-    summary: "Load balancer 502 and database errors at the same time."
+    summary: "502 en el balanceador y errores de base de datos a la vez."
     conflicts: [tt.hc-firewall, tt.db-allow-deleted]
     faults:
       - {type: vm_tag_remove, vm: api-1, tag: api, actor: "config-sync@{{.project}}.iam.gserviceaccount.com"}
     facts:
-      sre: [{keywords: [[tag, etiqueta, metadata, config]], answer: "config-sync reconciles instance metadata and tags every night from the CMDB."}]
+      sre: [{keywords: [[tag, etiqueta, metadata, config]], answer: "config-sync reconcilia cada noche los metadatos y las etiquetas de las instancias a partir de la CMDB."}]
     hints:
-      - text: "Firewall rules here target network tags. Which tags does api-1 have now?"
+      - text: "Aquí las reglas de cortafuegos se dirigen a etiquetas de red. ¿Qué etiquetas tiene ahora api-1?"
     evidence:
       commands: "instances describe|firewall-rules (list|describe)|get-health"
-      rootCause: [[tag, etiqueta], [api, firewall]]
-      sample: "config-sync removed the api network tag from api-1, so neither the health-check rule nor the api-to-database rule applied to it anymore."
-    dangerous: ["removing target tags from firewall rules so they apply to every VM"]
-    fixes: ["add the api tag back to api-1"]
+      rootCause: [[tag, etiqueta], [api, firewall, cortafuegos]]
+      sample: "config-sync quitó la etiqueta de red api de api-1, así que ya no se le aplicaban ni la regla de las comprobaciones de estado ni la de la API hacia la base de datos."
+    dangerous: ["quitar las etiquetas de destino de las reglas de cortafuegos para que se apliquen a todas las VM"]
+    fixes: ["volver a añadir la etiqueta api a api-1"]
     solution: |
       gcloud compute backend-services get-health checkout-be --global
       gcloud compute instances describe api-1 --zone={{.zone}} --format='value(tags.items)'
       gcloud compute instances add-tags api-1 --tags=api --zone={{.zone}}
     settle: 2
+    en:
+      title: Network tag removed from the API VM
+      summary: Load balancer 502 and database errors at the same time.
+      sample: config-sync removed the api network tag from api-1, so neither the health-check rule nor the api-to-database rule applied to it anymore.
+      hints:
+        - Firewall rules here target network tags. Which tags does api-1 have now?
+      dangerous:
+        - removing target tags from firewall rules so they apply to every VM
+      fixes:
+        - add the api tag back to api-1
+      text:
+        config-sync reconcilia cada noche los metadatos y las etiquetas de las instancias a partir de la CMDB.: config-sync reconciles instance metadata and tags every night from the CMDB.
+en:
+  title: three-tier checkout behind a global load balancer
+  topology: Internet → checkout-lb (global HTTP LB) → checkout-be → api-ig/api-1:8080 → sql-1:5432
+  text:
+    Leo (backend): Leo (backend)
+    responsable de checkout-api: owns checkout-api
+    El código no ha cambiado desde la versión del viernes. Solo puedo decirte lo que dicen los registros de la aplicación.: The code hasn't changed since Friday's release. I can only tell you what the app logs say.
+    No hay despliegues desde el viernes a las 17:00. La versión 1.4 ha estado estable todo el fin de semana.: No deployment since Friday 17:00. Release 1.4 has been stable all weekend.
+    'Mira en Cloud Logging el contenedor checkout-api: registra los errores de base de datos con gravedad ERROR.': Check Cloud Logging for the checkout-api container — it logs database errors at ERROR severity.
+    Aisha (seguridad): Aisha (security)
+    dirige el programa de bastionado de red: runs the network hardening programme
+    Seguimos la línea base de bastionado; pregúntame por cambios concretos.: We follow the hardening baseline; ask me about specific changes.
+    'No abras nada a 0.0.0.0/0: las comprobaciones de estado vienen solo de 35.191.0.0/16 y 130.211.0.0/22.': Do not open anything to 0.0.0.0/0 — health checks come from 35.191.0.0/16 and 130.211.0.0/22 only.
+    Sam (SRE de guardia): Sam (SRE on call)
+    vigila los paneles: watches dashboards
+    Yo empezaría por la salud de los backends del balanceador y los registros de errores.: I'd start from the load balancer backend health and the error logs.
+    Los errores empezaron hacia las 08:50, justo después de la ventana de automatizaciones nocturnas.: Errors started around 08:50, right after the overnight automation window.
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    necesita una hora estimada para el negocio: needs an ETA for the business
+    Necesito una actualización para los clientes en el ticket cada 30 minutos.: I need a customer-facing update on the ticket every 30 minutes.
+    ? 'Nada de reinicios a ciegas en producción: cuéntame primero la hipótesis. Y no toques billing-batch, Finanzas está haciendo el cierre trimestral.'
+    : No blind restarts in production — tell me the hypothesis first. And do not touch billing-batch, Finance is running quarter close.
+    /checkout a través del balanceador devuelve 200: /checkout through the load balancer returns 200
+    Endpoint de salud a través del balanceador: Health endpoint through the load balancer
+    La base de datos nunca está abierta a 0.0.0.0/0: Database never open to 0.0.0.0/0
+    Los backends no están abiertos a todo internet: Backends not opened to the whole internet
+    La base de datos es inaccesible desde internet: Database unreachable from the internet
+    La VM billing-batch de Finanzas sigue intacta: Finance's billing-batch VM untouched

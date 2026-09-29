@@ -3,56 +3,106 @@
 symptoms:
   - id: http-502
     name: HTTP 502 Bad Gateway
-    description: The load balancer or proxy could not get a valid response from any backend.
+    description: El balanceador de carga o el proxy no pudo obtener una respuesta válida de ningún backend.
     layers: [dns, load-balancer, backend-health, firewall, timeout, application, k8s-readiness, k8s-workload]
     vague:
-      - "The website shows an error page for everyone."
-      - "Customers see 'Bad Gateway' when they open the shop."
+      - "La web muestra una página de error a todo el mundo."
+      - "Los clientes ven «Bad Gateway» al abrir la tienda."
     misleading:
-      firewall: "Looks like the application crashed after last night's deploy."
-      backend-health: "Probably a network outage — nothing loads."
-      load-balancer: "The app servers must be overloaded, please add more."
-      application: "Looks like a network problem, nothing reaches the servers."
-      tags: "Looks like the database is down."
-      k8s-readiness: "The cluster must be out of capacity, please add nodes."
-      k8s-workload: "Probably a network problem in front of the service."
+      firewall: "Parece que la aplicación se cayó tras el despliegue de anoche."
+      backend-health: "Seguramente es una caída de red: no carga nada."
+      load-balancer: "Los servidores de la aplicación deben de estar sobrecargados, por favor añadid más."
+      application: "Parece un problema de red: no llega nada a los servidores."
+      tags: "Parece que la base de datos está caída."
+      k8s-readiness: "El clúster debe de haberse quedado sin capacidad, por favor añadid nodos."
+      k8s-workload: "Seguramente es un problema de red delante del servicio."
+    en:
+      name: HTTP 502 Bad Gateway
+      description: The load balancer or proxy could not get a valid response from any backend.
+      vague:
+        - The website shows an error page for everyone.
+        - Customers see 'Bad Gateway' when they open the shop.
+      misleading:
+        firewall: Looks like the application crashed after last night's deploy.
+        backend-health: Probably a network outage — nothing loads.
+        load-balancer: The app servers must be overloaded, please add more.
+        application: Looks like a network problem, nothing reaches the servers.
+        tags: Looks like the database is down.
+        k8s-readiness: The cluster must be out of capacity, please add nodes.
+        k8s-workload: Probably a network problem in front of the service.
   - id: http-500
-    name: HTTP 500/503 on a business endpoint
-    description: The service answers but a business path fails because a dependency is unavailable or rejects the request.
+    name: HTTP 500/503 en un endpoint de negocio
+    description: El servicio responde, pero una ruta de negocio falla porque una dependencia no está disponible o rechaza la petición.
     layers: [application, release, configuration, identity, k8s-service, network-path, database, quota]
     vague:
-      - "Checkout fails for some customers, other pages work."
-      - "Orders cannot be placed; the home page is fine."
+      - "El checkout falla para algunos clientes; las demás páginas funcionan."
+      - "No se pueden hacer pedidos; la página de inicio va bien."
     misleading:
-      identity: "Looks like the network between the API and the database is broken."
-      firewall: "The database must be overloaded again."
-      database: "It's the new release, please roll it back."
-      configuration: "Looks like a network issue to the database."
-      release: "Seems to be a permissions problem."
-      network-path: "The database password probably expired."
-      k8s-service: "The new release must have broken the catalog."
+      identity: "Parece que la red entre la API y la base de datos está rota."
+      firewall: "La base de datos debe de estar sobrecargada otra vez."
+      database: "Es la nueva versión, por favor volved atrás."
+      configuration: "Parece un problema de red hacia la base de datos."
+      release: "Parece un problema de permisos."
+      network-path: "Seguramente ha caducado la contraseña de la base de datos."
+      k8s-service: "La nueva versión debe de haber roto el catálogo."
+    en:
+      name: HTTP 500/503 on a business endpoint
+      description: The service answers but a business path fails because a dependency is unavailable or rejects the request.
+      vague:
+        - Checkout fails for some customers, other pages work.
+        - Orders cannot be placed; the home page is fine.
+      misleading:
+        identity: Looks like the network between the API and the database is broken.
+        firewall: The database must be overloaded again.
+        database: It's the new release, please roll it back.
+        configuration: Looks like a network issue to the database.
+        release: Seems to be a permissions problem.
+        network-path: The database password probably expired.
+        k8s-service: The new release must have broken the catalog.
   - id: timeout
-    name: Timeouts / service unavailable under load
-    description: Requests hang or return 503 when load increases.
+    name: Timeouts / servicio no disponible con carga
+    description: Las peticiones se quedan colgadas o devuelven 503 cuando sube la carga.
     layers: [capacity, connection-pool, autoscaling, database, network-path]
     vague:
-      - "Everything is very slow and sometimes fails."
+      - "Todo va muy lento y a veces falla."
     misleading:
-      connection-pool: "Looks like the database server needs a bigger machine."
-      capacity: "Must be a bug in the new code."
+      connection-pool: "Parece que el servidor de base de datos necesita una máquina más grande."
+      capacity: "Debe de ser un error en el código nuevo."
+    en:
+      name: Timeouts / service unavailable under load
+      description: Requests hang or return 503 when load increases.
+      vague:
+        - Everything is very slow and sometimes fails.
+      misleading:
+        connection-pool: Looks like the database server needs a bigger machine.
+        capacity: Must be a bug in the new code.
   - id: data-exposure
-    name: Data or service exposed publicly
-    description: An external party reports access to data or an admin surface.
+    name: Datos o servicio expuestos públicamente
+    description: Un tercero informa de que ha podido acceder a datos o a una superficie de administración.
     layers: [storage-iam, service-iam, firewall, org-policy]
     vague:
-      - "A researcher says our files are visible on the internet."
+      - "Un investigador dice que nuestros archivos se ven en internet."
     misleading:
-      storage-iam: "Probably a leaked password on a laptop."
+      storage-iam: "Seguramente es una contraseña filtrada desde un portátil."
+    en:
+      name: Data or service exposed publicly
+      description: An external party reports access to data or an admin surface.
+      vague:
+        - A researcher says our files are visible on the internet.
+      misleading:
+        storage-iam: Probably a leaked password on a laptop.
   - id: cost-spike
-    name: Unexpected cost increase
-    description: Finance reports a sudden rise in spend.
+    name: Aumento inesperado del coste
+    description: Finanzas informa de una subida repentina del gasto.
     layers: [compute, storage, network-egress, data-processing, idle-resources]
     vague:
-      - "The bill doubled this month, what happened?"
+      - "La factura se ha duplicado este mes, ¿qué ha pasado?"
     misleading:
-      compute: "Probably BigQuery queries from the analysts."
+      compute: "Seguramente son las consultas de BigQuery de los analistas."
+    en:
+      name: Unexpected cost increase
+      description: Finance reports a sudden rise in spend.
+      vague:
+        - The bill doubled this month, what happened?
+      misleading:
+        compute: Probably BigQuery queries from the analysts.

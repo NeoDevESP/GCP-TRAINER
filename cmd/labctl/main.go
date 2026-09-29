@@ -116,6 +116,8 @@ func main() {
 				}
 			}
 		}
+		// Spanish is the primary language: every text needs its English overlay.
+		problems = append(problems, translationProblems(cat, *content)...)
 		sort.Strings(problems)
 		for _, p := range problems {
 			fmt.Println("✗", p)

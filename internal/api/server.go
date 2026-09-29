@@ -760,16 +760,17 @@ func (s *Server) failureLibrary(w http.ResponseWriter, r *http.Request) (any, er
 		ID, Title, Topology string
 		Failures            []fv
 	}
+	lib := s.Lib.Localized(s.lang(r))
 	var systems []sv
-	for _, id := range sortedKeys(s.Lib.Systems) {
-		sys := s.Lib.Systems[id]
+	for _, id := range sortedKeys(lib.Systems) {
+		sys := lib.Systems[id]
 		v := sv{ID: sys.ID, Title: sys.Title, Topology: sys.Topology}
 		for _, f := range sys.Failures {
 			v.Failures = append(v.Failures, fv{f.ID, f.Title, f.Symptom, f.Layer, f.Kind, f.Skills})
 		}
 		systems = append(systems, v)
 	}
-	return map[string]any{"symptoms": s.Lib.Symptoms, "contexts": s.Lib.Contexts, "systems": systems, "graph": s.Lib.SymptomGraph()}, nil
+	return map[string]any{"symptoms": lib.Symptoms, "contexts": lib.Contexts, "systems": systems, "graph": lib.SymptomGraph()}, nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {

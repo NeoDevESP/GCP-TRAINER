@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/neodevesp/gcp-trainer/internal/desk"
+	"github.com/neodevesp/gcp-trainer/internal/i18n"
 )
 
 // Incident generator (Blueprint §7-8). A scenario is declarative and
@@ -143,8 +144,25 @@ func dedupe(fs []*FailureMode) []*FailureMode {
 	return out
 }
 
-// Generate builds a lab from a spec.
+// Generate builds a lab from a spec. The lab is written in Spanish (the
+// primary language) and carries its English overlay: the same spec and seed
+// are generated from the English view of the library and paired field by
+// field.
 func (lib *Library) Generate(g GenSpec) (*Lab, error) {
+	es, err := lib.generate(g, i18n.ES)
+	if err != nil {
+		return nil, err
+	}
+	en, err := lib.Localized(i18n.EN).generate(g, i18n.EN)
+	if err != nil {
+		return nil, err
+	}
+	es.EN = pairOverlay(es, en)
+	return es, nil
+}
+
+func (lib *Library) generate(g GenSpec, lang string) (*Lab, error) {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	if g.Difficulty < 1 {
 		g.Difficulty = 2
 	}
@@ -169,7 +187,7 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 		if len(keys) > 0 {
 			ctx = lib.Contexts[pick(g.Seed, "context", keys)]
 		} else {
-			ctx = &Context{ID: "generic", Company: "Nebula Corporation", Service: sys.Title, Impact: "Users are affected.", Priority: "P2"}
+			ctx = &Context{ID: "generic", Company: "Nebula Corporation", Service: sys.Title, Impact: p("Los usuarios están afectados.", "Users are affected."), Priority: "P2"}
 		}
 	}
 	primary := fails[0]
@@ -222,9 +240,9 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 	}
 	l.Title = fmt.Sprintf("%s · %s: %s", ctx.Company, symName, ctx.Service)
 	if g.Mode == "unknown" {
-		l.Title = fmt.Sprintf("%s · Unknown problem: %s", ctx.Company, ctx.Service)
+		l.Title = fmt.Sprintf(p("%s · Problema desconocido: %s", "%s · Unknown problem: %s"), ctx.Company, ctx.Service)
 	}
-	l.Summary = fmt.Sprintf("Generated incident on %s (difficulty %d, %d fault(s)).", sys.Title, g.Difficulty, len(fails))
+	l.Summary = fmt.Sprintf(p("Incidente generado en %s (dificultad %d, %d fallo(s)).", "Generated incident on %s (difficulty %d, %d fault(s))."), sys.Title, g.Difficulty, len(fails))
 
 	// Faults (+ noise at difficulty ≥ 2)
 	for _, f := range fails {
@@ -251,38 +269,44 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 		summary = pick(g.Seed, "vague", sym.Vague)
 	}
 	ticketID := fmt.Sprintf("%s-%d", kind, 1000+int(mix(uint64(g.Seed), "ticket")%9000))
-	l.Ticket = &desk.Ticket{ID: ticketID, Kind: kind, Priority: prio, Summary: summary, Impact: ctx.Impact, Reporter: firstNonEmpty(ctx.Reporter, "Customer Support"), Service: ctx.Service, Status: "NEW", Misleading: misleading,
-		Comments: []desk.Comment{{At: "08:55", From: firstNonEmpty(ctx.Reporter, "Customer Support"), Text: summary}}}
+	reporter := firstNonEmpty(ctx.Reporter, p("Atención al cliente", "Customer Support"))
+	l.Ticket = &desk.Ticket{ID: ticketID, Kind: kind, Priority: prio, Summary: summary, Impact: ctx.Impact, Reporter: reporter, Service: ctx.Service, Status: "NEW", Misleading: misleading,
+		Comments: []desk.Comment{{At: "08:55", From: reporter, Text: summary}}}
 	l.Ticket.SLA = map[string]string{"P1": "30m", "P2": "4h", "P3": "1d", "P4": "3d"}[prio]
 
 	// Story
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "**%s · %s %s** — reported by %s.\n\n> %s\n\n", ticketID, kind, prio, l.Ticket.Reporter, summary)
+	fmt.Fprintf(&sb, p("**%s · %s %s** — abierto por %s.\n\n> %s\n\n", "**%s · %s %s** — reported by %s.\n\n> %s\n\n"), ticketID, kind, prio, l.Ticket.Reporter, summary)
 	if g.Mode != "unknown" {
-		fmt.Fprintf(&sb, "Service: **%s** (%s).\n\n", ctx.Service, sys.Title)
+		fmt.Fprintf(&sb, p("Servicio: **%s** (%s).\n\n", "Service: **%s** (%s).\n\n"), ctx.Service, sys.Title)
 	}
-	fmt.Fprintf(&sb, "Business impact: %s\n\n", ctx.Impact)
+	fmt.Fprintf(&sb, p("Impacto en el negocio: %s\n\n", "Business impact: %s\n\n"), ctx.Impact)
 	if len(l.Constraints) > 0 {
-		fmt.Fprintf(&sb, "Constraints: %s.\n\n", humanConstraints(l.Constraints))
+		fmt.Fprintf(&sb, p("Restricciones: %s.\n\n", "Constraints: %s.\n\n"), humanConstraints(l.Constraints, lang))
 	}
-	sb.WriteString("Use `ticket`, `team` and `ask WHO \"question\"` to work the ticket. Post an update (`ticket update`) and resolve it with a note when done.")
+	sb.WriteString(p("Usa `ticket`, `team` y `ask QUIÉN \"pregunta\"` para trabajar el ticket. Publica una actualización (`ticket update`) y resuélvelo con una nota cuando termines.", "Use `ticket`, `team` and `ask WHO \"question\"` to work the ticket. Post an update (`ticket update`) and resolve it with a note when done."))
 	if prio == "P1" {
-		sb.WriteString(" **P1: a postmortem is mandatory.**")
+		sb.WriteString(p(" **P1: el post-mortem es obligatorio.**", " **P1: a postmortem is mandatory.**"))
 	}
 	l.Story = sb.String()
 	if prio == "P1" {
 		// Mode P1: alert cascade, business pressure and a mandatory postmortem.
 		l.Timeline = []TimelineEvent{
-			{At: "08:50", From: "Cloud Monitoring", Text: "Uptime check failing from 3 regions"},
-			{At: "08:51", From: "PagerDuty", Text: "P1 page: 5xx ratio > 50% on " + ctx.Service},
-			{At: "08:52", From: "Cloud Monitoring", Text: "Error budget burn rate 14x (fast burn)"},
-			{At: "08:54", From: "Customer Support", Text: "40+ customer complaints in 5 minutes"},
-			{At: "08:56", From: "Incident Commander", Text: "Status update required every 30 minutes; postmortem due within 48h"},
+			{At: "08:50", From: "Cloud Monitoring", Text: p("La comprobación de disponibilidad falla desde 3 regiones", "Uptime check failing from 3 regions")},
+			{At: "08:51", From: "PagerDuty", Text: p("Aviso P1: ratio de 5xx > 50 % en ", "P1 page: 5xx ratio > 50% on ") + ctx.Service},
+			{At: "08:52", From: "Cloud Monitoring", Text: p("Consumo del presupuesto de error 14x (consumo rápido)", "Error budget burn rate 14x (fast burn)")},
+			{At: "08:54", From: p("Atención al cliente", "Customer Support"), Text: p("Más de 40 quejas de clientes en 5 minutos", "40+ customer complaints in 5 minutes")},
+			{At: "08:56", From: p("Responsable del incidente", "Incident Commander"), Text: p("Actualización de estado cada 30 minutos; post-mortem en un plazo de 48 h", "Status update required every 30 minutes; postmortem due within 48h")},
 		}
 	} else {
-		l.Timeline = []TimelineEvent{{At: "08:52", From: "Cloud Monitoring", Text: "Alert: " + symName}}
+		l.Timeline = []TimelineEvent{{At: "08:52", From: "Cloud Monitoring", Text: p("Alerta: ", "Alert: ") + symName}}
 	}
-	l.Objectives = []string{"Gather evidence and form hypotheses before changing anything", "Restore the service with the minimum safe change", "Keep security guardrails and stated constraints", "Communicate on the ticket and document the root cause"}
+	l.Objectives = []string{
+		p("Reúne evidencias y formula hipótesis antes de cambiar nada", "Gather evidence and form hypotheses before changing anything"),
+		p("Restablece el servicio con el cambio seguro mínimo", "Restore the service with the minimum safe change"),
+		p("Respeta las barreras de seguridad y las restricciones indicadas", "Keep security guardrails and stated constraints"),
+		p("Comunica en el ticket y documenta la causa raíz", "Communicate on the ticket and document the root cause"),
+	}
 
 	// Actors: system actors + failure facts merged by role.
 	actors := map[string]*desk.Actor{}
@@ -335,8 +359,10 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 	if settle > 0 {
 		fmt.Fprintf(&sol, "sleep %d\n", settle*60)
 	}
-	sol.WriteString("ticket update \"Service restored after fixing the root cause; monitoring recovery, next update in 30 minutes. Impact limited to the incident window.\"\n")
-	sol.WriteString("ticket resolve \"Root cause identified and fixed; verified the service responds correctly again.\"\n")
+	sol.WriteString(p("ticket update \"Servicio restablecido tras corregir la causa raíz; vigilamos la recuperación, próxima actualización en 30 minutos. Impacto limitado a la ventana del incidente.\"\n",
+		"ticket update \"Service restored after fixing the root cause; monitoring recovery, next update in 30 minutes. Impact limited to the incident window.\"\n"))
+	sol.WriteString(p("ticket resolve \"Causa raíz identificada y corregida; verificado que el servicio vuelve a responder correctamente.\"\n",
+		"ticket resolve \"Root cause identified and fixed; verified the service responds correctly again.\"\n"))
 	l.Solution = sol.String()
 
 	// Evidence
@@ -346,10 +372,10 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 		rc = append(rc, f.Evidence.Sample)
 	}
 	l.Evidence.Sample["rootCause"] = strings.Join(rc, " ")
-	l.Evidence.Sample["prevention"] = "Add a policy check in CI for this change, alert on the symptom and document the runbook so the change is reviewed before it reaches production."
+	l.Evidence.Sample["prevention"] = p("Añadir una comprobación de políticas en CI para este cambio, alertar sobre el síntoma y documentar el runbook para que el cambio se revise antes de llegar a producción.", "Add a policy check in CI for this change, alert on the symptom and document the runbook so the change is reviewed before it reaches production.")
 	if prio == "P1" {
 		l.Evidence.Fields = append(l.Evidence.Fields, "postmortem")
-		l.Evidence.Sample["postmortem"] = "Timeline: detection from alerts, diagnosis with logs and configuration, fix applied and verified. Impact: users affected during the window. Root cause and action items with owners are listed above."
+		l.Evidence.Sample["postmortem"] = p("Cronología: detección por las alertas, diagnóstico con registros y configuración, corrección aplicada y verificada. Impacto: usuarios afectados durante la ventana. La causa raíz y las acciones con responsables están indicadas arriba.", "Timeline: detection from alerts, diagnosis with logs and configuration, fix applied and verified. Impact: users affected during the window. Root cause and action items with owners are listed above.")
 	}
 
 	// Rubric (100 points)
@@ -363,7 +389,7 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 	var diag []Check
 	for _, f := range fails {
 		if f.Evidence.Commands != "" {
-			diag = append(diag, Check{"type": "command", "regex": f.Evidence.Commands, "desc": "Evidence gathered for: " + f.Title})
+			diag = append(diag, Check{"type": "command", "regex": f.Evidence.Commands, "desc": p("Evidencias reunidas para: ", "Evidence gathered for: ") + f.Title})
 		}
 	}
 	var rcChecks []Check
@@ -376,28 +402,28 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 			}
 			groups = append(groups, gg)
 		}
-		rcChecks = append(rcChecks, Check{"type": "evidence", "fields": []any{"rootCause"}, "keywords": groups, "desc": "Root cause explained: " + f.Title})
+		rcChecks = append(rcChecks, Check{"type": "evidence", "fields": []any{"rootCause"}, "keywords": groups, "desc": p("Causa raíz explicada: ", "Root cause explained: ") + f.Title})
 	}
 	comm := []Check{
-		{"type": "ticket_update", "min": 1, "desc": "Stakeholder update posted on the ticket"},
-		{"type": "ticket_resolved", "desc": "Ticket resolved with a resolution note"},
+		{"type": "ticket_update", "min": 1, "desc": p("Actualización para las partes interesadas publicada en el ticket", "Stakeholder update posted on the ticket")},
+		{"type": "ticket_resolved", "desc": p("Ticket resuelto con una nota de resolución", "Ticket resolved with a resolution note")},
 	}
 	if prio == "P1" {
-		comm = append(comm, Check{"type": "evidence", "fields": []any{"postmortem"}, "keywords": []any{[]any{"timeline", "cronologia", "detect"}, []any{"impact", "impacto"}}, "desc": "Postmortem (mandatory for P1)"})
+		comm = append(comm, Check{"type": "evidence", "fields": []any{"postmortem"}, "keywords": []any{[]any{"timeline", "cronologia", "detect"}, []any{"impact", "impacto"}}, "desc": p("Post-mortem (obligatorio en P1)", "Postmortem (mandatory for P1)")})
 	}
-	l.Rubric = []RubricItem{{Name: "Service restored", Validator: "functional", Points: 35, All: true, Checks: healthy}}
+	l.Rubric = []RubricItem{{Name: p("Servicio restablecido", "Service restored"), Validator: "functional", Points: 35, All: true, Checks: healthy}}
 	if len(safety) > 0 {
-		l.Rubric = append(l.Rubric, RubricItem{Name: "Safe fix", Validator: "security", Points: 15, Critical: true, All: true, Checks: safety})
+		l.Rubric = append(l.Rubric, RubricItem{Name: p("Corrección segura", "Safe fix"), Validator: "security", Points: 15, Critical: true, All: true, Checks: safety})
 	} else {
 		l.Rubric[0].Points += 15
 	}
 	l.Rubric = append(l.Rubric,
-		RubricItem{Name: "Diagnosis", Validator: "diagnosis", Points: 15, Checks: diag},
-		RubricItem{Name: "Root cause", Validator: "evidence", Points: 20, Checks: rcChecks},
-		RubricItem{Name: "Communication", Validator: "evidence", Points: 15, Checks: comm},
+		RubricItem{Name: p("Diagnóstico", "Diagnosis"), Validator: "diagnosis", Points: 15, Checks: diag},
+		RubricItem{Name: p("Causa raíz", "Root cause"), Validator: "evidence", Points: 20, Checks: rcChecks},
+		RubricItem{Name: p("Comunicación", "Communication"), Validator: "evidence", Points: 15, Checks: comm},
 	)
 	if len(diag) == 0 {
-		l.Rubric[len(l.Rubric)-3].Checks = []Check{{"type": "command", "regex": "logging read|describe|list|get-health", "desc": "Evidence gathered"}}
+		l.Rubric[len(l.Rubric)-3].Checks = []Check{{"type": "command", "regex": "logging read|describe|list|get-health", "desc": p("Evidencias reunidas", "Evidence gathered")}}
 	}
 	l.WellArchitected = []string{"reliability", "operations"}
 	l.Certs = []string{"ACE"}
@@ -406,20 +432,21 @@ func (lib *Library) Generate(g GenSpec) (*Lab, error) {
 	return l, nil
 }
 
-func humanConstraints(cs []string) string {
+func humanConstraints(cs []string, lang string) string {
+	p := func(es, en string) string { return i18n.P(lang, es, en) }
 	var out []string
 	for _, c := range cs {
 		switch {
 		case c == "no-downtime":
-			out = append(out, "no downtime allowed (do not stop or delete serving resources)")
+			out = append(out, p("no se permiten cortes (no detengas ni borres recursos que estén sirviendo)", "no downtime allowed (do not stop or delete serving resources)"))
 		case c == "no-public":
-			out = append(out, "nothing may be exposed publicly")
+			out = append(out, p("no se puede exponer nada públicamente", "nothing may be exposed publicly"))
 		case c == "no-basic-roles":
-			out = append(out, "no basic roles (owner/editor/viewer)")
+			out = append(out, p("sin roles básicos (owner/editor/viewer)", "no basic roles (owner/editor/viewer)"))
 		case c == "no-delete":
-			out = append(out, "no deletions")
+			out = append(out, p("sin borrados", "no deletions"))
 		case strings.HasPrefix(c, "protect:"):
-			out = append(out, "do not modify "+strings.TrimPrefix(c, "protect:")+" (owned by another team)")
+			out = append(out, i18n.Pf(lang, "no modifiques %s (pertenece a otro equipo)", "do not modify %s (owned by another team)", strings.TrimPrefix(c, "protect:")))
 		default:
 			out = append(out, c)
 		}

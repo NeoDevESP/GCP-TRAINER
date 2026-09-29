@@ -98,3 +98,35 @@ func TestTranslationProblems(t *testing.T) {
 	}
 	_ = desk.Actor{}
 }
+
+// Generated incidents are Spanish with a complete English overlay built from
+// the English view of the library.
+func TestGeneratedIncidentIsBilingual(t *testing.T) {
+	lib, err := LoadLibrary("../../content/failures")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := lib.TranslationProblems(); len(p) > 0 {
+		t.Fatalf("library translation problems: %v", p)
+	}
+	for _, g := range []GenSpec{
+		{System: "three-tier", Difficulty: 2, Seed: 7},
+		{System: "shop-platform", Difficulty: 4, Seed: 3, Mode: "production"},
+		{System: "gke-shop", Difficulty: 3, Seed: 11, Mode: "unknown"},
+	} {
+		l, err := lib.Generate(g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p := l.TranslationProblems(); len(p) > 0 {
+			t.Errorf("%s: %v", g.System, p)
+		}
+		en := l.Localized("en")
+		if en.Title == l.Title || en.Story == l.Story || en.Rubric[0].Name == l.Rubric[0].Name {
+			t.Errorf("%s: English view not translated: %q / %q", g.System, en.Title, en.Rubric[0].Name)
+		}
+		if !strings.Contains(l.Story, "Impacto en el negocio") || !strings.Contains(en.Story, "Business impact") {
+			t.Errorf("%s: story languages wrong:\n%s\n---\n%s", g.System, l.Story, en.Story)
+		}
+	}
+}
