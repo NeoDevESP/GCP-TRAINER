@@ -1,6 +1,6 @@
 id: linux-l02-permission-denied
-title: "Linux: a hardening script broke the reports service"
-summary: Read owners, groups and modes, restore access for the service account only — without chmod 777.
+title: "Linux: un script de bastionado ha roto el servicio de informes"
+summary: Lee propietarios, grupos y permisos y devuelve el acceso solo a la cuenta del servicio, sin chmod 777.
 track: linux
 day: 2
 level: basic
@@ -26,29 +26,29 @@ ticket:
   id: INC-322
   kind: INC
   priority: P3
-  summary: "Reports are down after last night's CIS hardening run on reports-1."
+  summary: "Los informes están caídos desde la ejecución de bastionado CIS de anoche en reports-1."
   reporter: Marta (FinOps)
 actors:
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[hardening, cis, script, change, cambio]], answer: "The hardening script set every file under /etc/reports to root:root 600 because it contains a password."}
-      - {keywords: [[777, everyone, todos, world, other]], answer: "That file has a database password: it must never be world-readable."}
+      - {keywords: [[hardening, cis, script, change, cambio, bastionado, endurecimiento, cambi]], answer: "El script de bastionado puso todos los archivos de /etc/reports como root:root 600 porque contienen una contraseña."}
+      - {keywords: [[777, everyone, todos, world, other, todo el mundo, mundo, internet, otro, otra]], answer: "Ese archivo tiene una contraseña de base de datos: nunca debe poder leerlo todo el mundo."}
 story: |
-  The reports service (runs as user **reports**) on `reports-1` fails to start after a hardening run.
-  Use `systemctl status`, `journalctl`, `ls -l`, `stat`, `id reports` over IAP SSH, then give the service
-  exactly the access it needs to its configuration file — nobody else may read it.
+  El servicio de informes (se ejecuta como el usuario **reports**) de `reports-1` no arranca tras una ejecución de bastionado.
+  Usa `systemctl status`, `journalctl`, `ls -l`, `stat` e `id reports` por SSH con IAP y después da al servicio
+  exactamente el acceso que necesita a su archivo de configuración: nadie más puede leerlo.
 objectives:
-  - Find the permission error
-  - Grant read access to the service account only
-  - Restart and verify
+  - Encuentra el error de permisos
+  - Concede acceso de lectura solo a la cuenta del servicio
+  - Reinicia y verifica
 hints:
-  - text: "`ls -l /etc/reports` shows owner, group and mode; the service runs as `reports`."
-  - text: "`chown root:reports` + `chmod 640` lets the group read without exposing the file."
+  - text: "`ls -l /etc/reports` muestra el propietario, el grupo y los permisos; el servicio se ejecuta como `reports`."
+  - text: "`chown root:reports` + `chmod 640` permite leer al grupo sin exponer el archivo."
 evidence:
   fields: [rootCause]
   sample:
-    rootCause: The hardening script set /etc/reports/app.yaml to root:root 600, so the service user reports could not read its configuration. I changed the group to reports and the mode to 640, which lets only root and the reports group read it, and restarted the service.
+    rootCause: El script de bastionado dejó /etc/reports/app.yaml como root:root 600, así que el usuario del servicio, reports, no podía leer su configuración. Cambié el grupo a reports y los permisos a 640, lo que permite leerlo solo a root y al grupo reports, y reinicié el servicio.
 solution: |
   gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status python-http'
   gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo journalctl -u python-http'
@@ -58,26 +58,56 @@ solution: |
   gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo chmod 640 /etc/reports/app.yaml'
   gcloud compute ssh reports-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart python-http'
 rubric:
-  - name: Service back
+  - name: Servicio recuperado
     validator: functional
     points: 35
     checks:
-      - {type: http, target: "vm:reports-1:8000", path: /, status: 200, desc: "reports serves again"}
-  - name: Least privilege on the file
+      - {type: http, target: "vm:reports-1:8000", path: /, status: 200, desc: "reports vuelve a servir"}
+  - name: Mínimo privilegio sobre el archivo
     validator: security
     points: 35
     critical: true
     all: true
     checks:
-      - {type: vm_file, vm: reports-1, path: /etc/reports/app.yaml, readableBy: reports, noWorld: true, desc: "Readable by the service, not by everyone"}
-      - {type: vm_file, vm: reports-1, path: /etc/reports/app.yaml, notReadableBy: student, desc: "Other users cannot read the password"}
-  - name: Diagnosis
+      - {type: vm_file, vm: reports-1, path: /etc/reports/app.yaml, readableBy: reports, noWorld: true, desc: "Legible por el servicio, no por todo el mundo"}
+      - {type: vm_file, vm: reports-1, path: /etc/reports/app.yaml, notReadableBy: student, desc: "Los demás usuarios no pueden leer la contraseña"}
+  - name: Diagnóstico
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "ls -l|stat |journalctl", desc: "Inspected permissions and logs"}
-  - name: Explanation
+      - {type: command, regex: "ls -l|stat |journalctl", desc: "Permisos y registros inspeccionados"}
+  - name: Explicación
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[permission, permiso, 600, mode], [group, grupo, chown, 640]], desc: "Explain the permission model"}
+      - {type: evidence, fields: [rootCause], keywords: [[permission, permiso, 600, mode], [group, grupo, chown, 640]], desc: "Explica el modelo de permisos"}
+en:
+  title: 'Linux: a hardening script broke the reports service'
+  summary: Read owners, groups and modes, restore access for the service account only — without chmod 777.
+  story: |
+    The reports service (runs as user **reports**) on `reports-1` fails to start after a hardening run.
+    Use `systemctl status`, `journalctl`, `ls -l`, `stat`, `id reports` over IAP SSH, then give the service
+    exactly the access it needs to its configuration file — nobody else may read it.
+  objectives:
+    - Find the permission error
+    - Grant read access to the service account only
+    - Restart and verify
+  hints:
+    - '`ls -l /etc/reports` shows owner, group and mode; the service runs as `reports`.'
+    - '`chown root:reports` + `chmod 640` lets the group read without exposing the file.'
+  ticket:
+    summary: Reports are down after last night's CIS hardening run on reports-1.
+  text:
+    Servicio recuperado: Service back
+    reports vuelve a servir: reports serves again
+    Mínimo privilegio sobre el archivo: Least privilege on the file
+    Legible por el servicio, no por todo el mundo: Readable by the service, not by everyone
+    Los demás usuarios no pueden leer la contraseña: Other users cannot read the password
+    Diagnóstico: Diagnosis
+    Permisos y registros inspeccionados: Inspected permissions and logs
+    Explicación: Explanation
+    Explica el modelo de permisos: Explain the permission model
+    Marta (FinOps): Marta (FinOps)
+    Aisha (oficina del CISO): Aisha (CISO office)
+    El script de bastionado puso todos los archivos de /etc/reports como root:root 600 porque contienen una contraseña.: The hardening script set every file under /etc/reports to root:root 600 because it contains a password.
+    'Ese archivo tiene una contraseña de base de datos: nunca debe poder leerlo todo el mundo.': 'That file has a database password: it must never be world-readable.'

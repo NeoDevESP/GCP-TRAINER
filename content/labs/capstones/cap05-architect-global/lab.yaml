@@ -1,6 +1,6 @@
 id: cap-architect-global
-title: "Capstone (Architect/SRE): a global platform that survives losing a region"
-summary: Design, build and prove a two-continent service — requirements met on paper, WAF at the edge, SLO monitoring, and a regional disaster survived in a chaos experiment.
+title: "Proyecto final (arquitecto/SRE): una plataforma global que sobrevive a la pérdida de una región"
+summary: 'Diseña, construye y demuestra un servicio en dos continentes: requisitos cumplidos sobre el papel, WAF en el borde, monitorización de SLO y un desastre regional superado en un experimento de caos.'
 track: capstones
 day: 5
 level: professional
@@ -24,25 +24,25 @@ files:
     budgetEur: 1000
     waf: true
 story: |
-  Nebula's **product catalog** (`europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0`, stateless, serves
-  `/products`) goes global. Deliver:
+  El **catálogo de productos** de Nebula (`europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0`, sin estado, sirve
+  `/products`) se hace global. Entrega:
 
-  1. `design.yaml` meeting `requirements.yaml` (check with `arch evaluate design.yaml requirements.yaml`).
-  2. The platform: Cloud Run in **europe-west1** and **us-central1** behind one global HTTP load balancer
-     `catalog-lb` (serverless NEGs), reachable only through it, with a Cloud Armor policy `edge-waf` on the
-     backend service.
-  3. SLO monitoring: an uptime check on `/products` and an alert when it fails.
-  4. Proof: `chaos run region-outage --region=europe-west1 --target=lb:catalog-lb --path=/products --slo=99.9 --duration=10`
-     must hold. Write the SLO document (SLI, SLO, error budget, what happens when it is burnt).
+  1. `design.yaml` cumpliendo `requirements.yaml` (compruébalo con `arch evaluate design.yaml requirements.yaml`).
+  2. La plataforma: Cloud Run en **europe-west1** y **us-central1** tras un único balanceador HTTP global
+     `catalog-lb` (NEG serverless), accesible solo a través de él, con una política de Cloud Armor `edge-waf` en el
+     servicio de backend.
+  3. Monitorización del SLO: una comprobación de disponibilidad en `/products` y una alerta cuando falle.
+  4. Prueba: `chaos run region-outage --region=europe-west1 --target=lb:catalog-lb --path=/products --slo=99.9 --duration=10`
+     debe cumplirse. Escribe el documento de SLO (SLI, SLO, presupuesto de error y qué pasa cuando se agota).
 objectives:
-  - A design that meets every requirement, with trade-offs
-  - Multi-region serving behind a single global endpoint and WAF
-  - SLO monitoring and alerting
-  - Regional disaster survived and documented
+  - Un diseño que cumpla todos los requisitos, con sus compromisos
+  - Servicio multirregión tras un único endpoint global y WAF
+  - Monitorización y alertas de SLO
+  - Desastre regional superado y documentado
 evidence:
   fields: [slo]
   sample:
-    slo: "SLI: share of /products requests answered with 2xx/3xx at the load balancer. SLO: 99.95% over 30 days, error budget 21.6 minutes per month. Fast burn (14x in 1 hour) pages on-call; when the budget is exhausted releases are frozen until reliability work restores it. The region-outage chaos experiment held at 100% because the global load balancer routed to us-central1."
+    slo: "SLI: proporción de peticiones a /products respondidas con 2xx/3xx en el balanceador. SLO: 99,95 % en 30 días, presupuesto de error de 21,6 minutos al mes. Un consumo rápido (14x en 1 hora) avisa a la guardia; cuando se agota el presupuesto se congelan las versiones hasta que el trabajo de fiabilidad lo recupere. El experimento de caos region-outage se mantuvo al 100 % porque el balanceador global dirigió el tráfico a us-central1."
 solution: |
   cat > design.yaml <<'YAML'
   name: catalog-global
@@ -69,38 +69,73 @@ solution: |
   gcloud alpha monitoring policies create --display-name="catalog SLO" --condition-display-name=uptime --condition-filter='metric.type="monitoring.googleapis.com/uptime_check/check_passed"' --if='< 1' --duration=120s
   chaos run region-outage --region=europe-west1 --target=lb:catalog-lb --path=/products --slo=99.9 --duration=10
 rubric:
-  - name: Design meets requirements
+  - name: El diseño cumple los requisitos
     validator: reliability
     points: 20
     checks:
-      - {type: design, requirements: {availability: 99.95, rpoMinutes: 5, rtoMinutes: 30, peakRps: 4000, userRegions: [europe, us], latencyMs: 100, budgetEur: 1000, waf: true}, desc: "All requirements met by design.yaml"}
-  - name: Global platform
+      - {type: design, requirements: {availability: 99.95, rpoMinutes: 5, rtoMinutes: 30, peakRps: 4000, userRegions: [europe, us], latencyMs: 100, budgetEur: 1000, waf: true}, desc: "design.yaml cumple todos los requisitos"}
+  - name: Plataforma global
     validator: functional
     points: 20
     all: true
     checks:
-      - {type: http, target: "lb:catalog-lb", path: /products, status: 200, desc: "Served through the global endpoint"}
-      - {type: count, collection: runServices, min: 2, desc: "Serving from two regions"}
-      - {type: http, target: "run:catalog-ew1", path: /products, status: 404, desc: "Direct run.app access closed"}
-  - name: Edge security
+      - {type: http, target: "lb:catalog-lb", path: /products, status: 200, desc: "Se sirve a través del endpoint global"}
+      - {type: count, collection: runServices, min: 2, desc: "Se sirve desde dos regiones"}
+      - {type: http, target: "run:catalog-ew1", path: /products, status: 404, desc: "Acceso directo a run.app cerrado"}
+  - name: Seguridad en el borde
     validator: security
     points: 10
     checks:
-      - {type: exists, path: "backendServices[\"catalog-be\"]", expect: {securityPolicy: edge-waf}, desc: "Cloud Armor attached"}
-  - name: SLO monitoring
+      - {type: exists, path: "backendServices[\"catalog-be\"]", expect: {securityPolicy: edge-waf}, desc: "Cloud Armor asociado"}
+  - name: Monitorización del SLO
     validator: state
     points: 10
     all: true
     checks:
-      - {type: count, collection: uptimeChecks, min: 1, desc: "Uptime check"}
-      - {type: alert_policy, filterContains: uptime_check, desc: "Alert on the SLI"}
-  - name: Regional disaster survived
+      - {type: count, collection: uptimeChecks, min: 1, desc: "Comprobación de disponibilidad"}
+      - {type: alert_policy, filterContains: uptime_check, desc: "Alerta sobre el SLI"}
+  - name: Desastre regional superado
     validator: functional
     points: 25
     checks:
-      - {type: chaos, experiment: region-outage, minSlo: 99.9, minMinutes: 5, desc: "Region-outage experiment held at ≥99.9%"}
-  - name: SLO document
+      - {type: chaos, experiment: region-outage, minSlo: 99.9, minMinutes: 5, desc: "El experimento region-outage se mantuvo en ≥99,9 %"}
+  - name: Documento de SLO
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [slo], keywords: [[sli], [slo], [error budget, presupuesto de error], [burn, freeze, congel]], desc: "SLI, SLO, error budget and policy"}
+      - {type: evidence, fields: [slo], keywords: [[sli], [slo], [error budget, presupuesto de error], [burn, freeze, congel, consum, quema]], desc: "SLI, SLO, presupuesto de error y política"}
+en:
+  title: 'Capstone (Architect/SRE): a global platform that survives losing a region'
+  summary: Design, build and prove a two-continent service — requirements met on paper, WAF at the edge, SLO monitoring, and a regional disaster survived in a chaos experiment.
+  story: |
+    Nebula's **product catalog** (`europe-docker.pkg.dev/gcplab-public/apps/catalog-api:1.0`, stateless, serves
+    `/products`) goes global. Deliver:
+
+    1. `design.yaml` meeting `requirements.yaml` (check with `arch evaluate design.yaml requirements.yaml`).
+    2. The platform: Cloud Run in **europe-west1** and **us-central1** behind one global HTTP load balancer
+       `catalog-lb` (serverless NEGs), reachable only through it, with a Cloud Armor policy `edge-waf` on the
+       backend service.
+    3. SLO monitoring: an uptime check on `/products` and an alert when it fails.
+    4. Proof: `chaos run region-outage --region=europe-west1 --target=lb:catalog-lb --path=/products --slo=99.9 --duration=10`
+       must hold. Write the SLO document (SLI, SLO, error budget, what happens when it is burnt).
+  objectives:
+    - A design that meets every requirement, with trade-offs
+    - Multi-region serving behind a single global endpoint and WAF
+    - SLO monitoring and alerting
+    - Regional disaster survived and documented
+  text:
+    El diseño cumple los requisitos: Design meets requirements
+    design.yaml cumple todos los requisitos: All requirements met by design.yaml
+    Plataforma global: Global platform
+    Se sirve a través del endpoint global: Served through the global endpoint
+    Se sirve desde dos regiones: Serving from two regions
+    Acceso directo a run.app cerrado: Direct run.app access closed
+    Seguridad en el borde: Edge security
+    Cloud Armor asociado: Cloud Armor attached
+    Monitorización del SLO: SLO monitoring
+    Comprobación de disponibilidad: Uptime check
+    Alerta sobre el SLI: Alert on the SLI
+    Desastre regional superado: Regional disaster survived
+    El experimento region-outage se mantuvo en ≥99,9 %: Region-outage experiment held at ≥99.9%
+    Documento de SLO: SLO document
+    SLI, SLO, presupuesto de error y política: SLI, SLO, error budget and policy

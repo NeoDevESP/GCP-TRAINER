@@ -1,6 +1,6 @@
 id: cap-data-ml-platform
-title: "Capstone (Professional): an order analytics and churn-scoring platform"
-summary: Build event ingestion into a cost-guarded warehouse and serve a model — private services, scoped identities, failure handling and a design you can defend.
+title: "Proyecto final (profesional): una plataforma de analítica de pedidos y puntuación de abandono"
+summary: 'Construye la ingesta de eventos en un almacén de datos con el coste bajo control y sirve un modelo: servicios privados, identidades acotadas, gestión de fallos y un diseño que puedas defender.'
 track: capstones
 day: 6
 level: professional
@@ -22,38 +22,38 @@ files:
 traffic:
   - {name: producers, target: "pubsub:orders", rps: 100}
 story: |
-  The shop publishes every order to Pub/Sub. Build the platform that turns them into analytics and churn scores.
+  La tienda publica cada pedido en Pub/Sub. Construye la plataforma que los convierte en analítica y en puntuaciones de abandono.
 
-  **Ingestion** — topic `orders`; a private Cloud Run service **`orders-worker`**
-  (`europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0`, env `BQ_TABLE=analytics.orders`) receives them
-  through an authenticated push subscription **`orders-push`** (path `/push`); poison messages go to `orders-dlq`
-  after 5 attempts.
+  **Ingesta** — tema `orders`; un servicio privado de Cloud Run **`orders-worker`**
+  (`europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0`, variable `BQ_TABLE=analytics.orders`) los recibe
+  a través de una suscripción push autenticada **`orders-push`** (ruta `/push`); los mensajes envenenados van a `orders-dlq`
+  tras 5 intentos.
 
-  **Warehouse** — dataset `analytics` in the EU; table `orders` partitioned by day on `order_ts`, clustered by
-  `customer_id`, and queries **must** filter on the partition (analysts have burned budget before).
+  **Almacén de datos** — dataset `analytics` en la UE; tabla `orders` particionada por día sobre `order_ts`, agrupada en clústeres por
+  `customer_id`, y las consultas **deben** filtrar por la partición (los analistas ya han quemado presupuesto antes).
 
-  **Scoring** — model `churn` (artifacts `gs://models-{{.project}}/churn/v3/`, image
-  `europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest`) on endpoint `churn-endpoint`, CPU only,
-  monitored, verified with `request.json`.
+  **Puntuación** — modelo `churn` (artefactos `gs://models-{{.project}}/churn/v3/`, imagen
+  `europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest`) en el endpoint `churn-endpoint`, solo CPU,
+  monitorizado y verificado con `request.json`.
 
-  Each component has its own identity with the minimum access: the worker writes **only** to the `analytics`
-  dataset, the push identity can **only** invoke the worker. Document your design decisions.
+  Cada componente tiene su propia identidad con el acceso mínimo: el worker escribe **solo** en el dataset `analytics`
+  y la identidad de push **solo** puede invocar al worker. Documenta tus decisiones de diseño.
 constraints: [no-basic-roles, no-public]
 objectives:
-  - Orders flow from Pub/Sub to the worker and are acknowledged
-  - Partitioned, clustered, partition-filter-enforced table in the EU
-  - Private worker, dataset-scoped writer identity, invoker-only push identity
-  - Dead-letter handling
-  - Monitored model endpoint serving a test prediction
-  - Design decisions documented
+  - Los pedidos fluyen de Pub/Sub al worker y se confirman
+  - Tabla en la UE particionada, agrupada en clústeres y con filtro de partición obligatorio
+  - Worker privado, identidad de escritura limitada al dataset e identidad de push que solo invoca
+  - Gestión de mensajes fallidos (dead-letter)
+  - Endpoint del modelo monitorizado sirviendo una predicción de prueba
+  - Decisiones de diseño documentadas
 hints:
-  - text: "Grant BigQuery access on the dataset (`bq add-iam-policy-binding`), not on the project."
+  - text: "Concede el acceso de BigQuery en el dataset (`bq add-iam-policy-binding`), no en el proyecto."
   - text: "`bq mk --table --time_partitioning_field=order_ts --clustering_fields=customer_id --require_partition_filter analytics.orders ...`"
-  - text: "The Pub/Sub service agent needs publisher on the dead-letter topic; the push identity needs `roles/run.invoker` on the service."
+  - text: "El agente de servicio de Pub/Sub necesita permiso de publicación en el tema de dead-letter; la identidad de push necesita `roles/run.invoker` en el servicio."
 evidence:
   fields: [design]
   sample:
-    design: "Pub/Sub decouples producers from processing and the dead-letter topic isolates poison messages after 5 attempts. orders-worker is private and invoked only by push-sa through OIDC push; worker-sa can write only the analytics dataset. The table is partitioned by day on order_ts and clustered by customer_id with a required partition filter to bound query cost. The churn model runs on CPU with monitoring so drift is detected; each component has its own least-privilege service account."
+    design: "Pub/Sub desacopla a los productores del procesamiento y el tema de dead-letter aísla los mensajes envenenados tras 5 intentos. orders-worker es privado y solo lo invoca push-sa mediante push con OIDC; worker-sa solo puede escribir en el dataset analytics. La tabla está particionada por día sobre order_ts y agrupada por customer_id con un filtro de partición obligatorio para acotar el coste de las consultas. El modelo de abandono se ejecuta en CPU con monitorización para detectar la deriva; cada componente tiene su propia cuenta de servicio con mínimo privilegio."
 solution: |
   gcloud iam service-accounts create worker-sa
   gcloud iam service-accounts create push-sa
@@ -94,45 +94,96 @@ shortcuts:
       gcloud ai endpoints predict churn-endpoint --region={{.region}} --json-request=request.json
       sleep 300
 rubric:
-  - name: Ingestion
+  - name: Ingesta
     validator: functional
     points: 25
     checks:
-      - {type: pubsub, subscription: orders-push, ackedMin: 10, backlogMax: 50, settle: 3, desc: "Orders are delivered to the worker and acknowledged"}
-  - name: Warehouse design
+      - {type: pubsub, subscription: orders-push, ackedMin: 10, backlogMax: 50, settle: 3, desc: "Los pedidos se entregan al worker y se confirman"}
+  - name: Diseño del almacén de datos
     validator: cost
     points: 15
     all: true
     checks:
-      - {type: exists, path: "datasets.analytics", expect: {location: EU}, desc: "Dataset in the EU"}
-      - {type: count, collection: datasets.analytics.tables, where: {partitionField: order_ts, clustering: {contains: customer_id}, requirePartitionFilter: true}, min: 1, desc: "Partitioned, clustered, partition filter required"}
-  - name: Identities and exposure
+      - {type: exists, path: "datasets.analytics", expect: {location: EU}, desc: "Dataset en la UE"}
+      - {type: count, collection: datasets.analytics.tables, where: {partitionField: order_ts, clustering: {contains: customer_id}, requirePartitionFilter: true}, min: 1, desc: "Particionada, agrupada y con filtro de partición obligatorio"}
+  - name: Identidades y exposición
     validator: security
     points: 25
     critical: true
     all: true
     checks:
-      - {type: http, target: "run:orders-worker", path: /push, status: 403, desc: "The worker is private"}
-      - {type: iam, principal: "serviceAccount:worker-sa@{{.project}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: "dataset:analytics", desc: "The worker can write the analytics dataset"}
-      - {type: iam, principal: "serviceAccount:worker-sa@{{.project}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: project, expect: false, desc: "The worker cannot write other datasets"}
-      - {type: no_basic_roles, members: ["serviceAccount:worker-sa@{{.project}}.iam.gserviceaccount.com", "serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com", "serviceAccount:predictor-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
-  - name: Failure handling
+      - {type: http, target: "run:orders-worker", path: /push, status: 403, desc: "El worker es privado"}
+      - {type: iam, principal: "serviceAccount:worker-sa@{{.project}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: "dataset:analytics", desc: "El worker puede escribir en el dataset analytics"}
+      - {type: iam, principal: "serviceAccount:worker-sa@{{.project}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: project, expect: false, desc: "El worker no puede escribir en otros datasets"}
+      - {type: no_basic_roles, members: ["serviceAccount:worker-sa@{{.project}}.iam.gserviceaccount.com", "serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com", "serviceAccount:predictor-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos"}
+  - name: Gestión de fallos
     validator: reliability
     points: 10
     all: true
     checks:
-      - {type: exists, path: "subscriptions[\"orders-push\"]", expect: {deadLetterTopic: orders-dlq, maxDeliveryAttempts: {gte: 5}}, desc: "Dead-letter policy"}
-      - {type: exists, path: "subscriptions[\"orders-dlq-sub\"]", expect: {topic: orders-dlq}, desc: "Dead letters can be inspected"}
-  - name: Scoring
+      - {type: exists, path: "subscriptions[\"orders-push\"]", expect: {deadLetterTopic: orders-dlq, maxDeliveryAttempts: {gte: 5}}, desc: "Política de dead-letter"}
+      - {type: exists, path: "subscriptions[\"orders-dlq-sub\"]", expect: {topic: orders-dlq}, desc: "Se pueden inspeccionar los mensajes fallidos"}
+  - name: Puntuación
     validator: functional
     points: 15
     all: true
     checks:
-      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "predictor-sa"}}, min: 1, desc: "Model deployed as predictor-sa"}
-      - {type: count, collection: aiEndpoints, where: {modelMonitoring: true, predictionCount: {gte: 1}}, min: 1, desc: "Monitored and verified"}
-      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"acceleratorCount\":[1-9]"}}, max: 0, desc: "CPU only"}
-  - name: Design decisions
+      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "predictor-sa"}}, min: 1, desc: "Modelo desplegado como predictor-sa"}
+      - {type: count, collection: aiEndpoints, where: {modelMonitoring: true, predictionCount: {gte: 1}}, min: 1, desc: "Monitorizado y verificado"}
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"acceleratorCount\":[1-9]"}}, max: 0, desc: "Solo CPU"}
+  - name: Decisiones de diseño
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [design], keywords: [[dead-letter, dead letter, dlq], [partition, particion], [least privilege, service account, identity, identidad], [private, privado, invoker, oidc]], desc: "Design decisions explained"}
+      - {type: evidence, fields: [design], keywords: [[dead-letter, dead letter, dlq, mensajes fallidos, cola de errores], [partition, particion], [least privilege, service account, identity, identidad, minimo privilegio, cuenta de servicio], [private, privado, invoker, oidc, privad]], desc: "Decisiones de diseño explicadas"}
+en:
+  title: 'Capstone (Professional): an order analytics and churn-scoring platform'
+  summary: Build event ingestion into a cost-guarded warehouse and serve a model — private services, scoped identities, failure handling and a design you can defend.
+  story: |
+    The shop publishes every order to Pub/Sub. Build the platform that turns them into analytics and churn scores.
+
+    **Ingestion** — topic `orders`; a private Cloud Run service **`orders-worker`**
+    (`europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0`, env `BQ_TABLE=analytics.orders`) receives them
+    through an authenticated push subscription **`orders-push`** (path `/push`); poison messages go to `orders-dlq`
+    after 5 attempts.
+
+    **Warehouse** — dataset `analytics` in the EU; table `orders` partitioned by day on `order_ts`, clustered by
+    `customer_id`, and queries **must** filter on the partition (analysts have burned budget before).
+
+    **Scoring** — model `churn` (artifacts `gs://models-{{.project}}/churn/v3/`, image
+    `europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest`) on endpoint `churn-endpoint`, CPU only,
+    monitored, verified with `request.json`.
+
+    Each component has its own identity with the minimum access: the worker writes **only** to the `analytics`
+    dataset, the push identity can **only** invoke the worker. Document your design decisions.
+  objectives:
+    - Orders flow from Pub/Sub to the worker and are acknowledged
+    - Partitioned, clustered, partition-filter-enforced table in the EU
+    - Private worker, dataset-scoped writer identity, invoker-only push identity
+    - Dead-letter handling
+    - Monitored model endpoint serving a test prediction
+    - Design decisions documented
+  hints:
+    - Grant BigQuery access on the dataset (`bq add-iam-policy-binding`), not on the project.
+    - '`bq mk --table --time_partitioning_field=order_ts --clustering_fields=customer_id --require_partition_filter analytics.orders ...`'
+    - The Pub/Sub service agent needs publisher on the dead-letter topic; the push identity needs `roles/run.invoker` on the service.
+  text:
+    Ingesta: Ingestion
+    Los pedidos se entregan al worker y se confirman: Orders are delivered to the worker and acknowledged
+    Diseño del almacén de datos: Warehouse design
+    Dataset en la UE: Dataset in the EU
+    Particionada, agrupada y con filtro de partición obligatorio: Partitioned, clustered, partition filter required
+    Identidades y exposición: Identities and exposure
+    El worker es privado: The worker is private
+    El worker puede escribir en el dataset analytics: The worker can write the analytics dataset
+    El worker no puede escribir en otros datasets: The worker cannot write other datasets
+    Sin roles básicos: No basic roles
+    Gestión de fallos: Failure handling
+    Política de dead-letter: Dead-letter policy
+    Se pueden inspeccionar los mensajes fallidos: Dead letters can be inspected
+    Puntuación: Scoring
+    Modelo desplegado como predictor-sa: Model deployed as predictor-sa
+    Monitorizado y verificado: Monitored and verified
+    Solo CPU: CPU only
+    Decisiones de diseño: Design decisions
+    Decisiones de diseño explicadas: Design decisions explained

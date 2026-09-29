@@ -1,6 +1,6 @@
 id: sec-s01-leaked-key
-title: "SEC P1: a service-account key leaked on GitHub"
-summary: Respond to a leaked key end to end — preserve evidence, contain, remove the attacker's persistence, prevent recurrence and report.
+title: "SEC P1: se ha filtrado en GitHub una clave de cuenta de servicio"
+summary: 'Responde de principio a fin a una clave filtrada: conserva las evidencias, contén, elimina la persistencia del atacante, evita que se repita e informa.'
 track: security
 day: 1
 level: advanced
@@ -36,52 +36,52 @@ ticket:
   kind: SEC
   priority: P1
   sla: 30m
-  summary: "GitHub reported our CI service-account key in a public repo. Billing shows GPU usage we don't recognise."
-  impact: Unknown access with a deployment identity; GPU costs accumulating every hour.
-  reporter: Security Command Center / GitHub secret scanning
+  summary: "GitHub ha detectado la clave de la cuenta de servicio de nuestra CI en un repositorio público. La facturación muestra un uso de GPU que no reconocemos."
+  impact: Acceso desconocido con una identidad de despliegue; los costes de GPU se acumulan cada hora.
+  reporter: Security Command Center / secret scanning de GitHub
 actors:
   - role: developer
-    name: Tom (CI owner)
-    persona: maintains the GitHub Actions pipeline
-    fallback: "The pipeline deploys web-1 with ci-deployer. Please don't delete the service account, releases depend on it."
+    name: Tom (responsable de la CI)
+    persona: mantiene el pipeline de GitHub Actions
+    fallback: "El pipeline despliega web-1 con ci-deployer. Por favor, no borréis la cuenta de servicio: las publicaciones dependen de ella."
     facts:
-      - {keywords: [[key, clave, json, github, repo]], answer: "I pushed ci-scripts to a public repo by mistake last night — deploy/key.json was in it. That's the only key I created."}
-      - {keywords: [[gke, worker, instance, vm, gpu]], answer: "We don't run GKE or GPUs in this project. Only web-1."}
+      - {keywords: [[key, clave, json, github, repo]], answer: "Anoche subí por error ci-scripts a un repositorio público, y deploy/key.json estaba dentro. Es la única clave que he creado."}
+      - {keywords: [[gke, worker, instance, vm, gpu, instancia]], answer: "En este proyecto no usamos GKE ni GPU. Solo web-1."}
   - role: security
-    name: Aisha (security)
-    persona: incident commander
-    fallback: "Order matters: preserve evidence, contain, eradicate, then recover and prevent."
+    name: Aisha (seguridad)
+    persona: responsable del incidente
+    fallback: "El orden importa: conservar las evidencias, contener, erradicar y después recuperar y prevenir."
     facts:
-      - {keywords: [[evidence, forense, disk, disco, snapshot]], answer: "Snapshot the attacker's boot disk before you delete anything — deleting the VM deletes its boot disk."}
-      - {keywords: [[persist, backdoor, iam, user, usuario, access]], answer: "Attackers with a deployment key usually add themselves somewhere so they can come back. Check the IAM policy and the audit log for SetIamPolicy."}
-      - {keywords: [[prevent, policy, politica, again, future]], answer: "We want the org policy that forbids new service-account keys on this project. The pipeline can move to Workload Identity Federation."}
+      - {keywords: [[evidence, forense, disk, disco, snapshot, evidencia, prueba]], answer: "Haz un snapshot del disco de arranque del atacante antes de borrar nada: al borrar la VM se borra su disco de arranque."}
+      - {keywords: [[persist, backdoor, iam, user, usuario, access, puerta trasera, acceso]], answer: "Los atacantes con una clave de despliegue suelen darse acceso en algún sitio para poder volver. Revisa la política de IAM y el registro de auditoría en busca de SetIamPolicy."}
+      - {keywords: [[prevent, policy, politica, again, future, preven, evitar, de nuevo, otra vez, futur]], answer: "Queremos la política de organización que prohíbe nuevas claves de cuentas de servicio en este proyecto. El pipeline puede pasar a Workload Identity Federation."}
   - role: finance
     name: Marta (FinOps)
-    fallback: "Every hour those GPUs run costs us real money."
+    fallback: "Cada hora que funcionan esas GPU nos cuesta dinero de verdad."
 story: |
-  GitHub secret scanning found the key of **ci-deployer** in a public repository (see `secret-scanning-alert.txt`),
-  and billing shows GPU usage nobody recognises. You are the incident responder.
+  El secret scanning de GitHub ha encontrado la clave de **ci-deployer** en un repositorio público (mira `secret-scanning-alert.txt`),
+  y la facturación muestra un uso de GPU que nadie reconoce. Eres quien responde al incidente.
 
-  Work like a professional: **preserve evidence first**, then contain, remove every foothold the attacker left,
-  keep the business running (`web-1`, and the `ci-deployer` identity the pipeline needs), prevent recurrence,
-  and keep stakeholders informed.
-constraints: [protect:web-1]
+  Trabaja como un profesional: **conserva primero las evidencias**, después contén, elimina todos los puntos de apoyo que dejó el atacante,
+  mantén el negocio en marcha (`web-1` y la identidad `ci-deployer` que necesita el pipeline), evita que se repita
+  y mantén informadas a las partes interesadas.
+constraints: ['protect:web-1']
 objectives:
-  - Identify what the leaked identity did (audit logs, findings)
-  - Snapshot the attacker's disk, then remove the attacker's workloads
-  - Revoke the leaked key without breaking the pipeline identity
-  - Remove any persistence the attacker added
-  - Prevent new service-account keys on this project
-  - Update the ticket and write the postmortem
+  - Identifica qué hizo la identidad filtrada (registros de auditoría, hallazgos)
+  - Haz un snapshot del disco del atacante y después elimina sus cargas
+  - Revoca la clave filtrada sin romper la identidad del pipeline
+  - Elimina cualquier persistencia que haya añadido el atacante
+  - Impide nuevas claves de cuentas de servicio en este proyecto
+  - Actualiza el ticket y escribe el post-mortem
 hints:
-  - text: "`gcloud logging read 'logName:cloudaudit protoPayload.authenticationInfo.principalEmail:ci-deployer'` shows everything the key did — not only instance creation."
-  - text: "Names lie: find the attacker's VM by who created it, its GPUs and its startup script, not by its name."
-  - text: "`gcloud compute disks snapshot DISK --zone=ZONE` before `instances delete`; `resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --project=...` to prevent recurrence."
+  - text: "`gcloud logging read 'logName:cloudaudit protoPayload.authenticationInfo.principalEmail:ci-deployer'` muestra todo lo que hizo la clave, no solo la creación de instancias."
+  - text: "Los nombres mienten: encuentra la VM del atacante por quién la creó, sus GPU y su script de arranque, no por su nombre."
+  - text: "`gcloud compute disks snapshot DISCO --zone=ZONA` antes de `instances delete`; `resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --project=...` para evitar que se repita."
 evidence:
   fields: [rootCause, postmortem]
   sample:
-    rootCause: "The ci-deployer service-account key was committed to a public GitHub repository; the attacker used the leaked key from 185.220.101.7 to create a GPU cryptomining VM disguised as a GKE worker and granted roles/editor to an external user for persistence."
-    postmortem: "Timeline: 21:58 repo made public, 22:02 key pushed, 22:14 key used to create the miner and add the external editor, 08:00 alert. Impact: GPU cost and editor access for an external account. Response: snapshot for forensics, miner deleted, key revoked, backdoor binding removed. Action items: org policy forbidding keys, Workload Identity Federation for CI, secret scanning pre-commit hooks."
+    rootCause: "La clave de la cuenta de servicio ci-deployer se subió a un repositorio público de GitHub; el atacante usó la clave filtrada desde 185.220.101.7 para crear una VM de minado de criptomonedas con GPU disfrazada de worker de GKE y concedió roles/editor a un usuario externo para tener persistencia."
+    postmortem: "Cronología: 21:58 el repositorio se hace público, 22:02 se sube la clave, 22:14 se usa la clave para crear el minero y añadir el editor externo, 08:00 alerta. Impacto: coste de GPU y acceso de editor para una cuenta externa. Respuesta: snapshot para análisis forense, minero borrado, clave revocada, binding de puerta trasera eliminado. Acciones: política de organización que prohíba las claves, Workload Identity Federation para la CI y hooks de pre-commit con detección de secretos."
 solution: |
   cat secret-scanning-alert.txt
   gcloud scc findings list --format='table(category,severity,resourceName)'
@@ -110,42 +110,99 @@ shortcuts:
       gcloud iam service-accounts keys delete $(gcloud iam service-accounts keys list --iam-account=ci-deployer@{{.project}}.iam.gserviceaccount.com --format='value(name)' --limit=1) --iam-account=ci-deployer@{{.project}}.iam.gserviceaccount.com --quiet
       ticket update "Miner deleted and key revoked."
 rubric:
-  - name: Evidence preserved
+  - name: Evidencias conservadas
     validator: diagnosis
     points: 15
     checks:
-      - {type: count, collection: snapshots, where: {sourceDisk: {eq: "gke-worker-{{.suffix}}"}}, min: 1, desc: "The attacker's disk was snapshotted for forensics"}
-  - name: Contained
+      - {type: count, collection: snapshots, where: {sourceDisk: {eq: "gke-worker-{{.suffix}}"}}, min: 1, desc: "Se ha hecho un snapshot del disco del atacante para el análisis forense"}
+  - name: Contenido
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: finding_absent, category: CRYPTOMINING_SUSPECTED, desc: "Attacker workload removed"}
-      - {type: finding_absent, category: LEAKED_SERVICE_ACCOUNT_KEY, desc: "Leaked key revoked"}
-  - name: Persistence removed
+      - {type: finding_absent, category: CRYPTOMINING_SUSPECTED, desc: "Carga del atacante eliminada"}
+      - {type: finding_absent, category: LEAKED_SERVICE_ACCOUNT_KEY, desc: "Clave filtrada revocada"}
+  - name: Persistencia eliminada
     validator: security
     points: 20
     critical: true
     checks:
-      - {type: iam, principal: "user:ci-backup@proton.example", permission: resourcemanager.projects.get, resource: project, expect: false, desc: "No access left for the attacker's account"}
-  - name: Recurrence prevented
+      - {type: iam, principal: "user:ci-backup@proton.example", permission: resourcemanager.projects.get, resource: project, expect: false, desc: "La cuenta del atacante ya no tiene acceso"}
+  - name: Se evita que se repita
     validator: security
     points: 10
     checks:
-      - {type: org_policy, constraint: iam.disableServiceAccountKeyCreation, desc: "New service-account keys are blocked on the project"}
-  - name: Business intact
+      - {type: org_policy, constraint: iam.disableServiceAccountKeyCreation, desc: "Las nuevas claves de cuentas de servicio están bloqueadas en el proyecto"}
+  - name: Negocio intacto
     validator: functional
     points: 10
     critical: true
     all: true
     checks:
-      - {type: exists, path: "instances[\"web-1\"]", expect: {status: RUNNING}, desc: "web-1 still running"}
-      - {type: exists, path: "serviceAccounts[\"ci-deployer@{{.project}}.iam.gserviceaccount.com\"]", desc: "The pipeline identity still exists"}
-  - name: Communication & postmortem
+      - {type: exists, path: "instances[\"web-1\"]", expect: {status: RUNNING}, desc: "web-1 sigue en marcha"}
+      - {type: exists, path: "serviceAccounts[\"ci-deployer@{{.project}}.iam.gserviceaccount.com\"]", desc: "La identidad del pipeline sigue existiendo"}
+  - name: Comunicación y post-mortem
     validator: evidence
     points: 15
     checks:
-      - {type: ticket_update, desc: "Stakeholder update"}
-      - {type: evidence, fields: [rootCause], keywords: [[key, clave], [github, repo, public, publico]], desc: "Root cause"}
-      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto], [action, accion, prevent]], desc: "Postmortem"}
+      - {type: ticket_update, desc: "Actualización para las partes interesadas"}
+      - {type: evidence, fields: [rootCause], keywords: [[key, clave], [github, repo, public, publico]], desc: "Causa raíz"}
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto], [action, accion, prevent, preven, evitar]], desc: "Post-mortem"}
+en:
+  title: 'SEC P1: a service-account key leaked on GitHub'
+  summary: Respond to a leaked key end to end — preserve evidence, contain, remove the attacker's persistence, prevent recurrence and report.
+  story: |
+    GitHub secret scanning found the key of **ci-deployer** in a public repository (see `secret-scanning-alert.txt`),
+    and billing shows GPU usage nobody recognises. You are the incident responder.
+
+    Work like a professional: **preserve evidence first**, then contain, remove every foothold the attacker left,
+    keep the business running (`web-1`, and the `ci-deployer` identity the pipeline needs), prevent recurrence,
+    and keep stakeholders informed.
+  objectives:
+    - Identify what the leaked identity did (audit logs, findings)
+    - Snapshot the attacker's disk, then remove the attacker's workloads
+    - Revoke the leaked key without breaking the pipeline identity
+    - Remove any persistence the attacker added
+    - Prevent new service-account keys on this project
+    - Update the ticket and write the postmortem
+  hints:
+    - '`gcloud logging read ''logName:cloudaudit protoPayload.authenticationInfo.principalEmail:ci-deployer''` shows everything the key did — not only instance creation.'
+    - 'Names lie: find the attacker''s VM by who created it, its GPUs and its startup script, not by its name.'
+    - '`gcloud compute disks snapshot DISK --zone=ZONE` before `instances delete`; `resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --project=...` to prevent recurrence.'
+  ticket:
+    summary: GitHub reported our CI service-account key in a public repo. Billing shows GPU usage we don't recognise.
+    impact: Unknown access with a deployment identity; GPU costs accumulating every hour.
+  text:
+    Evidencias conservadas: Evidence preserved
+    Se ha hecho un snapshot del disco del atacante para el análisis forense: The attacker's disk was snapshotted for forensics
+    Contenido: Contained
+    Carga del atacante eliminada: Attacker workload removed
+    Clave filtrada revocada: Leaked key revoked
+    Persistencia eliminada: Persistence removed
+    La cuenta del atacante ya no tiene acceso: No access left for the attacker's account
+    Se evita que se repita: Recurrence prevented
+    Las nuevas claves de cuentas de servicio están bloqueadas en el proyecto: New service-account keys are blocked on the project
+    Negocio intacto: Business intact
+    web-1 sigue en marcha: web-1 still running
+    La identidad del pipeline sigue existiendo: The pipeline identity still exists
+    Comunicación y post-mortem: Communication & postmortem
+    Actualización para las partes interesadas: Stakeholder update
+    Causa raíz: Root cause
+    Post-mortem: Postmortem
+    Security Command Center / secret scanning de GitHub: Security Command Center / GitHub secret scanning
+    Tom (responsable de la CI): Tom (CI owner)
+    mantiene el pipeline de GitHub Actions: maintains the GitHub Actions pipeline
+    'El pipeline despliega web-1 con ci-deployer. Por favor, no borréis la cuenta de servicio: las publicaciones dependen de ella.': The pipeline deploys web-1 with ci-deployer. Please don't delete the service account, releases depend on it.
+    Anoche subí por error ci-scripts a un repositorio público, y deploy/key.json estaba dentro. Es la única clave que he creado.: I pushed ci-scripts to a public repo by mistake last night — deploy/key.json was in it. That's the only key I created.
+    En este proyecto no usamos GKE ni GPU. Solo web-1.: We don't run GKE or GPUs in this project. Only web-1.
+    Aisha (seguridad): Aisha (security)
+    responsable del incidente: incident commander
+    'El orden importa: conservar las evidencias, contener, erradicar y después recuperar y prevenir.': 'Order matters: preserve evidence, contain, eradicate, then recover and prevent.'
+    'Haz un snapshot del disco de arranque del atacante antes de borrar nada: al borrar la VM se borra su disco de arranque.': Snapshot the attacker's boot disk before you delete anything — deleting the VM deletes its boot disk.
+    ? Los atacantes con una clave de despliegue suelen darse acceso en algún sitio para poder volver. Revisa la política de IAM y el registro de auditoría en busca de SetIamPolicy.
+    : Attackers with a deployment key usually add themselves somewhere so they can come back. Check the IAM policy and the audit log for SetIamPolicy.
+    ? Queremos la política de organización que prohíbe nuevas claves de cuentas de servicio en este proyecto. El pipeline puede pasar a Workload Identity Federation.
+    : We want the org policy that forbids new service-account keys on this project. The pipeline can move to Workload Identity Federation.
+    Marta (FinOps): Marta (FinOps)
+    Cada hora que funcionan esas GPU nos cuesta dinero de verdad.: Every hour those GPUs run costs us real money.

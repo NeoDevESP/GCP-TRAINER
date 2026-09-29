@@ -1,6 +1,6 @@
 id: cap-junior-secure-app
-title: "Capstone (Junior): ship a small app securely and observably"
-summary: Deploy a simple application with its own identity, private data, least privilege, logging-based alerting and a budget — the Junior Cloud Engineer rite of passage.
+title: "Proyecto final (junior): publicar una aplicación pequeña de forma segura y observable"
+summary: 'Despliega una aplicación sencilla con su propia identidad, datos privados, mínimo privilegio, alertas basadas en registros y un presupuesto: el rito de paso del Junior Cloud Engineer.'
 track: capstones
 day: 1
 level: intermediate
@@ -14,24 +14,24 @@ difficulty: 3
 minutes: 90
 baseline: [empty]
 story: |
-  The marketing team needs a small **reports** service in `{{.project}}`:
+  El equipo de marketing necesita un pequeño servicio de **informes** en `{{.project}}`:
 
-  - Cloud Run service `reports` (image `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) in {{.region}},
-    public, reading report files from a **private** bucket `gs://reports-{{.project}}` (env `BUCKET`)
-  - the service runs as its own service account `reports-sa` that can **only read** that bucket
-  - upload `q3.csv` to `gs://reports-{{.project}}/data/report.csv`
-  - observability: a log-based metric `reports-5xx` for its HTTP 5xx and an alert policy on it that notifies
-    an email channel `oncall@gcplab.dev`
-  - a budget of 50 EUR with alerts at 50/90/100%
+  - servicio de Cloud Run `reports` (imagen `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) en {{.region}},
+    público, que lea los archivos de informes de un bucket **privado** `gs://reports-{{.project}}` (variable `BUCKET`)
+  - el servicio se ejecuta con su propia cuenta de servicio `reports-sa`, que **solo puede leer** ese bucket
+  - sube `q3.csv` a `gs://reports-{{.project}}/data/report.csv`
+  - observabilidad: una métrica basada en registros `reports-5xx` para sus HTTP 5xx y una política de alertas sobre ella que avise
+    a un canal de correo `oncall@gcplab.dev`
+  - un presupuesto de 50 EUR con alertas al 50/90/100 %
 files:
   q3.csv: |
     region,revenue
     EU,120000
 objectives:
-  - Deploy the service with its own identity
-  - Private data with read-only access for the service
-  - Alerting on errors with a notification channel
-  - Cost guardrail
+  - Despliega el servicio con su propia identidad
+  - Datos privados con acceso de solo lectura para el servicio
+  - Alertas sobre errores con un canal de notificación
+  - Barrera de costes
 solution: |
   gcloud storage buckets create gs://reports-{{.project}} --location={{.region}} --uniform-bucket-level-access --public-access-prevention
   gcloud storage cp q3.csv gs://reports-{{.project}}/data/report.csv
@@ -46,37 +46,70 @@ solution: |
 evidence:
   fields: [explanation]
   sample:
-    explanation: reports runs on Cloud Run as reports-sa, which only has objectViewer on the private reports bucket; a log-based metric counts 5xx and an alert notifies the oncall email channel; a 50 EUR budget alerts at 50, 90 and 100 percent.
+    explanation: reports se ejecuta en Cloud Run como reports-sa, que solo tiene objectViewer sobre el bucket privado de informes; una métrica basada en registros cuenta los 5xx y una alerta avisa al canal de correo oncall; un presupuesto de 50 EUR alerta al 50, 90 y 100 por ciento.
 rubric:
-  - name: Service works
+  - name: El servicio funciona
     validator: functional
     points: 25
     checks:
-      - {type: http, target: "run:reports", path: /reports, status: 200, desc: "/reports serves the data"}
-  - name: Identity and data
+      - {type: http, target: "run:reports", path: /reports, status: 200, desc: "/reports sirve los datos"}
+  - name: Identidad y datos
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: exists, path: "runServices.reports", expect: {serviceAccount: "reports-sa@{{.project}}.iam.gserviceaccount.com"}, desc: "Runs as reports-sa"}
-      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.create, resource: "bucket:reports-{{.project}}/data/x.csv", expect: false, desc: "Read-only access"}
-      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "Data is private"}
-      - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles"}
-  - name: Observability
+      - {type: exists, path: "runServices.reports", expect: {serviceAccount: "reports-sa@{{.project}}.iam.gserviceaccount.com"}, desc: "Se ejecuta como reports-sa"}
+      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.create, resource: "bucket:reports-{{.project}}/data/x.csv", expect: false, desc: "Acceso de solo lectura"}
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "Los datos son privados"}
+      - {type: no_basic_roles, members: ["serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos"}
+  - name: Observabilidad
     validator: state
     points: 25
     all: true
     checks:
-      - {type: log_metric, filterContains: ["httpRequest.status>=500"], desc: "5xx log-based metric"}
-      - {type: alert_policy, filterContains: "logging.googleapis.com/user/reports-5xx", channel: true, desc: "Alert with a notification channel"}
-  - name: Cost guardrail
+      - {type: log_metric, filterContains: ["httpRequest.status>=500"], desc: "Métrica de 5xx basada en registros"}
+      - {type: alert_policy, filterContains: "logging.googleapis.com/user/reports-5xx", channel: true, desc: "Alerta con un canal de notificación"}
+  - name: Barrera de costes
     validator: cost
     points: 10
     checks:
-      - {type: exists, path: "budgets[\"reports-budget\"]", expect: {amount: 50, thresholds: {minLen: 3}}, desc: "Budget with thresholds"}
-  - name: Explanation
+      - {type: exists, path: "budgets[\"reports-budget\"]", expect: {amount: 50, thresholds: {minLen: 3}}, desc: "Presupuesto con umbrales"}
+  - name: Explicación
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[service account, cuenta de servicio, identity], [alert, alerta], [budget, presupuesto]], desc: "Explain the setup"}
+      - {type: evidence, fields: [explanation], keywords: [[service account, cuenta de servicio, identity, identidad], [alert, alerta], [budget, presupuesto]], desc: "Explica la configuración"}
+en:
+  title: 'Capstone (Junior): ship a small app securely and observably'
+  summary: Deploy a simple application with its own identity, private data, least privilege, logging-based alerting and a budget — the Junior Cloud Engineer rite of passage.
+  story: |
+    The marketing team needs a small **reports** service in `{{.project}}`:
+
+    - Cloud Run service `reports` (image `europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0`) in {{.region}},
+      public, reading report files from a **private** bucket `gs://reports-{{.project}}` (env `BUCKET`)
+    - the service runs as its own service account `reports-sa` that can **only read** that bucket
+    - upload `q3.csv` to `gs://reports-{{.project}}/data/report.csv`
+    - observability: a log-based metric `reports-5xx` for its HTTP 5xx and an alert policy on it that notifies
+      an email channel `oncall@gcplab.dev`
+    - a budget of 50 EUR with alerts at 50/90/100%
+  objectives:
+    - Deploy the service with its own identity
+    - Private data with read-only access for the service
+    - Alerting on errors with a notification channel
+    - Cost guardrail
+  text:
+    El servicio funciona: Service works
+    /reports sirve los datos: /reports serves the data
+    Identidad y datos: Identity and data
+    Se ejecuta como reports-sa: Runs as reports-sa
+    Acceso de solo lectura: Read-only access
+    Los datos son privados: Data is private
+    Sin roles básicos: No basic roles
+    Observabilidad: Observability
+    Métrica de 5xx basada en registros: 5xx log-based metric
+    Alerta con un canal de notificación: Alert with a notification channel
+    Barrera de costes: Cost guardrail
+    Presupuesto con umbrales: Budget with thresholds
+    Explicación: Explanation
+    Explica la configuración: Explain the setup

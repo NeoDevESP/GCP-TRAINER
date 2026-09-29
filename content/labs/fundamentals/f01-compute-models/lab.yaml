@@ -1,6 +1,6 @@
 id: fundamentals-f01-compute-models
-title: "IT fundamentals: VM, container or serverless?"
-summary: Run the same web app as a VM and as a serverless container, compare what you manage and what you pay, and choose deliberately.
+title: "Fundamentos de TI: ¿VM, contenedor o serverless?"
+summary: Ejecuta la misma aplicación web en una VM y como contenedor serverless, compara lo que gestionas y lo que pagas, y elige con criterio.
 track: foundations
 day: 1
 level: basic
@@ -14,43 +14,81 @@ difficulty: 1
 minutes: 30
 baseline: [default-network]
 story: |
-  **Learn mode.** The same `hello` web app can run on a **virtual machine** (you manage the OS) or as a
-  **serverless container** on Cloud Run (Google manages servers, scaling to zero).
+  **Modo aprendizaje.** La misma aplicación web `hello` puede ejecutarse en una **máquina virtual** (tú gestionas el sistema operativo) o como
+  **contenedor serverless** en Cloud Run (Google gestiona los servidores y escala a cero).
 
-  1. Create VM `hello-vm` (e2-small, tag `web`) whose startup script installs `nginx`, and open tcp:80 to it.
-  2. Deploy Cloud Run service `hello-run` from `europe-docker.pkg.dev/gcplab-public/apps/hello:1.0` (public).
-  3. Compare `gcloud billing estimate` and answer the questions.
+  1. Crea la VM `hello-vm` (e2-small, etiqueta `web`) con un script de arranque que instale `nginx` y ábrele tcp:80.
+  2. Despliega el servicio de Cloud Run `hello-run` desde `europe-docker.pkg.dev/gcplab-public/apps/hello:1.0` (público).
+  3. Compara `gcloud billing estimate` y responde a las preguntas.
 objectives:
-  - Run a workload on a VM and on serverless
-  - Understand the responsibility split
-  - Compare cost behaviour at idle
+  - Ejecuta una carga en una VM y en serverless
+  - Entiende el reparto de responsabilidades
+  - Compara el comportamiento del coste en reposo
 quiz:
-  - {id: q1, question: "Who patches the operating system of hello-vm?", options: ["Google", "You", "Nobody — it is immutable", "The load balancer"], answer: [1]}
-  - {id: q2, question: "What does hello-run cost when it receives no traffic (min instances 0)?", options: ["The same as the VM", "Close to nothing: it scales to zero", "It cannot scale to zero", "Double"], answer: [1]}
-  - {id: q3, question: "When is a VM the better choice?", options: ["Always", "When you need OS-level control, special software or long-running stateful processes", "For bursty HTTP APIs", "Never"], answer: [1]}
+  - {id: q1, question: "¿Quién aplica los parches al sistema operativo de hello-vm?", options: ["Google", "Tú", "Nadie: es inmutable", "El balanceador de carga"], answer: [1]}
+  - {id: q2, question: "¿Cuánto cuesta hello-run cuando no recibe tráfico (mínimo de instancias 0)?", options: ["Lo mismo que la VM", "Casi nada: escala a cero", "No puede escalar a cero", "El doble"], answer: [1]}
+  - {id: q3, question: "¿Cuándo es mejor opción una VM?", options: ["Siempre", "Cuando necesitas control del sistema operativo, software especial o procesos con estado de larga duración", "Para API HTTP con picos de tráfico", "Nunca"], answer: [1]}
 solution: |
   gcloud compute firewall-rules create allow-web --network=default --allow=tcp:80 --source-ranges=0.0.0.0/0 --target-tags=web
   gcloud compute instances create hello-vm --zone={{.zone}} --machine-type=e2-small --tags=web --metadata=startup-script='apt-get install -y nginx'
   gcloud run deploy hello-run --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --allow-unauthenticated
   gcloud billing estimate
 rubric:
-  - name: VM workload
+  - name: Carga en VM
     validator: functional
     points: 25
     checks:
-      - {type: http, target: "vm:hello-vm:80", path: /, status: 200, desc: "VM serves the page"}
-  - name: Serverless workload
+      - {type: http, target: "vm:hello-vm:80", path: /, status: 200, desc: "La VM sirve la página"}
+  - name: Carga serverless
     validator: functional
     points: 25
     checks:
-      - {type: http, target: "run:hello-run", path: /, status: 200, desc: "Cloud Run serves the page"}
-  - name: Compared
+      - {type: http, target: "run:hello-run", path: /, status: 200, desc: "Cloud Run sirve la página"}
+  - name: Comparado
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "billing estimate", desc: "Compared costs"}
-  - name: Concepts
+      - {type: command, regex: "billing estimate", desc: "Costes comparados"}
+  - name: Conceptos
     validator: quiz
     points: 40
     checks:
-      - {type: quiz, ratio: 1, desc: "Responsibility and cost questions"}
+      - {type: quiz, ratio: 1, desc: "Preguntas de responsabilidad y coste"}
+en:
+  title: 'IT fundamentals: VM, container or serverless?'
+  summary: Run the same web app as a VM and as a serverless container, compare what you manage and what you pay, and choose deliberately.
+  story: |
+    **Learn mode.** The same `hello` web app can run on a **virtual machine** (you manage the OS) or as a
+    **serverless container** on Cloud Run (Google manages servers, scaling to zero).
+
+    1. Create VM `hello-vm` (e2-small, tag `web`) whose startup script installs `nginx`, and open tcp:80 to it.
+    2. Deploy Cloud Run service `hello-run` from `europe-docker.pkg.dev/gcplab-public/apps/hello:1.0` (public).
+    3. Compare `gcloud billing estimate` and answer the questions.
+  objectives:
+    - Run a workload on a VM and on serverless
+    - Understand the responsibility split
+    - Compare cost behaviour at idle
+  text:
+    ¿Quién aplica los parches al sistema operativo de hello-vm?: Who patches the operating system of hello-vm?
+    Google: Google
+    Tú: You
+    'Nadie: es inmutable': Nobody — it is immutable
+    El balanceador de carga: The load balancer
+    ¿Cuánto cuesta hello-run cuando no recibe tráfico (mínimo de instancias 0)?: What does hello-run cost when it receives no traffic (min instances 0)?
+    Lo mismo que la VM: The same as the VM
+    'Casi nada: escala a cero': 'Close to nothing: it scales to zero'
+    No puede escalar a cero: It cannot scale to zero
+    El doble: Double
+    ¿Cuándo es mejor opción una VM?: When is a VM the better choice?
+    Siempre: Always
+    Cuando necesitas control del sistema operativo, software especial o procesos con estado de larga duración: When you need OS-level control, special software or long-running stateful processes
+    Para API HTTP con picos de tráfico: For bursty HTTP APIs
+    Nunca: Never
+    Carga en VM: VM workload
+    La VM sirve la página: VM serves the page
+    Carga serverless: Serverless workload
+    Cloud Run sirve la página: Cloud Run serves the page
+    Comparado: Compared
+    Costes comparados: Compared costs
+    Conceptos: Concepts
+    Preguntas de responsabilidad y coste: Responsibility and cost questions

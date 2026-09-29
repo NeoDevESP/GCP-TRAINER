@@ -1,6 +1,6 @@
 id: devops-tf01-drift-import
-title: "Terraform Challenge: drift, import and a dangerous rename"
-summary: Reconcile Terraform with reality — detect console drift, adopt a hand-made bucket, prevent a mass destruction caused by a rename and protect the network.
+title: "Reto de Terraform: deriva, importación y un renombrado peligroso"
+summary: 'Reconcilia Terraform con la realidad: detecta la deriva hecha desde la consola, adopta un bucket creado a mano, evita una destrucción masiva causada por un renombrado y protege la red.'
 track: devops
 day: 1
 level: advanced
@@ -92,27 +92,27 @@ ticket:
   id: CHG-512
   kind: CHG
   priority: P2
-  summary: "Merge PR #412 (rename network resource, manage the logs bucket) and bring prod back in line with Terraform. Last night ops hot-fixed something in the console."
-  reporter: Kai (platform team)
+  summary: "Fusiona la PR #412 (renombrar el recurso de red, gestionar el bucket de logs) y vuelve a alinear prod con Terraform. Anoche operaciones hizo un arreglo rápido desde la consola."
+  reporter: Kai (equipo de plataforma)
 story: |
-  The state lives in `gs://tfstate-{{.project}}` (prefix `prod`). PR #412 renames `google_compute_network.main`
-  to `google_compute_network.vpc` and adds the **existing** bucket `logs-{{.project}}`, created by hand last year.
-  Last night someone changed a firewall rule in the console.
+  El estado vive en `gs://tfstate-{{.project}}` (prefijo `prod`). La PR #412 renombra `google_compute_network.main`
+  a `google_compute_network.vpc` y añade el bucket **existente** `logs-{{.project}}`, creado a mano el año pasado.
+  Anoche alguien cambió una regla de cortafuegos desde la consola.
 
-  Get to a clean `terraform plan` **without destroying or recreating anything** that exists, revert the
-  console drift, and make sure nobody can destroy the production network by accident again.
+  Consigue un `terraform plan` limpio **sin destruir ni recrear nada** de lo que existe, revierte la
+  deriva de la consola y asegúrate de que nadie pueda volver a destruir la red de producción por accidente.
 objectives:
-  - Detect drift before changing anything
-  - Avoid destroy/recreate caused by the rename (state operations)
-  - Adopt the hand-made bucket (import)
-  - Revert the drift in place and protect the network
+  - Detecta la deriva antes de cambiar nada
+  - Evita destruir y recrear por culpa del renombrado (operaciones de estado)
+  - Adopta el bucket creado a mano (import)
+  - Revierte la deriva en su sitio y protege la red
 hints:
-  - text: "`terraform plan -refresh-only` shows what changed outside Terraform; read the full plan before applying."
-  - text: "`terraform state mv OLD NEW` and `terraform import ADDR ID`; `lifecycle { prevent_destroy = true }`."
+  - text: "`terraform plan -refresh-only` muestra lo que ha cambiado fuera de Terraform; lee el plan completo antes de aplicar."
+  - text: "`terraform state mv ANTIGUA NUEVA` y `terraform import DIRECCIÓN ID`; `lifecycle { prevent_destroy = true }`."
 evidence:
   fields: [explanation]
   sample:
-    explanation: The rename would destroy and recreate prod-net, so I moved the state address with terraform state mv; I imported the existing logs bucket instead of creating it; the refresh-only plan showed allow-ssh-iap opened to 0.0.0.0/0 in the console, which apply reverted in place; prevent_destroy now protects the network.
+    explanation: El renombrado habría destruido y recreado prod-net, así que moví la dirección en el estado con terraform state mv; importé el bucket de logs existente en lugar de crearlo; el plan refresh-only mostró allow-ssh-iap abierta a 0.0.0.0/0 desde la consola, y el apply la revirtió en su sitio; ahora prevent_destroy protege la red.
 solution: |
   terraform init
   terraform plan -refresh-only
@@ -162,37 +162,73 @@ solution: |
   terraform apply -auto-approve
   terraform plan
 rubric:
-  - name: Clean plan
+  - name: Plan limpio
     validator: state
     points: 25
     checks:
-      - {type: terraform_clean, minResources: 4, desc: "terraform plan shows no changes"}
-  - name: Nothing destroyed
+      - {type: terraform_clean, minResources: 4, desc: "terraform plan no muestra cambios"}
+  - name: No se ha destruido nada
     validator: security
     points: 25
     critical: true
     all: true
     checks:
-      - {type: log_contains, filter: "protoPayload.methodName:networks.delete OR protoPayload.methodName:buckets.delete", min: 1, not: true, desc: "No network or bucket was deleted"}
-      - {type: tf_state, address: google_compute_network.vpc, desc: "State tracks the renamed network"}
-      - {type: tf_state, address: google_storage_bucket.logs, desc: "Existing bucket imported"}
-  - name: Drift reverted
+      - {type: log_contains, filter: "protoPayload.methodName:networks.delete OR protoPayload.methodName:buckets.delete", min: 1, not: true, desc: "No se ha borrado ninguna red ni bucket"}
+      - {type: tf_state, address: google_compute_network.vpc, desc: "El estado sigue a la red renombrada"}
+      - {type: tf_state, address: google_storage_bucket.logs, desc: "Bucket existente importado"}
+  - name: Deriva revertida
     validator: security
     points: 20
     checks:
-      - {type: exists, path: "firewalls[\"allow-ssh-iap\"]", expect: {sourceRanges: ["35.235.240.0/20"]}, desc: "SSH only from IAP again"}
-  - name: Guardrail
+      - {type: exists, path: "firewalls[\"allow-ssh-iap\"]", expect: {sourceRanges: ["35.235.240.0/20"]}, desc: "SSH de nuevo solo desde IAP"}
+  - name: Barrera de seguridad
     validator: state
     points: 10
     checks:
-      - {type: file_contains, file: main.tf, regex: "prevent_destroy\\s*=\\s*true", desc: "Network protected with prevent_destroy"}
-  - name: Drift detected first
+      - {type: file_contains, file: main.tf, regex: "prevent_destroy\\s*=\\s*true", desc: "Red protegida con prevent_destroy"}
+  - name: Deriva detectada primero
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "terraform plan", min: 2, desc: "Planned before applying"}
-  - name: Explanation
+      - {type: command, regex: "terraform plan", min: 2, desc: "Planificado antes de aplicar"}
+  - name: Explicación
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[state mv, rename, move], [import], [drift, console, refresh]], desc: "Explain the operations"}
+      - {type: evidence, fields: [explanation], keywords: [[state mv, rename, move, renombr, mover, mueve, movi], [import], [drift, console, refresh, deriva]], desc: "Explica las operaciones"}
+en:
+  title: 'Terraform Challenge: drift, import and a dangerous rename'
+  summary: Reconcile Terraform with reality — detect console drift, adopt a hand-made bucket, prevent a mass destruction caused by a rename and protect the network.
+  story: |
+    The state lives in `gs://tfstate-{{.project}}` (prefix `prod`). PR #412 renames `google_compute_network.main`
+    to `google_compute_network.vpc` and adds the **existing** bucket `logs-{{.project}}`, created by hand last year.
+    Last night someone changed a firewall rule in the console.
+
+    Get to a clean `terraform plan` **without destroying or recreating anything** that exists, revert the
+    console drift, and make sure nobody can destroy the production network by accident again.
+  objectives:
+    - Detect drift before changing anything
+    - Avoid destroy/recreate caused by the rename (state operations)
+    - Adopt the hand-made bucket (import)
+    - Revert the drift in place and protect the network
+  hints:
+    - '`terraform plan -refresh-only` shows what changed outside Terraform; read the full plan before applying.'
+    - '`terraform state mv OLD NEW` and `terraform import ADDR ID`; `lifecycle { prevent_destroy = true }`.'
+  ticket:
+    summary: 'Merge PR #412 (rename network resource, manage the logs bucket) and bring prod back in line with Terraform. Last night ops hot-fixed something in the console.'
+  text:
+    Plan limpio: Clean plan
+    terraform plan no muestra cambios: terraform plan shows no changes
+    No se ha destruido nada: Nothing destroyed
+    No se ha borrado ninguna red ni bucket: No network or bucket was deleted
+    El estado sigue a la red renombrada: State tracks the renamed network
+    Bucket existente importado: Existing bucket imported
+    Deriva revertida: Drift reverted
+    SSH de nuevo solo desde IAP: SSH only from IAP again
+    Barrera de seguridad: Guardrail
+    Red protegida con prevent_destroy: Network protected with prevent_destroy
+    Deriva detectada primero: Drift detected first
+    Planificado antes de aplicar: Planned before applying
+    Explicación: Explanation
+    Explica las operaciones: Explain the operations
+    Kai (equipo de plataforma): Kai (platform team)

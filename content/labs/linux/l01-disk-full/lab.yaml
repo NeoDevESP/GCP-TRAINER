@@ -1,6 +1,6 @@
 id: linux-l01-disk-full
-title: "Linux: the web server died — no space left on device"
-summary: Find what filled the disk from the shell, free space without destroying data, bring the service back and prevent recurrence.
+title: "Linux: el servidor web ha muerto — no queda espacio en el disco"
+summary: Averigua desde la shell qué llenó el disco, libera espacio sin destruir datos, recupera el servicio y evita que se repita.
 track: linux
 day: 1
 level: basic
@@ -30,30 +30,30 @@ ticket:
   id: INC-310
   kind: INC
   priority: P2
-  summary: "The website on web-1 is down since this morning. Nobody deployed anything."
-  reporter: Customer Support
+  summary: "La web de web-1 está caída desde esta mañana. Nadie ha desplegado nada."
+  reporter: Atención al cliente
 actors:
   - role: developer
-    name: Leo (web team)
+    name: Leo (equipo web)
     facts:
-      - {keywords: [[debug, log, logging, verbose]], answer: "Oops — I enabled debug logging on Friday to chase a bug and forgot to turn it off. You can throw away debug.log."}
-      - {keywords: [[orders, db, database, data, app]], answer: "Never delete /var/lib/app/orders.db — that's the local order queue!"}
+      - {keywords: [[debug, log, logging, verbose, registro]], answer: "Vaya: el viernes activé el registro de depuración para perseguir un error y se me olvidó desactivarlo. Puedes tirar debug.log."}
+      - {keywords: [[orders, db, database, data, app, pedidos, base de datos, datos]], answer: "¡No borres nunca /var/lib/app/orders.db: es la cola local de pedidos!"}
 story: |
-  `web-1` stopped serving. Connect with `gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='...'`
-  and use the usual tools (`systemctl status`, `journalctl`, `df -h`, `du -sh /var/*`, `find / -size +500M`,
-  `ls -l`). Free space **without losing data**, restart the service and make sure logs are rotated.
+  `web-1` ha dejado de servir. Conéctate con `gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='...'`
+  y usa las herramientas de siempre (`systemctl status`, `journalctl`, `df -h`, `du -sh /var/*`, `find / -size +500M`,
+  `ls -l`). Libera espacio **sin perder datos**, reinicia el servicio y asegúrate de que los registros rotan.
 objectives:
-  - Read the service error
-  - Find what is using the disk
-  - Free space safely and restart the service
-  - Prevent recurrence
+  - Lee el error del servicio
+  - Averigua qué está usando el disco
+  - Libera espacio de forma segura y reinicia el servicio
+  - Evita que se repita
 hints:
-  - text: "`journalctl` shows why nginx exits; `df -h` confirms it."
-  - text: "`du -sh /var/log/nginx/*` — and ask the developer before deleting anything."
+  - text: "`journalctl` muestra por qué termina nginx; `df -h` lo confirma."
+  - text: "`du -sh /var/log/nginx/*`, y pregunta al desarrollador antes de borrar nada."
 evidence:
   fields: [rootCause]
   sample:
-    rootCause: Debug logging left enabled wrote a 16 GB debug.log in /var/log/nginx and filled the 20 GB disk; nginx could not write its logs and exited. I truncated debug.log after confirming with the developer, kept orders.db, restarted nginx and forced a logrotate.
+    rootCause: El registro de depuración que se quedó activado escribió un debug.log de 16 GB en /var/log/nginx y llenó el disco de 20 GB; nginx no podía escribir sus registros y terminaba. Vacié debug.log tras confirmarlo con el desarrollador, conservé orders.db, reinicié nginx y forcé un logrotate.
 solution: |
   gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
   gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo journalctl -u nginx'
@@ -66,26 +66,58 @@ solution: |
   gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
   curl -s http://$(gcloud compute instances describe web-1 --zone={{.zone}} --format='value(networkInterfaces[0].accessConfigs[0].natIP)')/
 rubric:
-  - name: Service back
+  - name: Servicio recuperado
     validator: functional
     points: 30
     checks:
-      - {type: http, target: "vm:web-1:80", path: /, status: 200, desc: "web-1 serves again"}
-  - name: Space freed safely
+      - {type: http, target: "vm:web-1:80", path: /, status: 200, desc: "web-1 vuelve a servir"}
+  - name: Espacio liberado de forma segura
     validator: state
     points: 30
     critical: true
     all: true
     checks:
-      - {type: vm_disk, vm: web-1, maxPct: 80, desc: "Disk below 80%"}
-      - {type: vm_file, vm: web-1, path: /var/lib/app/orders.db, desc: "orders.db kept"}
-  - name: Diagnosis
+      - {type: vm_disk, vm: web-1, maxPct: 80, desc: "Disco por debajo del 80 %"}
+      - {type: vm_file, vm: web-1, path: /var/lib/app/orders.db, desc: "orders.db conservado"}
+  - name: Diagnóstico
     validator: diagnosis
     points: 20
     checks:
-      - {type: command, regex: "df -h|du -sh|find / -size", min: 2, desc: "Measured before deleting"}
-  - name: Root cause & prevention
+      - {type: command, regex: "df -h|du -sh|find / -size", min: 2, desc: "Medido antes de borrar"}
+  - name: Causa raíz y prevención
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[debug], [disk, disco, space, espacio], [logrotate, rotat]], desc: "Cause and prevention"}
+      - {type: evidence, fields: [rootCause], keywords: [[debug], [disk, disco, space, espacio], [logrotate, rotat, rota]], desc: "Causa y prevención"}
+en:
+  title: 'Linux: the web server died — no space left on device'
+  summary: Find what filled the disk from the shell, free space without destroying data, bring the service back and prevent recurrence.
+  story: |
+    `web-1` stopped serving. Connect with `gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='...'`
+    and use the usual tools (`systemctl status`, `journalctl`, `df -h`, `du -sh /var/*`, `find / -size +500M`,
+    `ls -l`). Free space **without losing data**, restart the service and make sure logs are rotated.
+  objectives:
+    - Read the service error
+    - Find what is using the disk
+    - Free space safely and restart the service
+    - Prevent recurrence
+  hints:
+    - '`journalctl` shows why nginx exits; `df -h` confirms it.'
+    - '`du -sh /var/log/nginx/*` — and ask the developer before deleting anything.'
+  ticket:
+    summary: The website on web-1 is down since this morning. Nobody deployed anything.
+  text:
+    Servicio recuperado: Service back
+    web-1 vuelve a servir: web-1 serves again
+    Espacio liberado de forma segura: Space freed safely
+    Disco por debajo del 80 %: Disk below 80%
+    orders.db conservado: orders.db kept
+    Diagnóstico: Diagnosis
+    Medido antes de borrar: Measured before deleting
+    Causa raíz y prevención: Root cause & prevention
+    Causa y prevención: Cause and prevention
+    Atención al cliente: Customer Support
+    Leo (equipo web): Leo (web team)
+    ? 'Vaya: el viernes activé el registro de depuración para perseguir un error y se me olvidó desactivarlo. Puedes tirar debug.log.'
+    : Oops — I enabled debug logging on Friday to chase a bug and forgot to turn it off. You can throw away debug.log.
+    '¡No borres nunca /var/lib/app/orders.db: es la cola local de pedidos!': Never delete /var/lib/app/orders.db — that's the local order queue!

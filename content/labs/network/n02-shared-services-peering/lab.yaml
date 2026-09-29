@@ -1,6 +1,6 @@
 id: net-n02-shared-services-peering
-title: "Reach the shared license server over VPC peering"
-summary: Peer two VPCs, resolve an overlapping range without renumbering the other team, and open exactly one port to exactly one subnet.
+title: "Llegar al servidor de licencias compartido por emparejamiento de VPC"
+summary: Empareja dos VPC, resuelve un rango solapado sin renumerar al otro equipo y abre exactamente un puerto a exactamente una subred.
 track: network
 day: 1
 level: intermediate
@@ -26,47 +26,47 @@ ticket:
   kind: REQ
   priority: P3
   sla: 2d
-  summary: "app-1 must reach the shared license server license-1 on tcp:27000. The platform team says 'just peer the VPCs'."
-  reporter: Dana (app team)
+  summary: "app-1 tiene que llegar al servidor de licencias compartido license-1 en tcp:27000. El equipo de plataforma dice «emparejad las VPC y ya»."
+  reporter: Dana (equipo de aplicaciones)
 actors:
   - role: developer
-    name: Dana (app team)
-    fallback: "Our app only needs the license port 27000, nothing else."
+    name: Dana (equipo de aplicaciones)
+    fallback: "Nuestra aplicación solo necesita el puerto de licencias 27000, nada más."
   - role: sre
-    name: Ravi (shared services)
-    persona: owns shared-vpc and license-1
-    fallback: "shared-vpc uses 10.20.0.0/16 and we can't renumber it — twenty teams depend on it."
+    name: Ravi (servicios compartidos)
+    persona: responsable de shared-vpc y license-1
+    fallback: "shared-vpc usa 10.20.0.0/16 y no podemos renumerarla: dependen de ella veinte equipos."
     facts:
-      - {keywords: [[firewall, allow, port, puerto, rule]], answer: "shared-vpc denies ingress by default. Add a rule for 27000 from your app subnet only — we audit anything wider."}
-      - {keywords: [[tag, etiqueta, source-tags]], answer: "Careful: network tags from a peered VPC don't match our firewall rules. Use the source range of your subnet."}
+      - {keywords: [[firewall, allow, port, puerto, rule, cortafuegos, permit, regla]], answer: "shared-vpc deniega la entrada por defecto. Añade una regla para el 27000 solo desde vuestra subred de aplicaciones: auditamos todo lo que sea más amplio."}
+      - {keywords: [[tag, etiqueta, source-tags]], answer: "Cuidado: las etiquetas de red de una VPC emparejada no coinciden con nuestras reglas de cortafuegos. Usa el rango de origen de tu subred."}
   - role: manager
-    name: Irene (engineering manager)
-    fallback: "Close the request with what you changed."
+    name: Irene (responsable de ingeniería)
+    fallback: "Cierra la solicitud con lo que hayas cambiado."
     facts:
-      - {keywords: [[legacy, subnet, batch, delete, borrar]], answer: "legacy-subnet belonged to the old batch system, decommissioned in Q2. If nothing uses it, it can go."}
+      - {keywords: [[legacy, subnet, batch, delete, borrar, subred, lote, borr, elimin]], answer: "legacy-subnet pertenecía al antiguo sistema de procesos por lotes, retirado en el segundo trimestre. Si nada la usa, se puede borrar."}
 story: |
-  `app-1` (in **app-vpc**) must use the license server `license-1` (in **shared-vpc**, owned by another team)
-  on **tcp:27000**. Peer the networks, but:
+  `app-1` (en **app-vpc**) tiene que usar el servidor de licencias `license-1` (en **shared-vpc**, propiedad de otro equipo)
+  en **tcp:27000**. Empareja las redes, pero:
 
-  - `shared-vpc` (10.20.0.0/16) cannot be renumbered
-  - only `app-subnet` may reach the license port — nothing else, nothing wider
-  - neither VM gets a public address
+  - `shared-vpc` (10.20.0.0/16) no se puede renumerar
+  - solo `app-subnet` puede llegar al puerto de licencias: nada más y nada más amplio
+  - ninguna de las VM tiene dirección pública
 
-  Try the obvious command first and read the error carefully.
-constraints: [protect:license-1, protect:shared-subnet, no-public]
+  Prueba primero el comando obvio y lee el error con atención.
+constraints: ['protect:license-1', 'protect:shared-subnet', no-public]
 objectives:
-  - Understand why the peering is rejected
-  - Remove the conflict on your side, after checking it is unused
-  - Establish the peering in both directions
-  - Allow tcp:27000 from 10.10.0.0/24 only, and verify the path
+  - Entiende por qué se rechaza el emparejamiento
+  - Elimina el conflicto en tu lado tras comprobar que no se usa
+  - Establece el emparejamiento en los dos sentidos
+  - Permite tcp:27000 solo desde 10.10.0.0/24 y verifica el camino
 hints:
-  - text: "Peered VPCs cannot have overlapping subnet ranges. Which of your subnets overlaps 10.20.0.0/16?"
-  - text: "A peering is ACTIVE only when both networks create it (`--network=app-vpc --peer-network=shared-vpc` and the reverse)."
-  - text: "Firewall rules in shared-vpc cannot use app-vpc's tags as sources; use `--source-ranges=10.10.0.0/24` and `--target-tags=license-server`."
+  - text: "Las VPC emparejadas no pueden tener rangos de subred solapados. ¿Cuál de tus subredes se solapa con 10.20.0.0/16?"
+  - text: "Un emparejamiento solo está ACTIVE cuando lo crean las dos redes (`--network=app-vpc --peer-network=shared-vpc` y al revés)."
+  - text: "Las reglas de cortafuegos de shared-vpc no pueden usar las etiquetas de app-vpc como origen; usa `--source-ranges=10.10.0.0/24` y `--target-tags=license-server`."
 evidence:
   fields: [explanation]
   sample:
-    explanation: "The peering failed because legacy-subnet 10.20.4.0/24 overlapped shared-vpc 10.20.0.0/16; it was unused, so I deleted it, peered both directions and allowed tcp:27000 only from 10.10.0.0/24 to the license-server tag. I verified with nc from app-1."
+    explanation: "El emparejamiento fallaba porque legacy-subnet 10.20.4.0/24 se solapaba con shared-vpc 10.20.0.0/16; no se usaba, así que la borré, emparejé en los dos sentidos y permití tcp:27000 solo desde 10.10.0.0/24 hacia la etiqueta license-server. Lo verifiqué con nc desde app-1."
 solution: |
   !gcloud compute networks peerings create app-to-shared --network=app-vpc --peer-network=shared-vpc
   gcloud compute networks subnets list --format='table(name,network,ipCidrRange)'
@@ -92,31 +92,81 @@ shortcuts:
       gcloud compute firewall-rules create shared-allow-license-from-app --network=shared-vpc --allow=tcp:27000 --source-ranges=10.10.0.0/24 --target-tags=license-server
       ticket resolve "Created the peering from app-vpc and allowed 27000 from the app subnet."
 rubric:
-  - name: Path works
+  - name: El camino funciona
     validator: functional
     points: 35
     checks:
-      - {type: tcp, from: "vm:app-1", to: "vm:license-1", port: 27000, desc: "app-1 reaches license-1 on tcp:27000"}
-  - name: Peering
+      - {type: tcp, from: "vm:app-1", to: "vm:license-1", port: 27000, desc: "app-1 llega a license-1 en tcp:27000"}
+  - name: Emparejamiento
     validator: state
     points: 20
     all: true
     checks:
-      - {type: exists, path: "networks[\"app-vpc\"]", expect: {peerings: {regex: "shared-vpc"}}, desc: "app-vpc peers with shared-vpc"}
-      - {type: exists, path: "networks[\"shared-vpc\"]", expect: {peerings: {regex: "app-vpc"}}, desc: "shared-vpc peers back with app-vpc"}
-      - {type: exists, path: "subnets[\"shared-subnet\"]", expect: {ipCidrRange: 10.20.0.0/16}, desc: "shared-vpc was not renumbered"}
-  - name: Least exposure
+      - {type: exists, path: "networks[\"app-vpc\"]", expect: {peerings: {regex: "shared-vpc"}}, desc: "app-vpc se empareja con shared-vpc"}
+      - {type: exists, path: "networks[\"shared-vpc\"]", expect: {peerings: {regex: "app-vpc"}}, desc: "shared-vpc se empareja de vuelta con app-vpc"}
+      - {type: exists, path: "subnets[\"shared-subnet\"]", expect: {ipCidrRange: 10.20.0.0/16}, desc: "shared-vpc no se ha renumerado"}
+  - name: Mínima exposición
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: forbid_firewall, port: 27000, desc: "License port not open to the internet"}
-      - {type: count, collection: firewalls, where: {network: {eq: shared-vpc}, sourceRanges: {regex: "10\\.0\\.0\\.0/8|10\\.0\\.0\\.0/9|10\\.20\\.0\\.0/16|10\\.10\\.0\\.0/16"}}, max: 0, desc: "No rule wider than app-subnet in shared-vpc"}
-      - {type: exists, path: "instances[\"license-1\"]", expect: {natIP: {empty: true}}, desc: "license-1 has no public address"}
-  - name: Communication
+      - {type: forbid_firewall, port: 27000, desc: "Puerto de licencias no abierto a internet"}
+      - {type: count, collection: firewalls, where: {network: {eq: shared-vpc}, sourceRanges: {regex: "10\\.0\\.0\\.0/8|10\\.0\\.0\\.0/9|10\\.20\\.0\\.0/16|10\\.10\\.0\\.0/16"}}, max: 0, desc: "Ninguna regla más amplia que app-subnet en shared-vpc"}
+      - {type: exists, path: "instances[\"license-1\"]", expect: {natIP: {empty: true}}, desc: "license-1 no tiene dirección pública"}
+  - name: Comunicación
     validator: evidence
     points: 15
     checks:
-      - {type: ticket_resolved, desc: "Request closed with what changed"}
-      - {type: evidence, fields: [explanation], keywords: [[overlap, solap, 10.20], [peer, peering], [27000, firewall]], desc: "Explains the overlap, the peering and the rule"}
+      - {type: ticket_resolved, desc: "Solicitud cerrada con lo que se ha cambiado"}
+      - {type: evidence, fields: [explanation], keywords: [[overlap, solap, 10.20], [peer, peering, empareja, emparejamiento], [27000, firewall, cortafuegos]], desc: "Explica el solapamiento, el emparejamiento y la regla"}
+en:
+  title: Reach the shared license server over VPC peering
+  summary: Peer two VPCs, resolve an overlapping range without renumbering the other team, and open exactly one port to exactly one subnet.
+  story: |
+    `app-1` (in **app-vpc**) must use the license server `license-1` (in **shared-vpc**, owned by another team)
+    on **tcp:27000**. Peer the networks, but:
+
+    - `shared-vpc` (10.20.0.0/16) cannot be renumbered
+    - only `app-subnet` may reach the license port — nothing else, nothing wider
+    - neither VM gets a public address
+
+    Try the obvious command first and read the error carefully.
+  objectives:
+    - Understand why the peering is rejected
+    - Remove the conflict on your side, after checking it is unused
+    - Establish the peering in both directions
+    - Allow tcp:27000 from 10.10.0.0/24 only, and verify the path
+  hints:
+    - Peered VPCs cannot have overlapping subnet ranges. Which of your subnets overlaps 10.20.0.0/16?
+    - A peering is ACTIVE only when both networks create it (`--network=app-vpc --peer-network=shared-vpc` and the reverse).
+    - Firewall rules in shared-vpc cannot use app-vpc's tags as sources; use `--source-ranges=10.10.0.0/24` and `--target-tags=license-server`.
+  ticket:
+    summary: app-1 must reach the shared license server license-1 on tcp:27000. The platform team says 'just peer the VPCs'.
+  text:
+    El camino funciona: Path works
+    app-1 llega a license-1 en tcp:27000: app-1 reaches license-1 on tcp:27000
+    Emparejamiento: Peering
+    app-vpc se empareja con shared-vpc: app-vpc peers with shared-vpc
+    shared-vpc se empareja de vuelta con app-vpc: shared-vpc peers back with app-vpc
+    shared-vpc no se ha renumerado: shared-vpc was not renumbered
+    Mínima exposición: Least exposure
+    Puerto de licencias no abierto a internet: License port not open to the internet
+    Ninguna regla más amplia que app-subnet en shared-vpc: No rule wider than app-subnet in shared-vpc
+    license-1 no tiene dirección pública: license-1 has no public address
+    Comunicación: Communication
+    Solicitud cerrada con lo que se ha cambiado: Request closed with what changed
+    Explica el solapamiento, el emparejamiento y la regla: Explains the overlap, the peering and the rule
+    Dana (equipo de aplicaciones): Dana (app team)
+    Nuestra aplicación solo necesita el puerto de licencias 27000, nada más.: Our app only needs the license port 27000, nothing else.
+    Ravi (servicios compartidos): Ravi (shared services)
+    responsable de shared-vpc y license-1: owns shared-vpc and license-1
+    'shared-vpc usa 10.20.0.0/16 y no podemos renumerarla: dependen de ella veinte equipos.': shared-vpc uses 10.20.0.0/16 and we can't renumber it — twenty teams depend on it.
+    ? 'shared-vpc deniega la entrada por defecto. Añade una regla para el 27000 solo desde vuestra subred de aplicaciones: auditamos todo lo que sea más amplio.'
+    : shared-vpc denies ingress by default. Add a rule for 27000 from your app subnet only — we audit anything wider.
+    ? 'Cuidado: las etiquetas de red de una VPC emparejada no coinciden con nuestras reglas de cortafuegos. Usa el rango de origen de tu subred.'
+    : 'Careful: network tags from a peered VPC don''t match our firewall rules. Use the source range of your subnet.'
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    Cierra la solicitud con lo que hayas cambiado.: Close the request with what you changed.
+    ? legacy-subnet pertenecía al antiguo sistema de procesos por lotes, retirado en el segundo trimestre. Si nada la usa, se puede borrar.
+    : legacy-subnet belonged to the old batch system, decommissioned in Q2. If nothing uses it, it can go.

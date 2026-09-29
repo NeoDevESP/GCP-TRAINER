@@ -1,6 +1,6 @@
 id: arch-a01-global-expansion
-title: "Architecture Simulator: Nebula opens in the United States"
-summary: Redesign a single-zone storefront for two continents under availability, RPO/RTO, capacity, latency, residency, security and budget constraints — and justify the trade-offs.
+title: "Simulador de arquitectura: Nebula abre en Estados Unidos"
+summary: Rediseña una tienda de una sola zona para dos continentes con restricciones de disponibilidad, RPO/RTO, capacidad, latencia, residencia, seguridad y presupuesto, y justifica los compromisos.
 track: architect
 day: 2
 level: professional
@@ -35,45 +35,45 @@ files:
       - {name: db, type: cloud-sql, regions: [europe-west1], tier: db-custom-2-7680, backups: true, publicIp: true}
     path: [lb, web, db]
 story: |
-  Nebula is launching in the **United States**. Edit `design.yaml` so the storefront meets every requirement in
-  `requirements.yaml`, and evaluate it with the Architecture Simulator:
+  Nebula se lanza en **Estados Unidos**. Edita `design.yaml` para que la tienda cumpla todos los requisitos de
+  `requirements.yaml` y evalúala con el simulador de arquitectura:
 
   ```
   arch evaluate design.yaml requirements.yaml
   ```
 
-  Component types: `global-lb` (with `armor`), `cdn`, `cloud-run`, `mig`, `gke`, `cloud-sql` (`ha`, `replicas`,
+  Tipos de componente: `global-lb` (con `armor`), `cdn`, `cloud-run`, `mig`, `gke`, `cloud-sql` (`ha`, `replicas`,
   `backups`, `pitr`, `tier`, `publicIp`), `spanner`/`firestore` (`multiRegion`, `nodes`), `memorystore`.
-  Every number in the report is explained — use it to discuss trade-offs. Then answer the review board.
+  Cada número del informe viene explicado: úsalo para discutir los compromisos. Después responde al comité de revisión.
 objectives:
-  - Meet availability, RPO/RTO and peak capacity
-  - Serve both continents within the latency target while keeping data in the EU
-  - Stay within budget with security controls (WAF, private data)
-  - Justify the main trade-offs
+  - Cumple la disponibilidad, el RPO/RTO y la capacidad en pico
+  - Sirve a los dos continentes dentro del objetivo de latencia manteniendo los datos en la UE
+  - Mantente dentro del presupuesto con controles de seguridad (WAF, datos privados)
+  - Justifica los principales compromisos
 quiz:
   - id: q1
-    question: Why is a multi-region Spanner instance not the obvious answer here?
-    options: ["It cannot keep data in the EU", "It meets RPO/RTO but costs more than the whole budget", "It does not support SQL", "It needs a VPN"]
+    question: ¿Por qué una instancia multirregión de Spanner no es la respuesta obvia aquí?
+    options: ["No puede mantener los datos en la UE", "Cumple el RPO/RTO pero cuesta más que todo el presupuesto", "No admite SQL", "Necesita una VPN"]
     answer: [1]
     justify: true
-    keywords: [[cost, coste, budget, presupuesto], [rpo, rto, replication, replicacion]]
+    keywords: [[cost, coste, budget, presupuesto, costo], [rpo, rto, replication, replicacion]]
   - id: q2
-    question: US users are served from a US region, yet data must stay in the EU. What is the consequence?
-    options: ["Nothing", "Each uncached request pays a transatlantic round trip to the database", "The data is copied to the US", "The WAF blocks US users"]
+    question: Los usuarios de EE. UU. se sirven desde una región de EE. UU., pero los datos deben quedarse en la UE. ¿Qué consecuencia tiene?
+    options: ["Ninguna", "Cada petición no cacheada paga una ida y vuelta transatlántica a la base de datos", "Los datos se copian a EE. UU.", "El WAF bloquea a los usuarios de EE. UU."]
     answer: [1]
     justify: true
-    keywords: [[latency, latencia, round trip, ms], [residency, gdpr, eu, residencia]]
+    keywords: [[latency, latencia, round trip, ms, ida y vuelta], [residency, gdpr, eu, residencia]]
   - id: q3
-    question: What does the cross-region read replica buy you compared with backups + PITR?
-    options: ["Lower cost", "Minutes-level RTO and seconds of RPO on a regional disaster", "Synchronous replication", "Automatic failover without action"]
+    question: ¿Qué te aporta la réplica de lectura en otra región frente a copias de seguridad + PITR?
+    options: ["Menor coste", "RTO de minutos y RPO de segundos ante un desastre regional", "Replicación síncrona", "Conmutación automática sin intervención"]
     answer: [1]
 hints:
-  - text: "Availability multiplies along the path: a zonal database caps the whole system."
-  - text: "RPO ≤ 5 min on a regional disaster needs a replica in another region; RTO ≤ 30 min needs a rehearsed promotion."
+  - text: "La disponibilidad se multiplica a lo largo del camino: una base de datos zonal limita todo el sistema."
+  - text: "Un RPO ≤ 5 min ante un desastre regional necesita una réplica en otra región; un RTO ≤ 30 min necesita una promoción ensayada."
 evidence:
   fields: [adr]
   sample:
-    adr: "Decision: Cloud Run in europe-west1 and us-central1 behind a global load balancer with Cloud Armor and CDN; Cloud SQL regional HA in europe-west1 with private IP and a cross-region replica in europe-west4. Trade-offs: multi-region Spanner would give RPO 0 but costs more than the budget; US requests pay a transatlantic round trip to keep data in the EU, mitigated with CDN caching; failover to the replica is a manual, rehearsed step."
+    adr: "Decisión: Cloud Run en europe-west1 y us-central1 tras un balanceador global con Cloud Armor y CDN; Cloud SQL regional en HA en europe-west1 con IP privada y una réplica en otra región, europe-west4. Compromisos: Spanner multirregión daría RPO 0 pero cuesta más que el presupuesto; las peticiones de EE. UU. pagan una ida y vuelta transatlántica para mantener los datos en la UE, lo que se mitiga con la caché de la CDN; la conmutación a la réplica es un paso manual y ensayado."
 solution: |
   arch evaluate design.yaml requirements.yaml
   cat > design.yaml <<'YAML'
@@ -87,35 +87,87 @@ solution: |
   YAML
   arch evaluate design.yaml requirements.yaml
 rubric:
-  - name: Reliability & DR
+  - name: Fiabilidad y recuperación ante desastres
     validator: reliability
     points: 25
     checks:
-      - {type: design, only: [availability, "RPO (regional failure)", "RTO (regional failure)"], requirements: {availability: 99.9, rpoMinutes: 5, rtoMinutes: 30}, desc: "Availability, RPO and RTO met"}
-  - name: Scale & latency
+      - {type: design, only: [availability, "RPO (regional failure)", "RTO (regional failure)"], requirements: {availability: 99.9, rpoMinutes: 5, rtoMinutes: 30}, desc: "Disponibilidad, RPO y RTO cumplidos"}
+  - name: Escala y latencia
     validator: state
     points: 15
     checks:
-      - {type: design, requirements: {peakRps: 3000, userRegions: [europe, us], latencyMs: 200}, desc: "Peak capacity and latency for both continents"}
-  - name: Security & compliance
+      - {type: design, requirements: {peakRps: 3000, userRegions: [europe, us], latencyMs: 200}, desc: "Capacidad en pico y latencia para los dos continentes"}
+  - name: Seguridad y cumplimiento
     validator: security
     points: 15
     critical: true
     checks:
-      - {type: design, requirements: {residency: eu, privateData: true, waf: true}, desc: "EU residency, private data stores, WAF"}
-  - name: Cost
+      - {type: design, requirements: {residency: eu, privateData: true, waf: true}, desc: "Residencia en la UE, almacenes de datos privados, WAF"}
+  - name: Coste
     validator: cost
     points: 10
     checks:
-      - {type: design, requirements: {budgetEur: 1500}, desc: "Within the monthly budget"}
-  - name: Trade-offs
+      - {type: design, requirements: {budgetEur: 1500}, desc: "Dentro del presupuesto mensual"}
+  - name: Compromisos
     validator: quiz
     points: 20
     checks:
-      - {type: quiz, ratio: 1, desc: "Review board questions"}
-  - name: Decision record
+      - {type: quiz, ratio: 1, desc: "Preguntas del comité de revisión"}
+  - name: Registro de decisiones
     validator: evidence
     points: 15
     checks:
-      - {type: command, regex: "arch evaluate", min: 2, desc: "Evaluated before and after"}
-      - {type: evidence, fields: [adr], keywords: [[trade-off, tradeoff, compromiso, cost], [replica, rpo], [latency, latencia]], desc: "Architecture decision record"}
+      - {type: command, regex: "arch evaluate", min: 2, desc: "Evaluado antes y después"}
+      - {type: evidence, fields: [adr], keywords: [[trade-off, tradeoff, compromiso, cost, equilibrio, coste, costo], [replica, rpo], [latency, latencia]], desc: "Registro de decisiones de arquitectura"}
+en:
+  title: 'Architecture Simulator: Nebula opens in the United States'
+  summary: Redesign a single-zone storefront for two continents under availability, RPO/RTO, capacity, latency, residency, security and budget constraints — and justify the trade-offs.
+  story: |
+    Nebula is launching in the **United States**. Edit `design.yaml` so the storefront meets every requirement in
+    `requirements.yaml`, and evaluate it with the Architecture Simulator:
+
+    ```
+    arch evaluate design.yaml requirements.yaml
+    ```
+
+    Component types: `global-lb` (with `armor`), `cdn`, `cloud-run`, `mig`, `gke`, `cloud-sql` (`ha`, `replicas`,
+    `backups`, `pitr`, `tier`, `publicIp`), `spanner`/`firestore` (`multiRegion`, `nodes`), `memorystore`.
+    Every number in the report is explained — use it to discuss trade-offs. Then answer the review board.
+  objectives:
+    - Meet availability, RPO/RTO and peak capacity
+    - Serve both continents within the latency target while keeping data in the EU
+    - Stay within budget with security controls (WAF, private data)
+    - Justify the main trade-offs
+  hints:
+    - 'Availability multiplies along the path: a zonal database caps the whole system.'
+    - RPO ≤ 5 min on a regional disaster needs a replica in another region; RTO ≤ 30 min needs a rehearsed promotion.
+  text:
+    ¿Por qué una instancia multirregión de Spanner no es la respuesta obvia aquí?: Why is a multi-region Spanner instance not the obvious answer here?
+    No puede mantener los datos en la UE: It cannot keep data in the EU
+    Cumple el RPO/RTO pero cuesta más que todo el presupuesto: It meets RPO/RTO but costs more than the whole budget
+    No admite SQL: It does not support SQL
+    Necesita una VPN: It needs a VPN
+    ? Los usuarios de EE. UU. se sirven desde una región de EE. UU., pero los datos deben quedarse en la UE. ¿Qué consecuencia tiene?
+    : US users are served from a US region, yet data must stay in the EU. What is the consequence?
+    Ninguna: Nothing
+    Cada petición no cacheada paga una ida y vuelta transatlántica a la base de datos: Each uncached request pays a transatlantic round trip to the database
+    Los datos se copian a EE. UU.: The data is copied to the US
+    El WAF bloquea a los usuarios de EE. UU.: The WAF blocks US users
+    ¿Qué te aporta la réplica de lectura en otra región frente a copias de seguridad + PITR?: What does the cross-region read replica buy you compared with backups + PITR?
+    Menor coste: Lower cost
+    RTO de minutos y RPO de segundos ante un desastre regional: Minutes-level RTO and seconds of RPO on a regional disaster
+    Replicación síncrona: Synchronous replication
+    Conmutación automática sin intervención: Automatic failover without action
+    Fiabilidad y recuperación ante desastres: Reliability & DR
+    Disponibilidad, RPO y RTO cumplidos: Availability, RPO and RTO met
+    Escala y latencia: Scale & latency
+    Capacidad en pico y latencia para los dos continentes: Peak capacity and latency for both continents
+    Seguridad y cumplimiento: Security & compliance
+    Residencia en la UE, almacenes de datos privados, WAF: EU residency, private data stores, WAF
+    Coste: Cost
+    Dentro del presupuesto mensual: Within the monthly budget
+    Compromisos: Trade-offs
+    Preguntas del comité de revisión: Review board questions
+    Registro de decisiones: Decision record
+    Evaluado antes y después: Evaluated before and after
+    Registro de decisiones de arquitectura: Architecture decision record

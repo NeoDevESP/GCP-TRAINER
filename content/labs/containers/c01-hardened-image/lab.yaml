@@ -1,6 +1,6 @@
 id: containers-c01-hardened-image
-title: "Containers: build, harden and publish an image"
-summary: Fix a Dockerfile that runs as root with a baked-in secret, publish it to Artifact Registry and run it on Cloud Run with the secret injected at runtime.
+title: "Contenedores: construir, bastionar y publicar una imagen"
+summary: Corrige un Dockerfile que se ejecuta como root con un secreto incrustado, publícalo en Artifact Registry y ejecútalo en Cloud Run con el secreto inyectado en tiempo de ejecución.
 track: foundations
 day: 4
 level: intermediate
@@ -24,20 +24,20 @@ files:
     ENTRYPOINT ["/app"]
   app: "(payments binary)"
 story: |
-  A developer's `Dockerfile` bakes an **API key** into the image and runs as **root** on a full OS base.
-  Fix it, then build and publish `{{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0`, and deploy
-  Cloud Run service `payments` injecting `API_KEY` from Secret Manager secret `payments-key`
-  (value `sk_live_rotated_{{.project}}`).
+  El `Dockerfile` de un desarrollador incrusta una **clave de API** en la imagen y se ejecuta como **root** sobre una base de sistema operativo completa.
+  Corrígelo, construye y publica `{{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0` y despliega
+  el servicio de Cloud Run `payments` inyectando `API_KEY` desde el secreto de Secret Manager `payments-key`
+  (valor `sk_live_rotated_{{.project}}`).
 
-  Requirements for the Dockerfile: minimal base (distroless), a non-root `USER`, no secrets in `ENV`.
+  Requisitos del Dockerfile: base mínima (distroless), un `USER` que no sea root y ningún secreto en `ENV`.
 objectives:
-  - Remove secrets from the image
-  - Run as non-root on a minimal base
-  - Publish to a private registry
-  - Inject secrets at runtime
+  - Elimina los secretos de la imagen
+  - Ejecuta sin root sobre una base mínima
+  - Publica en un registro privado
+  - Inyecta los secretos en tiempo de ejecución
 hints:
-  - text: "`FROM gcr.io/distroless/static:nonroot` and `USER nonroot:nonroot`."
-  - text: "`gcloud auth configure-docker {{.region}}-docker.pkg.dev` before `docker push`."
+  - text: "`FROM gcr.io/distroless/static:nonroot` y `USER nonroot:nonroot`."
+  - text: "`gcloud auth configure-docker {{.region}}-docker.pkg.dev` antes de `docker push`."
 solution: |
   cat > Dockerfile <<'DOCKER'
   FROM gcr.io/distroless/static:nonroot
@@ -53,30 +53,61 @@ solution: |
   gcloud secrets add-iam-policy-binding payments-key --member=serviceAccount:$(gcloud projects describe {{.project}} --format='value(projectNumber)')-compute@developer.gserviceaccount.com --role=roles/secretmanager.secretAccessor
   gcloud run deploy payments --image={{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0 --region={{.region}} --set-secrets=API_KEY=payments-key:latest --allow-unauthenticated
 rubric:
-  - name: Hardened Dockerfile
+  - name: Dockerfile bastionado
     validator: security
     points: 35
     critical: true
     all: true
     checks:
-      - {type: file_contains, file: Dockerfile, regex: "(?m)^USER\\s+\\S+", desc: "Runs as a non-root user"}
-      - {type: file_contains, file: Dockerfile, regex: "distroless", desc: "Minimal base image"}
-      - {type: file_contains, file: Dockerfile, regex: "sk_live", not: true, desc: "No secret baked into the image"}
-  - name: Published
+      - {type: file_contains, file: Dockerfile, regex: "(?m)^USER\\s+\\S+", desc: "Se ejecuta con un usuario que no es root"}
+      - {type: file_contains, file: Dockerfile, regex: "distroless", desc: "Imagen base mínima"}
+      - {type: file_contains, file: Dockerfile, regex: "sk_live", not: true, desc: "Ningún secreto incrustado en la imagen"}
+  - name: Publicada
     validator: state
     points: 20
     checks:
-      - {type: exists, path: "artifactRepos.apps.images", expect: {"": {regex: "payments"}}, desc: "Image in Artifact Registry"}
-  - name: Running with runtime secret
+      - {type: exists, path: "artifactRepos.apps.images", expect: {"": {regex: "payments"}}, desc: "Imagen en Artifact Registry"}
+  - name: En marcha con el secreto en tiempo de ejecución
     validator: functional
     points: 30
     all: true
     checks:
-      - {type: http, target: "run:payments", path: /pay, status: 200, desc: "Service works"}
-      - {type: exists, path: "runServices.payments.secrets.API_KEY", desc: "API_KEY injected from Secret Manager"}
-      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV], desc: "No plaintext secrets in the service"}
-  - name: Build workflow
+      - {type: http, target: "run:payments", path: /pay, status: 200, desc: "El servicio funciona"}
+      - {type: exists, path: "runServices.payments.secrets.API_KEY", desc: "API_KEY inyectada desde Secret Manager"}
+      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV], desc: "Ningún secreto en claro en el servicio"}
+  - name: Flujo de compilación
     validator: diagnosis
     points: 15
     checks:
-      - {type: command, regex: "docker (build|push)", min: 2, desc: "Built and pushed"}
+      - {type: command, regex: "docker (build|push)", min: 2, desc: "Construida y publicada"}
+en:
+  title: 'Containers: build, harden and publish an image'
+  summary: Fix a Dockerfile that runs as root with a baked-in secret, publish it to Artifact Registry and run it on Cloud Run with the secret injected at runtime.
+  story: |
+    A developer's `Dockerfile` bakes an **API key** into the image and runs as **root** on a full OS base.
+    Fix it, then build and publish `{{.region}}-docker.pkg.dev/{{.project}}/apps/payments:1.0`, and deploy
+    Cloud Run service `payments` injecting `API_KEY` from Secret Manager secret `payments-key`
+    (value `sk_live_rotated_{{.project}}`).
+
+    Requirements for the Dockerfile: minimal base (distroless), a non-root `USER`, no secrets in `ENV`.
+  objectives:
+    - Remove secrets from the image
+    - Run as non-root on a minimal base
+    - Publish to a private registry
+    - Inject secrets at runtime
+  hints:
+    - '`FROM gcr.io/distroless/static:nonroot` and `USER nonroot:nonroot`.'
+    - '`gcloud auth configure-docker {{.region}}-docker.pkg.dev` before `docker push`.'
+  text:
+    Dockerfile bastionado: Hardened Dockerfile
+    Se ejecuta con un usuario que no es root: Runs as a non-root user
+    Imagen base mínima: Minimal base image
+    Ningún secreto incrustado en la imagen: No secret baked into the image
+    Publicada: Published
+    Imagen en Artifact Registry: Image in Artifact Registry
+    En marcha con el secreto en tiempo de ejecución: Running with runtime secret
+    El servicio funciona: Service works
+    API_KEY inyectada desde Secret Manager: API_KEY injected from Secret Manager
+    Ningún secreto en claro en el servicio: No plaintext secrets in the service
+    Flujo de compilación: Build workflow
+    Construida y publicada: Built and pushed

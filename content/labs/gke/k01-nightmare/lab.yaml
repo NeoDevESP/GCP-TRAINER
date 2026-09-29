@@ -1,6 +1,6 @@
 id: gke-k01-nightmare
-title: "Kubernetes Nightmare: four broken workloads before the demo"
-summary: Diagnose OOMKilled, unbound PVCs, RBAC denials and ImagePullBackOff in one cluster and fix each with the minimum change.
+title: "Pesadilla en Kubernetes: cuatro cargas rotas antes de la demo"
+summary: Diagnostica OOMKilled, PVC sin enlazar, denegaciones de RBAC e ImagePullBackOff en un mismo clúster y corrige cada uno con el cambio mínimo.
 track: gke-sre
 day: 1
 level: advanced
@@ -116,36 +116,36 @@ ticket:
   id: INC-4410
   kind: INC
   priority: P2
-  summary: "Demo for the board in 2 hours and half of ops-gke is red. Please don't just recreate the cluster."
-  reporter: Irene (engineering manager)
+  summary: "Demo para el consejo dentro de 2 horas y la mitad de ops-gke está en rojo. Por favor, no te limites a recrear el clúster."
+  reporter: Irene (responsable de ingeniería)
 actors:
   - role: developer
-    name: Kai (platform team)
-    fallback: "I deployed everything from apps.yaml yesterday; it worked on my laptop."
+    name: Kai (equipo de plataforma)
+    fallback: "Ayer desplegué todo desde apps.yaml; en mi portátil funcionaba."
     facts:
-      - {keywords: [[web, image, 2.0, registry]], answer: "web 2.0 was never pushed — CI failed. 1.0 in the public registry is the one we demo."}
-      - {keywords: [[report, memory, memoria, oom]], answer: "The report generator renders PDFs in memory; in staging it uses around 700Mi."}
-      - {keywords: [[storage, disk, disco, pvc, fast-ssd]], answer: "I copied the PVC from another cloud; I don't know which storage classes GKE has."}
-      - {keywords: [[inspector, rbac, permission, permiso, pods]], answer: "inspector only needs to list pods in its namespace for the dashboard."}
+      - {keywords: [[web, image, 2.0, registry, imagen]], answer: "web 2.0 nunca se llegó a publicar: falló la CI. La 1.0 del registro público es la que enseñamos en la demo."}
+      - {keywords: [[report, memory, memoria, oom, informe]], answer: "El generador de informes renderiza los PDF en memoria; en staging usa unos 700Mi."}
+      - {keywords: [[storage, disk, disco, pvc, fast-ssd, almacenamiento]], answer: "Copié el PVC de otra nube; no sé qué clases de almacenamiento tiene GKE."}
+      - {keywords: [[inspector, rbac, permission, permiso, pods]], answer: "inspector solo necesita listar pods de su namespace para el panel."}
 story: |
-  Four workloads in `ops-gke` are failing: **reports**, **media**, **inspector** and **web**. Each one has a
-  different root cause. Fix them without recreating the cluster, without granting cluster-admin and without
-  deleting data. Use `kubectl get pods`, `kubectl describe`, `kubectl get events`, `kubectl get pvc` and
+  Cuatro cargas de `ops-gke` están fallando: **reports**, **media**, **inspector** y **web**. Cada una tiene una
+  causa raíz distinta. Corrígelas sin recrear el clúster, sin conceder cluster-admin y sin
+  borrar datos. Usa `kubectl get pods`, `kubectl describe`, `kubectl get events`, `kubectl get pvc` y
   `kubectl auth can-i`.
 constraints: [no-basic-roles]
 objectives:
-  - Diagnose each failure from Kubernetes evidence
-  - reports runs without OOM
-  - media gets its volume
-  - inspector can list pods (and nothing more)
-  - web runs the published image
+  - Diagnostica cada fallo a partir de las evidencias de Kubernetes
+  - reports funciona sin OOM
+  - media obtiene su volumen
+  - inspector puede listar pods (y nada más)
+  - web ejecuta la imagen publicada
 hints:
-  - text: "`kubectl get events` groups the reasons: OOMKilled, FailedScheduling, ImagePullBackOff…"
-  - text: "`kubectl get storageclass` lists what GKE provides; a PVC's storage class cannot be changed in place."
+  - text: "`kubectl get events` agrupa los motivos: OOMKilled, FailedScheduling, ImagePullBackOff…"
+  - text: "`kubectl get storageclass` lista lo que ofrece GKE; la clase de almacenamiento de un PVC no se puede cambiar en caliente."
 evidence:
   fields: [rootCause]
   sample:
-    rootCause: reports was OOMKilled because its 256Mi memory limit is below its ~700Mi working set; media-data asked for a non-existent storage class fast-ssd so the PVC stayed Pending; inspector's service account had no RBAC role to list pods; web referenced an image tag 2.0 that was never pushed (ImagePullBackOff).
+    rootCause: reports sufría OOMKilled porque su límite de memoria de 256Mi está por debajo de su conjunto de trabajo de ~700Mi; media-data pedía una clase de almacenamiento inexistente, fast-ssd, así que el PVC se quedaba en Pending; la cuenta de servicio de inspector no tenía ningún rol de RBAC para listar pods; web hacía referencia a una etiqueta de imagen 2.0 que nunca se publicó (ImagePullBackOff).
 solution: |
   gcloud container clusters get-credentials ops-gke --zone={{.zone}}
   kubectl get pods
@@ -214,32 +214,73 @@ rubric:
     validator: functional
     points: 15
     checks:
-      - {type: k8s_ready, cluster: ops-gke, deployment: reports, min: 2, desc: "reports ready without OOM"}
+      - {type: k8s_ready, cluster: ops-gke, deployment: reports, min: 2, desc: "reports listo sin OOM"}
   - name: media (PVC)
     validator: functional
     points: 15
     checks:
-      - {type: k8s_ready, cluster: ops-gke, deployment: media, min: 1, desc: "media running with its volume"}
+      - {type: k8s_ready, cluster: ops-gke, deployment: media, min: 1, desc: "media en marcha con su volumen"}
   - name: inspector (RBAC)
     validator: security
     points: 20
     all: true
     checks:
-      - {type: http, target: "k8s:ops-gke/inspector", path: /pods, status: 200, desc: "inspector lists pods"}
-      - {type: k8s_rbac, cluster: ops-gke, serviceAccount: inspector, verb: delete, resource: pods, expect: false, desc: "inspector cannot delete pods"}
-      - {type: k8s_rbac, cluster: ops-gke, serviceAccount: inspector, verb: list, resource: secrets, expect: false, desc: "inspector cannot read secrets"}
+      - {type: http, target: "k8s:ops-gke/inspector", path: /pods, status: 200, desc: "inspector lista pods"}
+      - {type: k8s_rbac, cluster: ops-gke, serviceAccount: inspector, verb: delete, resource: pods, expect: false, desc: "inspector no puede borrar pods"}
+      - {type: k8s_rbac, cluster: ops-gke, serviceAccount: inspector, verb: list, resource: secrets, expect: false, desc: "inspector no puede leer secrets"}
   - name: web (ImagePullBackOff)
     validator: functional
     points: 15
     checks:
-      - {type: k8s_ready, cluster: ops-gke, deployment: web, min: 2, desc: "web running"}
-  - name: Diagnosis
+      - {type: k8s_ready, cluster: ops-gke, deployment: web, min: 2, desc: "web en marcha"}
+  - name: Diagnóstico
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "kubectl (describe|get events|get pvc|logs|auth can-i)", min: 2, desc: "Evidence gathered from Kubernetes"}
-  - name: Root causes
+      - {type: command, regex: "kubectl (describe|get events|get pvc|logs|auth can-i)", min: 2, desc: "Evidencias recogidas de Kubernetes"}
+  - name: Causas raíz
     validator: evidence
     points: 25
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[oom, memory, memoria], [storage class, storageclass, pvc], [rbac, role, permission], [image, imagen, pull]], desc: "All four root causes explained"}
+      - {type: evidence, fields: [rootCause], keywords: [[oom, memory, memoria], [storage class, storageclass, pvc, clase de almacenamiento], [rbac, role, permission, rol, permiso], [image, imagen, pull]], desc: "Las cuatro causas raíz explicadas"}
+en:
+  title: 'Kubernetes Nightmare: four broken workloads before the demo'
+  summary: Diagnose OOMKilled, unbound PVCs, RBAC denials and ImagePullBackOff in one cluster and fix each with the minimum change.
+  story: |
+    Four workloads in `ops-gke` are failing: **reports**, **media**, **inspector** and **web**. Each one has a
+    different root cause. Fix them without recreating the cluster, without granting cluster-admin and without
+    deleting data. Use `kubectl get pods`, `kubectl describe`, `kubectl get events`, `kubectl get pvc` and
+    `kubectl auth can-i`.
+  objectives:
+    - Diagnose each failure from Kubernetes evidence
+    - reports runs without OOM
+    - media gets its volume
+    - inspector can list pods (and nothing more)
+    - web runs the published image
+  hints:
+    - '`kubectl get events` groups the reasons: OOMKilled, FailedScheduling, ImagePullBackOff…'
+    - '`kubectl get storageclass` lists what GKE provides; a PVC''s storage class cannot be changed in place.'
+  ticket:
+    summary: Demo for the board in 2 hours and half of ops-gke is red. Please don't just recreate the cluster.
+  text:
+    reports (OOMKilled): reports (OOMKilled)
+    reports listo sin OOM: reports ready without OOM
+    media (PVC): media (PVC)
+    media en marcha con su volumen: media running with its volume
+    inspector (RBAC): inspector (RBAC)
+    inspector lista pods: inspector lists pods
+    inspector no puede borrar pods: inspector cannot delete pods
+    inspector no puede leer secrets: inspector cannot read secrets
+    web (ImagePullBackOff): web (ImagePullBackOff)
+    web en marcha: web running
+    Diagnóstico: Diagnosis
+    Evidencias recogidas de Kubernetes: Evidence gathered from Kubernetes
+    Causas raíz: Root causes
+    Las cuatro causas raíz explicadas: All four root causes explained
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    Kai (equipo de plataforma): Kai (platform team)
+    Ayer desplegué todo desde apps.yaml; en mi portátil funcionaba.: I deployed everything from apps.yaml yesterday; it worked on my laptop.
+    'web 2.0 nunca se llegó a publicar: falló la CI. La 1.0 del registro público es la que enseñamos en la demo.': web 2.0 was never pushed — CI failed. 1.0 in the public registry is the one we demo.
+    El generador de informes renderiza los PDF en memoria; en staging usa unos 700Mi.: The report generator renders PDFs in memory; in staging it uses around 700Mi.
+    Copié el PVC de otra nube; no sé qué clases de almacenamiento tiene GKE.: I copied the PVC from another cloud; I don't know which storage classes GKE has.
+    inspector solo necesita listar pods de su namespace para el panel.: inspector only needs to list pods in its namespace for the dashboard.

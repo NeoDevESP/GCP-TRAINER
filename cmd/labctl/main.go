@@ -11,6 +11,7 @@ import (
 	"github.com/neodevesp/gcp-trainer/internal/company"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -427,5 +428,5 @@ func translationProblems(cat *learning.Catalog, content string) []string {
 		problems = append(problems, co.TranslationProblems()...)
 	}
 	sort.Strings(problems)
-	return problems
+	return slices.Compact(problems)
 }

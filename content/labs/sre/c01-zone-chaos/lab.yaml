@@ -1,6 +1,6 @@
 id: sre-c01-zone-chaos
-title: "Chaos Engineering: prove the storefront survives a zone failure"
-summary: State a hypothesis, break things on purpose, watch the SLO — then redesign the web tier until the experiment holds.
+title: "Ingeniería del caos: demostrar que la tienda sobrevive a la caída de una zona"
+summary: Plantea una hipótesis, rompe cosas a propósito, vigila el SLO y rediseña la capa web hasta que el experimento se cumpla.
 track: sre
 day: 1
 level: advanced
@@ -32,33 +32,33 @@ ticket:
   id: PRB-71
   kind: PRB
   priority: P3
-  summary: "Our SLO is 99% availability. Architecture review says the web tier 'should' survive a zone outage. Prove it — with an experiment, not a slide."
+  summary: "Nuestro SLO es un 99 % de disponibilidad. La revisión de arquitectura dice que la capa web «debería» sobrevivir a la caída de una zona. Demuéstralo con un experimento, no con una diapositiva."
   reporter: Sam (SRE)
 story: |
-  The storefront `web-lb` is served by a single VM `web-1` in `{{.zone}}`. Use the **chaos** tool:
+  La tienda `web-lb` la sirve una única VM `web-1` en `{{.zone}}`. Usa la herramienta **chaos**:
 
   ```
   chaos run zone-outage --zone={{.zone}} --target=lb:web-lb --slo=99 --duration=5
-  chaos run kill-instance --instance=NAME --target=lb:web-lb --slo=99 --duration=5
+  chaos run kill-instance --instance=NOMBRE --target=lb:web-lb --slo=99 --duration=5
   chaos history
   ```
 
-  1. Run the zone experiment against the current design and watch the hypothesis fail.
-  2. Rebuild the web tier from the `web-tpl` template as a **regional** managed instance group (3 zones,
-     autohealing with `web-hc`) behind the same load balancer, and retire the zonal group.
-  3. Re-run both experiments until the hypothesis holds, and write the experiment report.
+  1. Ejecuta el experimento de zona contra el diseño actual y observa cómo falla la hipótesis.
+  2. Reconstruye la capa web a partir de la plantilla `web-tpl` como un grupo de instancias gestionado **regional** (3 zonas,
+     autorreparación con `web-hc`) tras el mismo balanceador y retira el grupo zonal.
+  3. Vuelve a ejecutar los dos experimentos hasta que la hipótesis se cumpla y escribe el informe del experimento.
 objectives:
-  - Define steady state and hypothesis
-  - Observe the failure on the current design
-  - Redesign for zonal failure and instance loss
-  - Prove it with experiments and report
+  - Define el estado estable y la hipótesis
+  - Observa el fallo con el diseño actual
+  - Rediseña para soportar la caída de una zona y la pérdida de instancias
+  - Demuéstralo con experimentos e informa
 hints:
-  - text: "`gcloud compute instance-groups managed create NAME --region=REGION --template=... --size=3 --health-check=web-hc`"
-  - text: "Add the new group to `web-be` (`--instance-group-region`) and remove `web-ig` before experimenting again."
+  - text: "`gcloud compute instance-groups managed create NOMBRE --region=REGIÓN --template=... --size=3 --health-check=web-hc`"
+  - text: "Añade el nuevo grupo a `web-be` (`--instance-group-region`) y quita `web-ig` antes de volver a experimentar."
 evidence:
   fields: [report]
   sample:
-    report: "Hypothesis: the storefront stays above 99% availability when a zone fails. The first experiment failed (0% during the outage) because the only VM was zonal. After moving to a regional managed instance group across three zones with autohealing, the zone-outage experiment held at 100% and the kill-instance experiment held because the load balancer routed around the lost VM and the MIG recreated it."
+    report: "Hipótesis: la tienda se mantiene por encima del 99 % de disponibilidad cuando cae una zona. El primer experimento falló (0 % durante la caída) porque la única VM era zonal. Tras pasar a un grupo de instancias gestionado regional en tres zonas con autorreparación, el experimento zone-outage se mantuvo al 100 % y el experimento kill-instance se cumplió porque el balanceador esquivó la VM perdida y el MIG la recreó."
 solution: |
   chaos run zone-outage --zone={{.zone}} --target=lb:web-lb --slo=99 --duration=5
   gcloud compute instance-groups managed create web-mig --template=web-tpl --size=3 --region={{.region}} --health-check=web-hc --initial-delay=60
@@ -70,30 +70,69 @@ solution: |
   chaos run kill-instance --instance=$(gcloud compute instances list --filter="name~web-mig" --format="value(name)" --limit=1) --target=lb:web-lb --slo=99 --duration=5
   chaos history
 rubric:
-  - name: Failure observed first
+  - name: Fallo observado primero
     validator: diagnosis
     points: 15
     checks:
-      - {type: chaos, experiment: zone-outage, held: false, desc: "Ran the experiment against the original design"}
-  - name: Resilient design
+      - {type: chaos, experiment: zone-outage, held: false, desc: "Experimento ejecutado contra el diseño original"}
+  - name: Diseño resiliente
     validator: reliability
     points: 25
     all: true
     checks:
-      - {type: exists, path: "instanceGroups[\"web-mig\"]", expect: {distributionZones: {minLen: 3}, autoHealing: {regex: "web-hc"}}, desc: "Regional MIG over 3 zones with autohealing"}
-      - {type: http, target: "lb:web-lb", path: /, status: 200, desc: "Storefront serving"}
-  - name: Zone failure survived
+      - {type: exists, path: "instanceGroups[\"web-mig\"]", expect: {distributionZones: {minLen: 3}, autoHealing: {regex: "web-hc"}}, desc: "MIG regional en 3 zonas con autorreparación"}
+      - {type: http, target: "lb:web-lb", path: /, status: 200, desc: "La tienda sirve"}
+  - name: Caída de zona superada
     validator: functional
     points: 25
     checks:
-      - {type: chaos, experiment: zone-outage, minSlo: 99, minMinutes: 5, desc: "Zone-outage experiment held at ≥99%"}
-  - name: Instance loss survived
+      - {type: chaos, experiment: zone-outage, minSlo: 99, minMinutes: 5, desc: "El experimento zone-outage se mantuvo en ≥99 %"}
+  - name: Pérdida de instancia superada
     validator: functional
     points: 15
     checks:
-      - {type: chaos, experiment: kill-instance, minSlo: 99, desc: "Kill-instance experiment held"}
-  - name: Experiment report
+      - {type: chaos, experiment: kill-instance, minSlo: 99, desc: "El experimento kill-instance se cumplió"}
+  - name: Informe del experimento
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [report], keywords: [[hypothesis, hipotesis], [zone, zona], [regional, managed instance group, mig], [99, slo]], desc: "Hypothesis, observations and conclusion"}
+      - {type: evidence, fields: [report], keywords: [[hypothesis, hipotesis], [zone, zona], [regional, managed instance group, mig, grupo de instancias gestionado], [99, slo]], desc: "Hipótesis, observaciones y conclusión"}
+en:
+  title: 'Chaos Engineering: prove the storefront survives a zone failure'
+  summary: State a hypothesis, break things on purpose, watch the SLO — then redesign the web tier until the experiment holds.
+  story: |
+    The storefront `web-lb` is served by a single VM `web-1` in `{{.zone}}`. Use the **chaos** tool:
+
+    ```
+    chaos run zone-outage --zone={{.zone}} --target=lb:web-lb --slo=99 --duration=5
+    chaos run kill-instance --instance=NAME --target=lb:web-lb --slo=99 --duration=5
+    chaos history
+    ```
+
+    1. Run the zone experiment against the current design and watch the hypothesis fail.
+    2. Rebuild the web tier from the `web-tpl` template as a **regional** managed instance group (3 zones,
+       autohealing with `web-hc`) behind the same load balancer, and retire the zonal group.
+    3. Re-run both experiments until the hypothesis holds, and write the experiment report.
+  objectives:
+    - Define steady state and hypothesis
+    - Observe the failure on the current design
+    - Redesign for zonal failure and instance loss
+    - Prove it with experiments and report
+  hints:
+    - '`gcloud compute instance-groups managed create NAME --region=REGION --template=... --size=3 --health-check=web-hc`'
+    - Add the new group to `web-be` (`--instance-group-region`) and remove `web-ig` before experimenting again.
+  ticket:
+    summary: Our SLO is 99% availability. Architecture review says the web tier 'should' survive a zone outage. Prove it — with an experiment, not a slide.
+  text:
+    Fallo observado primero: Failure observed first
+    Experimento ejecutado contra el diseño original: Ran the experiment against the original design
+    Diseño resiliente: Resilient design
+    MIG regional en 3 zonas con autorreparación: Regional MIG over 3 zones with autohealing
+    La tienda sirve: Storefront serving
+    Caída de zona superada: Zone failure survived
+    El experimento zone-outage se mantuvo en ≥99 %: Zone-outage experiment held at ≥99%
+    Pérdida de instancia superada: Instance loss survived
+    El experimento kill-instance se cumplió: Kill-instance experiment held
+    Informe del experimento: Experiment report
+    Hipótesis, observaciones y conclusión: Hypothesis, observations and conclusion
+    Sam (SRE): Sam (SRE)

@@ -1,6 +1,6 @@
 id: gke-k02-workload-identity
-title: "Workload Identity: replace a service-account key the right way"
-summary: Give a GKE workload its own Google identity with Workload Identity — no keys, no node-wide permissions.
+title: "Workload Identity: sustituir una clave de cuenta de servicio como es debido"
+summary: 'Da a una carga de GKE su propia identidad de Google con Workload Identity: sin claves y sin permisos para todo el nodo.'
 track: gke
 day: 2
 level: intermediate
@@ -50,30 +50,30 @@ setup: |
 traffic:
   - {name: reports, target: "k8s:apps-gke/reports", path: /reports, rps: 5}
 story: |
-  The **reports** service on `apps-gke` must read `gs://reports-{{.project}}`. In staging a developer
-  downloaded a JSON key for a service account and mounted it as a Kubernetes Secret. Security has
-  banned service-account keys, and the cluster's nodes run as `gke-nodes`, a minimal identity that
-  must stay minimal.
+  El servicio **reports** de `apps-gke` tiene que leer `gs://reports-{{.project}}`. En staging, un desarrollador
+  descargó una clave JSON de una cuenta de servicio y la montó como Secret de Kubernetes. Seguridad ha
+  prohibido las claves de cuentas de servicio, y los nodos del clúster se ejecutan como `gke-nodes`, una identidad mínima que
+  debe seguir siéndolo.
 
-  Give **only the reports workload** read access to the bucket with **Workload Identity**:
-  a dedicated Google service account, a Kubernetes service account mapped to it, and a cluster whose
-  nodes actually hand pods that identity.
+  Da acceso de lectura al bucket **solo a la carga reports** con **Workload Identity**:
+  una cuenta de servicio de Google dedicada, una cuenta de servicio de Kubernetes asociada a ella y un clúster cuyos
+  nodos entreguen de verdad esa identidad a los pods.
 constraints: [no-basic-roles]
 objectives:
-  - Enable Workload Identity on the cluster and on its node pool
-  - Create a dedicated Google service account with read-only access to the bucket
-  - Map a Kubernetes service account to it and run reports with it
-  - No keys, no bucket access for the node identity
+  - Activa Workload Identity en el clúster y en su grupo de nodos
+  - Crea una cuenta de servicio de Google dedicada con acceso de solo lectura al bucket
+  - Asóciale una cuenta de servicio de Kubernetes y ejecuta reports con ella
+  - Sin claves y sin acceso al bucket para la identidad de los nodos
 hints:
-  - text: "Workload Identity has three parts: the cluster's workload pool, the node pool's metadata mode, and an IAM binding that lets `PROJECT.svc.id.goog[NAMESPACE/KSA]` impersonate the Google service account."
-  - text: "`gcloud container node-pools update default-pool --cluster=apps-gke --workload-metadata=GKE_METADATA`; the KSA needs the annotation `iam.gke.io/gcp-service-account`."
-  - text: "Grant `roles/iam.workloadIdentityUser` on the Google service account (not on the project) to `serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]`."
+  - text: "Workload Identity tiene tres partes: el workload pool del clúster, el modo de metadatos del grupo de nodos y un binding de IAM que permite a `PROJECT.svc.id.goog[NAMESPACE/KSA]` suplantar a la cuenta de servicio de Google."
+  - text: "`gcloud container node-pools update default-pool --cluster=apps-gke --workload-metadata=GKE_METADATA`; la KSA necesita la anotación `iam.gke.io/gcp-service-account`."
+  - text: "Concede `roles/iam.workloadIdentityUser` en la cuenta de servicio de Google (no en el proyecto) a `serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]`."
 evidence:
-  prompt: Explain why Workload Identity is safer than the key and than granting the node identity.
+  prompt: Explica por qué Workload Identity es más seguro que la clave y que dar permisos a la identidad de los nodos.
   fields: [explanation]
   minWords: 25
   sample:
-    explanation: "Workload Identity gives only the reports pods the reports-sa identity through short-lived tokens, so there is no long-lived key to leak or rotate, and the node service account stays minimal instead of giving every pod on the node access to the bucket."
+    explanation: "Workload Identity da la identidad reports-sa solo a los pods de reports mediante tokens de corta duración, así que no hay una clave de larga duración que pueda filtrarse o que haya que rotar, y la cuenta de servicio de los nodos sigue siendo mínima en lugar de dar acceso al bucket a todos los pods del nodo."
 solution: |
   gcloud container clusters get-credentials apps-gke --zone={{.zone}}
   kubectl logs deployment/reports
@@ -148,33 +148,69 @@ shortcuts:
       gcloud storage buckets add-iam-policy-binding gs://reports-{{.project}} --member=serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
       gcloud iam service-accounts keys create key.json --iam-account=reports-sa@{{.project}}.iam.gserviceaccount.com
 rubric:
-  - name: Reports read the bucket
+  - name: reports lee el bucket
     validator: functional
     points: 30
     checks:
-      - {type: http, target: "k8s:apps-gke/reports", path: /reports, status: 200, desc: "reports serves /reports from the bucket"}
-  - name: Workload Identity configured
+      - {type: http, target: "k8s:apps-gke/reports", path: /reports, status: 200, desc: "reports sirve /reports desde el bucket"}
+  - name: Workload Identity configurado
     validator: state
     points: 25
     all: true
     checks:
-      - {type: exists, path: "clusters[\"apps-gke\"]", expect: {workloadPool: {eq: "{{.project}}.svc.id.goog"}}, desc: "Cluster has a workload pool"}
-      - {type: exists, path: "clusters[\"apps-gke\"]", expect: {nodePools: {regex: "GKE_METADATA"}}, desc: "Node pool exposes the GKE metadata server"}
-  - name: No keys, no node-wide access
+      - {type: exists, path: "clusters[\"apps-gke\"]", expect: {workloadPool: {eq: "{{.project}}.svc.id.goog"}}, desc: "El clúster tiene un workload pool"}
+      - {type: exists, path: "clusters[\"apps-gke\"]", expect: {nodePools: {regex: "GKE_METADATA"}}, desc: "El grupo de nodos expone el servidor de metadatos de GKE"}
+  - name: Sin claves ni acceso para todo el nodo
     validator: security
     points: 30
     critical: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [SA_USER_MANAGED_KEY], desc: "No user-managed service-account keys"}
-      - {type: iam, principal: "serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "The node identity cannot read the bucket"}
-      - {type: no_basic_roles, members: ["serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com"], desc: "The node identity has no basic roles"}
-  - name: Least privilege
+      - {type: policy, package: gcplab.security, ids: [SA_USER_MANAGED_KEY], desc: "Ninguna clave de cuenta de servicio gestionada por usuarios"}
+      - {type: iam, principal: "serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "La identidad de los nodos no puede leer el bucket"}
+      - {type: no_basic_roles, members: ["serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com"], desc: "La identidad de los nodos no tiene roles básicos"}
+  - name: Mínimo privilegio
     validator: security
     points: 5
     checks:
-      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "reports-sa is read-only"}
-  - name: Explanation
+      - {type: iam, principal: "serviceAccount:reports-sa@{{.project}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:reports-{{.project}}/data/report.csv", expect: false, desc: "reports-sa es de solo lectura"}
+  - name: Explicación
     validator: evidence
     points: 10
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[key, clave], [node, nodo], [token, short-lived, temporal, pod]], desc: "Explains the risks avoided"}
+      - {type: evidence, fields: [explanation], keywords: [[key, clave], [node, nodo], [token, short-lived, temporal, pod, corta duracion]], desc: "Explica los riesgos evitados"}
+en:
+  title: 'Workload Identity: replace a service-account key the right way'
+  summary: Give a GKE workload its own Google identity with Workload Identity — no keys, no node-wide permissions.
+  story: |
+    The **reports** service on `apps-gke` must read `gs://reports-{{.project}}`. In staging a developer
+    downloaded a JSON key for a service account and mounted it as a Kubernetes Secret. Security has
+    banned service-account keys, and the cluster's nodes run as `gke-nodes`, a minimal identity that
+    must stay minimal.
+
+    Give **only the reports workload** read access to the bucket with **Workload Identity**:
+    a dedicated Google service account, a Kubernetes service account mapped to it, and a cluster whose
+    nodes actually hand pods that identity.
+  evidencePrompt: Explain why Workload Identity is safer than the key and than granting the node identity.
+  objectives:
+    - Enable Workload Identity on the cluster and on its node pool
+    - Create a dedicated Google service account with read-only access to the bucket
+    - Map a Kubernetes service account to it and run reports with it
+    - No keys, no bucket access for the node identity
+  hints:
+    - 'Workload Identity has three parts: the cluster''s workload pool, the node pool''s metadata mode, and an IAM binding that lets `PROJECT.svc.id.goog[NAMESPACE/KSA]` impersonate the Google service account.'
+    - '`gcloud container node-pools update default-pool --cluster=apps-gke --workload-metadata=GKE_METADATA`; the KSA needs the annotation `iam.gke.io/gcp-service-account`.'
+    - Grant `roles/iam.workloadIdentityUser` on the Google service account (not on the project) to `serviceAccount:{{.project}}.svc.id.goog[default/reports-ksa]`.
+  text:
+    reports lee el bucket: Reports read the bucket
+    reports sirve /reports desde el bucket: reports serves /reports from the bucket
+    Workload Identity configurado: Workload Identity configured
+    El clúster tiene un workload pool: Cluster has a workload pool
+    El grupo de nodos expone el servidor de metadatos de GKE: Node pool exposes the GKE metadata server
+    Sin claves ni acceso para todo el nodo: No keys, no node-wide access
+    Ninguna clave de cuenta de servicio gestionada por usuarios: No user-managed service-account keys
+    La identidad de los nodos no puede leer el bucket: The node identity cannot read the bucket
+    La identidad de los nodos no tiene roles básicos: The node identity has no basic roles
+    Mínimo privilegio: Least privilege
+    reports-sa es de solo lectura: reports-sa is read-only
+    Explicación: Explanation
+    Explica los riesgos evitados: Explains the risks avoided

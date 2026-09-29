@@ -1,6 +1,6 @@
 id: career-i01-cloud-engineer-interview
-title: "Interview Mode: Cloud Engineer technical interview"
-summary: A progressive technical interview with follow-up questions that depend on your answers, plus a live exercise in a real (simulated) project.
+title: "Modo entrevista: entrevista técnica de Cloud Engineer"
+summary: Una entrevista técnica progresiva con repreguntas que dependen de tus respuestas, más un ejercicio en directo en un proyecto real (simulado).
 track: career
 day: 1
 level: intermediate
@@ -20,63 +20,63 @@ setup: |
   gcloud compute routers create interview-router --network=interview-vpc --region={{.region}}
   gcloud compute instances create app-1 --zone={{.zone}} --subnet=apps --no-address --metadata=startup-script='apt-get update && apt-get install -y nginx'
 story: |
-  You are interviewing for **Cloud Engineer** at Nebula. The interviewer asks one question at a time and digs
-  deeper depending on what you answer — run `interview` to get the next question and
-  `answer ID N "why"` to reply. Half-way through there is a live exercise:
+  Te están entrevistando para el puesto de **Cloud Engineer** en Nebula. El entrevistador hace una pregunta cada vez y profundiza
+  según lo que respondas: ejecuta `interview` para recibir la siguiente pregunta y
+  `answer ID N "por qué"` para responder. A mitad de la entrevista hay un ejercicio en directo:
 
-  > `app-1` in `{{.project}}` has no public IP and cannot install packages. Fix it **without** giving it a
-  > public IP, while I watch.
+  > `app-1` en `{{.project}}` no tiene IP pública y no puede instalar paquetes. Arréglalo **sin** darle una
+  > IP pública, mientras miro.
 objectives:
-  - Answer progressively harder questions and justify them
-  - Handle follow-up questions
-  - Solve the live exercise securely
-  - Explain your fix
+  - Responde a preguntas cada vez más difíciles y justifícalas
+  - Gestiona las repreguntas
+  - Resuelve el ejercicio en directo de forma segura
+  - Explica tu corrección
 quiz:
   - id: q1
-    question: "A /24 subnet: how many addresses can VMs use in Google Cloud?"
+    question: "Una subred /24: ¿cuántas direcciones pueden usar las VM en Google Cloud?"
     options: ["256", "254", "252", "250"]
     answer: [2]
     justify: true
-    keywords: [[reserved, reservad, network, broadcast, gateway, 4]]
+    keywords: [[reserved, reservad, network, broadcast, gateway, 4, red, pasarela]]
   - id: q2
-    question: "A developer needs to read objects in one bucket. Which grant do you give?"
-    options: ["roles/editor on the project", "roles/storage.objectViewer on the bucket", "roles/storage.admin on the project", "Make the bucket public"]
+    question: "Una desarrolladora necesita leer objetos de un bucket. ¿Qué permiso le das?"
+    options: ["roles/editor en el proyecto", "roles/storage.objectViewer en el bucket", "roles/storage.admin en el proyecto", "Hacer público el bucket"]
     answer: [1]
     justify: true
-    keywords: [[least privilege, minimo privilegio, minimum], [bucket]]
+    keywords: [[least privilege, minimo privilegio, minimum, minimo], [bucket]]
   - id: q2b
     after: q2
     when: correct
-    probe: "Good. Let's make it harder."
-    question: "Now they need that access only until Friday. How?"
-    options: ["Remember to remove it on Friday", "An IAM Condition with request.time < Friday", "A custom role", "A service account key that expires"]
+    probe: "Bien. Vamos a complicarlo un poco."
+    question: "Ahora solo necesita ese acceso hasta el viernes. ¿Cómo lo haces?"
+    options: ["Acordarme de quitarlo el viernes", "Una condición de IAM con request.time < viernes", "Un rol personalizado", "Una clave de cuenta de servicio que caduque"]
     answer: [1]
   - id: q2c
     after: q2
     when: incorrect
-    probe: "Hmm, let's step back."
-    question: "Which is the principle behind granting access in Google Cloud?"
-    options: ["Grant broad roles to avoid tickets", "Least privilege at the smallest scope", "Only use basic roles", "Share one admin account"]
+    probe: "Mmm, demos un paso atrás."
+    question: "¿Cuál es el principio para conceder accesos en Google Cloud?"
+    options: ["Conceder roles amplios para evitar tickets", "Mínimo privilegio en el ámbito más pequeño", "Usar solo roles básicos", "Compartir una cuenta de administrador"]
     answer: [1]
   - id: q3
-    question: "A VM without an external IP must download OS updates. What do you configure?"
-    options: ["An external IP", "Cloud NAT on a Cloud Router for its subnet", "Private Google Access only", "A VPN"]
+    question: "Una VM sin IP externa tiene que descargar actualizaciones del sistema. ¿Qué configuras?"
+    options: ["Una IP externa", "Cloud NAT en un Cloud Router para su subred", "Solo acceso privado a Google", "Una VPN"]
     answer: [1]
     justify: true
-    keywords: [[nat], [external ip, public ip, ip publica, egress]]
+    keywords: [[nat], [external ip, public ip, ip publica, egress, ip externa]]
   - id: q3b
     after: q3
     when: correct
-    probe: "Right — and a follow-up."
-    question: "And what does Private Google Access add on top?"
-    options: ["Internet access", "Access to Google APIs (e.g. Cloud Storage) without NAT or public IPs", "SSH access", "Nothing"]
+    probe: "Correcto. Y ahora una repregunta."
+    question: "¿Y qué añade además el acceso privado a Google?"
+    options: ["Acceso a internet", "Acceso a las API de Google (p. ej. Cloud Storage) sin NAT ni IP públicas", "Acceso por SSH", "Nada"]
     answer: [1]
 hints:
-  - text: "The router already exists; NAT is configured on the router."
+  - text: "El router ya existe; el NAT se configura en el router."
 evidence:
   fields: [explanation]
   sample:
-    explanation: app-1 has no external IP and the network had no NAT, so it had no egress path to the internet. I configured Cloud NAT on interview-router for all subnet ranges, which gives outbound access without exposing the VM with a public IP.
+    explanation: app-1 no tiene IP externa y la red no tenía NAT, así que no tenía camino de salida a internet. Configuré Cloud NAT en interview-router para todos los rangos de subred, lo que da salida sin exponer la VM con una IP pública.
 solution: |
   interview
   answer q1 3 "Google reserves four addresses per subnet: network, gateway, second-to-last and broadcast"
@@ -91,24 +91,83 @@ solution: |
   interview
   gcloud compute routers nats create interview-nat --router=interview-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
 rubric:
-  - name: Technical answers
+  - name: Respuestas técnicas
     validator: quiz
     points: 40
     checks:
-      - {type: quiz, ratio: 0.8, desc: "Progressive questions and follow-ups"}
-  - name: Live exercise
+      - {type: quiz, ratio: 0.8, desc: "Preguntas progresivas y repreguntas"}
+  - name: Ejercicio en directo
     validator: functional
     points: 30
     checks:
-      - {type: egress, from: "vm:app-1", desc: "app-1 reaches the internet"}
-  - name: Secure solution
+      - {type: egress, from: "vm:app-1", desc: "app-1 llega a internet"}
+  - name: Solución segura
     validator: security
     points: 15
     critical: true
     checks:
-      - {type: exists, path: "instances[\"app-1\"]", expect: {natIP: {empty: true}}, desc: "Still no public IP"}
-  - name: Explanation
+      - {type: exists, path: "instances[\"app-1\"]", expect: {natIP: {empty: true}}, desc: "Sigue sin IP pública"}
+  - name: Explicación
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[nat], [external ip, public ip, ip publica], [egress, salida, outbound]], desc: "Explain the fix"}
+      - {type: evidence, fields: [explanation], keywords: [[nat], [external ip, public ip, ip publica, ip externa], [egress, salida, outbound, saliente]], desc: "Explica la corrección"}
+en:
+  title: 'Interview Mode: Cloud Engineer technical interview'
+  summary: A progressive technical interview with follow-up questions that depend on your answers, plus a live exercise in a real (simulated) project.
+  story: |
+    You are interviewing for **Cloud Engineer** at Nebula. The interviewer asks one question at a time and digs
+    deeper depending on what you answer — run `interview` to get the next question and
+    `answer ID N "why"` to reply. Half-way through there is a live exercise:
+
+    > `app-1` in `{{.project}}` has no public IP and cannot install packages. Fix it **without** giving it a
+    > public IP, while I watch.
+  objectives:
+    - Answer progressively harder questions and justify them
+    - Handle follow-up questions
+    - Solve the live exercise securely
+    - Explain your fix
+  hints:
+    - The router already exists; NAT is configured on the router.
+  text:
+    'Una subred /24: ¿cuántas direcciones pueden usar las VM en Google Cloud?': 'A /24 subnet: how many addresses can VMs use in Google Cloud?'
+    256: 256
+    254: 254
+    252: 252
+    250: 250
+    Una desarrolladora necesita leer objetos de un bucket. ¿Qué permiso le das?: A developer needs to read objects in one bucket. Which grant do you give?
+    roles/editor en el proyecto: roles/editor on the project
+    roles/storage.objectViewer en el bucket: roles/storage.objectViewer on the bucket
+    roles/storage.admin en el proyecto: roles/storage.admin on the project
+    Hacer público el bucket: Make the bucket public
+    Ahora solo necesita ese acceso hasta el viernes. ¿Cómo lo haces?: Now they need that access only until Friday. How?
+    Bien. Vamos a complicarlo un poco.: Good. Let's make it harder.
+    Acordarme de quitarlo el viernes: Remember to remove it on Friday
+    Una condición de IAM con request.time < viernes: An IAM Condition with request.time < Friday
+    Un rol personalizado: A custom role
+    Una clave de cuenta de servicio que caduque: A service account key that expires
+    ¿Cuál es el principio para conceder accesos en Google Cloud?: Which is the principle behind granting access in Google Cloud?
+    Mmm, demos un paso atrás.: Hmm, let's step back.
+    Conceder roles amplios para evitar tickets: Grant broad roles to avoid tickets
+    Mínimo privilegio en el ámbito más pequeño: Least privilege at the smallest scope
+    Usar solo roles básicos: Only use basic roles
+    Compartir una cuenta de administrador: Share one admin account
+    Una VM sin IP externa tiene que descargar actualizaciones del sistema. ¿Qué configuras?: A VM without an external IP must download OS updates. What do you configure?
+    Una IP externa: An external IP
+    Cloud NAT en un Cloud Router para su subred: Cloud NAT on a Cloud Router for its subnet
+    Solo acceso privado a Google: Private Google Access only
+    Una VPN: A VPN
+    ¿Y qué añade además el acceso privado a Google?: And what does Private Google Access add on top?
+    Correcto. Y ahora una repregunta.: Right — and a follow-up.
+    Acceso a internet: Internet access
+    Acceso a las API de Google (p. ej. Cloud Storage) sin NAT ni IP públicas: Access to Google APIs (e.g. Cloud Storage) without NAT or public IPs
+    Acceso por SSH: SSH access
+    Nada: Nothing
+    Respuestas técnicas: Technical answers
+    Preguntas progresivas y repreguntas: Progressive questions and follow-ups
+    Ejercicio en directo: Live exercise
+    app-1 llega a internet: app-1 reaches the internet
+    Solución segura: Secure solution
+    Sigue sin IP pública: Still no public IP
+    Explicación: Explanation
+    Explica la corrección: Explain the fix

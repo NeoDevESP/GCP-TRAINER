@@ -1,6 +1,6 @@
 id: cap-devops-platform
-title: "Capstone (DevOps): from Terraform to a rollback on GKE"
-summary: Build the delivery platform as code, a least-privilege supply chain from commit to image, deploy to GKE, detect a bad release and roll back.
+title: "Proyecto final (DevOps): de Terraform a una marcha atrás en GKE"
+summary: Construye la plataforma de entrega como código y una cadena de suministro con mínimo privilegio desde el commit hasta la imagen, despliega en GKE, detecta una versión mala y vuelve atrás.
 track: capstones
 day: 3
 level: professional
@@ -51,34 +51,34 @@ ticket:
   id: CHG-600
   kind: CHG
   priority: P3
-  summary: "Platform for the storefront team: infrastructure as code, CI from the repo, deployments to web-gke and a proven rollback."
-  reporter: Kai (platform team)
+  summary: "Plataforma para el equipo de la tienda: infraestructura como código, CI desde el repositorio, despliegues en web-gke y una marcha atrás demostrada."
+  reporter: Kai (equipo de plataforma)
 actors:
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[build, cloud build, identity, service account, cuenta]], answer: "Builds run as a dedicated builder identity that can only push images — never the default Cloud Build account with editor."}
-      - {keywords: [[tag, latest, immutable, inmutable]], answer: "Deploy immutable, commit-tagged images. `latest` is not an audit trail."}
+      - {keywords: [[build, cloud build, identity, service account, cuenta, compilacion, compil, identidad, cuenta de servicio]], answer: "Las compilaciones se ejecutan con una identidad builder dedicada que solo puede publicar imágenes; nunca con la cuenta por defecto de Cloud Build con editor."}
+      - {keywords: [[tag, latest, immutable, inmutable, etiqueta]], answer: "Desplegad imágenes inmutables y etiquetadas con el commit. `latest` no sirve como rastro de auditoría."}
 story: |
-  Build the storefront delivery platform in `{{.project}}`:
+  Construye la plataforma de entrega de la tienda en `{{.project}}`:
 
-  1. **Terraform** (`main.tf`): Docker repository `releases` in {{.region}}, service account `builder`, and the
-     role that lets `builder` push images — nothing more.
-  2. **CI**: trigger `storefront-main` on repo `storefront` (branch `main`) running `cloudbuild.yaml` as `builder`,
-     producing `…/releases/storefront:$SHORT_SHA`.
-  3. **Deploy** the first commit's image to cluster `web-gke` with `k8s.yaml` (replace `IMAGE_PLACEHOLDER`).
-     The nodes run as `gke-nodes` — make sure they can pull.
-  4. Ship a second commit that turns out to be broken (`LABEL sim.behavior=payments-api:3.0-bad` in the
-     Dockerfile), deploy it, notice the failure and **roll back**.
+  1. **Terraform** (`main.tf`): repositorio Docker `releases` en {{.region}}, cuenta de servicio `builder` y el
+     rol que permite a `builder` publicar imágenes; nada más.
+  2. **CI**: activador `storefront-main` en el repositorio `storefront` (rama `main`) que ejecuta `cloudbuild.yaml` como `builder`
+     y produce `…/releases/storefront:$SHORT_SHA`.
+  3. **Despliega** la imagen del primer commit en el clúster `web-gke` con `k8s.yaml` (sustituye `IMAGE_PLACEHOLDER`).
+     Los nodos se ejecutan como `gke-nodes`: asegúrate de que pueden descargar las imágenes.
+  4. Publica un segundo commit que resulta estar roto (`LABEL sim.behavior=payments-api:3.0-bad` en el
+     Dockerfile), despliégalo, detecta el fallo y **vuelve atrás**.
 objectives:
-  - Infrastructure as code with a clean plan
-  - Least-privilege supply chain from commit to immutable image
-  - Deployment to GKE that pulls from the private registry
-  - Failed release detected and rolled back
+  - Infraestructura como código con un plan limpio
+  - Cadena de suministro con mínimo privilegio desde el commit hasta una imagen inmutable
+  - Despliegue en GKE que descarga del registro privado
+  - Versión fallida detectada y revertida
 evidence:
   fields: [postmortem]
   sample:
-    postmortem: The second commit's image crashed on start (CrashLoopBackOff), so readiness failed; kubectl rollout undo returned storefront to the first commit's image. Terraform manages the registry, the builder identity and its artifactregistry.writer role; gke-nodes only has artifactregistry.reader.
+    postmortem: La imagen del segundo commit fallaba al arrancar (CrashLoopBackOff), así que fallaba la readiness; kubectl rollout undo devolvió storefront a la imagen del primer commit. Terraform gestiona el registro, la identidad builder y su rol artifactregistry.writer; gke-nodes solo tiene artifactregistry.reader.
 solution: |
   cat > main.tf <<'HCL'
   provider "google" {
@@ -130,38 +130,80 @@ solution: |
   kubectl rollout undo deployment/storefront
   kubectl get pods
 rubric:
-  - name: Infrastructure as code
+  - name: Infraestructura como código
     validator: state
     points: 15
     all: true
     checks:
-      - {type: terraform_clean, minResources: 3, desc: "Terraform manages registry, builder and its role with a clean plan"}
-      - {type: tf_state, address: google_project_iam_member.builder_push, desc: "Builder permissions in code"}
-  - name: Supply chain
+      - {type: terraform_clean, minResources: 3, desc: "Terraform gestiona el registro, builder y su rol con un plan limpio"}
+      - {type: tf_state, address: google_project_iam_member.builder_push, desc: "Permisos de builder en el código"}
+  - name: Cadena de suministro
     validator: security
     points: 25
     critical: true
     all: true
     checks:
-      - {type: build, trigger: true, imageRegex: "{{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:", shaTag: true, desc: "Triggered build produced a commit-tagged image"}
-      - {type: exists, path: "buildTriggers[\"storefront-main\"]", expect: {serviceAccount: "builder@{{.project}}.iam.gserviceaccount.com"}, desc: "Builds run as builder"}
-      - {type: no_basic_roles, members: ["serviceAccount:builder@{{.project}}.iam.gserviceaccount.com", "serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com"], desc: "No basic roles in the supply chain"}
-  - name: Deployed from the private registry
+      - {type: build, trigger: true, imageRegex: "{{.region}}-docker.pkg.dev/{{.project}}/releases/storefront:", shaTag: true, desc: "Una compilación activada produjo una imagen etiquetada con el commit"}
+      - {type: exists, path: "buildTriggers[\"storefront-main\"]", expect: {serviceAccount: "builder@{{.project}}.iam.gserviceaccount.com"}, desc: "Las compilaciones se ejecutan como builder"}
+      - {type: no_basic_roles, members: ["serviceAccount:builder@{{.project}}.iam.gserviceaccount.com", "serviceAccount:gke-nodes@{{.project}}.iam.gserviceaccount.com"], desc: "Sin roles básicos en la cadena de suministro"}
+  - name: Desplegado desde el registro privado
     validator: functional
     points: 20
     all: true
     checks:
-      - {type: k8s_ready, cluster: web-gke, deployment: storefront, min: 3, desc: "3 ready replicas"}
-      - {type: http, target: "k8s:web-gke/storefront", path: /shop, status: 502, not: true, desc: "Service answers through its load balancer"}
-  - name: Rollback proven
+      - {type: k8s_ready, cluster: web-gke, deployment: storefront, min: 3, desc: "3 réplicas listas"}
+      - {type: http, target: "k8s:web-gke/storefront", path: /shop, status: 502, not: true, desc: "El servicio responde a través de su balanceador de carga"}
+  - name: Marcha atrás demostrada
     validator: functional
     points: 20
     all: true
     checks:
-      - {type: exists, path: "clusters[\"web-gke\"].k8s.namespaces.default.deployments.storefront", expect: {revision: {gte: 3}}, desc: "Bad release rolled out and rolled back"}
-      - {type: command, regex: "rollout undo", desc: "Rolled back with kubectl rollout undo"}
-  - name: Postmortem
+      - {type: exists, path: "clusters[\"web-gke\"].k8s.namespaces.default.deployments.storefront", expect: {revision: {gte: 3}}, desc: "Versión mala desplegada y revertida"}
+      - {type: command, regex: "rollout undo", desc: "Revertida con kubectl rollout undo"}
+  - name: Post-mortem
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [postmortem], keywords: [[rollback, rollout undo, revert], [crash, readiness, fail], [writer, reader, least privilege, minimo]], desc: "What failed, how it was detected and rolled back"}
+      - {type: evidence, fields: [postmortem], keywords: [[rollback, rollout undo, revert, marcha atras, deshac], [crash, readiness, fail, fall], [writer, reader, least privilege, minimo, escritor, escritura, lector, minimo privilegio]], desc: "Qué falló, cómo se detectó y cómo se revirtió"}
+en:
+  title: 'Capstone (DevOps): from Terraform to a rollback on GKE'
+  summary: Build the delivery platform as code, a least-privilege supply chain from commit to image, deploy to GKE, detect a bad release and roll back.
+  story: |
+    Build the storefront delivery platform in `{{.project}}`:
+
+    1. **Terraform** (`main.tf`): Docker repository `releases` in {{.region}}, service account `builder`, and the
+       role that lets `builder` push images — nothing more.
+    2. **CI**: trigger `storefront-main` on repo `storefront` (branch `main`) running `cloudbuild.yaml` as `builder`,
+       producing `…/releases/storefront:$SHORT_SHA`.
+    3. **Deploy** the first commit's image to cluster `web-gke` with `k8s.yaml` (replace `IMAGE_PLACEHOLDER`).
+       The nodes run as `gke-nodes` — make sure they can pull.
+    4. Ship a second commit that turns out to be broken (`LABEL sim.behavior=payments-api:3.0-bad` in the
+       Dockerfile), deploy it, notice the failure and **roll back**.
+  objectives:
+    - Infrastructure as code with a clean plan
+    - Least-privilege supply chain from commit to immutable image
+    - Deployment to GKE that pulls from the private registry
+    - Failed release detected and rolled back
+  ticket:
+    summary: 'Platform for the storefront team: infrastructure as code, CI from the repo, deployments to web-gke and a proven rollback.'
+  text:
+    Infraestructura como código: Infrastructure as code
+    Terraform gestiona el registro, builder y su rol con un plan limpio: Terraform manages registry, builder and its role with a clean plan
+    Permisos de builder en el código: Builder permissions in code
+    Cadena de suministro: Supply chain
+    Una compilación activada produjo una imagen etiquetada con el commit: Triggered build produced a commit-tagged image
+    Las compilaciones se ejecutan como builder: Builds run as builder
+    Sin roles básicos en la cadena de suministro: No basic roles in the supply chain
+    Desplegado desde el registro privado: Deployed from the private registry
+    3 réplicas listas: 3 ready replicas
+    El servicio responde a través de su balanceador de carga: Service answers through its load balancer
+    Marcha atrás demostrada: Rollback proven
+    Versión mala desplegada y revertida: Bad release rolled out and rolled back
+    Revertida con kubectl rollout undo: Rolled back with kubectl rollout undo
+    Post-mortem: Postmortem
+    Qué falló, cómo se detectó y cómo se revirtió: What failed, how it was detected and rolled back
+    Kai (equipo de plataforma): Kai (platform team)
+    Aisha (oficina del CISO): Aisha (CISO office)
+    ? Las compilaciones se ejecutan con una identidad builder dedicada que solo puede publicar imágenes; nunca con la cuenta por defecto de Cloud Build con editor.
+    : Builds run as a dedicated builder identity that can only push images — never the default Cloud Build account with editor.
+    Desplegad imágenes inmutables y etiquetadas con el commit. `latest` no sirve como rastro de auditoría.: Deploy immutable, commit-tagged images. `latest` is not an audit trail.

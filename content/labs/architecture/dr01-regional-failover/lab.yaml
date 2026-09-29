@@ -1,6 +1,6 @@
 id: arch-dr01-regional-failover
-title: "Disaster drill: europe-west1 is down"
-summary: Execute a regional failover — promote the cross-region replica, repoint the standby service and verify RTO/RPO.
+title: "Simulacro de desastre: europe-west1 está caída"
+summary: 'Ejecuta una conmutación regional: promociona la réplica en otra región, reapunta el servicio en espera y verifica el RTO/RPO.'
 track: architect
 day: 1
 level: advanced
@@ -38,43 +38,43 @@ faults:
   - {type: region_outage, region: europe-west1}
 traffic:
   - {name: orders, target: "lb:orders-lb", path: /orders, rps: 30}
-constraints: [protect:orders-db]
+constraints: ['protect:orders-db']
 ticket:
   id: INC-9001
   kind: INC
   priority: P1
-  summary: "Google Cloud status page: europe-west1 degraded. Orders API returns 503. Execute the DR runbook."
-  reporter: Incident Commander
+  summary: "Página de estado de Google Cloud: europe-west1 degradada. La API de pedidos devuelve 503. Ejecuta el runbook de DR."
+  reporter: Responsable del incidente
 actors:
   - role: manager
-    name: Irene (engineering manager)
-    fallback: "What is our RTO and RPO right now? I need numbers for the board."
+    name: Irene (responsable de ingeniería)
+    fallback: "¿Cuál es nuestro RTO y nuestro RPO ahora mismo? Necesito cifras para el consejo."
     facts:
-      - {keywords: [[rto, rpo, target, objetivo]], answer: "Our DR policy: RTO 30 minutes, RPO 5 minutes. The replica in europe-west4 is asynchronous."}
-      - {keywords: [[primary, primario, delete, borrar, orders-db]], answer: "Do NOT delete the primary — when the region is back we need it for forensics and fail-back."}
+      - {keywords: [[rto, rpo, target, objetivo, destino]], answer: "Nuestra política de DR: RTO 30 minutos, RPO 5 minutos. La réplica de europe-west4 es asíncrona."}
+      - {keywords: [[primary, primario, delete, borrar, orders-db, primari, principal, borr, elimin]], answer: "NO borres la principal: cuando la región vuelva la necesitaremos para el análisis forense y la vuelta atrás."}
 story: |
-  **Disaster drill (for real this time).** `europe-west1` is unavailable. The global load balancer already
-  sends traffic to the standby service `orders-ew4` in `europe-west4`, but it still points at the primary
-  database `orders-db` in the failed region. A cross-region read replica `orders-db-dr` exists in europe-west4.
+  **Simulacro de desastre (esta vez de verdad).** `europe-west1` no está disponible. El balanceador global ya
+  envía el tráfico al servicio en espera `orders-ew4` en `europe-west4`, pero sigue apuntando a la base de datos
+  principal `orders-db` de la región caída. Existe una réplica de lectura en otra región, `orders-db-dr`, en europe-west4.
 
-  Execute the failover, verify orders work through `orders-lb`, and report the achieved RTO and RPO.
+  Ejecuta la conmutación, verifica que los pedidos funcionan a través de `orders-lb` e informa del RTO y el RPO conseguidos.
 objectives:
-  - Confirm the scope of the outage from evidence
-  - Promote the cross-region replica
-  - Repoint the standby service and verify end to end
-  - Report RTO/RPO and the fail-back plan
+  - Confirma el alcance de la caída a partir de evidencias
+  - Promociona la réplica de la otra región
+  - Reapunta el servicio en espera y verifica de extremo a extremo
+  - Informa del RTO/RPO y del plan de vuelta atrás
 quiz:
-  - {id: q1, question: "Why was the REGIONAL (HA) primary not enough for this incident?", options: ["HA protects against zone failures, not the loss of a whole region", "HA was misconfigured", "HA only works for MySQL", "HA needs a load balancer"], answer: [0]}
-  - {id: q2, question: "What bounds the data loss (RPO) of this failover?", options: ["The replication lag of the asynchronous cross-region replica", "The backup window at 02:00", "The Cloud Run concurrency", "The DNS TTL"], answer: [0]}
+  - {id: q1, question: "¿Por qué no bastó con la instancia principal REGIONAL (HA) en este incidente?", options: ["La HA protege frente a caídas de zona, no frente a la pérdida de toda una región", "La HA estaba mal configurada", "La HA solo funciona con MySQL", "La HA necesita un balanceador de carga"], answer: [0]}
+  - {id: q2, question: "¿Qué limita la pérdida de datos (RPO) de esta conmutación?", options: ["El retraso de replicación de la réplica asíncrona en otra región", "La ventana de copias de seguridad de las 02:00", "La concurrencia de Cloud Run", "El TTL del DNS"], answer: [0]}
 hints:
-  - text: "`gcloud sql instances promote-replica orders-db-dr` turns the replica into a standalone primary."
-  - text: "The standby Cloud Run service must attach and use the new instance connection name."
+  - text: "`gcloud sql instances promote-replica orders-db-dr` convierte la réplica en una instancia principal independiente."
+  - text: "El servicio de Cloud Run en espera debe conectarse al nombre de conexión de la nueva instancia y usarlo."
 evidence:
   fields: [rto, rpo, failback]
   sample:
-    rto: RTO was about 12 minutes from detection to orders working through the load balancer after promoting the replica and updating orders-ew4.
-    rpo: RPO equals the replication lag of the asynchronous replica, a few seconds, well under the 5 minute target.
-    failback: When europe-west1 recovers, rebuild a replica from the new primary in europe-west4, then schedule a controlled switchover back.
+    rto: El RTO fue de unos 12 minutos desde la detección hasta que los pedidos funcionaron a través del balanceador tras promocionar la réplica y actualizar orders-ew4.
+    rpo: El RPO equivale al retraso de replicación de la réplica asíncrona, unos segundos, muy por debajo del objetivo de 5 minutos.
+    failback: Cuando europe-west1 se recupere, reconstruir una réplica desde la nueva principal en europe-west4 y programar después una conmutación controlada de regreso.
 solution: |
   gcloud logging read 'logName:cloud-status' --limit=2 --format='value(textPayload)'
   gcloud sql instances describe orders-db-dr
@@ -84,27 +84,73 @@ solution: |
   curl -s http://$(gcloud compute forwarding-rules describe orders-lb --global --format='value(IPAddress)')/orders
   ticket update "Failed over to europe-west4: replica promoted and orders-ew4 repointed; orders are served again. Impact about 12 minutes, data loss limited to replication lag."
 rubric:
-  - name: Service restored
+  - name: Servicio restablecido
     validator: functional
     points: 35
     checks:
-      - {type: http, target: "lb:orders-lb", path: /orders, status: 200, desc: "Orders work through the global load balancer"}
-  - name: Failover executed
+      - {type: http, target: "lb:orders-lb", path: /orders, status: 200, desc: "Los pedidos funcionan a través del balanceador global"}
+  - name: Conmutación ejecutada
     validator: state
     points: 20
     all: true
     checks:
-      - {type: exists, path: "sqlInstances[\"orders-db-dr\"]", expect: {masterInstanceName: ""}, desc: "Replica promoted to primary"}
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", desc: "Primary kept for fail-back and forensics"}
-  - name: DR knowledge
+      - {type: exists, path: "sqlInstances[\"orders-db-dr\"]", expect: {masterInstanceName: ""}, desc: "Réplica promocionada a principal"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", desc: "Principal conservada para la vuelta atrás y el análisis forense"}
+  - name: Conocimientos de recuperación ante desastres
     validator: quiz
     points: 15
     checks:
-      - {type: quiz, ratio: 1, desc: "HA vs DR and what bounds RPO"}
-  - name: Communication & RTO/RPO
+      - {type: quiz, ratio: 1, desc: "HA frente a DR y qué limita el RPO"}
+  - name: Comunicación y RTO/RPO
     validator: evidence
     points: 30
     checks:
-      - {type: ticket_update, desc: "Stakeholder update"}
-      - {type: evidence, fields: [rto, rpo], keywords: [[rto, minut], [rpo, lag, replica]], desc: "RTO and RPO reported"}
-      - {type: evidence, fields: [failback], keywords: [[replica, switchover, fail-back, failback]], desc: "Fail-back plan"}
+      - {type: ticket_update, desc: "Actualización para las partes interesadas"}
+      - {type: evidence, fields: [rto, rpo], keywords: [[rto, minut], [rpo, lag, replica]], desc: "RTO y RPO comunicados"}
+      - {type: evidence, fields: [failback], keywords: [[replica, switchover, fail-back, failback, conmutacion, vuelta atras, regreso]], desc: "Plan de vuelta atrás"}
+en:
+  title: 'Disaster drill: europe-west1 is down'
+  summary: Execute a regional failover — promote the cross-region replica, repoint the standby service and verify RTO/RPO.
+  story: |
+    **Disaster drill (for real this time).** `europe-west1` is unavailable. The global load balancer already
+    sends traffic to the standby service `orders-ew4` in `europe-west4`, but it still points at the primary
+    database `orders-db` in the failed region. A cross-region read replica `orders-db-dr` exists in europe-west4.
+
+    Execute the failover, verify orders work through `orders-lb`, and report the achieved RTO and RPO.
+  objectives:
+    - Confirm the scope of the outage from evidence
+    - Promote the cross-region replica
+    - Repoint the standby service and verify end to end
+    - Report RTO/RPO and the fail-back plan
+  hints:
+    - '`gcloud sql instances promote-replica orders-db-dr` turns the replica into a standalone primary.'
+    - The standby Cloud Run service must attach and use the new instance connection name.
+  ticket:
+    summary: 'Google Cloud status page: europe-west1 degraded. Orders API returns 503. Execute the DR runbook.'
+  text:
+    ¿Por qué no bastó con la instancia principal REGIONAL (HA) en este incidente?: Why was the REGIONAL (HA) primary not enough for this incident?
+    La HA protege frente a caídas de zona, no frente a la pérdida de toda una región: HA protects against zone failures, not the loss of a whole region
+    La HA estaba mal configurada: HA was misconfigured
+    La HA solo funciona con MySQL: HA only works for MySQL
+    La HA necesita un balanceador de carga: HA needs a load balancer
+    ¿Qué limita la pérdida de datos (RPO) de esta conmutación?: What bounds the data loss (RPO) of this failover?
+    El retraso de replicación de la réplica asíncrona en otra región: The replication lag of the asynchronous cross-region replica
+    La ventana de copias de seguridad de las 02:00: The backup window at 02:00
+    La concurrencia de Cloud Run: The Cloud Run concurrency
+    El TTL del DNS: The DNS TTL
+    Servicio restablecido: Service restored
+    Los pedidos funcionan a través del balanceador global: Orders work through the global load balancer
+    Conmutación ejecutada: Failover executed
+    Réplica promocionada a principal: Replica promoted to primary
+    Principal conservada para la vuelta atrás y el análisis forense: Primary kept for fail-back and forensics
+    Conocimientos de recuperación ante desastres: DR knowledge
+    HA frente a DR y qué limita el RPO: HA vs DR and what bounds RPO
+    Comunicación y RTO/RPO: Communication & RTO/RPO
+    Actualización para las partes interesadas: Stakeholder update
+    RTO y RPO comunicados: RTO and RPO reported
+    Plan de vuelta atrás: Fail-back plan
+    Responsable del incidente: Incident Commander
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    ¿Cuál es nuestro RTO y nuestro RPO ahora mismo? Necesito cifras para el consejo.: What is our RTO and RPO right now? I need numbers for the board.
+    'Nuestra política de DR: RTO 30 minutos, RPO 5 minutos. La réplica de europe-west4 es asíncrona.': 'Our DR policy: RTO 30 minutes, RPO 5 minutes. The replica in europe-west4 is asynchronous.'
+    'NO borres la principal: cuando la región vuelva la necesitaremos para el análisis forense y la vuelta atrás.': Do NOT delete the primary — when the region is back we need it for forensics and fail-back.

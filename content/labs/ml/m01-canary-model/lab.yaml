@@ -1,6 +1,6 @@
 id: ml-m01-canary-model
-title: "Ship churn v2 as a canary, not a big bang"
-summary: Deploy a new model version next to the one in production, send it 10% of traffic, watch it and define when to promote or roll back.
+title: "Publicar churn v2 como canario, no de golpe"
+summary: Despliega una nueva versión del modelo junto a la de producción, envíale el 10 % del tráfico, obsérvala y define cuándo promocionarla o volver atrás.
 track: ml
 day: 1
 level: intermediate
@@ -30,43 +30,43 @@ ticket:
   kind: CHG
   priority: P3
   sla: 2d
-  summary: "Deploy churn v2 (artifacts in gs://models-{{.project}}/churn/v2/) to churn-endpoint. Offline AUC is better, but it has never seen production traffic."
-  reporter: Priya (data science)
+  summary: "Despliega churn v2 (artefactos en gs://models-{{.project}}/churn/v2/) en churn-endpoint. El AUC offline es mejor, pero nunca ha visto tráfico de producción."
+  reporter: Priya (ciencia de datos)
 actors:
   - role: developer
-    name: Priya (data science)
-    fallback: "v2 uses the same XGBoost serving image as v1."
+    name: Priya (ciencia de datos)
+    fallback: "La v2 usa la misma imagen de servicio de XGBoost que la v1."
     facts:
-      - {keywords: [[metric, auc, quality, calidad, promote, rollback]], answer: "We'd promote if v2's error rate and latency match v1 for a week and its score distribution doesn't drift. Otherwise roll back."}
+      - {keywords: [[metric, auc, quality, calidad, promote, rollback, metrica, promocion, promov, marcha atras, revert]], answer: "Promocionaríamos si la tasa de errores y la latencia de la v2 igualan a la v1 durante una semana y su distribución de puntuaciones no deriva. Si no, vuelta atrás."}
   - role: sre
     name: Omar (SRE)
-    fallback: "The CRM calls churn-endpoint thousands of times per hour — no downtime, please."
+    fallback: "El CRM llama a churn-endpoint miles de veces por hora: sin cortes, por favor."
     facts:
-      - {keywords: [[traffic, split, percent, canary]], answer: "Start v2 at 10% and keep v1 at 90%. `gcloud ai endpoints describe` shows the deployed-model ids you need for --traffic-split."}
+      - {keywords: [[traffic, split, percent, canary, trafico, divi, reparto, porcentaje, por ciento]], answer: "Empieza la v2 al 10 % y mantén la v1 al 90 %. `gcloud ai endpoints describe` muestra los ids de modelos desplegados que necesitas para --traffic-split."}
   - role: finance
     name: Marta (FinOps)
-    fallback: "Two models on the endpoint double the serving cost for a while — no GPUs, and remove the loser when you decide."
+    fallback: "Dos modelos en el endpoint duplican durante un tiempo el coste de servicio: sin GPU, y quita el perdedor cuando lo decidas."
 story: |
-  Data science trained **churn v2**. Production calls `churn-endpoint`, currently serving v1 (`churn`) with
-  100% of traffic. Ship v2 safely:
+  Ciencia de datos ha entrenado **churn v2**. Producción llama a `churn-endpoint`, que ahora sirve la v1 (`churn`) con
+  el 100 % del tráfico. Publica la v2 de forma segura:
 
-  - upload the model as **`churn-v2`** (same serving image as v1, artifacts in `gs://models-{{.project}}/churn/v2/`)
-  - deploy it to the **same endpoint** as `predictor-sa`, CPU only, and give it **10%** of the traffic; v1 keeps 90%
-  - turn on model monitoring and send a test request (`request.json`)
-  - write down the promotion and rollback criteria on the change ticket
+  - sube el modelo como **`churn-v2`** (la misma imagen de servicio que la v1, artefactos en `gs://models-{{.project}}/churn/v2/`)
+  - despliégalo en el **mismo endpoint** como `predictor-sa`, solo CPU, y dale el **10 %** del tráfico; la v1 se queda con el 90 %
+  - activa la monitorización del modelo y envía una petición de prueba (`request.json`)
+  - anota en el ticket de cambio los criterios de promoción y de vuelta atrás
 constraints: [no-downtime]
 objectives:
-  - v2 uploaded and deployed next to v1 without interrupting it
-  - 10% / 90% traffic split
-  - Monitoring on and a successful test prediction
-  - Promotion and rollback criteria documented
+  - v2 subida y desplegada junto a la v1 sin interrumpirla
+  - Reparto del tráfico 10 % / 90 %
+  - Monitorización activada y una predicción de prueba correcta
+  - Criterios de promoción y de vuelta atrás documentados
 hints:
-  - text: "`gcloud ai endpoints deploy-model` accepts `--traffic-split=0=10,DEPLOYED_MODEL_ID=90`, where `0` is the model being deployed."
-  - text: "The deployed-model id of v1 is in `gcloud ai endpoints describe churn-endpoint --region={{.region}}` (deployedModels[].id)."
+  - text: "`gcloud ai endpoints deploy-model` admite `--traffic-split=0=10,DEPLOYED_MODEL_ID=90`, donde `0` es el modelo que se está desplegando."
+  - text: "El id del modelo desplegado de la v1 está en `gcloud ai endpoints describe churn-endpoint --region={{.region}}` (deployedModels[].id)."
 evidence:
   fields: [rolloutPlan]
   sample:
-    rolloutPlan: "Canary: churn-v2 gets 10% of traffic on churn-endpoint and churn v1 keeps 90%. Promote to 50% and then 100% if error rate and latency match v1 for a week and the score distribution does not drift; roll back by setting the traffic split to 100% v1 and undeploying v2."
+    rolloutPlan: "Canario: churn-v2 recibe el 10 % del tráfico en churn-endpoint y churn v1 conserva el 90 %. Promocionar al 50 % y después al 100 % si la tasa de errores y la latencia igualan a la v1 durante una semana y la distribución de puntuaciones no deriva; volver atrás poniendo el reparto al 100 % para la v1 y retirando la v2."
 solution: |
   gcloud ai endpoints describe churn-endpoint --region={{.region}}
   gcloud ai models upload --region={{.region}} --display-name=churn-v2 --container-image-uri=europe-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-7:latest --artifact-uri=gs://models-{{.project}}/churn/v2/
@@ -84,36 +84,82 @@ shortcuts:
       gcloud ai endpoints predict churn-endpoint --region={{.region}} --json-request=request.json
       ticket update "churn-v2 deployed."
 rubric:
-  - name: v2 deployed next to v1
+  - name: v2 desplegada junto a la v1
     validator: state
     points: 25
     all: true
     checks:
-      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "\"modelDisplayName\":\"churn-v2\""}}, min: 1, desc: "churn-v2 is deployed on churn-endpoint"}
-      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "\"modelDisplayName\":\"churn\""}}, min: 1, desc: "v1 is still deployed"}
-  - name: Canary split
+      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "\"modelDisplayName\":\"churn-v2\""}}, min: 1, desc: "churn-v2 está desplegado en churn-endpoint"}
+      - {type: count, collection: aiEndpoints, where: {displayName: churn-endpoint, deployedModels: {regex: "\"modelDisplayName\":\"churn\""}}, min: 1, desc: "La v1 sigue desplegada"}
+  - name: Reparto canario
     validator: reliability
     points: 30
     critical: true
     all: true
     checks:
-      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"modelDisplayName\":\"churn-v2\"[^}]*\"trafficPercent\":10[,}]"}}, min: 1, desc: "churn-v2 receives 10% of traffic"}
-      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"modelDisplayName\":\"churn\"[^}]*\"trafficPercent\":90[,}]"}}, min: 1, desc: "v1 keeps 90% of traffic"}
-  - name: Observed and verified
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"modelDisplayName\":\"churn-v2\"[^}]*\"trafficPercent\":10[,}]"}}, min: 1, desc: "churn-v2 recibe el 10 % del tráfico"}
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"modelDisplayName\":\"churn\"[^}]*\"trafficPercent\":90[,}]"}}, min: 1, desc: "La v1 conserva el 90 % del tráfico"}
+  - name: Observado y verificado
     validator: functional
     points: 20
     all: true
     checks:
-      - {type: count, collection: aiEndpoints, where: {modelMonitoring: true}, min: 1, desc: "Model monitoring enabled"}
-      - {type: count, collection: aiEndpoints, where: {predictionCount: {gte: 1}}, min: 1, desc: "A test prediction was served"}
-  - name: Cost bounded
+      - {type: count, collection: aiEndpoints, where: {modelMonitoring: true}, min: 1, desc: "Monitorización del modelo activada"}
+      - {type: count, collection: aiEndpoints, where: {predictionCount: {gte: 1}}, min: 1, desc: "Se ha servido una predicción de prueba"}
+  - name: Coste acotado
     validator: cost
     points: 5
     checks:
-      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"acceleratorCount\":[1-9]"}}, max: 0, desc: "No GPUs"}
-  - name: Rollout plan
+      - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"acceleratorCount\":[1-9]"}}, max: 0, desc: "Sin GPU"}
+  - name: Plan de despliegue
     validator: evidence
     points: 20
     checks:
-      - {type: ticket_update, desc: "Change ticket updated"}
-      - {type: evidence, fields: [rolloutPlan], keywords: [[promot, increase, 50, 100], [rollback, roll back, revert], [latency, error, drift, metric]], desc: "Promotion and rollback criteria"}
+      - {type: ticket_update, desc: "Ticket de cambio actualizado"}
+      - {type: evidence, fields: [rolloutPlan], keywords: [[promot, increase, 50, 100, promocion, promov, aument], [rollback, roll back, revert, marcha atras, deshac], [latency, error, drift, metric, latencia, deriva, metrica]], desc: "Criterios de promoción y de vuelta atrás"}
+en:
+  title: Ship churn v2 as a canary, not a big bang
+  summary: Deploy a new model version next to the one in production, send it 10% of traffic, watch it and define when to promote or roll back.
+  story: |
+    Data science trained **churn v2**. Production calls `churn-endpoint`, currently serving v1 (`churn`) with
+    100% of traffic. Ship v2 safely:
+
+    - upload the model as **`churn-v2`** (same serving image as v1, artifacts in `gs://models-{{.project}}/churn/v2/`)
+    - deploy it to the **same endpoint** as `predictor-sa`, CPU only, and give it **10%** of the traffic; v1 keeps 90%
+    - turn on model monitoring and send a test request (`request.json`)
+    - write down the promotion and rollback criteria on the change ticket
+  objectives:
+    - v2 uploaded and deployed next to v1 without interrupting it
+    - 10% / 90% traffic split
+    - Monitoring on and a successful test prediction
+    - Promotion and rollback criteria documented
+  hints:
+    - '`gcloud ai endpoints deploy-model` accepts `--traffic-split=0=10,DEPLOYED_MODEL_ID=90`, where `0` is the model being deployed.'
+    - The deployed-model id of v1 is in `gcloud ai endpoints describe churn-endpoint --region={{.region}}` (deployedModels[].id).
+  ticket:
+    summary: Deploy churn v2 (artifacts in gs://models-{{.project}}/churn/v2/) to churn-endpoint. Offline AUC is better, but it has never seen production traffic.
+  text:
+    v2 desplegada junto a la v1: v2 deployed next to v1
+    churn-v2 está desplegado en churn-endpoint: churn-v2 is deployed on churn-endpoint
+    La v1 sigue desplegada: v1 is still deployed
+    Reparto canario: Canary split
+    churn-v2 recibe el 10 % del tráfico: churn-v2 receives 10% of traffic
+    La v1 conserva el 90 % del tráfico: v1 keeps 90% of traffic
+    Observado y verificado: Observed and verified
+    Monitorización del modelo activada: Model monitoring enabled
+    Se ha servido una predicción de prueba: A test prediction was served
+    Coste acotado: Cost bounded
+    Sin GPU: No GPUs
+    Plan de despliegue: Rollout plan
+    Ticket de cambio actualizado: Change ticket updated
+    Criterios de promoción y de vuelta atrás: Promotion and rollback criteria
+    Priya (ciencia de datos): Priya (data science)
+    La v2 usa la misma imagen de servicio de XGBoost que la v1.: v2 uses the same XGBoost serving image as v1.
+    ? Promocionaríamos si la tasa de errores y la latencia de la v2 igualan a la v1 durante una semana y su distribución de puntuaciones no deriva. Si no, vuelta atrás.
+    : We'd promote if v2's error rate and latency match v1 for a week and its score distribution doesn't drift. Otherwise roll back.
+    Omar (SRE): Omar (SRE)
+    'El CRM llama a churn-endpoint miles de veces por hora: sin cortes, por favor.': The CRM calls churn-endpoint thousands of times per hour — no downtime, please.
+    ? Empieza la v2 al 10 % y mantén la v1 al 90 %. `gcloud ai endpoints describe` muestra los ids de modelos desplegados que necesitas para --traffic-split.
+    : Start v2 at 10% and keep v1 at 90%. `gcloud ai endpoints describe` shows the deployed-model ids you need for --traffic-split.
+    Marta (FinOps): Marta (FinOps)
+    'Dos modelos en el endpoint duplican durante un tiempo el coste de servicio: sin GPU, y quita el perdedor cuando lo decidas.': Two models on the endpoint double the serving cost for a while — no GPUs, and remove the loser when you decide.

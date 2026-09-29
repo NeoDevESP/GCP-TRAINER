@@ -1,6 +1,6 @@
 id: data-d01-sql-recovery
-title: "A migration job dropped the orders database"
-summary: Recover one lost database from last night's backup without destroying the data written since, then make the next recovery precise.
+title: "Un proceso de migración ha borrado la base de datos de pedidos"
+summary: Recupera una base de datos perdida desde la copia de anoche sin destruir los datos escritos desde entonces y haz que la próxima recuperación sea precisa.
 track: data
 day: 1
 level: intermediate
@@ -30,49 +30,49 @@ ticket:
   kind: INC
   priority: P1
   sla: 1h
-  summary: "Order history is gone! The app says 'database orders does not exist' since the 09:00 migration."
-  impact: Customers cannot see or place orders; the analytics team keeps writing to orders-db.
-  reporter: Store support
+  summary: "¡El historial de pedidos ha desaparecido! La aplicación dice 'database orders does not exist' desde la migración de las 09:00."
+  impact: Los clientes no pueden ver ni hacer pedidos; el equipo de analítica sigue escribiendo en orders-db.
+  reporter: Soporte de la tienda
 actors:
   - role: developer
     name: Nora (backend)
-    fallback: "The migration job ran at 09:00. It was supposed to drop a temp database, not orders."
+    fallback: "El proceso de migración se ejecutó a las 09:00. Tenía que borrar una base de datos temporal, no orders."
     facts:
-      - {keywords: [[migration, script, drop, delete, borrar]], answer: "The migration dropped `orders` instead of `orders_tmp`. Nothing else was touched."}
+      - {keywords: [[migration, script, drop, delete, borrar, migracion, borr, elimin]], answer: "La migración borró `orders` en lugar de `orders_tmp`. No se tocó nada más."}
   - role: sre
-    name: Omar (DBA on call)
-    persona: owns orders-db
-    fallback: "There is a nightly backup at 02:00. Remember a restore replaces everything on the target instance."
+    name: Omar (DBA de guardia)
+    persona: responsable de orders-db
+    fallback: "Hay una copia nocturna a las 02:00. Recuerda que una restauración sustituye todo lo que hay en la instancia de destino."
     facts:
-      - {keywords: [[analytics, since, after, desde, new]], answer: "The analytics database was created at 07:30 — after the backup — and the analysts have been loading data into it all morning."}
-      - {keywords: [[restore, backup, overwrite, target, clone]], answer: "Never restore straight onto production in this case: it would wipe analytics. Restore to a temporary instance and move only orders back."}
-      - {keywords: [[export, import, bucket, permission, permiso]], answer: "Exports and imports are done by the Cloud SQL service agent, not by you — it needs access to the dumps bucket."}
+      - {keywords: [[analytics, since, after, desde, new, despues, tras, nuev]], answer: "La base de datos analytics se creó a las 07:30, después de la copia, y los analistas llevan toda la mañana cargando datos en ella."}
+      - {keywords: [[restore, backup, overwrite, target, clone, restaur, copia de seguridad, copias de seguridad, respaldo, sobrescrib, objetivo, destino]], answer: "En este caso nunca restaures directamente sobre producción: borraría analytics. Restaura en una instancia temporal y devuelve solo orders."}
+      - {keywords: [[export, import, bucket, permission, permiso]], answer: "Las exportaciones e importaciones las hace el agente de servicio de Cloud SQL, no tú: necesita acceso al bucket de volcados."}
   - role: manager
-    name: Irene (engineering manager)
-    fallback: "Updates on the ticket every 30 minutes, please. And tell me how we avoid losing a morning of data next time."
+    name: Irene (responsable de ingeniería)
+    fallback: "Actualizaciones en el ticket cada 30 minutos, por favor. Y dime cómo evitamos perder una mañana de datos la próxima vez."
 story: |
-  A migration job dropped the **orders** database of `orders-db` at 09:00. There is a nightly backup from 02:00,
-  but the **analytics** database was created and loaded *after* that backup — it must survive the recovery.
+  Un proceso de migración borró la base de datos **orders** de `orders-db` a las 09:00. Hay una copia nocturna de las 02:00,
+  pero la base de datos **analytics** se creó y se cargó *después* de esa copia: tiene que sobrevivir a la recuperación.
 
-  Recover `orders` into `orders-db` using the backup and the dumps bucket `gs://dumps-{{.project}}`, keep every
-  other database intact, clean up what you create, and make sure the next recovery can target the minute before
-  a mistake.
+  Recupera `orders` en `orders-db` usando la copia de seguridad y el bucket de volcados `gs://dumps-{{.project}}`, mantén intactas todas
+  las demás bases de datos, limpia lo que crees y asegúrate de que la próxima recuperación pueda volver al minuto anterior
+  a un error.
 constraints: [no-public]
 objectives:
-  - Confirm what was lost and when (audit log, database list)
-  - Restore the backup somewhere safe and move only orders back
-  - Keep analytics and inventory intact
-  - Enable point-in-time recovery and remove temporary resources
-  - Keep stakeholders informed
+  - Confirma qué se perdió y cuándo (registro de auditoría, lista de bases de datos)
+  - Restaura la copia en un lugar seguro y devuelve solo orders
+  - Mantén intactas analytics e inventory
+  - Activa la recuperación a un momento dado (PITR) y elimina los recursos temporales
+  - Mantén informadas a las partes interesadas
 hints:
-  - text: "`gcloud sql backups restore` replaces all databases of the *target* instance. What would that do to analytics?"
-  - text: "Restore into a new instance (`--restore-instance=NEW --backup-instance=orders-db`), then `gcloud sql export sql` the orders database to the bucket."
-  - text: "The service agent is in `gcloud sql instances describe ... --format='value(serviceAccountEmailAddress)'`. Import needs the target database to exist first."
+  - text: "`gcloud sql backups restore` sustituye todas las bases de datos de la instancia *de destino*. ¿Qué le pasaría a analytics?"
+  - text: "Restaura en una instancia nueva (`--restore-instance=NUEVA --backup-instance=orders-db`) y después exporta con `gcloud sql export sql` la base de datos orders al bucket."
+  - text: "El agente de servicio aparece en `gcloud sql instances describe ... --format='value(serviceAccountEmailAddress)'`. Para importar, la base de datos de destino tiene que existir antes."
 evidence:
   fields: [rootCause, prevention]
   sample:
-    rootCause: "The migration job deleted the orders database instead of orders_tmp at 09:00. Restoring the 02:00 backup directly onto orders-db would have wiped the analytics database created after the backup, so the backup was restored to a temporary instance and only orders was exported and imported back."
-    prevention: "Enable point-in-time recovery to restore to the minute before a mistake, run migrations with least privilege and a dry run, and require review before destructive database operations."
+    rootCause: "El proceso de migración borró la base de datos orders en lugar de orders_tmp a las 09:00. Restaurar la copia de las 02:00 directamente sobre orders-db habría borrado la base de datos analytics creada después de la copia, así que se restauró la copia en una instancia temporal y solo se exportó orders y se volvió a importar."
+    prevention: "Activar la recuperación a un momento dado para volver al minuto anterior a un error, ejecutar las migraciones con mínimo privilegio y un dry run, y exigir revisión antes de operaciones destructivas en la base de datos."
 solution: |
   gcloud logging read 'protoPayload.methodName:databases.delete' --limit=3 --format='value(protoPayload.authenticationInfo.principalEmail,protoPayload.resourceName)'
   gcloud sql databases list --instance=orders-db
@@ -101,35 +101,86 @@ shortcuts:
       gcloud sql instances patch orders-db --enable-point-in-time-recovery
       ticket update "Recreated the orders database."
 rubric:
-  - name: Orders recovered
+  - name: Pedidos recuperados
     validator: functional
     points: 35
     critical: true
     all: true
     checks:
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: orders}}, desc: "orders exists again on orders-db"}
-      - {type: command, regex: "sql import sql orders-db .*--database[= ]orders", desc: "orders was loaded with the backed-up data, not recreated empty"}
-  - name: Nothing else lost
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: orders}}, desc: "orders vuelve a existir en orders-db"}
+      - {type: command, regex: "sql import sql orders-db .*--database[= ]orders", desc: "orders se cargó con los datos de la copia, no se recreó vacía"}
+  - name: No se ha perdido nada más
     validator: reliability
     points: 20
     critical: true
     all: true
     checks:
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: analytics}}, desc: "analytics (written after the backup) survived"}
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: inventory}}, desc: "inventory intact"}
-  - name: Precise recovery next time
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: analytics}}, desc: "analytics (escrita después de la copia) ha sobrevivido"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {databases: {contains: inventory}}, desc: "inventory intacta"}
+  - name: Recuperación precisa la próxima vez
     validator: reliability
     points: 15
     checks:
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "Point-in-time recovery enabled on orders-db"}
-  - name: Cleanup
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "Recuperación a un momento dado activada en orders-db"}
+  - name: Limpieza
     validator: cost
     points: 10
     checks:
-      - {type: count, collection: sqlInstances, max: 1, desc: "Temporary restore instance removed"}
-  - name: Communication
+      - {type: count, collection: sqlInstances, max: 1, desc: "Instancia temporal de restauración eliminada"}
+  - name: Comunicación
     validator: evidence
     points: 20
     checks:
-      - {type: ticket_update, desc: "Stakeholder updates"}
-      - {type: evidence, fields: [rootCause], keywords: [[orders, migration], [backup, restore, restaur], [analytics, overwrite, sobrescrib, temporary, temporal]], desc: "Explains the loss and why the recovery path was chosen"}
+      - {type: ticket_update, desc: "Actualizaciones para las partes interesadas"}
+      - {type: evidence, fields: [rootCause], keywords: [[orders, migration, pedidos, migracion], [backup, restore, restaur, copia de seguridad, copias de seguridad, respaldo], [analytics, overwrite, sobrescrib, temporary, temporal]], desc: "Explica la pérdida y por qué se eligió ese camino de recuperación"}
+en:
+  title: A migration job dropped the orders database
+  summary: Recover one lost database from last night's backup without destroying the data written since, then make the next recovery precise.
+  story: |
+    A migration job dropped the **orders** database of `orders-db` at 09:00. There is a nightly backup from 02:00,
+    but the **analytics** database was created and loaded *after* that backup — it must survive the recovery.
+
+    Recover `orders` into `orders-db` using the backup and the dumps bucket `gs://dumps-{{.project}}`, keep every
+    other database intact, clean up what you create, and make sure the next recovery can target the minute before
+    a mistake.
+  objectives:
+    - Confirm what was lost and when (audit log, database list)
+    - Restore the backup somewhere safe and move only orders back
+    - Keep analytics and inventory intact
+    - Enable point-in-time recovery and remove temporary resources
+    - Keep stakeholders informed
+  hints:
+    - '`gcloud sql backups restore` replaces all databases of the *target* instance. What would that do to analytics?'
+    - Restore into a new instance (`--restore-instance=NEW --backup-instance=orders-db`), then `gcloud sql export sql` the orders database to the bucket.
+    - The service agent is in `gcloud sql instances describe ... --format='value(serviceAccountEmailAddress)'`. Import needs the target database to exist first.
+  ticket:
+    summary: Order history is gone! The app says 'database orders does not exist' since the 09:00 migration.
+    impact: Customers cannot see or place orders; the analytics team keeps writing to orders-db.
+  text:
+    Pedidos recuperados: Orders recovered
+    orders vuelve a existir en orders-db: orders exists again on orders-db
+    orders se cargó con los datos de la copia, no se recreó vacía: orders was loaded with the backed-up data, not recreated empty
+    No se ha perdido nada más: Nothing else lost
+    analytics (escrita después de la copia) ha sobrevivido: analytics (written after the backup) survived
+    inventory intacta: inventory intact
+    Recuperación precisa la próxima vez: Precise recovery next time
+    Recuperación a un momento dado activada en orders-db: Point-in-time recovery enabled on orders-db
+    Limpieza: Cleanup
+    Instancia temporal de restauración eliminada: Temporary restore instance removed
+    Comunicación: Communication
+    Actualizaciones para las partes interesadas: Stakeholder updates
+    Explica la pérdida y por qué se eligió ese camino de recuperación: Explains the loss and why the recovery path was chosen
+    Soporte de la tienda: Store support
+    Nora (backend): Nora (backend)
+    El proceso de migración se ejecutó a las 09:00. Tenía que borrar una base de datos temporal, no orders.: The migration job ran at 09:00. It was supposed to drop a temp database, not orders.
+    La migración borró `orders` en lugar de `orders_tmp`. No se tocó nada más.: The migration dropped `orders` instead of `orders_tmp`. Nothing else was touched.
+    Omar (DBA de guardia): Omar (DBA on call)
+    responsable de orders-db: owns orders-db
+    Hay una copia nocturna a las 02:00. Recuerda que una restauración sustituye todo lo que hay en la instancia de destino.: There is a nightly backup at 02:00. Remember a restore replaces everything on the target instance.
+    ? La base de datos analytics se creó a las 07:30, después de la copia, y los analistas llevan toda la mañana cargando datos en ella.
+    : The analytics database was created at 07:30 — after the backup — and the analysts have been loading data into it all morning.
+    ? 'En este caso nunca restaures directamente sobre producción: borraría analytics. Restaura en una instancia temporal y devuelve solo orders.'
+    : 'Never restore straight onto production in this case: it would wipe analytics. Restore to a temporary instance and move only orders back.'
+    'Las exportaciones e importaciones las hace el agente de servicio de Cloud SQL, no tú: necesita acceso al bucket de volcados.': Exports and imports are done by the Cloud SQL service agent, not by you — it needs access to the dumps bucket.
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    Actualizaciones en el ticket cada 30 minutos, por favor. Y dime cómo evitamos perder una mañana de datos la próxima vez.: Updates on the ticket every 30 minutes, please. And tell me how we avoid losing a morning of data next time.

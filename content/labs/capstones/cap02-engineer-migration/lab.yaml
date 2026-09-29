@@ -1,6 +1,6 @@
 id: cap-engineer-migration
-title: "Capstone (Cloud Engineer): migrate checkout from VMs to managed services"
-summary: Migrate an application and its database — managed database with HA and backups, data import, serverless runtime with least privilege and secrets, zero-downtime cutover behind the same load balancer, monitoring and decommissioning.
+title: "Proyecto final (Cloud Engineer): migrar checkout de VM a servicios gestionados"
+summary: 'Migra una aplicación y su base de datos: base de datos gestionada con HA y copias de seguridad, importación de datos, ejecución serverless con mínimo privilegio y secretos, cambio sin cortes tras el mismo balanceador, monitorización y retirada de las VM.'
 track: capstones
 day: 2
 level: advanced
@@ -24,42 +24,42 @@ ticket:
   id: MIG-7
   kind: MIG
   priority: P3
-  summary: "Retire the checkout VMs (api-1, sql-1). Target: Cloud Run + Cloud SQL, same public endpoint, no downtime for customers."
-  reporter: Irene (engineering manager)
+  summary: "Retirad las VM de checkout (api-1, sql-1). Objetivo: Cloud Run + Cloud SQL, el mismo endpoint público y sin cortes para los clientes."
+  reporter: Irene (responsable de ingeniería)
 actors:
   - role: dba
     name: Olga (DBA)
-    fallback: "The dump is ready in the migration bucket."
+    fallback: "El volcado está listo en el bucket de migración."
     facts:
-      - {keywords: [[dump, data, datos, import, where, donde]], answer: "gs://migration-{{.project}}/checkout.sql — plain SQL dump of database checkout. Import it into a database called checkout."}
-      - {keywords: [[rpo, backup, ha, availability]], answer: "The business wants RPO ≤ 5 minutes and survival of a zone failure."}
+      - {keywords: [[dump, data, datos, import, where, donde]], answer: "gs://migration-{{.project}}/checkout.sql: volcado SQL en texto plano de la base de datos checkout. Impórtalo en una base de datos llamada checkout."}
+      - {keywords: [[rpo, backup, ha, availability, copia de seguridad, copias de seguridad, respaldo, disponibilidad]], answer: "El negocio quiere un RPO ≤ 5 minutos y sobrevivir a la caída de una zona."}
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[password, secret, credential, contrase]], answer: "Passwords live in Secret Manager, never in environment variables. The service gets only the roles it needs."}
-      - {keywords: [[public, internet, ingress, direct]], answer: "The Cloud Run service must only be reachable through the load balancer, not directly on its run.app URL."}
+      - {keywords: [[password, secret, credential, contrase, contrasena, secreto, credencial]], answer: "Las contraseñas viven en Secret Manager, nunca en variables de entorno. El servicio recibe solo los roles que necesita."}
+      - {keywords: [[public, internet, ingress, direct, directa, directo]], answer: "El servicio de Cloud Run solo debe ser accesible a través del balanceador, no directamente por su URL run.app."}
 story: |
-  Checkout runs on two VMs behind `checkout-lb`: `api-1` (container `checkout-api:1.4`, needs `DB_HOST`, `DB_USER`,
-  `DB_PASSWORD`, `DB_NAME`) and `sql-1` (PostgreSQL). Migrate to:
+  Checkout se ejecuta en dos VM tras `checkout-lb`: `api-1` (contenedor `checkout-api:1.4`, necesita `DB_HOST`, `DB_USER`,
+  `DB_PASSWORD`, `DB_NAME`) y `sql-1` (PostgreSQL). Mígralo a:
 
-  - **Cloud SQL** `orders-db` (PostgreSQL 15) surviving a zone failure with RPO ≤ 5 min; database `checkout`,
-    user `app`; data from `gs://migration-{{.project}}/checkout.sql`
-  - **Cloud Run** `checkout` running as `checkout-run` with the password from Secret Manager, reachable **only**
-    through the load balancer
-  - the **same** `checkout-lb` endpoint, switched without downtime; then stop `api-1` and `sql-1`
-  - an uptime check and an alert for the new service; a short runbook
+  - **Cloud SQL** `orders-db` (PostgreSQL 15) que sobreviva a la caída de una zona con RPO ≤ 5 min; base de datos `checkout`,
+    usuario `app`; datos de `gs://migration-{{.project}}/checkout.sql`
+  - **Cloud Run** `checkout` ejecutándose como `checkout-run` con la contraseña desde Secret Manager, accesible **solo**
+    a través del balanceador de carga
+  - el **mismo** endpoint `checkout-lb`, cambiado sin cortes; después detén `api-1` y `sql-1`
+  - una comprobación de disponibilidad y una alerta para el nuevo servicio; un runbook breve
 objectives:
-  - Build the managed database and import the data
-  - Deploy the service with least privilege and secrets
-  - Cut over behind the same load balancer without downtime
-  - Decommission the VMs, add monitoring, write the runbook
+  - Construye la base de datos gestionada e importa los datos
+  - Despliega el servicio con mínimo privilegio y secretos
+  - Haz el cambio tras el mismo balanceador sin cortes
+  - Retira las VM, añade monitorización y escribe el runbook
 hints:
-  - text: "Cloud SQL imports are performed by the instance's service account (`serviceAccountEmailAddress`) — it needs read access to the bucket."
-  - text: "Serverless NEG + `--ingress=internal-and-cloud-load-balancing` keeps the run.app URL closed."
+  - text: "Las importaciones de Cloud SQL las hace la cuenta de servicio de la instancia (`serviceAccountEmailAddress`): necesita acceso de lectura al bucket."
+  - text: "Un NEG serverless + `--ingress=internal-and-cloud-load-balancing` mantiene cerrada la URL run.app."
 evidence:
   fields: [runbook]
   sample:
-    runbook: "1. Create orders-db regional with backups and PITR, database checkout and user app. 2. Grant the Cloud SQL service agent objectViewer on the migration bucket and import checkout.sql. 3. Store the password in Secret Manager; checkout-run gets cloudsql.client and secretAccessor on that secret only. 4. Deploy Cloud Run with ingress internal-and-cloud-load-balancing. 5. Add a serverless NEG to checkout-be, verify, then remove api-ig (no downtime). 6. Stop api-1 and sql-1. Rollback: re-add api-ig and start the VMs."
+    runbook: "1. Crear orders-db regional con copias de seguridad y PITR, base de datos checkout y usuario app. 2. Conceder al agente de servicio de Cloud SQL objectViewer sobre el bucket de migración e importar checkout.sql. 3. Guardar la contraseña en Secret Manager; checkout-run recibe cloudsql.client y secretAccessor solo sobre ese secreto. 4. Desplegar Cloud Run con ingress internal-and-cloud-load-balancing. 5. Añadir un NEG serverless a checkout-be, verificar y después quitar api-ig (sin cortes). 6. Detener api-1 y sql-1. Vuelta atrás: volver a añadir api-ig y arrancar las VM."
 solution: |
   ask dba "where is the dump?"
   gcloud sql instances create orders-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --availability-type=REGIONAL --backup-start-time=02:00 --enable-point-in-time-recovery
@@ -79,40 +79,90 @@ solution: |
   gcloud monitoring uptime create checkout-uptime --resource-type=uptime-url --resource-labels=host=$(gcloud compute forwarding-rules describe checkout-lb --global --format='value(IPAddress)') --path=/checkout
   gcloud alpha monitoring policies create --display-name="checkout uptime" --condition-display-name=uptime --condition-filter='metric.type="monitoring.googleapis.com/uptime_check/check_passed"' --if='< 1' --duration=300s
 rubric:
-  - name: Same endpoint, new platform
+  - name: Mismo endpoint, nueva plataforma
     validator: functional
     points: 25
     critical: true
     all: true
     checks:
-      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "checkout-lb serves /checkout"}
-      - {type: exists, path: "instances[\"api-1\"]", expect: {status: TERMINATED}, desc: "api-1 decommissioned (served by Cloud Run)"}
-      - {type: exists, path: "instances[\"sql-1\"]", expect: {status: TERMINATED}, desc: "sql-1 decommissioned"}
-  - name: Data migrated, database resilient
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "checkout-lb sirve /checkout"}
+      - {type: exists, path: "instances[\"api-1\"]", expect: {status: TERMINATED}, desc: "api-1 retirada (atiende Cloud Run)"}
+      - {type: exists, path: "instances[\"sql-1\"]", expect: {status: TERMINATED}, desc: "sql-1 retirada"}
+  - name: Datos migrados y base de datos resiliente
     validator: reliability
     points: 20
     all: true
     checks:
-      - {type: exists, path: "sqlInstances[\"orders-db\"].databaseFlags", expect: {"": {regex: "sim-imported-checkout"}}, desc: "checkout.sql imported into database checkout"}
-      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db]}, desc: "Regional HA with backups"}
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "PITR for RPO ≤ 5 min"}
-  - name: Least privilege and secrets
+      - {type: exists, path: "sqlInstances[\"orders-db\"].databaseFlags", expect: {"": {regex: "sim-imported-checkout"}}, desc: "checkout.sql importado en la base de datos checkout"}
+      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db]}, desc: "HA regional con copias de seguridad"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "PITR para RPO ≤ 5 min"}
+  - name: Mínimo privilegio y secretos
     validator: security
     points: 20
     all: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV, BASIC_ROLE_SERVICE_ACCOUNT, PUBLIC_SQL], desc: "No plaintext secrets, basic roles or open database"}
-      - {type: http, target: "run:checkout", path: /checkout, status: 404, desc: "run.app URL closed (load balancer only)"}
-      - {type: iam, principal: "serviceAccount:checkout-run@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:checkout-db-password", desc: "Service reads its own secret"}
-  - name: Monitoring
+      - {type: policy, package: gcplab.security, ids: [SECRET_IN_ENV, BASIC_ROLE_SERVICE_ACCOUNT, PUBLIC_SQL], desc: "Sin secretos en claro, roles básicos ni base de datos abierta"}
+      - {type: http, target: "run:checkout", path: /checkout, status: 404, desc: "URL run.app cerrada (solo a través del balanceador)"}
+      - {type: iam, principal: "serviceAccount:checkout-run@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:checkout-db-password", desc: "El servicio lee su propio secreto"}
+  - name: Monitorización
     validator: state
     points: 15
     all: true
     checks:
-      - {type: count, collection: uptimeChecks, min: 1, desc: "Uptime check"}
-      - {type: alert_policy, filterContains: uptime_check, desc: "Alert on the uptime check"}
+      - {type: count, collection: uptimeChecks, min: 1, desc: "Comprobación de disponibilidad"}
+      - {type: alert_policy, filterContains: uptime_check, desc: "Alerta sobre la comprobación de disponibilidad"}
   - name: Runbook
     validator: evidence
     points: 20
     checks:
-      - {type: evidence, fields: [runbook], keywords: [[import], [secret], [neg, load balancer, balanceador], [rollback, revert]], desc: "Runbook with cutover and rollback"}
+      - {type: evidence, fields: [runbook], keywords: [[import], [secret, secreto], [neg, load balancer, balanceador], [rollback, revert, marcha atras, deshac]], desc: "Runbook con el cambio y la vuelta atrás"}
+en:
+  title: 'Capstone (Cloud Engineer): migrate checkout from VMs to managed services'
+  summary: Migrate an application and its database — managed database with HA and backups, data import, serverless runtime with least privilege and secrets, zero-downtime cutover behind the same load balancer, monitoring and decommissioning.
+  story: |
+    Checkout runs on two VMs behind `checkout-lb`: `api-1` (container `checkout-api:1.4`, needs `DB_HOST`, `DB_USER`,
+    `DB_PASSWORD`, `DB_NAME`) and `sql-1` (PostgreSQL). Migrate to:
+
+    - **Cloud SQL** `orders-db` (PostgreSQL 15) surviving a zone failure with RPO ≤ 5 min; database `checkout`,
+      user `app`; data from `gs://migration-{{.project}}/checkout.sql`
+    - **Cloud Run** `checkout` running as `checkout-run` with the password from Secret Manager, reachable **only**
+      through the load balancer
+    - the **same** `checkout-lb` endpoint, switched without downtime; then stop `api-1` and `sql-1`
+    - an uptime check and an alert for the new service; a short runbook
+  objectives:
+    - Build the managed database and import the data
+    - Deploy the service with least privilege and secrets
+    - Cut over behind the same load balancer without downtime
+    - Decommission the VMs, add monitoring, write the runbook
+  hints:
+    - Cloud SQL imports are performed by the instance's service account (`serviceAccountEmailAddress`) — it needs read access to the bucket.
+    - Serverless NEG + `--ingress=internal-and-cloud-load-balancing` keeps the run.app URL closed.
+  ticket:
+    summary: 'Retire the checkout VMs (api-1, sql-1). Target: Cloud Run + Cloud SQL, same public endpoint, no downtime for customers.'
+  text:
+    Mismo endpoint, nueva plataforma: Same endpoint, new platform
+    checkout-lb sirve /checkout: checkout-lb serves /checkout
+    api-1 retirada (atiende Cloud Run): api-1 decommissioned (served by Cloud Run)
+    sql-1 retirada: sql-1 decommissioned
+    Datos migrados y base de datos resiliente: Data migrated, database resilient
+    checkout.sql importado en la base de datos checkout: checkout.sql imported into database checkout
+    HA regional con copias de seguridad: Regional HA with backups
+    PITR para RPO ≤ 5 min: PITR for RPO ≤ 5 min
+    Mínimo privilegio y secretos: Least privilege and secrets
+    Sin secretos en claro, roles básicos ni base de datos abierta: No plaintext secrets, basic roles or open database
+    URL run.app cerrada (solo a través del balanceador): run.app URL closed (load balancer only)
+    El servicio lee su propio secreto: Service reads its own secret
+    Monitorización: Monitoring
+    Comprobación de disponibilidad: Uptime check
+    Alerta sobre la comprobación de disponibilidad: Alert on the uptime check
+    Runbook: Runbook
+    Runbook con el cambio y la vuelta atrás: Runbook with cutover and rollback
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    Olga (DBA): Olga (DBA)
+    El volcado está listo en el bucket de migración.: The dump is ready in the migration bucket.
+    ? 'gs://migration-{{.project}}/checkout.sql: volcado SQL en texto plano de la base de datos checkout. Impórtalo en una base de datos llamada checkout.'
+    : gs://migration-{{.project}}/checkout.sql — plain SQL dump of database checkout. Import it into a database called checkout.
+    El negocio quiere un RPO ≤ 5 minutos y sobrevivir a la caída de una zona.: The business wants RPO ≤ 5 minutes and survival of a zone failure.
+    Aisha (oficina del CISO): Aisha (CISO office)
+    Las contraseñas viven en Secret Manager, nunca en variables de entorno. El servicio recibe solo los roles que necesita.: Passwords live in Secret Manager, never in environment variables. The service gets only the roles it needs.
+    El servicio de Cloud Run solo debe ser accesible a través del balanceador, no directamente por su URL run.app.: The Cloud Run service must only be reachable through the load balancer, not directly on its run.app URL.

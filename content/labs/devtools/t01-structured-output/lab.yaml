@@ -1,6 +1,6 @@
 id: devtools-t01-structured-output
-title: "Dev tooling: JSON, jq, formats and what HTTP status codes tell you"
-summary: Turn CLI output into data with --format, --filter and jq, and read API errors correctly.
+title: "Herramientas de desarrollo: JSON, jq, formatos y lo que te dicen los códigos HTTP"
+summary: Convierte la salida de la CLI en datos con --format, --filter y jq, e interpreta correctamente los errores de las API.
 track: foundations
 day: 3
 level: basic
@@ -17,41 +17,79 @@ setup: |
   for n in web-1 web-2 batch-1; do gcloud compute instances create $n --zone={{.zone}} --machine-type=e2-small --labels=team=web; done
   gcloud compute instances stop batch-1 --zone={{.zone}}
 story: |
-  The inventory team needs two files produced **from data, not by hand**:
+  El equipo de inventario necesita dos archivos generados **a partir de datos, no a mano**:
 
-  1. `inventory.csv` with header `name,zone,status` for every VM (use `--format="csv(...)"`)
-  2. `running.txt` with the names of **RUNNING** VMs only, one per line, using `--format=json` and `jq`
+  1. `inventory.csv` con la cabecera `name,zone,status` para cada VM (usa `--format="csv(...)"`)
+  2. `running.txt` con los nombres de las VM en estado **RUNNING**, uno por línea, usando `--format=json` y `jq`
 
-  Then answer the questions about API errors.
+  Después responde a las preguntas sobre errores de las API.
 objectives:
-  - Shape CLI output with --format
-  - Query JSON with jq
-  - Interpret HTTP status codes from APIs
+  - Da forma a la salida de la CLI con --format
+  - Consulta JSON con jq
+  - Interpreta los códigos de estado HTTP de las API
 quiz:
-  - {id: q1, question: "An API returns 401. What does it mean?", options: ["You are authenticated but lack permission", "No valid credentials were presented", "The resource does not exist", "Rate limit exceeded"], answer: [1]}
-  - {id: q2, question: "An API returns 403 PERMISSION_DENIED. What do you check first?", options: ["The network", "The identity making the call and its IAM roles on the resource", "The DNS record", "The request body size"], answer: [1]}
-  - {id: q3, question: "An API returns 429 RESOURCE_EXHAUSTED. What is the right client behaviour?", options: ["Retry immediately in a tight loop", "Retry with exponential backoff and check quotas", "Give up permanently", "Switch region"], answer: [1]}
+  - {id: q1, question: "Una API devuelve 401. ¿Qué significa?", options: ["Estás autenticado pero te falta permiso", "No se han presentado credenciales válidas", "El recurso no existe", "Se ha superado el límite de peticiones"], answer: [1]}
+  - {id: q2, question: "Una API devuelve 403 PERMISSION_DENIED. ¿Qué revisas primero?", options: ["La red", "La identidad que hace la llamada y sus roles de IAM sobre el recurso", "El registro DNS", "El tamaño del cuerpo de la petición"], answer: [1]}
+  - {id: q3, question: "Una API devuelve 429 RESOURCE_EXHAUSTED. ¿Cuál es el comportamiento correcto del cliente?", options: ["Reintentar de inmediato en un bucle cerrado", "Reintentar con espera exponencial y revisar las cuotas", "Rendirse para siempre", "Cambiar de región"], answer: [1]}
 solution: |
   gcloud compute instances list --format="csv(name,zone.basename(),status)" > inventory.csv
   gcloud compute instances list --format=json | jq -r '.[] | select(.status=="RUNNING") | .name' > running.txt
   cat running.txt
 rubric:
-  - name: CSV inventory
+  - name: Inventario CSV
     validator: state
     points: 30
     all: true
     checks:
-      - {type: file_contains, file: inventory.csv, regex: "^name,zone,status", desc: "Header row"}
-      - {type: file_contains, file: inventory.csv, regex: "batch-1,{{.zone}},TERMINATED", desc: "All VMs with zone and status"}
-  - name: jq query
+      - {type: file_contains, file: inventory.csv, regex: "^name,zone,status", desc: "Fila de cabecera"}
+      - {type: file_contains, file: inventory.csv, regex: "batch-1,{{.zone}},TERMINATED", desc: "Todas las VM con zona y estado"}
+  - name: Consulta con jq
     validator: state
     points: 30
     all: true
     checks:
-      - {type: file_contains, file: running.txt, regex: "web-1", desc: "Running VMs listed"}
-      - {type: file_contains, file: running.txt, regex: "batch-1", not: true, desc: "Stopped VM excluded"}
-  - name: API errors
+      - {type: file_contains, file: running.txt, regex: "web-1", desc: "VM en marcha listadas"}
+      - {type: file_contains, file: running.txt, regex: "batch-1", not: true, desc: "VM detenida excluida"}
+  - name: Errores de API
     validator: quiz
     points: 40
     checks:
-      - {type: quiz, ratio: 1, desc: "401 vs 403 vs 429"}
+      - {type: quiz, ratio: 1, desc: "401 frente a 403 frente a 429"}
+en:
+  title: 'Dev tooling: JSON, jq, formats and what HTTP status codes tell you'
+  summary: Turn CLI output into data with --format, --filter and jq, and read API errors correctly.
+  story: |
+    The inventory team needs two files produced **from data, not by hand**:
+
+    1. `inventory.csv` with header `name,zone,status` for every VM (use `--format="csv(...)"`)
+    2. `running.txt` with the names of **RUNNING** VMs only, one per line, using `--format=json` and `jq`
+
+    Then answer the questions about API errors.
+  objectives:
+    - Shape CLI output with --format
+    - Query JSON with jq
+    - Interpret HTTP status codes from APIs
+  text:
+    Una API devuelve 401. ¿Qué significa?: An API returns 401. What does it mean?
+    Estás autenticado pero te falta permiso: You are authenticated but lack permission
+    No se han presentado credenciales válidas: No valid credentials were presented
+    El recurso no existe: The resource does not exist
+    Se ha superado el límite de peticiones: Rate limit exceeded
+    Una API devuelve 403 PERMISSION_DENIED. ¿Qué revisas primero?: An API returns 403 PERMISSION_DENIED. What do you check first?
+    La red: The network
+    La identidad que hace la llamada y sus roles de IAM sobre el recurso: The identity making the call and its IAM roles on the resource
+    El registro DNS: The DNS record
+    El tamaño del cuerpo de la petición: The request body size
+    Una API devuelve 429 RESOURCE_EXHAUSTED. ¿Cuál es el comportamiento correcto del cliente?: An API returns 429 RESOURCE_EXHAUSTED. What is the right client behaviour?
+    Reintentar de inmediato en un bucle cerrado: Retry immediately in a tight loop
+    Reintentar con espera exponencial y revisar las cuotas: Retry with exponential backoff and check quotas
+    Rendirse para siempre: Give up permanently
+    Cambiar de región: Switch region
+    Inventario CSV: CSV inventory
+    Fila de cabecera: Header row
+    Todas las VM con zona y estado: All VMs with zone and status
+    Consulta con jq: jq query
+    VM en marcha listadas: Running VMs listed
+    VM detenida excluida: Stopped VM excluded
+    Errores de API: API errors
+    401 frente a 403 frente a 429: 401 vs 403 vs 429
