@@ -374,6 +374,18 @@ func MissionLab(d *Definition, base *scenario.Lab, params map[string]string, sta
 			}
 		}
 	}
+	// the company roster brings its English texts into the mission overlay
+	if base.EN != nil && d.EN != nil {
+		en := *base.EN
+		en.Text = map[string]string{}
+		for k, v := range d.EN.Text {
+			en.Text[k] = v
+		}
+		for k, v := range base.EN.Text {
+			en.Text[k] = v
+		}
+		l.EN = &en
+	}
 	if l.Track == "" {
 		l.Track = "company-" + d.ID
 	}
@@ -620,10 +632,20 @@ func clamp(v float64) float64 {
 }
 
 // DefinitionEN is the English overlay of a company definition: project
-// purposes by key and people's personas by role.
+// purposes by key and every people text (name, persona, fallback) keyed by
+// its Spanish text.
 type DefinitionEN struct {
 	Projects map[string]string `yaml:"projects"`
-	Personas map[string]string `yaml:"personas"`
+	Text     map[string]string `yaml:"text"`
+}
+
+func (d *Definition) tr(s string) string {
+	if d.EN != nil {
+		if v := d.EN.Text[strings.TrimSpace(s)]; v != "" {
+			return v
+		}
+	}
+	return s
 }
 
 // Localized returns the definition with its texts in the given language.
@@ -640,9 +662,7 @@ func (d *Definition) Localized(lang string) *Definition {
 	}
 	c.Actors = append([]desk.Actor{}, d.Actors...)
 	for i, a := range c.Actors {
-		if v := d.EN.Personas[a.Role]; v != "" {
-			c.Actors[i].Persona = v
-		}
+		c.Actors[i].Name, c.Actors[i].Persona, c.Actors[i].Fallback = d.tr(a.Name), d.tr(a.Persona), d.tr(a.Fallback)
 	}
 	return &c
 }
@@ -659,8 +679,10 @@ func (d *Definition) TranslationProblems() []string {
 			}
 		}
 		for _, a := range d.Actors {
-			if a.Persona != "" && d.EN.Personas[a.Role] == "" {
-				p = append(p, fmt.Sprintf("company %s: persona of %s not translated", d.ID, a.Role))
+			for _, t := range []string{a.Name, a.Persona, a.Fallback} {
+				if t != "" && d.EN.Text[strings.TrimSpace(t)] == "" {
+					p = append(p, fmt.Sprintf("company %s: %q (%s) not translated", d.ID, t, a.Role))
+				}
 			}
 		}
 	}

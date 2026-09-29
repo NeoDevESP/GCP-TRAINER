@@ -1,6 +1,6 @@
 id: nb-i01-ssh-compromise
-title: "SEC P1: suspicious GPU instances in production"
-summary: Consequence of exposing SSH — contain a compromise, remove the attacker's foothold and close the entry point.
+title: "SEC P1: instancias con GPU sospechosas en producción"
+summary: 'Consecuencia de exponer el SSH: contén un compromiso, elimina el punto de apoyo del atacante y cierra la puerta de entrada.'
 level: advanced
 branch: security
 type: incident
@@ -16,29 +16,29 @@ ticket:
   id: SEC-311
   kind: SEC
   priority: P1
-  summary: "Billing alert: GPU spend spiked overnight in {{.prod_web}}. Security Command Center shows CRITICAL findings."
+  summary: "Alerta de facturación: el gasto en GPU se ha disparado esta noche en {{.prod_web}}. Security Command Center muestra hallazgos CRITICAL."
   reporter: Security Command Center
 actors:
   - role: finance
     name: Marta (FinOps)
     facts:
-      - {keywords: [[gpu, cost, coste, spend]], answer: "Nobody at Nebula uses GPUs. That instance is not ours."}
+      - {keywords: [[gpu, cost, coste, spend, costo, gasto]], answer: "En Nebula nadie usa GPU. Esa instancia no es nuestra."}
 story: |
-  Something runs GPU instances in `{{.prod_web}}`. Contain the incident, find how the attacker got in and close
-  every door (yesterday somebody opened `{{.risk}}`). Keep evidence, do not touch `billing-batch`-like
-  business workloads (api-1, sql-1), post updates and write the postmortem.
-constraints: [protect:api-1, protect:sql-1]
+  Algo está ejecutando instancias con GPU en `{{.prod_web}}`. Contén el incidente, averigua cómo entró el atacante y cierra
+  todas las puertas (ayer alguien abrió `{{.risk}}`). Conserva las evidencias, no toques las cargas de negocio
+  (api-1, sql-1), publica actualizaciones y escribe el post-mortem.
+constraints: ['protect:api-1', 'protect:sql-1']
 objectives:
-  - Contain (stop the attacker's workloads)
-  - Remove the foothold (leaked key) and the entry point (open SSH)
-  - Keep business services running
-  - Communicate and write the postmortem
+  - Contén (detén las cargas del atacante)
+  - Elimina el punto de apoyo (clave filtrada) y la puerta de entrada (SSH abierto)
+  - Mantén en marcha los servicios de negocio
+  - Comunica y escribe el post-mortem
 evidence:
   fields: [rootCause, prevention, postmortem]
   sample:
-    rootCause: SSH was open to 0.0.0.0/0 through the firewall rule; the attacker logged in, stole a user-managed key of web-deployer and used it to create GPU instances for cryptomining.
-    prevention: Keep SSH behind IAP only, forbid service account keys with an organization policy, remove basic roles and alert on GPU usage and new keys.
-    postmortem: "Timeline: 22:14 key used from 185.220.101.7, 08:00 billing alert, containment by deleting the miner and the key. Impact: GPU cost and possible data access. Action items: org policy against keys, IAP-only SSH."
+    rootCause: El SSH estaba abierto a 0.0.0.0/0 por la regla de cortafuegos; el atacante entró, robó una clave gestionada por usuarios de web-deployer y la usó para crear instancias con GPU para minar criptomonedas.
+    prevention: Mantener el SSH solo tras IAP, prohibir las claves de cuentas de servicio con una política de organización, quitar los roles básicos y alertar sobre el uso de GPU y las claves nuevas.
+    postmortem: "Cronología: 22:14 la clave se usa desde 185.220.101.7, 08:00 alerta de facturación, contención borrando el minero y la clave. Impacto: coste de GPU y posible acceso a datos. Acciones: política de organización contra las claves y SSH solo por IAP."
 solution: |
   gcloud scc findings list --format='table(category,severity,resourceName)'
   gcloud logging read 'logName:cloudaudit protoPayload.methodName:instances.insert' --limit=5 --format='value(protoPayload.authenticationInfo.principalEmail,protoPayload.requestMetadata.callerIp)'
@@ -48,35 +48,67 @@ solution: |
   gcloud compute firewall-rules delete {{.risk}} --quiet
   ticket update "Contained: miner deleted, leaked key revoked, public SSH closed. Impact: GPU costs overnight; investigating data access. Next update in 30 minutes."
 rubric:
-  - name: Contained
+  - name: Contenido
     validator: security
     points: 30
     critical: true
     all: true
     checks:
-      - {type: finding_absent, category: CRYPTOMINING_SUSPECTED, desc: "Miner removed"}
-      - {type: finding_absent, category: LEAKED_SERVICE_ACCOUNT_KEY, desc: "Leaked key revoked"}
-  - name: Entry point closed
+      - {type: finding_absent, category: CRYPTOMINING_SUSPECTED, desc: "Minero eliminado"}
+      - {type: finding_absent, category: LEAKED_SERVICE_ACCOUNT_KEY, desc: "Clave filtrada revocada"}
+  - name: Puerta de entrada cerrada
     validator: security
     points: 20
     checks:
-      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT], desc: "SSH no longer open to the internet"}
-  - name: Business intact
+      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT], desc: "El SSH ya no está abierto a internet"}
+  - name: Negocio intacto
     validator: functional
     points: 10
     all: true
     checks:
-      - {type: exists, path: "instances[\"api-1\"]", expect: {status: RUNNING}, desc: "api-1 running"}
-      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "Checkout still works"}
-  - name: Investigation
+      - {type: exists, path: "instances[\"api-1\"]", expect: {status: RUNNING}, desc: "api-1 en marcha"}
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "El checkout sigue funcionando"}
+  - name: Investigación
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "scc findings|logging read", desc: "Used findings and audit logs"}
-  - name: Communication & postmortem
+      - {type: command, regex: "scc findings|logging read", desc: "Se han usado los hallazgos y los registros de auditoría"}
+  - name: Comunicación y post-mortem
     validator: evidence
     points: 30
     checks:
-      - {type: ticket_update, desc: "Stakeholder update"}
-      - {type: evidence, fields: [rootCause], keywords: [[ssh, 22, firewall], [key, clave]], desc: "Root cause"}
-      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto], [action, accion]], desc: "Postmortem"}
+      - {type: ticket_update, desc: "Actualización para las partes interesadas"}
+      - {type: evidence, fields: [rootCause], keywords: [[ssh, 22, firewall, cortafuegos], [key, clave]], desc: "Causa raíz"}
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto], [action, accion]], desc: "Post-mortem"}
+en:
+  title: 'SEC P1: suspicious GPU instances in production'
+  summary: Consequence of exposing SSH — contain a compromise, remove the attacker's foothold and close the entry point.
+  story: |
+    Something runs GPU instances in `{{.prod_web}}`. Contain the incident, find how the attacker got in and close
+    every door (yesterday somebody opened `{{.risk}}`). Keep evidence, do not touch `billing-batch`-like
+    business workloads (api-1, sql-1), post updates and write the postmortem.
+  objectives:
+    - Contain (stop the attacker's workloads)
+    - Remove the foothold (leaked key) and the entry point (open SSH)
+    - Keep business services running
+    - Communicate and write the postmortem
+  ticket:
+    summary: 'Billing alert: GPU spend spiked overnight in {{.prod_web}}. Security Command Center shows CRITICAL findings.'
+  text:
+    Contenido: Contained
+    Minero eliminado: Miner removed
+    Clave filtrada revocada: Leaked key revoked
+    Puerta de entrada cerrada: Entry point closed
+    El SSH ya no está abierto a internet: SSH no longer open to the internet
+    Negocio intacto: Business intact
+    api-1 en marcha: api-1 running
+    El checkout sigue funcionando: Checkout still works
+    Investigación: Investigation
+    Se han usado los hallazgos y los registros de auditoría: Used findings and audit logs
+    Comunicación y post-mortem: Communication & postmortem
+    Actualización para las partes interesadas: Stakeholder update
+    Causa raíz: Root cause
+    Post-mortem: Postmortem
+    Security Command Center: Security Command Center
+    Marta (FinOps): Marta (FinOps)
+    En Nebula nadie usa GPU. Esa instancia no es nuestra.: Nobody at Nebula uses GPUs. That instance is not ours.

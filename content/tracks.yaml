@@ -4,107 +4,149 @@
 # (MVP → V1 → V2 → V3).
 tracks:
   - id: foundations
-    title: Foundations — IT, networking, tooling, automation, containers
-    description: The base of the skill graph (Blueprint §4) before GCP Core — compute models, CIDR, structured output and APIs, containers and scripting.
+    title: 'Bases: TI, redes, herramientas, automatización y contenedores'
+    description: 'La base del grafo de habilidades (Blueprint §4) antes del núcleo de GCP: modelos de cómputo, CIDR, salida estructurada y API, contenedores y scripting.'
     level: foundational
     certs: [ACE]
     phase: MVP
     labs: [fundamentals-f01-compute-models, netfund-n01-address-plan, devtools-t01-structured-output, containers-c01-hardened-image, automation-a01-nightly-sweep]
+    en:
+      title: Foundations — IT, networking, tooling, automation, containers
+      description: The base of the skill graph (Blueprint §4) before GCP Core — compute models, CIDR, structured output and APIs, containers and scripting.
   - id: linux
-    title: Linux for cloud engineers
-    description: Disks, permissions, services and logs over IAP SSH.
+    title: Linux para ingenieros cloud
+    description: Discos, permisos, servicios y registros por SSH con IAP.
     level: foundational
     certs: [ACE]
     phase: MVP
     labs: [linux-l01-disk-full, linux-l02-permission-denied]
+    en:
+      title: Linux for cloud engineers
+      description: Disks, permissions, services and logs over IAP SSH.
   - id: ace-30
-    title: Associate Cloud Engineer — 30 days
-    description: One lab per day from context and IAM to incidents, capstone and boss battle. Builds the ACE competences through hands-on work.
+    title: 'Associate Cloud Engineer: 30 días'
+    description: Un laboratorio al día, desde el contexto y el IAM hasta los incidentes, el proyecto final y el jefe final. Construye las competencias de ACE trabajando con las manos.
     level: associate
     certs: [ACE]
     phase: MVP
     reference: https://cloud.google.com/learn/certification/cloud-engineer
     labs: [ace-d01-context, ace-d02-iam-storage-read, ace-d03-secure-bucket, ace-d04-web-vm, ace-d05-subnet-isolation, ace-d06-cloud-run, ace-d07-cloud-sql, ace-d08-logs-alert, ace-d09-health-check, ace-d10-checkpoint, ace-d11-app-403, ace-d12-private-egress, ace-d13-lb-dns, ace-d14-terraform, ace-d15-cloud-build, ace-d16-gke-two-services, ace-d17-gke-hpa, ace-d18-api-db-firewall, ace-d19-secret-env, ace-d20-sql-saturated, ace-d21-bigquery-cost, ace-d22-pubsub-ingestion, ace-d23-ml-endpoint, ace-d24-cmek, ace-d25-public-exposure, ace-d26-hybrid-design, ace-d27-deploy-rollback, ace-d28-architecture-review, ace-d29-capstone-orders, ace-d30-boss-incident]
+    en:
+      title: Associate Cloud Engineer — 30 days
+      description: One lab per day from context and IAM to incidents, capstone and boss battle. Builds the ACE competences through hands-on work.
   - id: capstones
-    title: Career capstones
-    description: One capstone per career stage (Blueprint §22) — Junior, Cloud Engineer, DevOps, Senior (company boss), Architect/SRE — plus the professional data & ML platform.
+    title: Proyectos finales de carrera
+    description: 'Un proyecto final por etapa profesional (Blueprint §22): junior, Cloud Engineer, DevOps, sénior (jefe final de la empresa) y arquitecto/SRE, más la plataforma profesional de datos y ML.'
     level: professional
     certs: [ACE, PCA, PCDE, PDE, PMLE]
     phase: V1
     labs: [cap-junior-secure-app, cap-engineer-migration, cap-devops-platform, cap-architect-global, cap-data-ml-platform]
+    en:
+      title: Career capstones
+      description: One capstone per career stage (Blueprint §22) — Junior, Cloud Engineer, DevOps, Senior (company boss), Architect/SRE — plus the professional data & ML platform.
   - id: architect
-    title: Architecture & disaster recovery
-    description: Architecture Simulator case studies and a real regional failover.
+    title: Arquitectura y recuperación ante desastres
+    description: Casos prácticos del simulador de arquitectura y una conmutación regional real.
     level: professional
     certs: [PCA]
     phase: V1
     reference: https://cloud.google.com/learn/certification/cloud-architect
     labs: [arch-a01-global-expansion, arch-dr01-regional-failover, cap-architect-global]
+    en:
+      title: Architecture & disaster recovery
+      description: Architecture Simulator case studies and a real regional failover.
   - id: devops
-    title: DevOps — infrastructure as code and delivery
-    description: Terraform operations under pressure and a full delivery platform.
+    title: 'DevOps: infraestructura como código y entrega'
+    description: Operaciones con Terraform bajo presión y una plataforma de entrega completa.
     level: professional
     certs: [PCDE]
     phase: V1
     reference: https://cloud.google.com/learn/certification/cloud-devops-engineer
     labs: [devops-tf01-drift-import, cap-devops-platform]
+    en:
+      title: DevOps — infrastructure as code and delivery
+      description: Terraform operations under pressure and a full delivery platform.
   - id: sre
-    title: SRE — reliability under failure
-    description: Kubernetes Nightmare and chaos engineering with SLOs.
+    title: 'SRE: fiabilidad ante los fallos'
+    description: Pesadilla en Kubernetes e ingeniería del caos con SLO.
     level: professional
     certs: [PCDE]
     phase: V1
     labs: [gke-k01-nightmare, sre-c01-zone-chaos]
+    en:
+      title: SRE — reliability under failure
+      description: Kubernetes Nightmare and chaos engineering with SLOs.
   - id: gke
-    title: GKE & Kubernetes operations
-    description: Workloads, autoscaling and Workload Identity, then Kubernetes incidents. Generate more with the incident generator (system gke-shop).
+    title: Operaciones de GKE y Kubernetes
+    description: Cargas, autoescalado y Workload Identity, y después incidentes de Kubernetes. Genera más con el generador de incidentes (sistema gke-shop).
     level: professional
     certs: [ACE, PCDE, PCSE]
     phase: V1
     reference: https://cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
     labs: [ace-d16-gke-two-services, ace-d17-gke-hpa, gke-k02-workload-identity, gke-k01-nightmare]
+    en:
+      title: GKE & Kubernetes operations
+      description: Workloads, autoscaling and Workload Identity, then Kubernetes incidents. Generate more with the incident generator (system gke-shop).
   - id: security
-    title: Security engineering
-    description: Least privilege, secrets and keys, encryption, exposure and a full incident response to a leaked credential.
+    title: Ingeniería de seguridad
+    description: Mínimo privilegio, secretos y claves, cifrado, exposición y una respuesta completa a un incidente de credenciales filtradas.
     level: professional
     certs: [PCSE]
     phase: V1
     reference: https://cloud.google.com/learn/certification/cloud-security-engineer
     labs: [ace-d02-iam-storage-read, ace-d19-secret-env, ace-d24-cmek, ace-d25-public-exposure, gke-k02-workload-identity, sec-s01-leaked-key]
+    en:
+      title: Security engineering
+      description: Least privilege, secrets and keys, encryption, exposure and a full incident response to a leaked credential.
   - id: network
-    title: Network engineering
-    description: Addressing, VPC design, private egress, load balancing, hybrid connectivity and peering with shared services.
+    title: Ingeniería de redes
+    description: Direccionamiento, diseño de VPC, salida privada, balanceo de carga, conectividad híbrida y emparejamiento con servicios compartidos.
     level: professional
     certs: [PCNE]
     phase: V2
     reference: https://cloud.google.com/learn/certification/cloud-network-engineer
     labs: [netfund-n01-address-plan, ace-d05-subnet-isolation, ace-d12-private-egress, ace-d13-lb-dns, ace-d18-api-db-firewall, net-n02-shared-services-peering, ace-d26-hybrid-design]
+    en:
+      title: Network engineering
+      description: Addressing, VPC design, private egress, load balancing, hybrid connectivity and peering with shared services.
   - id: data
-    title: Data & databases
-    description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
+    title: Datos y bases de datos
+    description: Operación y recuperación de Cloud SQL, control de costes de BigQuery e ingesta en streaming.
     level: professional
     certs: [PCDE, PCA]
     phase: V2
     labs: [ace-d07-cloud-sql, ace-d20-sql-saturated, data-d01-sql-recovery, ace-d21-bigquery-cost, ace-d22-pubsub-ingestion]
+    en:
+      title: Data & databases
+      description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
   - id: ml
-    title: ML serving & MLOps
-    description: Serve models with least privilege and monitoring, then roll out new versions as canaries.
+    title: Servicio de modelos de ML y MLOps
+    description: Sirve modelos con mínimo privilegio y monitorización y despliega versiones nuevas como canarios.
     level: professional
     certs: [PMLE]
     phase: V2
     reference: https://cloud.google.com/learn/certification/machine-learning-engineer
     labs: [ace-d23-ml-endpoint, ml-m01-canary-model]
+    en:
+      title: ML serving & MLOps
+      description: Serve models with least privilege and monitoring, then roll out new versions as canaries.
   - id: finops
     title: FinOps
-    description: Read the bill, find anomalies, act on recommendations with the owners, add guardrails.
+    description: Lee la factura, encuentra anomalías, actúa sobre las recomendaciones con los responsables y añade barreras.
     level: associate
     certs: [ACE, PCA]
     phase: V1
     labs: [finops-f01-bill-shock]
+    en:
+      title: FinOps
+      description: Read the bill, find anomalies, act on recommendations with the owners, add guardrails.
   - id: career
-    title: Career — interviews
-    description: Interview Mode with progressive questions, follow-ups and a live exercise.
+    title: 'Carrera: entrevistas'
+    description: Modo entrevista con preguntas progresivas, repreguntas y un ejercicio en directo.
     level: associate
     certs: [ACE]
     phase: V1
     labs: [career-i01-cloud-engineer-interview]
+    en:
+      title: Career — interviews
+      description: Interview Mode with progressive questions, follow-ups and a live exercise.

@@ -1,6 +1,6 @@
 id: nb-boss-quarter-close
-title: "BOSS (Senior): quarter close across the whole organisation"
-summary: Simultaneous incidents in several projects, a governance deadline and a cost overrun — triage, fix in the right order, protect other teams' work and keep leadership informed.
+title: "JEFE FINAL (sénior): cierre de trimestre en toda la organización"
+summary: 'Incidentes simultáneos en varios proyectos, un plazo de gobierno y un sobrecoste: clasifica, corrige en el orden adecuado, protege el trabajo de otros equipos y mantén informada a la dirección.'
 level: professional
 branch: architecture
 type: boss
@@ -20,41 +20,41 @@ ticket:
   id: INC-9999
   kind: INC
   priority: P1
-  summary: "Quarter close, 08:50: checkout errors in production, an external report about the data lake, the sandbox bill exploded, and the auditors arrive at noon asking for the key-creation guardrail in Production."
-  reporter: Incident Commander
+  summary: "Cierre de trimestre, 08:50: errores del checkout en producción, un informe externo sobre el data lake, la factura del sandbox disparada y los auditores llegan a mediodía pidiendo la barrera de creación de claves en Producción."
+  reporter: Responsable del incidente
 actors:
   - role: finance
     name: Marta (FinOps)
     facts:
-      - {keywords: [[sandbox, cost, coste, vm, abandoned, hackathon]], answer: "The abandoned-* VMs are from last month's hackathon — delete them. But finance-close is running our quarter close right now: do NOT touch it!"}
+      - {keywords: [[sandbox, cost, coste, vm, abandoned, hackathon, costo, abandonad]], answer: "Las VM abandoned-* son del hackathon del mes pasado: bórralas. Pero finance-close está ejecutando ahora mismo nuestro cierre de trimestre: ¡NO la toques!"}
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[datalake, data lake, public, report, bucket]], answer: "The researcher could list gs://datalake-... anonymously. Close it first, we'll assess access afterwards."}
-      - {keywords: [[audit, auditor, key, clave, guardrail]], answer: "Auditors want constraints/iam.disableServiceAccountKeyCreation enforced on the Production folder — inherited by every prod project."}
+      - {keywords: [[datalake, data lake, public, report, bucket, lago de datos, informe]], answer: "El investigador podía listar gs://datalake-... de forma anónima. Ciérralo primero; evaluaremos los accesos después."}
+      - {keywords: [[audit, auditor, key, clave, guardrail]], answer: "Los auditores quieren constraints/iam.disableServiceAccountKeyCreation aplicada en la carpeta Production y heredada por todos los proyectos de producción."}
   - role: manager
-    name: Irene (engineering manager)
+    name: Irene (responsable de ingeniería)
     facts:
-      - {keywords: [[priority, prioridad, order, orden, first, primero]], answer: "Revenue first, then data exposure, then cost, then the audit — but tell me your plan on the ticket before you start."}
+      - {keywords: [[priority, prioridad, order, orden, first, primero, pedido, primer]], answer: "Primero los ingresos, después la exposición de datos, después el coste y después la auditoría; pero cuéntame tu plan en el ticket antes de empezar."}
 story: |
-  Everything happens at once in **{{.company}}**. Work the P1 ticket like a senior engineer:
+  En **{{.company}}** todo ocurre a la vez. Trabaja el ticket P1 como una persona sénior:
 
-  - **prod-web** (`{{.prod_web}}`): checkout returns errors since 08:50
-  - **prod-data** (`{{.prod_data}}`): a researcher reports the data lake is public
-  - **sandbox** (`{{.sandbox}}`): cost exploded overnight — but some workloads there belong to Finance
-  - **governance**: enforce `iam.disableServiceAccountKeyCreation` on the Production folder (`{{.folder_production}}`) before noon
+  - **prod-web** (`{{.prod_web}}`): el checkout devuelve errores desde las 08:50
+  - **prod-data** (`{{.prod_data}}`): un investigador informa de que el data lake es público
+  - **sandbox** (`{{.sandbox}}`): el coste se ha disparado esta noche, pero algunas cargas de ahí son de Finanzas
+  - **gobierno**: aplica `iam.disableServiceAccountKeyCreation` en la carpeta Production (`{{.folder_production}}`) antes de mediodía
 
-  Post your plan on the ticket first, fix everything with minimum privilege, don't destroy other teams'
-  work, post a final update and write the postmortem.
+  Publica primero tu plan en el ticket, corrígelo todo con mínimo privilegio, no destruyas el trabajo de otros
+  equipos, publica una actualización final y escribe el post-mortem.
 objectives:
-  - Triage and communicate a plan
-  - Restore revenue, close the exposure, stop the waste, meet the audit
-  - Protect other teams' workloads
-  - Postmortem with prioritisation rationale
+  - Clasifica y comunica un plan
+  - Restablece los ingresos, cierra la exposición, detén el desperdicio y cumple con la auditoría
+  - Protege las cargas de otros equipos
+  - Post-mortem con la justificación de las prioridades
 evidence:
   fields: [postmortem]
   sample:
-    postmortem: "Timeline: 08:50 cleanup-bot deleted allow-api-to-db in prod-web (checkout down) while etl-sa made the data lake public; hackathon VMs inflated sandbox cost. Priorities: revenue first (restored the firewall rule), then exposure (removed allUsers), then cost (deleted abandoned VMs after confirming with Finance, kept finance-close), then audit (folder org policy). Impact: checkout errors for the duration; data lake listable. Action items: least privilege for bots, public access prevention, budgets on sandbox."
+    postmortem: "Cronología: 08:50 cleanup-bot borró allow-api-to-db en prod-web (checkout caído) mientras etl-sa hacía público el data lake; las VM del hackathon inflaron el coste del sandbox. Prioridades: primero los ingresos (restablecí la regla de cortafuegos), después la exposición (quité allUsers), después el coste (borré las VM abandonadas tras confirmarlo con Finanzas y conservé finance-close) y después la auditoría (política de organización en la carpeta). Impacto: errores en el checkout mientras duró; data lake listable. Acciones: mínimo privilegio para los bots, prevención de acceso público y presupuestos en el sandbox."
 solution: |
   ticket update "Plan: 1) restore checkout in prod-web 2) close the public data lake 3) stop sandbox waste after confirming owners 4) enforce the key-creation guardrail on Production. Next update in 30 minutes."
   gcloud logging read 'logName:cloudaudit' --limit=10 --format='value(protoPayload.methodName,protoPayload.authenticationInfo.principalEmail)'
@@ -66,37 +66,83 @@ solution: |
   sleep 120
   ticket update "Resolved: checkout restored, data lake private, hackathon VMs removed (finance-close untouched), key-creation guardrail enforced on Production. Postmortem to follow."
 rubric:
-  - name: Revenue restored
+  - name: Ingresos restablecidos
     validator: functional
     points: 20
     checks:
-      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "Checkout works"}
-  - name: Exposure closed
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "El checkout funciona"}
+  - name: Exposición cerrada
     validator: security
     points: 20
     critical: true
     checks:
-      - {type: policy, on: "{{.prod_data}}", package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "Data lake private"}
-  - name: Waste removed, others protected
+      - {type: policy, on: "{{.prod_data}}", package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "Data lake privado"}
+  - name: Desperdicio eliminado y otros equipos protegidos
     validator: cost
     points: 15
     all: true
     checks:
-      - {type: count, on: "{{.sandbox}}", collection: instances, where: {labels: {regex: "hackathon"}}, max: 0, desc: "Abandoned VMs gone"}
-      - {type: exists, on: "{{.sandbox}}", path: "instances[\"finance-close\"]", expect: {status: RUNNING}, desc: "finance-close untouched"}
-  - name: Governance deadline
+      - {type: count, on: "{{.sandbox}}", collection: instances, where: {labels: {regex: "hackathon"}}, max: 0, desc: "VM abandonadas eliminadas"}
+      - {type: exists, on: "{{.sandbox}}", path: "instances[\"finance-close\"]", expect: {status: RUNNING}, desc: "finance-close intacta"}
+  - name: Plazo de gobierno
     validator: security
     points: 15
     checks:
-      - {type: org_policy, on: "{{.prod_data}}", constraint: iam.disableServiceAccountKeyCreation, desc: "Production inherits the guardrail"}
-  - name: Leadership informed
+      - {type: org_policy, on: "{{.prod_data}}", constraint: iam.disableServiceAccountKeyCreation, desc: "Producción hereda la barrera"}
+  - name: Dirección informada
     validator: evidence
     points: 15
     checks:
-      - {type: ticket_update, min: 2, desc: "Plan and final update on the ticket"}
-      - {type: asked, actor: finance, desc: "Confirmed ownership before deleting"}
-  - name: Postmortem
+      - {type: ticket_update, min: 2, desc: "Plan y actualización final en el ticket"}
+      - {type: asked, actor: finance, desc: "Responsable confirmado antes de borrar"}
+  - name: Post-mortem
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [priorit], [impact, impacto], [action, accion]], desc: "Postmortem with prioritisation"}
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [priorit, prioriz, prioridad], [impact, impacto], [action, accion]], desc: "Post-mortem con priorización"}
+en:
+  title: 'BOSS (Senior): quarter close across the whole organisation'
+  summary: Simultaneous incidents in several projects, a governance deadline and a cost overrun — triage, fix in the right order, protect other teams' work and keep leadership informed.
+  story: |
+    Everything happens at once in **{{.company}}**. Work the P1 ticket like a senior engineer:
+
+    - **prod-web** (`{{.prod_web}}`): checkout returns errors since 08:50
+    - **prod-data** (`{{.prod_data}}`): a researcher reports the data lake is public
+    - **sandbox** (`{{.sandbox}}`): cost exploded overnight — but some workloads there belong to Finance
+    - **governance**: enforce `iam.disableServiceAccountKeyCreation` on the Production folder (`{{.folder_production}}`) before noon
+
+    Post your plan on the ticket first, fix everything with minimum privilege, don't destroy other teams'
+    work, post a final update and write the postmortem.
+  objectives:
+    - Triage and communicate a plan
+    - Restore revenue, close the exposure, stop the waste, meet the audit
+    - Protect other teams' workloads
+    - Postmortem with prioritisation rationale
+  ticket:
+    summary: 'Quarter close, 08:50: checkout errors in production, an external report about the data lake, the sandbox bill exploded, and the auditors arrive at noon asking for the key-creation guardrail in Production.'
+  text:
+    Ingresos restablecidos: Revenue restored
+    El checkout funciona: Checkout works
+    Exposición cerrada: Exposure closed
+    Data lake privado: Data lake private
+    Desperdicio eliminado y otros equipos protegidos: Waste removed, others protected
+    VM abandonadas eliminadas: Abandoned VMs gone
+    finance-close intacta: finance-close untouched
+    Plazo de gobierno: Governance deadline
+    Producción hereda la barrera: Production inherits the guardrail
+    Dirección informada: Leadership informed
+    Plan y actualización final en el ticket: Plan and final update on the ticket
+    Responsable confirmado antes de borrar: Confirmed ownership before deleting
+    Post-mortem: Postmortem
+    Post-mortem con priorización: Postmortem with prioritisation
+    Responsable del incidente: Incident Commander
+    Marta (FinOps): Marta (FinOps)
+    ? 'Las VM abandoned-* son del hackathon del mes pasado: bórralas. Pero finance-close está ejecutando ahora mismo nuestro cierre de trimestre: ¡NO la toques!'
+    : 'The abandoned-* VMs are from last month''s hackathon — delete them. But finance-close is running our quarter close right now: do NOT touch it!'
+    Aisha (oficina del CISO): Aisha (CISO office)
+    El investigador podía listar gs://datalake-... de forma anónima. Ciérralo primero; evaluaremos los accesos después.: The researcher could list gs://datalake-... anonymously. Close it first, we'll assess access afterwards.
+    ? Los auditores quieren constraints/iam.disableServiceAccountKeyCreation aplicada en la carpeta Production y heredada por todos los proyectos de producción.
+    : Auditors want constraints/iam.disableServiceAccountKeyCreation enforced on the Production folder — inherited by every prod project.
+    Irene (responsable de ingeniería): Irene (engineering manager)
+    ? Primero los ingresos, después la exposición de datos, después el coste y después la auditoría; pero cuéntame tu plan en el ticket antes de empezar.
+    : Revenue first, then data exposure, then cost, then the audit — but tell me your plan on the ticket before you start.

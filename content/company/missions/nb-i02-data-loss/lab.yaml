@@ -1,6 +1,6 @@
 id: nb-i02-data-loss
-title: "INC P1: the orders database is gone"
-summary: Consequence of skipping backups — a migration dropped the orders database and there is nothing to restore.
+title: "INC P1: la base de datos de pedidos ha desaparecido"
+summary: 'Consecuencia de saltarse las copias de seguridad: una migración borró la base de datos de pedidos y no hay nada que restaurar.'
 level: advanced
 branch: databases
 type: incident
@@ -15,27 +15,27 @@ ticket:
   id: INC-777
   kind: INC
   priority: P1
-  summary: "Order history is empty. The nightly migration job failed at 03:10."
-  reporter: Customer Support
+  summary: "El historial de pedidos está vacío. El proceso de migración nocturno falló a las 03:10."
+  reporter: Atención al cliente
 actors:
   - role: data
-    name: Ravi (data team)
+    name: Ravi (equipo de datos)
     facts:
-      - {keywords: [[migration, migracion, job, what, que]], answer: "The migration script runs DROP DATABASE and recreates it from a dump... the dump step failed after the drop."}
-      - {keywords: [[bigquery, analytics, copy, copia]], answer: "Analytics has a copy of orders up to yesterday 23:00 in analytics.orders."}
+      - {keywords: [[migration, migracion, job, what, que, proceso, tarea]], answer: "El script de migración ejecuta DROP DATABASE y la recrea desde un volcado... el paso del volcado falló después del borrado."}
+      - {keywords: [[bigquery, analytics, copy, copia]], answer: "Analítica tiene una copia de los pedidos hasta ayer a las 23:00 en analytics.orders."}
 story: |
-  The orders database in `{{.prod_data}}` disappeared. Find out what happened, recover what is possible,
-  make sure it cannot happen again (backups, PITR) and communicate honestly: this is a P1.
+  La base de datos de pedidos de `{{.prod_data}}` ha desaparecido. Averigua qué ha pasado, recupera lo que se pueda,
+  asegúrate de que no pueda volver a ocurrir (copias de seguridad, PITR) y comunica con honestidad: es un P1.
 objectives:
-  - Establish what happened and what can be recovered
-  - Recreate the database and protect it
-  - Communicate impact honestly and write the postmortem
+  - Establece qué ha pasado y qué se puede recuperar
+  - Recrea la base de datos y protégela
+  - Comunica el impacto con honestidad y escribe el post-mortem
 evidence:
   fields: [rootCause, prevention, postmortem]
   sample:
-    rootCause: The migration bot dropped the orders database and failed before restoring it; orders-db had no automated backups, so no restore point existed.
-    prevention: Automated backups with point-in-time recovery, deletion protection and a migration process that takes a backup first and requires approval.
-    postmortem: "Timeline: 03:10 drop by migration-bot, 08:00 detection. Impact: order history lost since the last analytics export (23:00). Action items: backups and PITR, migration review."
+    rootCause: El bot de migración borró la base de datos orders y falló antes de restaurarla; orders-db no tenía copias de seguridad automáticas, así que no existía ningún punto de restauración.
+    prevention: Copias de seguridad automáticas con recuperación a un momento dado, protección contra borrado y un proceso de migración que primero haga una copia y exija aprobación.
+    postmortem: "Cronología: 03:10 borrado por migration-bot, 08:00 detección. Impacto: historial de pedidos perdido desde la última exportación de analítica (23:00). Acciones: copias de seguridad y PITR, revisión de las migraciones."
 solution: |
   gcloud logging read 'logName:cloudaudit protoPayload.methodName:cloudsql.databases.delete' --limit=3 --format='value(protoPayload.authenticationInfo.principalEmail)'
   !gcloud sql backups list --instance=orders-db
@@ -44,26 +44,53 @@ solution: |
   gcloud sql instances patch orders-db --backup-start-time=02:00 --enable-point-in-time-recovery
   ticket update "Orders database recreated; no backups existed so history since the last analytics export at 23:00 is lost. Backups and PITR are now enabled. Next update in 30 minutes."
 rubric:
-  - name: Service restored
+  - name: Servicio restablecido
     validator: functional
     points: 25
     checks:
-      - {type: exists, path: "sqlInstances[\"orders-db\"].databases", expect: {"": {regex: "orders"}}, desc: "orders database exists again"}
-  - name: Never again
+      - {type: exists, path: "sqlInstances[\"orders-db\"].databases", expect: {"": {regex: "orders"}}, desc: "La base de datos orders vuelve a existir"}
+  - name: Nunca más
     validator: reliability
     points: 30
     all: true
     checks:
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {backupEnabled: true, pointInTimeRecovery: true}, desc: "Backups and PITR enabled"}
-  - name: Investigation
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {backupEnabled: true, pointInTimeRecovery: true}, desc: "Copias de seguridad y PITR activados"}
+  - name: Investigación
     validator: diagnosis
     points: 15
     checks:
-      - {type: command, regex: "logging read|backups list", desc: "Checked audit log and restore points"}
-  - name: Honest communication & postmortem
+      - {type: command, regex: "logging read|backups list", desc: "Registro de auditoría y puntos de restauración revisados"}
+  - name: Comunicación honesta y post-mortem
     validator: evidence
     points: 30
     checks:
-      - {type: ticket_update, keywords: [[lost, perdid, no backup, sin copia, cannot, no se puede]], desc: "Update states the data loss honestly"}
-      - {type: evidence, fields: [rootCause, prevention], keywords: [[backup, copia], [migration, migracion, drop]], desc: "Root cause and prevention"}
-      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto]], desc: "Postmortem"}
+      - {type: ticket_update, keywords: [[lost, perdid, no backup, sin copia, cannot, no se puede, no puede]], desc: "La actualización reconoce con honestidad la pérdida de datos"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[backup, copia, copia de seguridad, copias de seguridad, respaldo], [migration, migracion, drop, borr, elimin]], desc: "Causa raíz y prevención"}
+      - {type: evidence, fields: [postmortem], keywords: [[timeline, cronologia], [impact, impacto]], desc: "Post-mortem"}
+en:
+  title: 'INC P1: the orders database is gone'
+  summary: Consequence of skipping backups — a migration dropped the orders database and there is nothing to restore.
+  story: |
+    The orders database in `{{.prod_data}}` disappeared. Find out what happened, recover what is possible,
+    make sure it cannot happen again (backups, PITR) and communicate honestly: this is a P1.
+  objectives:
+    - Establish what happened and what can be recovered
+    - Recreate the database and protect it
+    - Communicate impact honestly and write the postmortem
+  ticket:
+    summary: Order history is empty. The nightly migration job failed at 03:10.
+  text:
+    Servicio restablecido: Service restored
+    La base de datos orders vuelve a existir: orders database exists again
+    Nunca más: Never again
+    Copias de seguridad y PITR activados: Backups and PITR enabled
+    Investigación: Investigation
+    Registro de auditoría y puntos de restauración revisados: Checked audit log and restore points
+    Comunicación honesta y post-mortem: Honest communication & postmortem
+    La actualización reconoce con honestidad la pérdida de datos: Update states the data loss honestly
+    Causa raíz y prevención: Root cause and prevention
+    Post-mortem: Postmortem
+    Atención al cliente: Customer Support
+    Ravi (equipo de datos): Ravi (data team)
+    El script de migración ejecuta DROP DATABASE y la recrea desde un volcado... el paso del volcado falló después del borrado.: The migration script runs DROP DATABASE and recreates it from a dump... the dump step failed after the drop.
+    Analítica tiene una copia de los pedidos hasta ayer a las 23:00 en analytics.orders.: Analytics has a copy of orders up to yesterday 23:00 in analytics.orders.

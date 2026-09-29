@@ -1,6 +1,6 @@
 id: nb-m08-guardrails
-title: "CHG: organisation guardrails for Production"
-summary: Enforce preventive controls at folder level so every current and future production project inherits them.
+title: "CHG: barreras de organización para Producción"
+summary: Aplica controles preventivos a nivel de carpeta para que todos los proyectos de producción, actuales y futuros, los hereden.
 level: advanced
 branch: architecture
 type: challenge
@@ -15,22 +15,22 @@ ticket:
   id: CHG-240
   kind: CHG
   priority: P2
-  summary: "After last quarter's findings the board wants guardrails: no public buckets and no service-account keys in Production, including future projects."
-  reporter: Aisha (CISO office)
+  summary: "Tras los hallazgos del último trimestre, el consejo quiere barreras: ni buckets públicos ni claves de cuentas de servicio en Producción, incluidos los proyectos futuros."
+  reporter: Aisha (oficina del CISO)
 actors:
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[development, dev, sandbox]], answer: "Only Production for now — dev teams still use keys for a legacy tool, we'll migrate them next quarter."}
-      - {keywords: [[future, new, nuevo, inherit, hered]], answer: "Yes, any new project created in the Production folder must get the same rules automatically."}
+      - {keywords: [[development, dev, sandbox, desarrollo]], answer: "Solo Producción por ahora: los equipos de desarrollo aún usan claves para una herramienta heredada; los migraremos el próximo trimestre."}
+      - {keywords: [[future, new, nuevo, inherit, hered, futur, nuev]], answer: "Sí, cualquier proyecto nuevo creado en la carpeta Production debe recibir automáticamente las mismas reglas."}
 story: |
-  Enforce `storage.publicAccessPrevention` and `iam.disableServiceAccountKeyCreation` on the **Production folder**
-  (id `{{.folder_production}}`) so all production projects inherit them — but not Development. You were granted
-  Organization Policy Administrator on that folder. Document the change.
+  Aplica `storage.publicAccessPrevention` e `iam.disableServiceAccountKeyCreation` en la **carpeta Production**
+  (id `{{.folder_production}}`) para que todos los proyectos de producción los hereden, pero no Development. Se te ha concedido
+  Administrador de políticas de organización en esa carpeta. Documenta el cambio.
 objectives:
-  - Choose the right level of the hierarchy
-  - Enforce both constraints
-  - Leave Development unaffected
+  - Elige el nivel adecuado de la jerarquía
+  - Aplica las dos restricciones
+  - No afectes a Development
 solution: |
   gcloud resource-manager folders list
   ask security "does it apply to development?"
@@ -38,20 +38,45 @@ solution: |
   gcloud resource-manager org-policies enable-enforce iam.disableServiceAccountKeyCreation --folder={{.folder_production}}
   ticket update "Enforced publicAccessPrevention and disableServiceAccountKeyCreation on the Production folder; all production projects inherit them, Development is unchanged."
 rubric:
-  - name: Guardrails inherited
+  - name: Barreras heredadas
     validator: security
     points: 50
     all: true
     checks:
-      - {type: org_policy, on: "{{.prod_web}}", constraint: storage.publicAccessPrevention, desc: "prod-web inherits public access prevention"}
-      - {type: org_policy, on: "{{.prod_data}}", constraint: iam.disableServiceAccountKeyCreation, desc: "prod-data inherits no-SA-keys"}
-  - name: Right scope
+      - {type: org_policy, on: "{{.prod_web}}", constraint: storage.publicAccessPrevention, desc: "prod-web hereda la prevención de acceso público"}
+      - {type: org_policy, on: "{{.prod_data}}", constraint: iam.disableServiceAccountKeyCreation, desc: "prod-data hereda la prohibición de claves de cuentas de servicio"}
+  - name: Ámbito adecuado
     validator: state
     points: 25
     checks:
-      - {type: org_policy, on: "{{.dev_web}}", constraint: iam.disableServiceAccountKeyCreation, enforced: true, not: true, desc: "Development not affected"}
-  - name: Documented
+      - {type: org_policy, on: "{{.dev_web}}", constraint: iam.disableServiceAccountKeyCreation, enforced: true, not: true, desc: "Development no se ve afectado"}
+  - name: Documentado
     validator: evidence
     points: 25
     checks:
-      - {type: ticket_update, public: false, keywords: [[folder, carpeta], [inherit, hered]], desc: "Change documented"}
+      - {type: ticket_update, public: false, keywords: [[folder, carpeta], [inherit, hered]], desc: "Cambio documentado"}
+en:
+  title: 'CHG: organisation guardrails for Production'
+  summary: Enforce preventive controls at folder level so every current and future production project inherits them.
+  story: |
+    Enforce `storage.publicAccessPrevention` and `iam.disableServiceAccountKeyCreation` on the **Production folder**
+    (id `{{.folder_production}}`) so all production projects inherit them — but not Development. You were granted
+    Organization Policy Administrator on that folder. Document the change.
+  objectives:
+    - Choose the right level of the hierarchy
+    - Enforce both constraints
+    - Leave Development unaffected
+  ticket:
+    summary: 'After last quarter''s findings the board wants guardrails: no public buckets and no service-account keys in Production, including future projects.'
+  text:
+    Barreras heredadas: Guardrails inherited
+    prod-web hereda la prevención de acceso público: prod-web inherits public access prevention
+    prod-data hereda la prohibición de claves de cuentas de servicio: prod-data inherits no-SA-keys
+    Ámbito adecuado: Right scope
+    Development no se ve afectado: Development not affected
+    Documentado: Documented
+    Cambio documentado: Change documented
+    Aisha (oficina del CISO): Aisha (CISO office)
+    ? 'Solo Producción por ahora: los equipos de desarrollo aún usan claves para una herramienta heredada; los migraremos el próximo trimestre.'
+    : Only Production for now — dev teams still use keys for a legacy tool, we'll migrate them next quarter.
+    Sí, cualquier proyecto nuevo creado en la carpeta Production debe recibir automáticamente las mismas reglas.: Yes, any new project created in the Production folder must get the same rules automatically.

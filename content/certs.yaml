@@ -4,40 +4,64 @@ certs:
   - id: ACE
     name: Associate Cloud Engineer
     level: associate
-    guide: https://cloud.google.com/learn/certification/cloud-engineer
+    guide: https://cloud.google.com/learn/certification/cloud-engineer?hl=es
     weights: {foundations: 12, compute: 20, storage: 10, networking: 18, iam: 18, observability: 10, databases: 6, devops: 6}
+    en:
+      name: Associate Cloud Engineer
+      guide: https://cloud.google.com/learn/certification/cloud-engineer
   - id: PCA
     name: Professional Cloud Architect
     level: professional
-    guide: https://cloud.google.com/learn/certification/cloud-architect
+    guide: https://cloud.google.com/learn/certification/cloud-architect?hl=es
     weights: {architecture: 25, networking: 15, security: 12, compute: 10, databases: 10, data: 8, devops: 8, observability: 6, iam: 6}
+    en:
+      name: Professional Cloud Architect
+      guide: https://cloud.google.com/learn/certification/cloud-architect
   - id: PCDE
     name: Professional Cloud DevOps Engineer
     level: professional
-    guide: https://cloud.google.com/learn/certification/cloud-devops-engineer
+    guide: https://cloud.google.com/learn/certification/cloud-devops-engineer?hl=es
     weights: {devops: 35, observability: 30, gke: 20, compute: 10, iam: 5}
+    en:
+      name: Professional Cloud DevOps Engineer
+      guide: https://cloud.google.com/learn/certification/cloud-devops-engineer
   - id: PCSE
     name: Professional Cloud Security Engineer
     level: professional
-    guide: https://cloud.google.com/learn/certification/cloud-security-engineer
+    guide: https://cloud.google.com/learn/certification/cloud-security-engineer?hl=es
     weights: {security: 35, iam: 30, networking: 20, observability: 10, storage: 5}
+    en:
+      name: Professional Cloud Security Engineer
+      guide: https://cloud.google.com/learn/certification/cloud-security-engineer
   - id: PCNE
     name: Professional Cloud Network Engineer
     level: professional
-    guide: https://cloud.google.com/learn/certification/cloud-network-engineer
+    guide: https://cloud.google.com/learn/certification/cloud-network-engineer?hl=es
     weights: {networking: 70, security: 15, observability: 10, gke: 5}
+    en:
+      name: Professional Cloud Network Engineer
+      guide: https://cloud.google.com/learn/certification/cloud-network-engineer
   - id: PDE
     name: Professional Data Engineer
     level: professional
-    guide: https://cloud.google.com/learn/certification/data-engineer
+    guide: https://cloud.google.com/learn/certification/data-engineer?hl=es
     weights: {data: 60, databases: 20, storage: 10, iam: 10}
+    en:
+      name: Professional Data Engineer
+      guide: https://cloud.google.com/learn/certification/data-engineer
   - id: PCDBE
     name: Professional Cloud Database Engineer
     level: professional
-    guide: https://cloud.google.com/learn/certification/cloud-database-engineer
+    guide: https://cloud.google.com/learn/certification/cloud-database-engineer?hl=es
     weights: {databases: 60, networking: 15, security: 10, observability: 15}
+    en:
+      name: Professional Cloud Database Engineer
+      guide: https://cloud.google.com/learn/certification/cloud-database-engineer
   - id: PMLE
     name: Professional Machine Learning Engineer
     level: professional
-    guide: https://cloud.google.com/learn/certification/machine-learning-engineer
+    guide: https://cloud.google.com/learn/certification/machine-learning-engineer?hl=es
     weights: {data: 70, devops: 15, iam: 15}
+    en:
+      name: Professional Machine Learning Engineer
+      guide: https://cloud.google.com/learn/certification/machine-learning-engineer

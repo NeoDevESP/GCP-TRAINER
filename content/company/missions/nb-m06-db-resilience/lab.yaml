@@ -1,6 +1,6 @@
 id: nb-m06-db-resilience
-title: "CHG: make the orders database resilient"
-summary: Add automated backups, point-in-time recovery and high availability to the orders database.
+title: "CHG: hacer resiliente la base de datos de pedidos"
+summary: Añade copias de seguridad automáticas, recuperación a un momento dado y alta disponibilidad a la base de datos de pedidos.
 level: intermediate
 branch: databases
 type: challenge
@@ -13,35 +13,55 @@ ticket:
   id: CHG-208
   kind: CHG
   priority: P3
-  summary: "Audit finding: orders-db has no backups and is zonal. Required: RPO ≤ 5 minutes, survive a zone outage."
-  reporter: Aisha (CISO office)
+  summary: "Hallazgo de auditoría: orders-db no tiene copias de seguridad y es zonal. Se requiere: RPO ≤ 5 minutos y sobrevivir a la caída de una zona."
+  reporter: Aisha (oficina del CISO)
 story: |
-  `orders-db` in `{{.prod_data}}` is zonal without backups. Make it meet **RPO ≤ 5 min** and **survive a zone outage**.
-  Update the change ticket when done.
+  `orders-db` en `{{.prod_data}}` es zonal y no tiene copias de seguridad. Haz que cumpla un **RPO ≤ 5 min** y que **sobreviva a la caída de una zona**.
+  Actualiza el ticket de cambio cuando termines.
 objectives:
-  - Automated backups and point-in-time recovery
-  - Regional high availability
-  - Document the change
+  - Copias de seguridad automáticas y recuperación a un momento dado
+  - Alta disponibilidad regional
+  - Documenta el cambio
 solution: |
   gcloud sql instances describe orders-db
   gcloud sql instances patch orders-db --backup-start-time=02:00 --enable-point-in-time-recovery
   gcloud sql instances patch orders-db --availability-type=REGIONAL
   ticket update "orders-db now has daily backups with point-in-time recovery (RPO minutes) and regional HA with a standby in another zone."
 rubric:
-  - name: Resilience
+  - name: Resiliencia
     validator: reliability
     points: 60
     all: true
     checks:
-      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db]}, desc: "Regional HA and automated backups"}
-      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "PITR for RPO ≤ 5 min"}
-  - name: Diagnosis
+      - {type: policy, package: gcplab.reliability, params: {haDatabases: [orders-db]}, desc: "HA regional y copias de seguridad automáticas"}
+      - {type: exists, path: "sqlInstances[\"orders-db\"]", expect: {pointInTimeRecovery: true}, desc: "PITR para RPO ≤ 5 min"}
+  - name: Diagnóstico
     validator: diagnosis
     points: 10
     checks:
-      - {type: command, regex: "sql instances describe|sql instances list", desc: "Inspected the instance first"}
-  - name: Change documented
+      - {type: command, regex: "sql instances describe|sql instances list", desc: "Instancia inspeccionada primero"}
+  - name: Cambio documentado
     validator: evidence
     points: 30
     checks:
-      - {type: ticket_update, public: false, keywords: [[backup, copia], [regional, ha, standby, zone, zona]], desc: "Change documented"}
+      - {type: ticket_update, public: false, keywords: [[backup, copia, copia de seguridad, copias de seguridad, respaldo], [regional, ha, standby, zone, zona, en espera, reserva]], desc: "Cambio documentado"}
+en:
+  title: 'CHG: make the orders database resilient'
+  summary: Add automated backups, point-in-time recovery and high availability to the orders database.
+  story: |
+    `orders-db` in `{{.prod_data}}` is zonal without backups. Make it meet **RPO ≤ 5 min** and **survive a zone outage**.
+    Update the change ticket when done.
+  objectives:
+    - Automated backups and point-in-time recovery
+    - Regional high availability
+    - Document the change
+  ticket:
+    summary: 'Audit finding: orders-db has no backups and is zonal. Required: RPO ≤ 5 minutes, survive a zone outage.'
+  text:
+    Resiliencia: Resilience
+    HA regional y copias de seguridad automáticas: Regional HA and automated backups
+    PITR para RPO ≤ 5 min: PITR for RPO ≤ 5 min
+    Diagnóstico: Diagnosis
+    Instancia inspeccionada primero: Inspected the instance first
+    Cambio documentado: Change documented
+    Aisha (oficina del CISO): Aisha (CISO office)

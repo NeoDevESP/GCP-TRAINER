@@ -1,6 +1,6 @@
 id: nb-m02-dev-access
-title: "REQ: web developers need to deploy in dev"
-summary: Grant a team exactly what it needs in development and nothing in production.
+title: "REQ: los desarrolladores web necesitan desplegar en dev"
+summary: Concede a un equipo exactamente lo que necesita en desarrollo y nada en producción.
 level: basic
 branch: iam
 type: challenge
@@ -13,26 +13,26 @@ ticket:
   id: REQ-117
   kind: REQ
   priority: P3
-  summary: "The web team (group web-devs@nebula.dev) must deploy Cloud Run services and manage files in the dev assets bucket of {{.dev_web}}. Please give them owner so they stop asking."
-  reporter: Leo (web team)
+  summary: "El equipo web (grupo web-devs@nebula.dev) tiene que desplegar servicios de Cloud Run y gestionar archivos en el bucket de recursos de dev de {{.dev_web}}. Dadles owner, por favor, para que dejen de pedir cosas."
+  reporter: Leo (equipo web)
 actors:
   - role: developer
-    name: Leo (web team)
-    fallback: "Just give us owner, it's only dev!"
+    name: Leo (equipo web)
+    fallback: "¡Danos owner y ya, que solo es dev!"
     facts:
-      - {keywords: [[prod, production, produccion]], answer: "No, we don't need production. Deployments to prod go through the pipeline."}
-      - {keywords: [[bucket, files, archivos, assets, storage]], answer: "Only gs://dev-assets-{{.dev_web}} — upload, overwrite and delete images."}
+      - {keywords: [[prod, production, produccion]], answer: "No, no necesitamos producción. Los despliegues a prod pasan por el pipeline."}
+      - {keywords: [[bucket, files, archivos, assets, storage, ficheros, recursos, activos, almacenamiento]], answer: "Solo gs://dev-assets-{{.dev_web}}: subir, sobrescribir y borrar imágenes."}
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[owner, editor, basic, basico]], answer: "Basic roles are banned by policy, even in dev. Use predefined roles."}
+      - {keywords: [[owner, editor, basic, basico, propietari]], answer: "La política prohíbe los roles básicos, incluso en dev. Usad roles predefinidos."}
 story: |
-  Leo asks for **owner** on `{{.dev_web}}` for `group:web-devs@nebula.dev`. Find out what they really need
-  (use `ask developer "..."` and `ask security "..."`) and grant least privilege. Resolve the ticket with a note.
+  Leo pide **owner** en `{{.dev_web}}` para `group:web-devs@nebula.dev`. Averigua qué necesitan de verdad
+  (usa `ask developer "..."` y `ask security "..."`) y concede el mínimo privilegio. Resuelve el ticket con una nota.
 objectives:
-  - Clarify the real need with the requester
-  - Grant predefined roles at the right scope
-  - No access to production, no basic roles
+  - Aclara la necesidad real con quien la pide
+  - Concede roles predefinidos en el ámbito adecuado
+  - Sin acceso a producción ni roles básicos
 solution: |
   ask developer "do you need production access?"
   ask developer "which bucket or files do you need?"
@@ -40,29 +40,59 @@ solution: |
   gcloud storage buckets add-iam-policy-binding gs://dev-assets-{{.dev_web}} --member=group:web-devs@nebula.dev --role=roles/storage.objectAdmin
   ticket resolve "Granted run.developer on dev-web and objectAdmin on the dev assets bucket only; owner is not allowed by policy."
 rubric:
-  - name: Team can work
+  - name: El equipo puede trabajar
     validator: functional
     points: 35
     all: true
     checks:
-      - {type: iam, principal: "group:web-devs@nebula.dev", permission: run.services.create, resource: project, desc: "Can deploy Cloud Run in dev-web"}
-      - {type: iam, principal: "group:web-devs@nebula.dev", permission: storage.objects.delete, resource: "bucket:dev-assets-{{.dev_web}}/img.png", desc: "Can manage the dev assets"}
-  - name: Least privilege
+      - {type: iam, principal: "group:web-devs@nebula.dev", permission: run.services.create, resource: project, desc: "Puede desplegar Cloud Run en dev-web"}
+      - {type: iam, principal: "group:web-devs@nebula.dev", permission: storage.objects.delete, resource: "bucket:dev-assets-{{.dev_web}}/img.png", desc: "Puede gestionar los recursos de dev"}
+  - name: Mínimo privilegio
     validator: security
     points: 40
     critical: true
     all: true
     checks:
-      - {type: no_basic_roles, members: ["group:web-devs@nebula.dev"], desc: "No basic roles"}
-      - {type: iam, on: "{{.prod_web}}", principal: "group:web-devs@nebula.dev", permission: run.services.create, resource: project, expect: false, desc: "No access to production"}
-      - {type: iam, principal: "group:web-devs@nebula.dev", permission: compute.instances.delete, resource: project, expect: false, desc: "No compute admin in dev"}
-  - name: Requirements clarified
+      - {type: no_basic_roles, members: ["group:web-devs@nebula.dev"], desc: "Sin roles básicos"}
+      - {type: iam, on: "{{.prod_web}}", principal: "group:web-devs@nebula.dev", permission: run.services.create, resource: project, expect: false, desc: "Sin acceso a producción"}
+      - {type: iam, principal: "group:web-devs@nebula.dev", permission: compute.instances.delete, resource: project, expect: false, desc: "Sin administración de Compute en dev"}
+  - name: Requisitos aclarados
     validator: diagnosis
     points: 10
     checks:
-      - {type: asked, actor: developer, min: 1, desc: "Asked the requester what they need"}
-  - name: Ticket closed
+      - {type: asked, actor: developer, min: 1, desc: "Se ha preguntado a quien lo pide qué necesita"}
+  - name: Ticket cerrado
     validator: evidence
     points: 15
     checks:
-      - {type: ticket_resolved, desc: "Resolution note on the ticket"}
+      - {type: ticket_resolved, desc: "Nota de resolución en el ticket"}
+en:
+  title: 'REQ: web developers need to deploy in dev'
+  summary: Grant a team exactly what it needs in development and nothing in production.
+  story: |
+    Leo asks for **owner** on `{{.dev_web}}` for `group:web-devs@nebula.dev`. Find out what they really need
+    (use `ask developer "..."` and `ask security "..."`) and grant least privilege. Resolve the ticket with a note.
+  objectives:
+    - Clarify the real need with the requester
+    - Grant predefined roles at the right scope
+    - No access to production, no basic roles
+  ticket:
+    summary: The web team (group web-devs@nebula.dev) must deploy Cloud Run services and manage files in the dev assets bucket of {{.dev_web}}. Please give them owner so they stop asking.
+  text:
+    El equipo puede trabajar: Team can work
+    Puede desplegar Cloud Run en dev-web: Can deploy Cloud Run in dev-web
+    Puede gestionar los recursos de dev: Can manage the dev assets
+    Mínimo privilegio: Least privilege
+    Sin roles básicos: No basic roles
+    Sin acceso a producción: No access to production
+    Sin administración de Compute en dev: No compute admin in dev
+    Requisitos aclarados: Requirements clarified
+    Se ha preguntado a quien lo pide qué necesita: Asked the requester what they need
+    Ticket cerrado: Ticket closed
+    Nota de resolución en el ticket: Resolution note on the ticket
+    Leo (equipo web): Leo (web team)
+    ¡Danos owner y ya, que solo es dev!: Just give us owner, it's only dev!
+    No, no necesitamos producción. Los despliegues a prod pasan por el pipeline.: No, we don't need production. Deployments to prod go through the pipeline.
+    'Solo gs://dev-assets-{{.dev_web}}: subir, sobrescribir y borrar imágenes.': Only gs://dev-assets-{{.dev_web}} — upload, overwrite and delete images.
+    Aisha (oficina del CISO): Aisha (CISO office)
+    La política prohíbe los roles básicos, incluso en dev. Usad roles predefinidos.: Basic roles are banned by policy, even in dev. Use predefined roles.

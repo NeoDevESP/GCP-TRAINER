@@ -1,6 +1,6 @@
 id: nb-m01-orientation
-title: "Day 1 at Nebula: find your way around"
-summary: Map the organisation, folders and projects, and configure your CLI for the development project.
+title: "Día 1 en Nebula: oriéntate"
+summary: Traza el mapa de la organización, las carpetas y los proyectos y configura tu CLI para el proyecto de desarrollo.
 level: basic
 branch: foundations
 type: guided
@@ -14,40 +14,76 @@ ticket:
   id: REQ-101
   kind: REQ
   priority: P4
-  summary: "Welcome aboard! Get familiar with our cloud estate and set up your CLI for the web team's development project."
-  reporter: Irene (engineering manager)
+  summary: "¡Bienvenido/a a bordo! Familiarízate con nuestro entorno cloud y configura tu CLI para el proyecto de desarrollo del equipo web."
+  reporter: Irene (responsable de ingeniería)
 story: |
-  Welcome to **{{.company}}**. Before touching anything, learn where things live.
+  Bienvenido/a a **{{.company}}**. Antes de tocar nada, aprende dónde está cada cosa.
 
-  1. Explore the organisation: folders and projects (`gcloud resource-manager folders list`, `gcloud projects list`).
-  2. Configure your CLI: default project = the **web team's development project**, region `europe-west1`.
-  3. Answer the orientation questions.
+  1. Explora la organización: carpetas y proyectos (`gcloud resource-manager folders list`, `gcloud projects list`).
+  2. Configura tu CLI: proyecto por defecto = el **proyecto de desarrollo del equipo web**, región `europe-west1`.
+  3. Responde a las preguntas de orientación.
 objectives:
-  - Explore folders and projects
-  - Configure the CLI for dev-web
-  - Answer the orientation questions
+  - Explora las carpetas y los proyectos
+  - Configura la CLI para dev-web
+  - Responde a las preguntas de orientación
 quiz:
-  - {id: q1, question: "Which folder contains the orders database project (prod-data)?", options: [Production, Development, Security, "Directly under the organisation"], answer: [0]}
-  - {id: q2, question: "Where does the checkout load balancer run?", options: ["{{.dev_web}}", "{{.prod_web}}", "{{.prod_platform}}", "{{.sandbox}}"], answer: [1]}
-  - {id: q3, question: "Where should you try an experimental service?", options: ["{{.prod_web}}", "{{.sandbox}}", "{{.security_monitoring}}", "{{.prod_data}}"], answer: [1]}
+  - {id: q1, question: "¿Qué carpeta contiene el proyecto de la base de datos de pedidos (prod-data)?", options: [Producción, Desarrollo, Seguridad, "Directamente bajo la organización"], answer: [0]}
+  - {id: q2, question: "¿Dónde se ejecuta el balanceador de carga del checkout?", options: ["{{.dev_web}}", "{{.prod_web}}", "{{.prod_platform}}", "{{.sandbox}}"], answer: [1]}
+  - {id: q3, question: "¿Dónde deberías probar un servicio experimental?", options: ["{{.prod_web}}", "{{.sandbox}}", "{{.security_monitoring}}", "{{.prod_data}}"], answer: [1]}
 solution: |
   gcloud resource-manager folders list
   gcloud projects list
   gcloud config set project {{.dev_web}}
   gcloud config set compute/region europe-west1
 rubric:
-  - name: Explored
+  - name: Explorado
     validator: diagnosis
     points: 20
     checks:
-      - {type: command, regex: "folders list|projects list|get-ancestors", desc: "Explored the hierarchy"}
-  - name: CLI configured
+      - {type: command, regex: "folders list|projects list|get-ancestors", desc: "Jerarquía explorada"}
+  - name: CLI configurada
     validator: state
     points: 30
     checks:
-      - {type: session_config, project: "{{.dev_web}}", region: europe-west1, desc: "Default project dev-web and region europe-west1"}
-  - name: Orientation
+      - {type: session_config, project: "{{.dev_web}}", region: europe-west1, desc: "Proyecto por defecto dev-web y región europe-west1"}
+  - name: Orientación
     validator: quiz
     points: 50
     checks:
-      - {type: quiz, ratio: 1, desc: "All orientation questions correct"}
+      - {type: quiz, ratio: 1, desc: "Todas las preguntas de orientación correctas"}
+en:
+  title: 'Day 1 at Nebula: find your way around'
+  summary: Map the organisation, folders and projects, and configure your CLI for the development project.
+  story: |
+    Welcome to **{{.company}}**. Before touching anything, learn where things live.
+
+    1. Explore the organisation: folders and projects (`gcloud resource-manager folders list`, `gcloud projects list`).
+    2. Configure your CLI: default project = the **web team's development project**, region `europe-west1`.
+    3. Answer the orientation questions.
+  objectives:
+    - Explore folders and projects
+    - Configure the CLI for dev-web
+    - Answer the orientation questions
+  ticket:
+    summary: Welcome aboard! Get familiar with our cloud estate and set up your CLI for the web team's development project.
+  text:
+    ¿Qué carpeta contiene el proyecto de la base de datos de pedidos (prod-data)?: Which folder contains the orders database project (prod-data)?
+    Producción: Production
+    Desarrollo: Development
+    Seguridad: Security
+    Directamente bajo la organización: Directly under the organisation
+    ¿Dónde se ejecuta el balanceador de carga del checkout?: Where does the checkout load balancer run?
+    '{{.dev_web}}': '{{.dev_web}}'
+    '{{.prod_web}}': '{{.prod_web}}'
+    '{{.prod_platform}}': '{{.prod_platform}}'
+    '{{.sandbox}}': '{{.sandbox}}'
+    ¿Dónde deberías probar un servicio experimental?: Where should you try an experimental service?
+    '{{.security_monitoring}}': '{{.security_monitoring}}'
+    '{{.prod_data}}': '{{.prod_data}}'
+    Explorado: Explored
+    Jerarquía explorada: Explored the hierarchy
+    CLI configurada: CLI configured
+    Proyecto por defecto dev-web y región europe-west1: Default project dev-web and region europe-west1
+    Orientación: Orientation
+    Todas las preguntas de orientación correctas: All orientation questions correct
+    Irene (responsable de ingeniería): Irene (engineering manager)

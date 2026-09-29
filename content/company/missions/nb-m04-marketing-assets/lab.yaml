@@ -1,6 +1,6 @@
 id: nb-m04-marketing-assets
-title: "REQ: public bucket for website images"
-summary: Publish approved public content safely without exposing any other data.
+title: "REQ: bucket público para las imágenes de la web"
+summary: Publica de forma segura contenido público aprobado sin exponer ningún otro dato.
 level: intermediate
 branch: storage
 type: challenge
@@ -13,27 +13,27 @@ ticket:
   id: REQ-131
   kind: REQ
   priority: P3
-  summary: "Marketing needs the website images publicly readable. Can you make the exports bucket public? It already has files in it."
+  summary: "Marketing necesita que las imágenes de la web se puedan leer públicamente. ¿Puedes hacer público el bucket de exportaciones? Ya tiene archivos."
   reporter: Julia (marketing)
 actors:
   - role: marketing
     name: Julia (marketing)
-    fallback: "I just need a URL that works for everyone."
+    fallback: "Solo necesito una URL que funcione para todo el mundo."
     facts:
-      - {keywords: [[exports, orders, pedido, which, cual]], answer: "Oh, the exports bucket has order data? No no, we only need the logo and banners — a new place is fine."}
+      - {keywords: [[exports, orders, pedido, which, cual, pedidos]], answer: "¿El bucket de exportaciones tiene datos de pedidos? No, no: solo necesitamos el logo y los banners; un sitio nuevo nos vale."}
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[public, publico, allusers, approve, aprob]], answer: "Public buckets must contain only approved content and carry the label public-content=true so audits skip them."}
+      - {keywords: [[public, publico, allusers, approve, aprob]], answer: "Los buckets públicos solo pueden contener contenido aprobado y llevar la etiqueta public-content=true para que las auditorías los omitan."}
 story: |
-  Marketing asks to make `gs://exports-{{.prod_web}}` public. Find out what they really need, then publish
-  `logo.png` in a **new** bucket `gs://assets-{{.prod_web}}` (EU, uniform access, label `public-content=true`).
+  Marketing pide hacer público `gs://exports-{{.prod_web}}`. Averigua qué necesitan de verdad y después publica
+  `logo.png` en un bucket **nuevo** `gs://assets-{{.prod_web}}` (UE, acceso uniforme, etiqueta `public-content=true`).
 files:
   logo.png: "PNG...nebula logo"
 objectives:
-  - Clarify the request
-  - Create a dedicated public bucket for approved content
-  - Keep order exports private
+  - Aclara la petición
+  - Crea un bucket público dedicado para el contenido aprobado
+  - Mantén privadas las exportaciones de pedidos
 solution: |
   ask marketing "which files do you need, the exports?"
   ask security "can a bucket be public?"
@@ -43,25 +43,54 @@ solution: |
   gcloud storage buckets add-iam-policy-binding gs://assets-{{.prod_web}} --member=allUsers --role=roles/storage.objectViewer
   ticket resolve "Created a dedicated public assets bucket with the logo; the exports bucket contains order data and stays private."
 rubric:
-  - name: Assets published
+  - name: Recursos publicados
     validator: functional
     points: 35
     all: true
     checks:
-      - {type: exists, path: "buckets[\"assets-{{.prod_web}}\"]", expect: {uniformBucketLevelAccess: true, labels: {regex: "public-content"}}, desc: "Dedicated, labelled bucket with UBLA"}
-      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:assets-{{.prod_web}}/logo.png", desc: "Logo publicly readable"}
-      - {type: exists, path: "buckets[\"assets-{{.prod_web}}\"].objects[\"logo.png\"]", desc: "Logo uploaded"}
-  - name: Data stays private
+      - {type: exists, path: "buckets[\"assets-{{.prod_web}}\"]", expect: {uniformBucketLevelAccess: true, labels: {regex: "public-content"}}, desc: "Bucket dedicado y etiquetado con UBLA"}
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:assets-{{.prod_web}}/logo.png", desc: "Logo legible públicamente"}
+      - {type: exists, path: "buckets[\"assets-{{.prod_web}}\"].objects[\"logo.png\"]", desc: "Logo subido"}
+  - name: Los datos siguen siendo privados
     validator: security
     points: 45
     critical: true
     all: true
     checks:
-      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.prod_web}}/2026-08/orders.csv", expect: false, desc: "Order exports stay private"}
-      - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "No unapproved public bucket"}
-  - name: Communication
+      - {type: iam, principal: anonymous, permission: storage.objects.get, resource: "bucket:exports-{{.prod_web}}/2026-08/orders.csv", expect: false, desc: "Las exportaciones de pedidos siguen siendo privadas"}
+      - {type: policy, package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "Ningún bucket público sin aprobar"}
+  - name: Comunicación
     validator: evidence
     points: 20
     checks:
-      - {type: asked, min: 1, desc: "Clarified the request"}
-      - {type: ticket_resolved, desc: "Ticket resolved"}
+      - {type: asked, min: 1, desc: "Petición aclarada"}
+      - {type: ticket_resolved, desc: "Ticket resuelto"}
+en:
+  title: 'REQ: public bucket for website images'
+  summary: Publish approved public content safely without exposing any other data.
+  story: |
+    Marketing asks to make `gs://exports-{{.prod_web}}` public. Find out what they really need, then publish
+    `logo.png` in a **new** bucket `gs://assets-{{.prod_web}}` (EU, uniform access, label `public-content=true`).
+  objectives:
+    - Clarify the request
+    - Create a dedicated public bucket for approved content
+    - Keep order exports private
+  ticket:
+    summary: Marketing needs the website images publicly readable. Can you make the exports bucket public? It already has files in it.
+  text:
+    Recursos publicados: Assets published
+    Bucket dedicado y etiquetado con UBLA: Dedicated, labelled bucket with UBLA
+    Logo legible públicamente: Logo publicly readable
+    Logo subido: Logo uploaded
+    Los datos siguen siendo privados: Data stays private
+    Las exportaciones de pedidos siguen siendo privadas: Order exports stay private
+    Ningún bucket público sin aprobar: No unapproved public bucket
+    Comunicación: Communication
+    Petición aclarada: Clarified the request
+    Ticket resuelto: Ticket resolved
+    Julia (marketing): Julia (marketing)
+    Solo necesito una URL que funcione para todo el mundo.: I just need a URL that works for everyone.
+    '¿El bucket de exportaciones tiene datos de pedidos? No, no: solo necesitamos el logo y los banners; un sitio nuevo nos vale.': Oh, the exports bucket has order data? No no, we only need the logo and banners — a new place is fine.
+    Aisha (oficina del CISO): Aisha (CISO office)
+    ? Los buckets públicos solo pueden contener contenido aprobado y llevar la etiqueta public-content=true para que las auditorías los omitan.
+    : Public buckets must contain only approved content and carry the label public-content=true so audits skip them.

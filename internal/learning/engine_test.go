@@ -117,8 +117,11 @@ func TestCareerAndTranscript(t *testing.T) {
 	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	e := &Engine{Cat: c, Now: func() time.Time { return now }}
 	p := e.Profile(User{ID: "u", Name: "Ada"}, nil, "ace-30")
-	if p.Career.Stage != "Cloud Intern" {
-		t.Fatalf("new learner should be Cloud Intern, got %q", p.Career.Stage)
+	if p.Career.Stage != "Becario/a cloud" {
+		t.Fatalf("new learner should be Becario/a cloud, got %q", p.Career.Stage)
+	}
+	if en := e.ForLang("en").Profile(User{ID: "u", Name: "Ada"}, nil, "ace-30"); en.Career.Stage != "Cloud Intern" {
+		t.Fatalf("in English the first stage is Cloud Intern, got %q", en.Career.Stage)
 	}
 	if len(p.Career.NextNeeds) == 0 {
 		t.Fatal("next stage should list needs")

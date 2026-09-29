@@ -1,6 +1,6 @@
 id: nb-m03-ops-ssh
-title: "REQ: ops needs SSH to production — today"
-summary: Provide administrative access to production VMs without exposing SSH to the internet.
+title: "REQ: operaciones necesita SSH a producción — hoy"
+summary: Da acceso administrativo a las VM de producción sin exponer el SSH a internet.
 level: intermediate
 branch: security
 type: challenge
@@ -13,25 +13,25 @@ ticket:
   id: REQ-124
   kind: REQ
   priority: P2
-  summary: "Ops (group ops@nebula.dev) must SSH into api-1 in {{.prod_web}} from home. Our IPs change every day — just open port 22 to everyone, it's urgent."
-  reporter: Pat (ops lead)
+  summary: "Operaciones (grupo ops@nebula.dev) tiene que entrar por SSH en api-1 de {{.prod_web}} desde casa. Nuestras IP cambian cada día: abre el puerto 22 a todo el mundo y ya, es urgente."
+  reporter: Pat (responsable de operaciones)
 actors:
   - role: ops
-    name: Pat (ops lead)
-    fallback: "Please hurry, the vendor is waiting on the call."
+    name: Pat (responsable de operaciones)
+    fallback: "Date prisa, por favor, el proveedor está esperando en la llamada."
     facts:
-      - {keywords: [[vpn, iap, tunnel, gcloud]], answer: "We all have gcloud installed. If `gcloud compute ssh --tunnel-through-iap` works, that's fine for us."}
+      - {keywords: [[vpn, iap, tunnel, gcloud, tunel]], answer: "Todos tenemos gcloud instalado. Si `gcloud compute ssh --tunnel-through-iap` funciona, a nosotros nos vale."}
   - role: security
-    name: Aisha (CISO office)
+    name: Aisha (oficina del CISO)
     facts:
-      - {keywords: [[22, ssh, open, abrir, internet, 0.0.0.0]], answer: "Never open 22 to 0.0.0.0/0 — scanners find it within minutes. IAP's range 35.235.240.0/20 is already allowed in prod-vpc."}
+      - {keywords: [[22, ssh, open, abrir, internet, 0.0.0.0, abiert]], answer: "Nunca abras el 22 a 0.0.0.0/0: los escáneres lo encuentran en minutos. El rango de IAP 35.235.240.0/20 ya está permitido en prod-vpc."}
 story: |
-  Pat wants port 22 open to the world "just for today". Deliver SSH access for `group:ops@nebula.dev`
-  to production VMs **without** exposing SSH publicly. Talk to the people involved and resolve the ticket.
+  Pat quiere el puerto 22 abierto a todo el mundo «solo por hoy». Da acceso SSH a `group:ops@nebula.dev`
+  a las VM de producción **sin** exponer el SSH públicamente. Habla con las personas implicadas y resuelve el ticket.
 objectives:
-  - Understand the constraint (changing home IPs)
-  - Grant IAP tunnel + OS Login access to the ops group
-  - Keep SSH closed to the internet
+  - Entiende la restricción (IP domésticas que cambian)
+  - Concede acceso por túnel de IAP + OS Login al grupo de operaciones
+  - Mantén el SSH cerrado a internet
 solution: |
   ask security "can I open 22 to the internet?"
   gcloud compute firewall-rules list --filter='network:prod-vpc'
@@ -39,21 +39,47 @@ solution: |
   gcloud projects add-iam-policy-binding {{.prod_web}} --member=group:ops@nebula.dev --role=roles/compute.osLogin
   ticket resolve "Ops can use gcloud compute ssh --tunnel-through-iap with IAP tunnel and OS Login roles; port 22 stays closed to the internet."
 rubric:
-  - name: Access delivered
+  - name: Acceso entregado
     validator: functional
     points: 40
     all: true
     checks:
-      - {type: iam, principal: "group:ops@nebula.dev", permission: iap.tunnelInstances.accessViaIAP, resource: project, desc: "IAP tunnel access"}
+      - {type: iam, principal: "group:ops@nebula.dev", permission: iap.tunnelInstances.accessViaIAP, resource: project, desc: "Acceso por túnel de IAP"}
       - {type: iam, principal: "group:ops@nebula.dev", permission: compute.instances.osLogin, resource: project, desc: "OS Login"}
-  - name: SSH not exposed
+  - name: SSH no expuesto
     validator: security
     points: 40
     critical: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT], desc: "No administrative port open to 0.0.0.0/0"}
-  - name: Communication
+      - {type: policy, package: gcplab.security, ids: [OPEN_ADMIN_PORT], desc: "Ningún puerto administrativo abierto a 0.0.0.0/0"}
+  - name: Comunicación
     validator: evidence
     points: 20
     checks:
-      - {type: ticket_resolved, desc: "Explained the solution on the ticket"}
+      - {type: ticket_resolved, desc: "Solución explicada en el ticket"}
+en:
+  title: 'REQ: ops needs SSH to production — today'
+  summary: Provide administrative access to production VMs without exposing SSH to the internet.
+  story: |
+    Pat wants port 22 open to the world "just for today". Deliver SSH access for `group:ops@nebula.dev`
+    to production VMs **without** exposing SSH publicly. Talk to the people involved and resolve the ticket.
+  objectives:
+    - Understand the constraint (changing home IPs)
+    - Grant IAP tunnel + OS Login access to the ops group
+    - Keep SSH closed to the internet
+  ticket:
+    summary: Ops (group ops@nebula.dev) must SSH into api-1 in {{.prod_web}} from home. Our IPs change every day — just open port 22 to everyone, it's urgent.
+  text:
+    Acceso entregado: Access delivered
+    Acceso por túnel de IAP: IAP tunnel access
+    OS Login: OS Login
+    SSH no expuesto: SSH not exposed
+    Ningún puerto administrativo abierto a 0.0.0.0/0: No administrative port open to 0.0.0.0/0
+    Comunicación: Communication
+    Solución explicada en el ticket: Explained the solution on the ticket
+    Pat (responsable de operaciones): Pat (ops lead)
+    Date prisa, por favor, el proveedor está esperando en la llamada.: Please hurry, the vendor is waiting on the call.
+    Todos tenemos gcloud instalado. Si `gcloud compute ssh --tunnel-through-iap` funciona, a nosotros nos vale.: We all have gcloud installed. If `gcloud compute ssh --tunnel-through-iap` works, that's fine for us.
+    Aisha (oficina del CISO): Aisha (CISO office)
+    ? 'Nunca abras el 22 a 0.0.0.0/0: los escáneres lo encuentran en minutos. El rango de IAP 35.235.240.0/20 ya está permitido en prod-vpc.'
+    : Never open 22 to 0.0.0.0/0 — scanners find it within minutes. IAP's range 35.235.240.0/20 is already allowed in prod-vpc.

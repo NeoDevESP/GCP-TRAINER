@@ -1,6 +1,6 @@
 id: nb-i04-data-exposure
-title: "SEC: customer data reachable from the internet"
-summary: Consequence of a public data bucket — close the exposure, assess what leaked and prevent recurrence.
+title: "SEC: datos de clientes accesibles desde internet"
+summary: 'Consecuencia de un bucket de datos público: cierra la exposición, evalúa qué se ha filtrado y evita que se repita.'
 level: advanced
 branch: security
 type: incident
@@ -15,20 +15,20 @@ ticket:
   id: SEC-318
   kind: SEC
   priority: P2
-  summary: "A bug-bounty researcher reports that gs://{{.risk}} lists and downloads files anonymously."
-  reporter: Bug bounty programme
+  summary: "Un investigador del programa de bug bounty informa de que gs://{{.risk}} permite listar y descargar archivos de forma anónima."
+  reporter: Programa de bug bounty
 story: |
-  `gs://{{.risk}}` in `{{.risk_project}}` is public. Close it, find out what was accessed and by whom, prevent it
-  from happening again in that project, and reply on the ticket.
+  `gs://{{.risk}}` en `{{.risk_project}}` es público. Ciérralo, averigua a qué se accedió y quién lo hizo, evita
+  que vuelva a pasar en ese proyecto y responde en el ticket.
 objectives:
-  - Close the exposure
-  - Assess access from logs
-  - Prevent recurrence
+  - Cierra la exposición
+  - Evalúa los accesos a partir de los registros
+  - Evita que se repita
 evidence:
   fields: [rootCause, prevention]
   sample:
-    rootCause: The bucket granted allUsers read access, so anyone could list and download its objects; the logs show downloads from 45.155.205.9.
-    prevention: Enforce public access prevention on the bucket and through an organization policy for production, and route public content to labelled dedicated buckets.
+    rootCause: El bucket daba acceso de lectura a allUsers, así que cualquiera podía listar y descargar sus objetos; los registros muestran descargas desde 45.155.205.9.
+    prevention: Aplicar la prevención de acceso público en el bucket y mediante una política de organización para producción, y llevar el contenido público a buckets dedicados y etiquetados.
 solution: |
   gcloud storage buckets get-iam-policy gs://{{.risk}}
   gcloud logging read 'resource.type="gcs_bucket"' --limit=5 --format='value(textPayload)' --project={{.risk_project}}
@@ -36,26 +36,49 @@ solution: |
   gcloud storage buckets update gs://{{.risk}} --public-access-prevention
   ticket update "The bucket is private again and public access prevention is enforced; downloads from 45.155.205.9 are being assessed with legal. Next update tomorrow."
 rubric:
-  - name: Closed
+  - name: Cerrado
     validator: security
     points: 40
     critical: true
     all: true
     checks:
-      - {type: policy, on: "{{.risk_project}}", package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "No public data bucket"}
-  - name: Prevented
+      - {type: policy, on: "{{.risk_project}}", package: gcplab.security, ids: [PUBLIC_BUCKET], desc: "Ningún bucket de datos público"}
+  - name: Prevenido
     validator: security
     points: 20
     checks:
-      - {type: exists, on: "{{.risk_project}}", path: "buckets[\"{{.risk}}\"]", expect: {publicAccessPrevention: enforced}, desc: "Public access prevention on the bucket"}
-  - name: Assessed
+      - {type: exists, on: "{{.risk_project}}", path: "buckets[\"{{.risk}}\"]", expect: {publicAccessPrevention: enforced}, desc: "Prevención de acceso público en el bucket"}
+  - name: Evaluado
     validator: diagnosis
     points: 15
     checks:
-      - {type: command, regex: "logging read|get-iam-policy", desc: "Checked access logs and policy"}
-  - name: Communication
+      - {type: command, regex: "logging read|get-iam-policy", desc: "Registros de acceso y política revisados"}
+  - name: Comunicación
     validator: evidence
     points: 25
     checks:
-      - {type: ticket_update, desc: "Stakeholder update"}
-      - {type: evidence, fields: [rootCause, prevention], keywords: [[allusers, public, publico], [prevention, prevencion, org policy, policy]], desc: "Root cause and prevention"}
+      - {type: ticket_update, desc: "Actualización para las partes interesadas"}
+      - {type: evidence, fields: [rootCause, prevention], keywords: [[allusers, public, publico], [prevention, prevencion, org policy, policy, politica de organizacion, politica]], desc: "Causa raíz y prevención"}
+en:
+  title: 'SEC: customer data reachable from the internet'
+  summary: Consequence of a public data bucket — close the exposure, assess what leaked and prevent recurrence.
+  story: |
+    `gs://{{.risk}}` in `{{.risk_project}}` is public. Close it, find out what was accessed and by whom, prevent it
+    from happening again in that project, and reply on the ticket.
+  objectives:
+    - Close the exposure
+    - Assess access from logs
+    - Prevent recurrence
+  ticket:
+    summary: A bug-bounty researcher reports that gs://{{.risk}} lists and downloads files anonymously.
+  text:
+    Cerrado: Closed
+    Ningún bucket de datos público: No public data bucket
+    Prevenido: Prevented
+    Prevención de acceso público en el bucket: Public access prevention on the bucket
+    Evaluado: Assessed
+    Registros de acceso y política revisados: Checked access logs and policy
+    Comunicación: Communication
+    Actualización para las partes interesadas: Stakeholder update
+    Causa raíz y prevención: Root cause and prevention
+    Programa de bug bounty: Bug bounty programme

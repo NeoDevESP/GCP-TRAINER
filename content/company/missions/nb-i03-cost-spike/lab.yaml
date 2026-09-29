@@ -1,6 +1,6 @@
 id: nb-i03-cost-spike
-title: "COST: the storefront bill doubled"
-summary: Consequence of having no budget — find forgotten resources, clean up safely and put an alert in place.
+title: "COST: la factura de la tienda se ha duplicado"
+summary: 'Consecuencia de no tener presupuesto: encuentra los recursos olvidados, limpia de forma segura y pon una alerta.'
 level: intermediate
 branch: finops
 type: incident
@@ -15,25 +15,25 @@ ticket:
   id: COST-19
   kind: COST
   priority: P2
-  summary: "The storefront project's forecast doubled this month and nobody noticed until the invoice. Why, and how do we avoid a surprise next time?"
+  summary: "La previsión del proyecto de la tienda se ha duplicado este mes y nadie se dio cuenta hasta la factura. ¿Por qué, y cómo evitamos otra sorpresa?"
   reporter: Marta (FinOps)
 actors:
   - role: perf
-    name: Chen (performance team)
-    fallback: "We ran load tests two weeks ago."
+    name: Chen (equipo de rendimiento)
+    fallback: "Hace dos semanas hicimos pruebas de carga."
     facts:
-      - {keywords: [[loadtest, load test, vm, instance, delete, borrar, still, todavia]], answer: "Oh no, the loadtest VMs are still up? The tests finished two weeks ago — please delete them."}
+      - {keywords: [[loadtest, load test, vm, instance, delete, borrar, still, todavia, prueba de carga, instancia, borr, elimin, aun]], answer: "¿Las VM loadtest siguen encendidas? Las pruebas terminaron hace dos semanas: bórralas, por favor."}
 story: |
-  Explain the cost increase in `{{.prod_web}}`, remove the waste **after confirming with its owner**, keep production
-  running and add a budget alert of 1000 EUR (50/90/100%).
+  Explica el aumento de coste en `{{.prod_web}}`, elimina el desperdicio **tras confirmarlo con su responsable**, mantén producción
+  en marcha y añade una alerta de presupuesto de 1000 EUR (50/90/100 %).
 objectives:
-  - Find the cost driver with evidence
-  - Confirm ownership before deleting
-  - Clean up and prevent surprises
+  - Encuentra el origen del coste con evidencias
+  - Confirma quién es el responsable antes de borrar
+  - Limpia y evita sorpresas
 evidence:
   fields: [rootCause]
   sample:
-    rootCause: Three e2-standard-32 loadtest VMs from the performance team kept running for two weeks after the tests ended and there was no budget alert to notice it.
+    rootCause: Tres VM loadtest e2-standard-32 del equipo de rendimiento siguieron en marcha dos semanas después de terminar las pruebas y no había ninguna alerta de presupuesto que lo detectara.
 solution: |
   gcloud billing estimate
   gcloud compute instances list --format='table(name,machineType.basename(),labels)'
@@ -42,30 +42,58 @@ solution: |
   gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=storefront-monthly --budget-amount=1000EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
   gcloud billing estimate
 rubric:
-  - name: Waste removed
+  - name: Desperdicio eliminado
     validator: cost
     points: 35
     all: true
     checks:
-      - {type: count, collection: instances, where: {labels: {regex: "loadtest"}}, max: 0, desc: "Load-test VMs gone"}
-      - {type: cost_max, eur: 1000, desc: "Spend back to normal"}
-  - name: Production intact
+      - {type: count, collection: instances, where: {labels: {regex: "loadtest"}}, max: 0, desc: "VM de pruebas de carga eliminadas"}
+      - {type: cost_max, eur: 1000, desc: "Gasto de vuelta a la normalidad"}
+  - name: Producción intacta
     validator: functional
     points: 15
     checks:
-      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "Checkout works"}
-  - name: Ownership confirmed
+      - {type: http, target: "lb:checkout-lb", path: /checkout, status: 200, desc: "El checkout funciona"}
+  - name: Responsable confirmado
     validator: diagnosis
     points: 15
     checks:
-      - {type: asked, actor: perf, min: 1, desc: "Confirmed with the owner before deleting"}
-  - name: Alerting
+      - {type: asked, actor: perf, min: 1, desc: "Confirmado con el responsable antes de borrar"}
+  - name: Alertas
     validator: cost
     points: 20
     checks:
-      - {type: count, collection: budgets, where: {amount: {gte: 1}}, min: 1, desc: "Budget alert configured"}
-  - name: Explanation
+      - {type: count, collection: budgets, where: {amount: {gte: 1}}, min: 1, desc: "Alerta de presupuesto configurada"}
+  - name: Explicación
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [rootCause], keywords: [[loadtest, load test, vm, instance], [budget, alert, alerta]], desc: "Cost driver explained"}
+      - {type: evidence, fields: [rootCause], keywords: [[loadtest, load test, vm, instance, prueba de carga, instancia], [budget, alert, alerta, presupuesto]], desc: "Origen del coste explicado"}
+en:
+  title: 'COST: the storefront bill doubled'
+  summary: Consequence of having no budget — find forgotten resources, clean up safely and put an alert in place.
+  story: |
+    Explain the cost increase in `{{.prod_web}}`, remove the waste **after confirming with its owner**, keep production
+    running and add a budget alert of 1000 EUR (50/90/100%).
+  objectives:
+    - Find the cost driver with evidence
+    - Confirm ownership before deleting
+    - Clean up and prevent surprises
+  ticket:
+    summary: The storefront project's forecast doubled this month and nobody noticed until the invoice. Why, and how do we avoid a surprise next time?
+  text:
+    Desperdicio eliminado: Waste removed
+    VM de pruebas de carga eliminadas: Load-test VMs gone
+    Gasto de vuelta a la normalidad: Spend back to normal
+    Producción intacta: Production intact
+    El checkout funciona: Checkout works
+    Responsable confirmado: Ownership confirmed
+    Confirmado con el responsable antes de borrar: Confirmed with the owner before deleting
+    Alertas: Alerting
+    Alerta de presupuesto configurada: Budget alert configured
+    Explicación: Explanation
+    Origen del coste explicado: Cost driver explained
+    Marta (FinOps): Marta (FinOps)
+    Chen (equipo de rendimiento): Chen (performance team)
+    Hace dos semanas hicimos pruebas de carga.: We ran load tests two weeks ago.
+    '¿Las VM loadtest siguen encendidas? Las pruebas terminaron hace dos semanas: bórralas, por favor.': Oh no, the loadtest VMs are still up? The tests finished two weeks ago — please delete them.

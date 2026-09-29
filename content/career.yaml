@@ -2,47 +2,65 @@
 # and autonomy (autonomy ladder index: 0 Guided … 5 Expert), not years.
 stages:
   - id: intern
-    name: Cloud Intern
-    scenario: Guided labs, concepts and atomic tasks
+    name: Becario/a cloud
+    scenario: Laboratorios guiados, conceptos y tareas atómicas
     minAutonomy: 0
+    en:
+      name: Cloud Intern
+      scenario: Guided labs, concepts and atomic tasks
   - id: junior
-    name: Junior Cloud Engineer
-    scenario: Clear tickets and low-risk changes
+    name: Cloud Engineer junior
+    scenario: Tickets claros y cambios de bajo riesgo
     minAutonomy: 1
     branches: {foundations: 40, iam: 30, compute: 30}
     capstones: [ace-d10-checkpoint, cap-junior-secure-app]
+    en:
+      name: Junior Cloud Engineer
+      scenario: Clear tickets and low-risk changes
   - id: engineer
     name: Cloud Engineer
-    scenario: Multi-component incidents and automation
+    scenario: Incidentes con varios componentes y automatización
     minAutonomy: 2
     branches: {foundations: 60, iam: 55, compute: 55, networking: 50, storage: 50, observability: 45}
     capstones: [ace-d29-capstone-orders, cap-engineer-migration]
+    en:
+      name: Cloud Engineer
+      scenario: Multi-component incidents and automation
   - id: senior
-    name: Senior Cloud Engineer
-    scenario: Ambiguity, production, architecture and risk
+    name: Cloud Engineer sénior
+    scenario: Ambigüedad, producción, arquitectura y riesgo
     minAutonomy: 3
     branches: {iam: 70, networking: 70, compute: 65, security: 60, observability: 60, databases: 55}
     capstones: [ace-d30-boss-incident, nb-boss-quarter-close]
+    en:
+      name: Senior Cloud Engineer
+      scenario: Ambiguity, production, architecture and risk
   - id: platform
-    name: Platform / DevOps / SRE Engineer
-    scenario: Reliability, internal platforms, pipelines, Kubernetes and observability
+    name: Ingeniero/a de plataforma / DevOps / SRE
+    scenario: Fiabilidad, plataformas internas, pipelines, Kubernetes y observabilidad
     minAutonomy: 4
     branches: {devops: 70, gke: 65, observability: 70, security: 65}
     capstones: [cap-devops-platform, sre-c01-zone-chaos]
+    en:
+      name: Platform / DevOps / SRE Engineer
+      scenario: Reliability, internal platforms, pipelines, Kubernetes and observability
   - id: architect
-    name: Cloud Architect
-    scenario: Global design, governance, HA/DR, cost and trade-offs
+    name: Arquitecto/a cloud
+    scenario: Diseño global, gobierno, HA/DR, coste y compromisos
     minAutonomy: 5
     branches: {architecture: 75, networking: 75, security: 70, databases: 65, finops: 50}
     capstones: [cap-architect-global]
+    en:
+      name: Cloud Architect
+      scenario: Global design, governance, HA/DR, cost and trade-offs
 specializations:
-  - {id: devops, name: DevOps, requires: engineer, branches: {devops: 70, containers: 60}, skills: [devops.cicd, devops.delivery, devops.iac], capstones: [ace-d27-deploy-rollback, cap-devops-platform, devops-tf01-drift-import], certs: [PCDE]}
-  - {id: sre, name: SRE, requires: engineer, branches: {observability: 70, gke: 55}, skills: [observability.slo, observability.incident, observability.chaos], capstones: [sre-c01-zone-chaos, gke-k01-nightmare], certs: [PCDE]}
-  - {id: security, name: Security, requires: engineer, branches: {security: 70, iam: 70}, skills: [security.secrets, security.kms, security.audit, security.incident], capstones: [ace-d25-public-exposure, nb-i01-ssh-compromise, sec-s01-leaked-key], certs: [PCSE]}
-  - {id: networking, name: Networking, requires: engineer, branches: {networking: 75, netfund: 60}, skills: [networking.hybrid, networking.lb, networking.dns], capstones: [ace-d26-hybrid-design, net-n02-shared-services-peering], certs: [PCNE]}
-  - {id: data, name: Data, requires: engineer, branches: {data: 70, databases: 55}, skills: [data.bigquery, data.pipelines], capstones: [ace-d22-pubsub-ingestion, data-d01-sql-recovery, cap-data-ml-platform], certs: [PDE]}
-  - {id: platform, name: Platform Engineering, requires: senior, branches: {gke: 70, devops: 65, architecture: 55}, skills: [gke.identity, devops.iac, gke.rbac], capstones: [cap-devops-platform, gke-k01-nightmare, gke-k02-workload-identity]}
-  - {id: clouddev, name: Cloud Development, requires: engineer, branches: {compute: 60, devtools: 60, containers: 60}, skills: [compute.serverless, devtools.apis]}
-  - {id: aiml, name: AI/ML, requires: engineer, branches: {data: 60}, skills: [data.ml], capstones: [ace-d23-ml-endpoint, ml-m01-canary-model, cap-data-ml-platform], certs: [PMLE]}
-  - {id: finops, name: FinOps, requires: engineer, branches: {finops: 65, architecture: 50}, skills: [architecture.cost, finops.optimization], capstones: [finops-f01-bill-shock, ace-d28-architecture-review]}
-  - {id: architecture, name: Architecture, requires: senior, branches: {architecture: 75, networking: 65, security: 60}, skills: [architecture.design, architecture.reliability, architecture.dr], capstones: [arch-a01-global-expansion, arch-dr01-regional-failover, cap-architect-global], certs: [PCA]}
+  - {id: devops, name: DevOps, requires: engineer, branches: {devops: 70, containers: 60}, skills: [devops.cicd, devops.delivery, devops.iac], capstones: [ace-d27-deploy-rollback, cap-devops-platform, devops-tf01-drift-import], certs: [PCDE], en: {name: DevOps}}
+  - {id: sre, name: SRE, requires: engineer, branches: {observability: 70, gke: 55}, skills: [observability.slo, observability.incident, observability.chaos], capstones: [sre-c01-zone-chaos, gke-k01-nightmare], certs: [PCDE], en: {name: SRE}}
+  - {id: security, name: Seguridad, requires: engineer, branches: {security: 70, iam: 70}, skills: [security.secrets, security.kms, security.audit, security.incident], capstones: [ace-d25-public-exposure, nb-i01-ssh-compromise, sec-s01-leaked-key], certs: [PCSE], en: {name: Security}}
+  - {id: networking, name: Redes, requires: engineer, branches: {networking: 75, netfund: 60}, skills: [networking.hybrid, networking.lb, networking.dns], capstones: [ace-d26-hybrid-design, net-n02-shared-services-peering], certs: [PCNE], en: {name: Networking}}
+  - {id: data, name: Datos, requires: engineer, branches: {data: 70, databases: 55}, skills: [data.bigquery, data.pipelines], capstones: [ace-d22-pubsub-ingestion, data-d01-sql-recovery, cap-data-ml-platform], certs: [PDE], en: {name: Data}}
+  - {id: platform, name: Ingeniería de plataformas, requires: senior, branches: {gke: 70, devops: 65, architecture: 55}, skills: [gke.identity, devops.iac, gke.rbac], capstones: [cap-devops-platform, gke-k01-nightmare, gke-k02-workload-identity], en: {name: Platform Engineering}}
+  - {id: clouddev, name: Desarrollo cloud, requires: engineer, branches: {compute: 60, devtools: 60, containers: 60}, skills: [compute.serverless, devtools.apis], en: {name: Cloud Development}}
+  - {id: aiml, name: IA/ML, requires: engineer, branches: {data: 60}, skills: [data.ml], capstones: [ace-d23-ml-endpoint, ml-m01-canary-model, cap-data-ml-platform], certs: [PMLE], en: {name: AI/ML}}
+  - {id: finops, name: FinOps, requires: engineer, branches: {finops: 65, architecture: 50}, skills: [architecture.cost, finops.optimization], capstones: [finops-f01-bill-shock, ace-d28-architecture-review], en: {name: FinOps}}
+  - {id: architecture, name: Arquitectura, requires: senior, branches: {architecture: 75, networking: 65, security: 60}, skills: [architecture.design, architecture.reliability, architecture.dr], capstones: [arch-a01-global-expansion, arch-dr01-regional-failover, cap-architect-global], certs: [PCA], en: {name: Architecture}}

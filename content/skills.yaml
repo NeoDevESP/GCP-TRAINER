@@ -8,148 +8,186 @@
 # observability → SRE. `block` groups skills into the master curriculum blocks.
 branches:
   - id: fundamentals
-    name: IT fundamentals
+    name: Fundamentos de TI
     block: Fundamentos IT
     skills:
-      - {id: fundamentals.os, name: Operating systems, observable: "Explains processes, memory, files and permissions and how a VM maps to hardware"}
-      - {id: fundamentals.virtualization, name: Virtualisation, observable: "Distinguishes bare metal, VMs, containers and serverless and their isolation", requires: [fundamentals.os]}
+      - {id: fundamentals.os, name: Sistemas operativos, observable: "Explica procesos, memoria, archivos y permisos y cómo se corresponde una VM con el hardware", en: {name: Operating systems, observable: "Explains processes, memory, files and permissions and how a VM maps to hardware"}}
+      - {id: fundamentals.virtualization, name: Virtualización, observable: "Distingue bare metal, VM, contenedores y serverless y su aislamiento", requires: [fundamentals.os], en: {name: Virtualisation, observable: "Distinguishes bare metal, VMs, containers and serverless and their isolation"}}
+    en:
+      name: IT fundamentals
   - id: linux
     name: Linux
     block: Linux
     skills:
-      - {id: linux.shell, name: Shell & files, observable: "Navigates the filesystem, reads logs and edits configuration from the shell", requires: [fundamentals.os]}
-      - {id: linux.permissions, name: Users & permissions, observable: "Diagnoses permission denied from owners, groups and modes", requires: [linux.shell]}
-      - {id: linux.processes, name: Processes & systemd, observable: "Finds, restarts and enables services and reads their journal", requires: [linux.shell]}
-      - {id: linux.disks, name: Disks & filesystems, observable: "Detects a full disk, frees space safely and grows a filesystem", requires: [linux.shell]}
-      - {id: linux.troubleshooting, name: Linux troubleshooting, observable: "Uses ss, ps, df, journalctl and curl to isolate a failing service", requires: [linux.processes, linux.disks, linux.permissions]}
+      - {id: linux.shell, name: Shell y archivos, observable: "Navega por el sistema de archivos, lee registros y edita la configuración desde la shell", requires: [fundamentals.os], en: {name: Shell & files, observable: "Navigates the filesystem, reads logs and edits configuration from the shell"}}
+      - {id: linux.permissions, name: Usuarios y permisos, observable: "Diagnostica un permission denied a partir de propietarios, grupos y permisos", requires: [linux.shell], en: {name: Users & permissions, observable: "Diagnoses permission denied from owners, groups and modes"}}
+      - {id: linux.processes, name: Procesos y systemd, observable: "Encuentra, reinicia y habilita servicios y lee su journal", requires: [linux.shell], en: {name: Processes & systemd, observable: "Finds, restarts and enables services and reads their journal"}}
+      - {id: linux.disks, name: Discos y sistemas de archivos, observable: "Detecta un disco lleno, libera espacio de forma segura y amplía un sistema de archivos", requires: [linux.shell], en: {name: Disks & filesystems, observable: "Detects a full disk, frees space safely and grows a filesystem"}}
+      - {id: linux.troubleshooting, name: Resolución de problemas en Linux, observable: "Usa ss, ps, df, journalctl y curl para aislar un servicio que falla", requires: [linux.processes, linux.disks, linux.permissions], en: {name: Linux troubleshooting, observable: "Uses ss, ps, df, journalctl and curl to isolate a failing service"}}
+    en:
+      name: Linux
   - id: netfund
-    name: Networking fundamentals
+    name: Fundamentos de redes
     block: Networking
     skills:
-      - {id: netfund.tcpip, name: TCP/IP, observable: "Explains addressing, ports, the TCP handshake and what a timeout vs refused means"}
-      - {id: netfund.cidr, name: CIDR & subnetting, observable: "Computes ranges, overlaps and capacity of subnets", requires: [netfund.tcpip]}
-      - {id: netfund.dnshttp, name: DNS, HTTP & TLS, observable: "Follows a request through DNS, TCP, TLS and HTTP status codes", requires: [netfund.tcpip]}
+      - {id: netfund.tcpip, name: TCP/IP, observable: "Explica el direccionamiento, los puertos, el handshake de TCP y qué significa un timeout frente a un rechazo", en: {name: TCP/IP, observable: "Explains addressing, ports, the TCP handshake and what a timeout vs refused means"}}
+      - {id: netfund.cidr, name: CIDR y subredes, observable: "Calcula rangos, solapamientos y capacidad de subredes", requires: [netfund.tcpip], en: {name: CIDR & subnetting, observable: "Computes ranges, overlaps and capacity of subnets"}}
+      - {id: netfund.dnshttp, name: "DNS, HTTP y TLS", observable: "Sigue una petición a través de DNS, TCP, TLS y los códigos de estado HTTP", requires: [netfund.tcpip], en: {name: "DNS, HTTP & TLS", observable: "Follows a request through DNS, TCP, TLS and HTTP status codes"}}
+    en:
+      name: Networking fundamentals
   - id: devtools
-    name: Development tooling
+    name: Herramientas de desarrollo
     block: Development tooling
     skills:
-      - {id: devtools.git, name: Git, observable: "Branches, commits and reviews changes through pull requests"}
-      - {id: devtools.formats, name: JSON, YAML & jq, observable: "Reads and filters structured output with --format, jq and YAML manifests"}
-      - {id: devtools.apis, name: REST APIs & tokens, observable: "Calls REST APIs with curl and OAuth/OIDC tokens and reads the errors", requires: [netfund.dnshttp, devtools.formats]}
+      - {id: devtools.git, name: Git, observable: "Crea ramas, hace commits y revisa cambios mediante pull requests", en: {name: Git, observable: "Branches, commits and reviews changes through pull requests"}}
+      - {id: devtools.formats, name: "JSON, YAML y jq", observable: "Lee y filtra salida estructurada con --format, jq y manifiestos YAML", en: {name: "JSON, YAML & jq", observable: "Reads and filters structured output with --format, jq and YAML manifests"}}
+      - {id: devtools.apis, name: API REST y tokens, observable: "Llama a API REST con curl y tokens OAuth/OIDC e interpreta los errores", requires: [netfund.dnshttp, devtools.formats], en: {name: REST APIs & tokens, observable: "Calls REST APIs with curl and OAuth/OIDC tokens and reads the errors"}}
+    en:
+      name: Development tooling
   - id: automation
-    name: Automation
+    name: Automatización
     block: Automation
     skills:
-      - {id: automation.bash, name: Bash scripting, observable: "Automates repetitive operations with loops, pipes and exit codes", requires: [linux.shell]}
-      - {id: automation.sdk, name: SDKs & scripting, observable: "Scripts cloud operations idempotently with filters and formats", requires: [automation.bash, devtools.formats]}
+      - {id: automation.bash, name: Scripting en Bash, observable: "Automatiza operaciones repetitivas con bucles, tuberías y códigos de salida", requires: [linux.shell], en: {name: Bash scripting, observable: "Automates repetitive operations with loops, pipes and exit codes"}}
+      - {id: automation.sdk, name: SDK y scripting, observable: "Automatiza operaciones cloud de forma idempotente con filtros y formatos", requires: [automation.bash, devtools.formats], en: {name: SDKs & scripting, observable: "Scripts cloud operations idempotently with filters and formats"}}
+    en:
+      name: Automation
   - id: containers
-    name: Containers
+    name: Contenedores
     block: Containers
     skills:
-      - {id: containers.docker, name: Docker & images, observable: "Builds, tags, runs and publishes container images", requires: [linux.processes, fundamentals.virtualization]}
-      - {id: containers.security, name: Container security, observable: "Uses minimal images, non-root users and trusted registries", requires: [containers.docker]}
+      - {id: containers.docker, name: Docker e imágenes, observable: "Construye, etiqueta, ejecuta y publica imágenes de contenedor", requires: [linux.processes, fundamentals.virtualization], en: {name: Docker & images, observable: "Builds, tags, runs and publishes container images"}}
+      - {id: containers.security, name: Seguridad de contenedores, observable: "Usa imágenes mínimas, usuarios sin root y registros de confianza", requires: [containers.docker], en: {name: Container security, observable: "Uses minimal images, non-root users and trusted registries"}}
+    en:
+      name: Containers
   - id: foundations
-    name: Foundations
+    name: Bases
     skills:
-      - {id: foundations.hierarchy, name: Resource hierarchy, observable: "Locates org, folders, projects, regions and zones and explains where a resource lives"}
-      - {id: foundations.cli, name: gcloud & Cloud Shell, observable: "Configures and verifies CLI context before operating", requires: [linux.shell]}
-      - {id: foundations.apis, name: APIs & org policy, observable: "Enables only the required APIs and respects organisation constraints", requires: [foundations.hierarchy]}
-      - {id: foundations.billing, name: Billing & budgets, observable: "Estimates cost, labels resources and configures budget alerts knowing they do not cap spend", requires: [foundations.hierarchy]}
+      - {id: foundations.hierarchy, name: Jerarquía de recursos, observable: "Ubica organización, carpetas, proyectos, regiones y zonas y explica dónde vive un recurso", en: {name: Resource hierarchy, observable: "Locates org, folders, projects, regions and zones and explains where a resource lives"}}
+      - {id: foundations.cli, name: gcloud y Cloud Shell, observable: "Configura y verifica el contexto de la CLI antes de operar", requires: [linux.shell], en: {name: gcloud & Cloud Shell, observable: "Configures and verifies CLI context before operating"}}
+      - {id: foundations.apis, name: API y políticas de organización, observable: "Habilita solo las API necesarias y respeta las restricciones de la organización", requires: [foundations.hierarchy], en: {name: APIs & org policy, observable: "Enables only the required APIs and respects organisation constraints"}}
+      - {id: foundations.billing, name: Facturación y presupuestos, observable: "Estima costes, etiqueta recursos y configura alertas de presupuesto sabiendo que no limitan el gasto", requires: [foundations.hierarchy], en: {name: Billing & budgets, observable: "Estimates cost, labels resources and configures budget alerts knowing they do not cap spend"}}
+    en:
+      name: Foundations
   - id: compute
-    name: Compute
+    name: Cómputo
     skills:
-      - {id: compute.vm, name: Compute Engine VMs, observable: "Deploys a VM with the right zone, machine type, image, tags and startup script", requires: [foundations.cli, fundamentals.virtualization]}
-      - {id: compute.mig, name: Managed instance groups, observable: "Builds templates and MIGs with autoscaling and autohealing", requires: [compute.vm, networking.lb]}
-      - {id: compute.disks, name: Disks & snapshots, observable: "Protects and restores data with snapshots", requires: [compute.vm, linux.disks]}
-      - {id: compute.serverless, name: Cloud Run, observable: "Deploys and configures a container service with the right identity and ingress", requires: [containers.docker, foundations.cli]}
-      - {id: compute.troubleshooting, name: Compute troubleshooting, observable: "Diagnoses unreachable or unhealthy workloads from evidence", requires: [compute.vm, networking.firewall, linux.troubleshooting]}
+      - {id: compute.vm, name: VM de Compute Engine, observable: "Despliega una VM con la zona, el tipo de máquina, la imagen, las etiquetas y el script de arranque adecuados", requires: [foundations.cli, fundamentals.virtualization], en: {name: Compute Engine VMs, observable: "Deploys a VM with the right zone, machine type, image, tags and startup script"}}
+      - {id: compute.mig, name: Grupos de instancias gestionados, observable: "Construye plantillas y MIG con autoescalado y autorreparación", requires: [compute.vm, networking.lb], en: {name: Managed instance groups, observable: "Builds templates and MIGs with autoscaling and autohealing"}}
+      - {id: compute.disks, name: Discos y snapshots, observable: "Protege y restaura datos con snapshots", requires: [compute.vm, linux.disks], en: {name: Disks & snapshots, observable: "Protects and restores data with snapshots"}}
+      - {id: compute.serverless, name: Cloud Run, observable: "Despliega y configura un servicio de contenedores con la identidad y el ingress adecuados", requires: [containers.docker, foundations.cli], en: {name: Cloud Run, observable: "Deploys and configures a container service with the right identity and ingress"}}
+      - {id: compute.troubleshooting, name: Resolución de problemas de cómputo, observable: "Diagnostica cargas inaccesibles o no sanas a partir de evidencias", requires: [compute.vm, networking.firewall, linux.troubleshooting], en: {name: Compute troubleshooting, observable: "Diagnoses unreachable or unhealthy workloads from evidence"}}
+    en:
+      name: Compute
   - id: storage
-    name: Storage
+    name: Almacenamiento
     skills:
-      - {id: storage.buckets, name: Buckets, observable: "Creates buckets in the required location and class", requires: [foundations.cli]}
-      - {id: storage.lifecycle, name: Lifecycle & versioning, observable: "Automates retention and cost with lifecycle rules and versioning", requires: [storage.buckets]}
-      - {id: storage.access, name: Object access control, observable: "Grants the minimum object access with UBLA and public access prevention", requires: [storage.buckets, iam.roles]}
-      - {id: storage.encryption, name: Encryption, observable: "Protects data with CMEK and understands the service agent", requires: [storage.buckets, security.kms]}
+      - {id: storage.buckets, name: Buckets, observable: "Crea buckets en la ubicación y la clase requeridas", requires: [foundations.cli], en: {name: Buckets, observable: "Creates buckets in the required location and class"}}
+      - {id: storage.lifecycle, name: Ciclo de vida y versiones, observable: "Automatiza la retención y el coste con reglas de ciclo de vida y control de versiones", requires: [storage.buckets], en: {name: Lifecycle & versioning, observable: "Automates retention and cost with lifecycle rules and versioning"}}
+      - {id: storage.access, name: Control de acceso a objetos, observable: "Concede el mínimo acceso a objetos con UBLA y prevención de acceso público", requires: [storage.buckets, iam.roles], en: {name: Object access control, observable: "Grants the minimum object access with UBLA and public access prevention"}}
+      - {id: storage.encryption, name: Cifrado, observable: "Protege los datos con CMEK y entiende el agente de servicio", requires: [storage.buckets, security.kms], en: {name: Encryption, observable: "Protects data with CMEK and understands the service agent"}}
+    en:
+      name: Storage
   - id: networking
-    name: Networking
+    name: Redes
     skills:
-      - {id: networking.vpc, name: VPC & subnets, observable: "Designs custom VPCs and non-overlapping subnets", requires: [netfund.cidr, foundations.cli]}
-      - {id: networking.routing, name: Routes, observable: "Explains which route and next hop a packet takes and fixes missing routes", requires: [networking.vpc]}
-      - {id: networking.firewall, name: Firewall rules, observable: "Reasons about priority, direction, tags and service accounts to allow only required traffic", requires: [networking.routing]}
-      - {id: networking.nat, name: Egress & Cloud NAT, observable: "Provides egress and Google API access without public IPs", requires: [networking.firewall]}
-      - {id: networking.lb, name: Load balancing, observable: "Publishes backends through a load balancer with health checks", requires: [networking.nat, netfund.dnshttp]}
-      - {id: networking.dns, name: Cloud DNS, observable: "Publishes and troubleshoots public and private DNS", requires: [networking.lb]}
-      - {id: networking.hybrid, name: Hybrid connectivity, observable: "Chooses and builds VPN/Interconnect with dynamic routing", requires: [networking.dns, networking.routing]}
-      - {id: networking.peering, name: VPC peering & private access, observable: "Connects networks privately without overlapping ranges", requires: [networking.vpc]}
+      - {id: networking.vpc, name: VPC y subredes, observable: "Diseña VPC personalizadas y subredes sin solapamientos", requires: [netfund.cidr, foundations.cli], en: {name: VPC & subnets, observable: "Designs custom VPCs and non-overlapping subnets"}}
+      - {id: networking.routing, name: Rutas, observable: "Explica qué ruta y siguiente salto toma un paquete y corrige las rutas que faltan", requires: [networking.vpc], en: {name: Routes, observable: "Explains which route and next hop a packet takes and fixes missing routes"}}
+      - {id: networking.firewall, name: Reglas de cortafuegos, observable: "Razona sobre prioridad, dirección, etiquetas y cuentas de servicio para permitir solo el tráfico necesario", requires: [networking.routing], en: {name: Firewall rules, observable: "Reasons about priority, direction, tags and service accounts to allow only required traffic"}}
+      - {id: networking.nat, name: Salida y Cloud NAT, observable: "Da salida a internet y acceso a las API de Google sin IP públicas", requires: [networking.firewall], en: {name: Egress & Cloud NAT, observable: "Provides egress and Google API access without public IPs"}}
+      - {id: networking.lb, name: Balanceo de carga, observable: "Publica backends tras un balanceador de carga con comprobaciones de estado", requires: [networking.nat, netfund.dnshttp], en: {name: Load balancing, observable: "Publishes backends through a load balancer with health checks"}}
+      - {id: networking.dns, name: Cloud DNS, observable: "Publica y resuelve problemas de DNS público y privado", requires: [networking.lb], en: {name: Cloud DNS, observable: "Publishes and troubleshoots public and private DNS"}}
+      - {id: networking.hybrid, name: Conectividad híbrida, observable: "Elige y construye VPN/Interconnect con enrutamiento dinámico", requires: [networking.dns, networking.routing], en: {name: Hybrid connectivity, observable: "Chooses and builds VPN/Interconnect with dynamic routing"}}
+      - {id: networking.peering, name: Emparejamiento de VPC y acceso privado, observable: "Conecta redes de forma privada sin rangos solapados", requires: [networking.vpc], en: {name: VPC peering & private access, observable: "Connects networks privately without overlapping ranges"}}
+    en:
+      name: Networking
   - id: iam
     name: IAM
     skills:
-      - {id: iam.roles, name: Roles, observable: "Chooses predefined or custom roles instead of basic roles", requires: [foundations.hierarchy]}
-      - {id: iam.serviceaccounts, name: Service accounts, observable: "Identifies the effective identity of a workload and scopes its permissions", requires: [iam.roles]}
-      - {id: iam.leastprivilege, name: Least privilege, observable: "Grants only what is needed at the lowest level of the hierarchy", requires: [iam.roles, iam.serviceaccounts]}
-      - {id: iam.conditions, name: IAM Conditions, observable: "Restricts access by time or resource with conditions", requires: [iam.leastprivilege]}
-      - {id: iam.impersonation, name: Impersonation, observable: "Uses short-lived credentials instead of keys", requires: [iam.serviceaccounts]}
-      - {id: iam.orgpolicy, name: Organisation policy, observable: "Applies guardrails with org policy constraints", requires: [iam.leastprivilege, foundations.apis]}
+      - {id: iam.roles, name: Roles, observable: "Elige roles predefinidos o personalizados en lugar de roles básicos", requires: [foundations.hierarchy], en: {name: Roles, observable: "Chooses predefined or custom roles instead of basic roles"}}
+      - {id: iam.serviceaccounts, name: Cuentas de servicio, observable: "Identifica la identidad efectiva de una carga y acota sus permisos", requires: [iam.roles], en: {name: Service accounts, observable: "Identifies the effective identity of a workload and scopes its permissions"}}
+      - {id: iam.leastprivilege, name: Mínimo privilegio, observable: "Concede solo lo necesario en el nivel más bajo de la jerarquía", requires: [iam.roles, iam.serviceaccounts], en: {name: Least privilege, observable: "Grants only what is needed at the lowest level of the hierarchy"}}
+      - {id: iam.conditions, name: Condiciones de IAM, observable: "Restringe el acceso por tiempo o por recurso con condiciones", requires: [iam.leastprivilege], en: {name: IAM Conditions, observable: "Restricts access by time or resource with conditions"}}
+      - {id: iam.impersonation, name: Suplantación de identidad, observable: "Usa credenciales de corta duración en lugar de claves", requires: [iam.serviceaccounts], en: {name: Impersonation, observable: "Uses short-lived credentials instead of keys"}}
+      - {id: iam.orgpolicy, name: Políticas de organización, observable: "Aplica barreras con restricciones de políticas de organización", requires: [iam.leastprivilege, foundations.apis], en: {name: Organisation policy, observable: "Applies guardrails with org policy constraints"}}
+    en:
+      name: IAM
   - id: security
-    name: Security
+    name: Seguridad
     skills:
-      - {id: security.secrets, name: Secret Manager, observable: "Removes secrets from configuration, rotates and scopes access", requires: [iam.leastprivilege]}
-      - {id: security.kms, name: Cloud KMS, observable: "Manages keys, rotation and encrypter/decrypter separation", requires: [iam.leastprivilege]}
-      - {id: security.armor, name: Cloud Armor & exposure, observable: "Detects and closes unintended exposure", requires: [networking.lb, iam.leastprivilege]}
-      - {id: security.scc, name: Posture & findings, observable: "Triages Security Command Center findings by risk", requires: [security.armor]}
-      - {id: security.audit, name: Audit & forensics, observable: "Reconstructs who did what from audit logs", requires: [observability.logging, iam.roles]}
-      - {id: security.supplychain, name: Supply chain, observable: "Builds from trusted sources with scoped build identities", requires: [devops.cicd, containers.security]}
-      - {id: security.incident, name: Security incident response, observable: "Contains, investigates, rotates credentials and prevents recurrence", requires: [security.audit, security.secrets]}
+      - {id: security.secrets, name: Secret Manager, observable: "Saca los secretos de la configuración, los rota y acota su acceso", requires: [iam.leastprivilege], en: {name: Secret Manager, observable: "Removes secrets from configuration, rotates and scopes access"}}
+      - {id: security.kms, name: Cloud KMS, observable: "Gestiona claves, su rotación y la separación entre cifrado y descifrado", requires: [iam.leastprivilege], en: {name: Cloud KMS, observable: "Manages keys, rotation and encrypter/decrypter separation"}}
+      - {id: security.armor, name: Cloud Armor y exposición, observable: "Detecta y cierra exposiciones no deseadas", requires: [networking.lb, iam.leastprivilege], en: {name: Cloud Armor & exposure, observable: "Detects and closes unintended exposure"}}
+      - {id: security.scc, name: Postura y hallazgos, observable: "Clasifica por riesgo los hallazgos de Security Command Center", requires: [security.armor], en: {name: Posture & findings, observable: "Triages Security Command Center findings by risk"}}
+      - {id: security.audit, name: Auditoría y análisis forense, observable: "Reconstruye quién hizo qué a partir de los registros de auditoría", requires: [observability.logging, iam.roles], en: {name: Audit & forensics, observable: "Reconstructs who did what from audit logs"}}
+      - {id: security.supplychain, name: Cadena de suministro, observable: "Construye desde fuentes de confianza con identidades de compilación acotadas", requires: [devops.cicd, containers.security], en: {name: Supply chain, observable: "Builds from trusted sources with scoped build identities"}}
+      - {id: security.incident, name: Respuesta a incidentes de seguridad, observable: "Contiene, investiga, rota credenciales y evita que se repita", requires: [security.audit, security.secrets], en: {name: Security incident response, observable: "Contains, investigates, rotates credentials and prevents recurrence"}}
+    en:
+      name: Security
   - id: databases
-    name: Databases
+    name: Bases de datos
     skills:
-      - {id: databases.cloudsql, name: Cloud SQL, observable: "Creates instances, databases and users and connects privately", requires: [networking.vpc, iam.serviceaccounts]}
-      - {id: databases.ha, name: High availability & DR, observable: "Configures HA, backups, PITR and replicas", requires: [databases.cloudsql]}
-      - {id: databases.performance, name: Performance, observable: "Correlates metrics, logs and queries to fix saturation", requires: [databases.cloudsql, observability.monitoring]}
+      - {id: databases.cloudsql, name: Cloud SQL, observable: "Crea instancias, bases de datos y usuarios y se conecta de forma privada", requires: [networking.vpc, iam.serviceaccounts], en: {name: Cloud SQL, observable: "Creates instances, databases and users and connects privately"}}
+      - {id: databases.ha, name: Alta disponibilidad y recuperación ante desastres, observable: "Configura HA, copias de seguridad, PITR y réplicas", requires: [databases.cloudsql], en: {name: High availability & DR, observable: "Configures HA, backups, PITR and replicas"}}
+      - {id: databases.performance, name: Rendimiento, observable: "Relaciona métricas, registros y consultas para corregir la saturación", requires: [databases.cloudsql, observability.monitoring], en: {name: Performance, observable: "Correlates metrics, logs and queries to fix saturation"}}
+    en:
+      name: Databases
   - id: data
     name: Big Data / ML
     skills:
-      - {id: data.bigquery, name: BigQuery, observable: "Designs partitioned/clustered tables and cheap queries", requires: [devtools.formats]}
-      - {id: data.pubsub, name: Pub/Sub, observable: "Builds reliable messaging with push, pull and dead letters", requires: [iam.serviceaccounts]}
-      - {id: data.pipelines, name: Pipelines, observable: "Connects producers, processing and sinks with failure handling", requires: [data.pubsub, data.bigquery]}
-      - {id: data.ml, name: ML serving, observable: "Serves a model with controlled identity, cost and monitoring", requires: [data.bigquery, compute.serverless]}
+      - {id: data.bigquery, name: BigQuery, observable: "Diseña tablas particionadas/agrupadas y consultas baratas", requires: [devtools.formats], en: {name: BigQuery, observable: "Designs partitioned/clustered tables and cheap queries"}}
+      - {id: data.pubsub, name: Pub/Sub, observable: "Construye mensajería fiable con push, pull y dead letters", requires: [iam.serviceaccounts], en: {name: Pub/Sub, observable: "Builds reliable messaging with push, pull and dead letters"}}
+      - {id: data.pipelines, name: Canales de datos, observable: "Conecta productores, procesamiento y destinos con gestión de fallos", requires: [data.pubsub, data.bigquery], en: {name: Pipelines, observable: "Connects producers, processing and sinks with failure handling"}}
+      - {id: data.ml, name: Servicio de modelos de ML, observable: "Sirve un modelo con identidad, coste y monitorización controlados", requires: [data.bigquery, compute.serverless], en: {name: ML serving, observable: "Serves a model with controlled identity, cost and monitoring"}}
+    en:
+      name: Big Data / ML
   - id: gke
     name: Kubernetes / GKE
     skills:
-      - {id: gke.workloads, name: Workloads, observable: "Deploys Deployments/Services with probes and resources", requires: [containers.docker, networking.vpc]}
-      - {id: gke.autoscaling, name: Autoscaling, observable: "Configures requests and HPA and demonstrates scale-out/in", requires: [gke.workloads]}
-      - {id: gke.identity, name: Workload Identity, observable: "Grants pods Google access without node keys", requires: [gke.workloads, iam.serviceaccounts]}
-      - {id: gke.troubleshooting, name: GKE troubleshooting, observable: "Diagnoses CrashLoopBackOff, readiness and rollout failures", requires: [gke.workloads, linux.troubleshooting]}
-      - {id: gke.networking, name: GKE networking, observable: "Exposes and isolates services (Service, Ingress, NetworkPolicy)", requires: [gke.workloads, networking.lb]}
-      - {id: gke.rbac, name: RBAC & storage, observable: "Diagnoses RBAC denials and PVC binding problems", requires: [gke.workloads, iam.roles]}
+      - {id: gke.workloads, name: Cargas de trabajo, observable: "Despliega Deployments/Services con sondas y recursos", requires: [containers.docker, networking.vpc], en: {name: Workloads, observable: "Deploys Deployments/Services with probes and resources"}}
+      - {id: gke.autoscaling, name: Autoescalado, observable: "Configura requests y HPA y demuestra el escalado hacia fuera y hacia dentro", requires: [gke.workloads], en: {name: Autoscaling, observable: "Configures requests and HPA and demonstrates scale-out/in"}}
+      - {id: gke.identity, name: Workload Identity, observable: "Da a los pods acceso a Google sin claves en los nodos", requires: [gke.workloads, iam.serviceaccounts], en: {name: Workload Identity, observable: "Grants pods Google access without node keys"}}
+      - {id: gke.troubleshooting, name: Resolución de problemas en GKE, observable: "Diagnostica CrashLoopBackOff y fallos de readiness y de despliegue", requires: [gke.workloads, linux.troubleshooting], en: {name: GKE troubleshooting, observable: "Diagnoses CrashLoopBackOff, readiness and rollout failures"}}
+      - {id: gke.networking, name: Redes en GKE, observable: "Expone y aísla servicios (Service, Ingress, NetworkPolicy)", requires: [gke.workloads, networking.lb], en: {name: GKE networking, observable: "Exposes and isolates services (Service, Ingress, NetworkPolicy)"}}
+      - {id: gke.rbac, name: RBAC y almacenamiento, observable: "Diagnostica denegaciones de RBAC y problemas de enlace de PVC", requires: [gke.workloads, iam.roles], en: {name: RBAC & storage, observable: "Diagnoses RBAC denials and PVC binding problems"}}
+    en:
+      name: Kubernetes / GKE
   - id: devops
     name: DevOps / CI-CD
     skills:
-      - {id: devops.iac, name: Infrastructure as code, observable: "Writes idempotent Terraform with variables and outputs", requires: [devtools.git, foundations.cli]}
-      - {id: devops.cicd, name: CI/CD, observable: "Automates build and publish from commits", requires: [devtools.git, containers.docker]}
-      - {id: devops.artifacts, name: Artifacts, observable: "Publishes reproducible, tagged images to Artifact Registry", requires: [containers.docker]}
-      - {id: devops.delivery, name: Progressive delivery, observable: "Releases with verification, canaries and rollback", requires: [devops.cicd, observability.monitoring]}
-      - {id: devops.iacops, name: Terraform operations, observable: "Handles state, drift, import and prevents mass destruction", requires: [devops.iac]}
+      - {id: devops.iac, name: Infraestructura como código, observable: "Escribe Terraform idempotente con variables y outputs", requires: [devtools.git, foundations.cli], en: {name: Infrastructure as code, observable: "Writes idempotent Terraform with variables and outputs"}}
+      - {id: devops.cicd, name: CI/CD, observable: "Automatiza la compilación y la publicación a partir de commits", requires: [devtools.git, containers.docker], en: {name: CI/CD, observable: "Automates build and publish from commits"}}
+      - {id: devops.artifacts, name: Artefactos, observable: "Publica imágenes reproducibles y etiquetadas en Artifact Registry", requires: [containers.docker], en: {name: Artifacts, observable: "Publishes reproducible, tagged images to Artifact Registry"}}
+      - {id: devops.delivery, name: Entrega progresiva, observable: "Publica versiones con verificación, canarios y marcha atrás", requires: [devops.cicd, observability.monitoring], en: {name: Progressive delivery, observable: "Releases with verification, canaries and rollback"}}
+      - {id: devops.iacops, name: Operaciones con Terraform, observable: "Gestiona el estado, la deriva y las importaciones y evita destrucciones masivas", requires: [devops.iac], en: {name: Terraform operations, observable: "Handles state, drift, import and prevents mass destruction"}}
+    en:
+      name: DevOps / CI-CD
   - id: observability
-    name: Observability
+    name: Observabilidad
     skills:
-      - {id: observability.logging, name: Cloud Logging, observable: "Queries logs precisely and builds log-based metrics", requires: [foundations.cli]}
-      - {id: observability.monitoring, name: Monitoring & alerting, observable: "Alerts on symptoms with actionable policies", requires: [observability.logging]}
-      - {id: observability.slo, name: SLI/SLO, observable: "Defines SLIs/SLOs and uptime checks", requires: [observability.monitoring]}
-      - {id: observability.incident, name: Incident response, observable: "Prioritises symptoms, isolates causes, restores and writes a postmortem", requires: [observability.monitoring, compute.troubleshooting]}
-      - {id: observability.chaos, name: Chaos & capacity, observable: "Runs controlled failure experiments and plans capacity", requires: [observability.slo, observability.incident]}
-      - {id: observability.postmortem, name: Postmortems & communication, observable: "Updates stakeholders during incidents and writes blameless postmortems", requires: [observability.incident]}
+      - {id: observability.logging, name: Cloud Logging, observable: "Consulta registros con precisión y construye métricas basadas en registros", requires: [foundations.cli], en: {name: Cloud Logging, observable: "Queries logs precisely and builds log-based metrics"}}
+      - {id: observability.monitoring, name: Monitorización y alertas, observable: "Alerta sobre síntomas con políticas accionables", requires: [observability.logging], en: {name: Monitoring & alerting, observable: "Alerts on symptoms with actionable policies"}}
+      - {id: observability.slo, name: SLI/SLO, observable: "Define SLI/SLO y comprobaciones de disponibilidad", requires: [observability.monitoring], en: {name: SLI/SLO, observable: "Defines SLIs/SLOs and uptime checks"}}
+      - {id: observability.incident, name: Respuesta a incidentes, observable: "Prioriza síntomas, aísla causas, restablece y escribe un post-mortem", requires: [observability.monitoring, compute.troubleshooting], en: {name: Incident response, observable: "Prioritises symptoms, isolates causes, restores and writes a postmortem"}}
+      - {id: observability.chaos, name: Caos y capacidad, observable: "Ejecuta experimentos controlados de fallos y planifica la capacidad", requires: [observability.slo, observability.incident], en: {name: Chaos & capacity, observable: "Runs controlled failure experiments and plans capacity"}}
+      - {id: observability.postmortem, name: Post-mortems y comunicación, observable: "Informa a las partes interesadas durante los incidentes y escribe post-mortems sin culpables", requires: [observability.incident], en: {name: Postmortems & communication, observable: "Updates stakeholders during incidents and writes blameless postmortems"}}
+    en:
+      name: Observability
   - id: architecture
-    name: Architecture
+    name: Arquitectura
     skills:
-      - {id: architecture.design, name: Solution design, observable: "Chooses between alternatives and justifies trade-offs", requires: [networking.lb, databases.cloudsql, iam.leastprivilege]}
-      - {id: architecture.reliability, name: Reliability design, observable: "Designs for HA/DR against stated RTO/RPO", requires: [architecture.design, databases.ha]}
-      - {id: architecture.cost, name: Cost optimisation, observable: "Reduces cost without breaking requirements", requires: [foundations.billing, architecture.design]}
-      - {id: architecture.dr, name: Disaster recovery, observable: "Executes failover against RTO/RPO and restores from backups", requires: [architecture.reliability]}
-      - {id: architecture.governance, name: Multi-project governance, observable: "Organises folders, Shared VPC and guardrails for many teams", requires: [iam.orgpolicy, networking.vpc]}
+      - {id: architecture.design, name: Diseño de soluciones, observable: "Elige entre alternativas y justifica los compromisos", requires: [networking.lb, databases.cloudsql, iam.leastprivilege], en: {name: Solution design, observable: "Chooses between alternatives and justifies trade-offs"}}
+      - {id: architecture.reliability, name: Diseño para la fiabilidad, observable: "Diseña para HA/DR frente a los RTO/RPO fijados", requires: [architecture.design, databases.ha], en: {name: Reliability design, observable: "Designs for HA/DR against stated RTO/RPO"}}
+      - {id: architecture.cost, name: Optimización de costes, observable: "Reduce costes sin romper los requisitos", requires: [foundations.billing, architecture.design], en: {name: Cost optimisation, observable: "Reduces cost without breaking requirements"}}
+      - {id: architecture.dr, name: Recuperación ante desastres, observable: "Ejecuta la conmutación frente a los RTO/RPO y restaura desde copias de seguridad", requires: [architecture.reliability], en: {name: Disaster recovery, observable: "Executes failover against RTO/RPO and restores from backups"}}
+      - {id: architecture.governance, name: Gobierno multiproyecto, observable: "Organiza carpetas, Shared VPC y barreras para muchos equipos", requires: [iam.orgpolicy, networking.vpc], en: {name: Multi-project governance, observable: "Organises folders, Shared VPC and guardrails for many teams"}}
+    en:
+      name: Architecture
   - id: finops
     name: FinOps
     block: FinOps
     skills:
-      - {id: finops.visibility, name: Cost visibility, observable: "Reads the bill by service, project and label and detects anomalies", requires: [foundations.billing]}
-      - {id: finops.optimization, name: Rightsizing & commitments, observable: "Rightsizes, schedules and removes idle resources with measured savings", requires: [finops.visibility, architecture.cost]}
+      - {id: finops.visibility, name: Visibilidad de costes, observable: "Lee la factura por servicio, proyecto y etiqueta y detecta anomalías", requires: [foundations.billing], en: {name: Cost visibility, observable: "Reads the bill by service, project and label and detects anomalies"}}
+      - {id: finops.optimization, name: Ajuste de tamaño y compromisos, observable: "Ajusta el tamaño, programa y elimina recursos ociosos con ahorros medidos", requires: [finops.visibility, architecture.cost], en: {name: Rightsizing & commitments, observable: "Rightsizes, schedules and removes idle resources with measured savings"}}
+    en:
+      name: FinOps

@@ -1,6 +1,6 @@
 id: nb-m07-privilege-review
-title: "PRB: service accounts with basic roles in production"
-summary: Replace legacy basic roles on production service accounts with the minimum predefined roles, without breaking workloads.
+title: "PRB: cuentas de servicio con roles básicos en producción"
+summary: Sustituye los roles básicos heredados de las cuentas de servicio de producción por los roles predefinidos mínimos sin romper las cargas.
 level: advanced
 branch: iam
 type: challenge
@@ -13,29 +13,29 @@ ticket:
   id: PRB-33
   kind: PRB
   priority: P3
-  summary: "Recurring audit finding: service accounts in production hold roles/editor. Remove it without breaking the deployer or the ETL."
-  reporter: Aisha (CISO office)
+  summary: "Hallazgo de auditoría recurrente: hay cuentas de servicio en producción con roles/editor. Quítalo sin romper el deployer ni la ETL."
+  reporter: Aisha (oficina del CISO)
 actors:
   - role: developer
-    name: Leo (web team)
+    name: Leo (equipo web)
     facts:
-      - {keywords: [[web-deployer, deployer, what, que, does, hace]], answer: "web-deployer updates instance metadata and restarts VMs during deploys. It also has to act as api-sa."}
+      - {keywords: [[web-deployer, deployer, what, que, does, hace]], answer: "web-deployer actualiza los metadatos de las instancias y reinicia las VM durante los despliegues. También tiene que actuar como api-sa."}
   - role: data
-    name: Ravi (data team)
-    fallback: "The ETL loads data every night."
+    name: Ravi (equipo de datos)
+    fallback: "La ETL carga datos todas las noches."
     facts:
-      - {keywords: [[etl, what, que, does, hace, need]], answer: "etl-sa reads the data lake bucket and writes BigQuery tables in analytics. Nothing else."}
+      - {keywords: [[etl, what, que, does, hace, need, necesit]], answer: "etl-sa lee el bucket del data lake y escribe tablas de BigQuery en analytics. Nada más."}
 story: |
-  `web-deployer` in `{{.prod_web}}` and `etl-sa` in `{{.prod_data}}` hold **roles/editor**. Ask the owners what
-  each identity does, grant the minimum predefined roles and only then remove editor. Document the change.
+  `web-deployer` en `{{.prod_web}}` y `etl-sa` en `{{.prod_data}}` tienen **roles/editor**. Pregunta a los responsables qué
+  hace cada identidad, concede los roles predefinidos mínimos y solo entonces quita editor. Documenta el cambio.
 objectives:
-  - Discover what each identity really does
-  - Grant predefined roles at the smallest scope
-  - Remove basic roles without breaking workloads
+  - Descubre qué hace realmente cada identidad
+  - Concede roles predefinidos en el ámbito más pequeño
+  - Quita los roles básicos sin romper las cargas
 evidence:
   fields: [explanation]
   sample:
-    explanation: web-deployer got compute.instanceAdmin.v1 and serviceAccountUser on api-sa; etl-sa got storage.objectViewer on the datalake bucket and bigquery.dataEditor; editor was removed from both after granting the replacements.
+    explanation: web-deployer recibió compute.instanceAdmin.v1 y serviceAccountUser sobre api-sa; etl-sa recibió storage.objectViewer sobre el bucket del data lake y bigquery.dataEditor; se quitó editor a ambas tras conceder los sustitutos.
 solution: |
   gcloud projects get-iam-policy {{.prod_web}} --flatten='bindings[].members' --filter='bindings.role:roles/editor' --format='value(bindings.members)'
   ask developer "what does web-deployer do?"
@@ -47,30 +47,62 @@ solution: |
   gcloud projects add-iam-policy-binding {{.prod_data}} --member=serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com --role=roles/bigquery.dataEditor
   gcloud projects remove-iam-policy-binding {{.prod_data}} --member=serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com --role=roles/editor
 rubric:
-  - name: No basic roles
+  - name: Sin roles básicos
     validator: security
     points: 35
     critical: true
     all: true
     checks:
-      - {type: policy, package: gcplab.security, ids: [BASIC_ROLE_SERVICE_ACCOUNT], desc: "No basic roles on prod-web service accounts"}
-      - {type: policy, on: "{{.prod_data}}", package: gcplab.security, ids: [BASIC_ROLE_SERVICE_ACCOUNT], desc: "No basic roles on prod-data service accounts"}
-  - name: Workloads still work
+      - {type: policy, package: gcplab.security, ids: [BASIC_ROLE_SERVICE_ACCOUNT], desc: "Sin roles básicos en las cuentas de servicio de prod-web"}
+      - {type: policy, on: "{{.prod_data}}", package: gcplab.security, ids: [BASIC_ROLE_SERVICE_ACCOUNT], desc: "Sin roles básicos en las cuentas de servicio de prod-data"}
+  - name: Las cargas siguen funcionando
     validator: functional
     points: 35
     all: true
     checks:
-      - {type: iam, principal: "serviceAccount:web-deployer@{{.prod_web}}.iam.gserviceaccount.com", permission: compute.instances.setMetadata, resource: project, desc: "Deployer can update VMs"}
-      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: project, desc: "ETL can load BigQuery"}
-      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:datalake-{{.prod_data}}/raw/x.json", desc: "ETL can read the data lake"}
-      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:datalake-{{.prod_data}}/raw/x.json", expect: false, desc: "ETL cannot delete raw data"}
-  - name: Discovery
+      - {type: iam, principal: "serviceAccount:web-deployer@{{.prod_web}}.iam.gserviceaccount.com", permission: compute.instances.setMetadata, resource: project, desc: "El deployer puede actualizar las VM"}
+      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: bigquery.tables.updateData, resource: project, desc: "La ETL puede cargar en BigQuery"}
+      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: storage.objects.get, resource: "bucket:datalake-{{.prod_data}}/raw/x.json", desc: "La ETL puede leer el data lake"}
+      - {type: iam, on: "{{.prod_data}}", principal: "serviceAccount:etl-sa@{{.prod_data}}.iam.gserviceaccount.com", permission: storage.objects.delete, resource: "bucket:datalake-{{.prod_data}}/raw/x.json", expect: false, desc: "La ETL no puede borrar los datos en bruto"}
+  - name: Descubrimiento
     validator: diagnosis
     points: 15
     checks:
-      - {type: asked, min: 2, desc: "Asked the owners what each identity does"}
-  - name: Documentation
+      - {type: asked, min: 2, desc: "Se ha preguntado a los responsables qué hace cada identidad"}
+  - name: Documentación
     validator: evidence
     points: 15
     checks:
-      - {type: evidence, fields: [explanation], keywords: [[editor], [instanceadmin, compute], [bigquery, dataeditor]], desc: "Change explained"}
+      - {type: evidence, fields: [explanation], keywords: [[editor], [instanceadmin, compute], [bigquery, dataeditor]], desc: "Cambio explicado"}
+en:
+  title: 'PRB: service accounts with basic roles in production'
+  summary: Replace legacy basic roles on production service accounts with the minimum predefined roles, without breaking workloads.
+  story: |
+    `web-deployer` in `{{.prod_web}}` and `etl-sa` in `{{.prod_data}}` hold **roles/editor**. Ask the owners what
+    each identity does, grant the minimum predefined roles and only then remove editor. Document the change.
+  objectives:
+    - Discover what each identity really does
+    - Grant predefined roles at the smallest scope
+    - Remove basic roles without breaking workloads
+  ticket:
+    summary: 'Recurring audit finding: service accounts in production hold roles/editor. Remove it without breaking the deployer or the ETL.'
+  text:
+    Sin roles básicos: No basic roles
+    Sin roles básicos en las cuentas de servicio de prod-web: No basic roles on prod-web service accounts
+    Sin roles básicos en las cuentas de servicio de prod-data: No basic roles on prod-data service accounts
+    Las cargas siguen funcionando: Workloads still work
+    El deployer puede actualizar las VM: Deployer can update VMs
+    La ETL puede cargar en BigQuery: ETL can load BigQuery
+    La ETL puede leer el data lake: ETL can read the data lake
+    La ETL no puede borrar los datos en bruto: ETL cannot delete raw data
+    Descubrimiento: Discovery
+    Se ha preguntado a los responsables qué hace cada identidad: Asked the owners what each identity does
+    Documentación: Documentation
+    Cambio explicado: Change explained
+    Aisha (oficina del CISO): Aisha (CISO office)
+    Leo (equipo web): Leo (web team)
+    ? web-deployer actualiza los metadatos de las instancias y reinicia las VM durante los despliegues. También tiene que actuar como api-sa.
+    : web-deployer updates instance metadata and restarts VMs during deploys. It also has to act as api-sa.
+    Ravi (equipo de datos): Ravi (data team)
+    La ETL carga datos todas las noches.: The ETL loads data every night.
+    etl-sa lee el bucket del data lake y escribe tablas de BigQuery en analytics. Nada más.: etl-sa reads the data lake bucket and writes BigQuery tables in analytics. Nothing else.

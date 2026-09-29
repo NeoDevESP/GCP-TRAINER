@@ -5,40 +5,68 @@ domain: nebula.dev
 folders: [Production, Development, Security]
 studentRoles: [roles/owner]
 projects:
-  - {key: prod-web, folder: Production, baseline: [three-tier-app, nebula-web-extra], labels: {env: prod, team: web}, purpose: "Checkout and storefront"}
-  - {key: prod-data, folder: Production, baseline: [nebula-data], labels: {env: prod, team: data}, purpose: "Orders database, data lake and analytics"}
-  - {key: prod-platform, folder: Production, baseline: [nebula-platform], labels: {env: prod, team: platform}, purpose: "Shared registry and event bus"}
-  - {key: dev-web, folder: Development, baseline: [default-network, nebula-dev], labels: {env: dev, team: web}, purpose: "Web team development"}
-  - {key: sandbox, folder: Development, baseline: [default-network], labels: {env: sandbox}, purpose: "Experiments"}
-  - {key: security-monitoring, folder: Security, baseline: [nebula-security], labels: {env: prod, team: security}, purpose: "Audit archive and security tooling"}
+  - {key: prod-web, folder: Production, baseline: [three-tier-app, nebula-web-extra], labels: {env: prod, team: web}, purpose: "Checkout y tienda online"}
+  - {key: prod-data, folder: Production, baseline: [nebula-data], labels: {env: prod, team: data}, purpose: "Base de datos de pedidos, data lake y analítica"}
+  - {key: prod-platform, folder: Production, baseline: [nebula-platform], labels: {env: prod, team: platform}, purpose: "Registro compartido y bus de eventos"}
+  - {key: dev-web, folder: Development, baseline: [default-network, nebula-dev], labels: {env: dev, team: web}, purpose: "Desarrollo del equipo web"}
+  - {key: sandbox, folder: Development, baseline: [default-network], labels: {env: sandbox}, purpose: "Experimentos"}
+  - {key: security-monitoring, folder: Security, baseline: [nebula-security], labels: {env: prod, team: security}, purpose: "Archivo de auditoría y herramientas de seguridad"}
 actors:
   - role: developer
-    name: Leo (web team)
-    persona: builds the storefront; always in a hurry
-    fallback: "Can you just make it work? I don't know the cloud details."
+    name: Leo (equipo web)
+    persona: construye la tienda online; siempre tiene prisa
+    fallback: "¿Puedes hacer que funcione y ya? No conozco los detalles del cloud."
   - role: security
-    name: Aisha (CISO office)
-    persona: owns guardrails and audits
-    fallback: "Whatever you do, keep least privilege and nothing public without approval."
+    name: Aisha (oficina del CISO)
+    persona: responsable de las barreras de seguridad y las auditorías
+    fallback: "Hagas lo que hagas, mantén el mínimo privilegio y nada público sin aprobación."
   - role: finance
     name: Marta (FinOps)
-    persona: watches the bill
-    fallback: "I need budgets and labels so I can attribute costs."
+    persona: vigila la factura
+    fallback: "Necesito presupuestos y etiquetas para poder imputar los costes."
   - role: manager
-    name: Irene (engineering manager)
-    persona: your manager
-    fallback: "Keep the ticket updated and tell me about risks before you take them."
+    name: Irene (responsable de ingeniería)
+    persona: tu responsable
+    fallback: "Mantén el ticket actualizado y avísame de los riesgos antes de asumirlos."
   - role: sre
     name: Sam (SRE)
-    persona: on call for production
-    fallback: "Check the dashboards and audit logs first."
+    persona: de guardia en producción
+    fallback: "Mira primero los paneles y los registros de auditoría."
   - role: customer
-    name: Store customer
-    persona: angry when checkout fails
-    fallback: "I just want to pay for my order!"
+    name: Cliente de la tienda
+    persona: se enfada cuando falla el checkout
+    fallback: "¡Solo quiero pagar mi pedido!"
 # Decisions today, incidents tomorrow.
 consequences:
-  - {id: open-ssh, policy: gcplab.security, deny: OPEN_ADMIN_PORT, after: 1, newOnly: true, mission: nb-i01-ssh-compromise, note: "SSH/RDP left open to the internet"}
-  - {id: public-data, policy: gcplab.security, deny: PUBLIC_BUCKET, after: 1, newOnly: true, mission: nb-i04-data-exposure, note: "a data bucket is public"}
-  - {id: no-backups, policy: gcplab.reliability, deny: SQL_NO_BACKUPS, params: {haDatabases: [orders-db]}, after: 3, mission: nb-i02-data-loss, note: "orders-db has no backups"}
-  - {id: no-budget, missing: budget, after: 4, mission: nb-i03-cost-spike, note: "no budget alerts on prod-web"}
+  - {id: open-ssh, policy: gcplab.security, deny: OPEN_ADMIN_PORT, after: 1, newOnly: true, mission: nb-i01-ssh-compromise, note: "SSH/RDP abierto a internet", en: {note: "SSH/RDP left open to the internet"}}
+  - {id: public-data, policy: gcplab.security, deny: PUBLIC_BUCKET, after: 1, newOnly: true, mission: nb-i04-data-exposure, note: "un bucket de datos es público", en: {note: "a data bucket is public"}}
+  - {id: no-backups, policy: gcplab.reliability, deny: SQL_NO_BACKUPS, params: {haDatabases: [orders-db]}, after: 3, mission: nb-i02-data-loss, note: "orders-db no tiene copias de seguridad", en: {note: "orders-db has no backups"}}
+  - {id: no-budget, missing: budget, after: 4, mission: nb-i03-cost-spike, note: "no hay alertas de presupuesto en prod-web", en: {note: "no budget alerts on prod-web"}}
+# English overlay: Spanish is the primary language.
+en:
+  projects:
+    prod-web: "Checkout and storefront"
+    prod-data: "Orders database, data lake and analytics"
+    prod-platform: "Shared registry and event bus"
+    dev-web: "Web team development"
+    sandbox: "Experiments"
+    security-monitoring: "Audit archive and security tooling"
+  text:
+    "Leo (equipo web)": "Leo (web team)"
+    "construye la tienda online; siempre tiene prisa": "builds the storefront; always in a hurry"
+    "¿Puedes hacer que funcione y ya? No conozco los detalles del cloud.": "Can you just make it work? I don't know the cloud details."
+    "Aisha (oficina del CISO)": "Aisha (CISO office)"
+    "responsable de las barreras de seguridad y las auditorías": "owns guardrails and audits"
+    "Hagas lo que hagas, mantén el mínimo privilegio y nada público sin aprobación.": "Whatever you do, keep least privilege and nothing public without approval."
+    "Marta (FinOps)": "Marta (FinOps)"
+    "vigila la factura": "watches the bill"
+    "Necesito presupuestos y etiquetas para poder imputar los costes.": "I need budgets and labels so I can attribute costs."
+    "Irene (responsable de ingeniería)": "Irene (engineering manager)"
+    "tu responsable": "your manager"
+    "Mantén el ticket actualizado y avísame de los riesgos antes de asumirlos.": "Keep the ticket updated and tell me about risks before you take them."
+    "Sam (SRE)": "Sam (SRE)"
+    "de guardia en producción": "on call for production"
+    "Mira primero los paneles y los registros de auditoría.": "Check the dashboards and audit logs first."
+    "Cliente de la tienda": "Store customer"
+    "se enfada cuando falla el checkout": "angry when checkout fails"
+    "¡Solo quiero pagar mi pedido!": "I just want to pay for my order!"
