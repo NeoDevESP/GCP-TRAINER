@@ -1,0 +1,74 @@
+name: windows-installer
+
+# Builds the Windows installer (MSI) with msitools on Linux.
+# - Every push: the MSI is attached to the run as an artifact (Actions tab).
+# - A tag like v1.2.3: the MSI is also published as a GitHub Release.
+on:
+  push:
+    branches: [main, "claude/**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: msi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  msi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the build number comes from the commit count
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install msitools
+        run: sudo apt-get update -q && sudo apt-get install -y -q wixl
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="1.0.$(git rev-list --count HEAD)"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build MSI
+        run: VERSION=${{ steps.version.outputs.version }} ./deploy/windows/build-msi.sh
+      - name: Check the package
+        run: |
+          msi=dist/CloudMastery-${{ steps.version.outputs.version }}-x64.msi
+          msiinfo export "$msi" Property | grep -q "ProductVersion.${{ steps.version.outputs.version }}"
+          mkdir extracted && (cd extracted && msiextract -C . "../$msi" > /dev/null)
+          diff -r "extracted/Cloud Mastery/content" content
+          test -f "extracted/Cloud Mastery/gcplab.exe"
+          test -f "extracted/Cloud Mastery/web/index.html"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CloudMastery-${{ steps.version.outputs.version }}-x64-msi
+          path: dist/*.msi
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: msi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.msi --repo "$GITHUB_REPOSITORY" \
+            --title "Cloud Mastery $GITHUB_REF_NAME" \
+            --notes "Instalador de Windows (64 bits). Guía: docs/instalador-windows.md"

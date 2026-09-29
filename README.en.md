@@ -108,6 +108,12 @@ and the Pub/Sub and GCS emulators (F1).
 | `MENTOR_LLM` | `off` | `on` enables the Claude post-mortem reviewer (needs `ANTHROPIC_API_KEY`) |
 | `CORS_ORIGIN` | — | allow a separately hosted web client |
 
+## Windows installer
+
+An MSI with everything included (simulator, web client and labs), offline and
+without dependencies: download it from *Releases* or *Actions →
+windows-installer*. Guide (Spanish): [docs/instalador-windows.md](docs/instalador-windows.md).
+
 ## Online for practice
 
 One service running the repository's Docker image, with the database in

@@ -13,3 +13,7 @@ coverage.out
 terraform.tfvars
 *.tsbuildinfo
 .demo/
+
+# Windows installer
+/build/
+/dist/

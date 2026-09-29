@@ -7,8 +7,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/neodevesp/gcp-trainer/internal/company"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -36,6 +38,22 @@ func env(k, d string) string {
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	var desk *desktop
+	if wantsDesktop(os.Args) {
+		d, exit, err := setupDesktop()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Cloud Mastery no ha podido arrancar:", err)
+			pauseOnError()
+			os.Exit(1)
+		}
+		if exit {
+			return
+		}
+		desk = d
+		log = desk.logger()
+		slog.SetDefault(log)
+		defer desk.logFile.Close()
+	}
 	content := env("CONTENT_DIR", "content")
 	scenario.BaselineDir = filepath.Join(content, "baselines")
 	grader.PolicyDir = filepath.Join(content, "policies")
@@ -51,6 +69,7 @@ func main() {
 	cat, err := learning.LoadCatalog(content)
 	if err != nil {
 		log.Error("load catalog", "err", err)
+		desk.fail("load catalog", err)
 		os.Exit(1)
 	}
 	if p := cat.Validate(); len(p) > 0 {
@@ -64,6 +83,7 @@ func main() {
 	}
 	if err != nil {
 		log.Error("store", "err", err)
+		desk.fail("store", err)
 		os.Exit(1)
 	}
 	defer st.Close()
@@ -138,9 +158,14 @@ func main() {
 		log.Info("listening", "addr", addr, "mode", mode, "labs", len(cat.Labs))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("serve", "err", err)
+			desk.fail("serve", err)
 			os.Exit(1)
 		}
 	}()
+	if desk != nil {
+		_, port, _ := net.SplitHostPort(addr)
+		go desk.announce(port)
+	}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
