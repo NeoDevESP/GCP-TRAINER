@@ -1,0 +1,108 @@
+id: serverless-s06-firestore-profiles
+title: "Firestore: perfiles de clientes con la API REST, índices y copias"
+summary: Crea la base de datos de Firestore, guarda perfiles con la API REST, añade el índice compuesto que pide la app y deja una exportación en Cloud Storage.
+track: serverless
+day: 6
+level: intermediate
+branch: databases
+type: guided
+skills: [databases.ha, devtools.apis]
+wellArchitected: [reliability, operations]
+certs: [PCDE, PCDBE]
+difficulty: 2
+minutes: 40
+baseline: [default-network]
+setup: |
+  gcloud storage buckets create gs://backups-{{.project}} --location={{.region}} --uniform-bucket-level-access
+story: |
+  La app móvil guarda los perfiles de clientes en **Firestore** (modo nativo). Prepara la base de datos de producción:
+
+  1. Crea la base de datos `(default)` en la ubicación multirregional **eur3** con **protección contra borrado**.
+  2. Crea dos documentos en la colección **customers** usando la **API REST** (curl):
+     `ana` con `name: "Ana"`, `country: "ES"`, `points: 120` y `luis` con `name: "Luis"`, `country: "MX"`, `points: 80`.
+  3. La app filtra por país y ordena por puntos: crea el índice compuesto de **customers** con `country` ascendente y
+     `points` descendente.
+  4. Exporta la base de datos a `gs://backups-{{.project}}/firestore`.
+objectives:
+  - Base de datos eur3 con protección contra borrado
+  - Documentos creados con la API REST
+  - Índice compuesto country ASC, points DESC
+  - Exportación en Cloud Storage
+hints:
+  - text: "`gcloud firestore databases create --location=eur3 --delete-protection`"
+  - text: "`curl -X POST -H \"Authorization: Bearer $(gcloud auth print-access-token)\" \"https://firestore.googleapis.com/v1/projects/PROYECTO/databases/(default)/documents/customers?documentId=ana\" -d '{\"fields\": {\"name\": {\"stringValue\": \"Ana\"}, \"points\": {\"integerValue\": \"120\"}}}'`"
+  - text: "`gcloud firestore indexes composite create --collection-group=customers --field-config=field-path=country,order=ascending --field-config=field-path=points,order=descending`"
+solution: |
+  gcloud services enable firestore.googleapis.com
+  gcloud firestore databases create --location=eur3 --delete-protection
+  curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" "https://firestore.googleapis.com/v1/projects/{{.project}}/databases/(default)/documents/customers?documentId=ana" -d '{"fields": {"name": {"stringValue": "Ana"}, "country": {"stringValue": "ES"}, "points": {"integerValue": "120"}}}'
+  curl -s -X POST -H "Authorization: Bearer $(gcloud auth print-access-token)" "https://firestore.googleapis.com/v1/projects/{{.project}}/databases/(default)/documents/customers?documentId=luis" -d '{"fields": {"name": {"stringValue": "Luis"}, "country": {"stringValue": "MX"}, "points": {"integerValue": "80"}}}'
+  curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" "https://firestore.googleapis.com/v1/projects/{{.project}}/databases/(default)/documents/customers"
+  gcloud firestore indexes composite create --collection-group=customers --field-config=field-path=country,order=ascending --field-config=field-path=points,order=descending
+  gcloud firestore export gs://backups-{{.project}}/firestore
+shortcuts:
+  - name: skip protection, index and backup
+    run: |
+      gcloud services enable firestore.googleapis.com
+      gcloud firestore databases create --location=eur3
+rubric:
+  - name: Base de datos
+    validator: reliability
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "firestore[\"(default)\"]", expect: {locationId: eur3, type: FIRESTORE_NATIVE}, desc: "Base de datos nativa en eur3"}
+      - {type: exists, path: "firestore[\"(default)\"]", expect: {deleteProtection: true}, desc: "Protección contra borrado"}
+  - name: Documentos
+    validator: functional
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "firestore[\"(default)\"].documents[\"customers/ana\"]", expect: {name: Ana, country: ES, points: 120}, desc: "Perfil ana"}
+      - {type: exists, path: "firestore[\"(default)\"].documents[\"customers/luis\"]", expect: {name: Luis, country: MX, points: 80}, desc: "Perfil luis"}
+      - {type: command, regex: "curl .*-X POST .*firestore.googleapis.com", desc: "Creados con la API REST"}
+  - name: Índice
+    validator: performance
+    points: 25
+    checks:
+      - {type: exists, path: "firestore[\"(default)\"].indexes[0]", expect: {collectionGroup: customers, fields: {regex: "country ASCENDING.*points DESCENDING"}}, desc: "Índice country ASC, points DESC"}
+  - name: Copia
+    validator: reliability
+    points: 20
+    checks:
+      - {type: exists, path: "buckets[\"backups-{{.project}}\"].objects", expect: {"[\"firestore/all_namespaces/all_kinds/output-0\"]": {regex: "."}}, desc: "Exportación en gs://backups-PROYECTO/firestore"}
+en:
+  title: "Firestore: customer profiles with the REST API, indexes and backups"
+  summary: Create the Firestore database, store profiles through the REST API, add the composite index the app needs and leave an export in Cloud Storage.
+  story: |
+    The mobile app stores customer profiles in **Firestore** (native mode). Prepare the production database:
+
+    1. Create the `(default)` database in the **eur3** multi-region with **delete protection**.
+    2. Create two documents in the **customers** collection using the **REST API** (curl):
+       `ana` with `name: "Ana"`, `country: "ES"`, `points: 120` and `luis` with `name: "Luis"`, `country: "MX"`, `points: 80`.
+    3. The app filters by country and sorts by points: create the composite index on **customers** with `country`
+       ascending and `points` descending.
+    4. Export the database to `gs://backups-{{.project}}/firestore`.
+  objectives:
+    - eur3 database with delete protection
+    - Documents created through the REST API
+    - Composite index country ASC, points DESC
+    - Export in Cloud Storage
+  hints:
+    - "`gcloud firestore databases create --location=eur3 --delete-protection`"
+    - "`curl -X POST -H \"Authorization: Bearer $(gcloud auth print-access-token)\" \"https://firestore.googleapis.com/v1/projects/PROJECT/databases/(default)/documents/customers?documentId=ana\" -d '{\"fields\": {\"name\": {\"stringValue\": \"Ana\"}, \"points\": {\"integerValue\": \"120\"}}}'`"
+    - "`gcloud firestore indexes composite create --collection-group=customers --field-config=field-path=country,order=ascending --field-config=field-path=points,order=descending`"
+  text:
+    Base de datos: Database
+    Base de datos nativa en eur3: Native database in eur3
+    Protección contra borrado: Delete protection
+    Documentos: Documents
+    Perfil ana: Profile ana
+    Perfil luis: Profile luis
+    Creados con la API REST: Created through the REST API
+    Índice: Index
+    Índice country ASC, points DESC: Index country ASC, points DESC
+    Copia: Backup
+    Exportación en gs://backups-PROYECTO/firestore: Export in gs://backups-PROJECT/firestore

@@ -1,0 +1,111 @@
+id: serverless-s05-spanner-orders
+title: "Spanner: esquema de pedidos con tablas intercaladas"
+summary: Crea una instancia de Spanner del tamaño justo, diseña un esquema con tablas intercaladas, carga datos, consúltalos con SQL y protege la base de datos contra borrados.
+track: serverless
+day: 5
+level: intermediate
+branch: databases
+type: guided
+skills: [databases.performance, databases.ha]
+wellArchitected: [reliability, cost]
+certs: [PCDBE, PCA]
+difficulty: 3
+minutes: 50
+baseline: [default-network]
+story: |
+  La tienda va a crecer en varios países y necesita una base de datos relacional que escale en horizontal.
+  Monta la prueba de concepto en **Spanner**:
+
+  - Instancia **shop-spanner** regional en {{.region}} con **100 unidades de procesamiento** (lo mínimo: es una prueba).
+  - Base de datos **shop** con dos tablas:
+    - `Customers (CustomerId INT64 NOT NULL, Name STRING(100))`, clave `CustomerId`
+    - `Orders (CustomerId INT64 NOT NULL, OrderId INT64 NOT NULL, Total FLOAT64)`, clave `(CustomerId, OrderId)`,
+      **intercalada** en `Customers` con borrado en cascada, para que los pedidos se guarden junto a su cliente.
+  - Carga al menos 2 clientes y 3 pedidos, y calcula con una consulta el total gastado por cliente.
+  - Activa la **protección contra borrado** de la base de datos.
+objectives:
+  - Instancia regional de 100 PU
+  - Esquema con Orders intercalada en Customers
+  - Datos cargados y consultados con SQL
+  - Protección contra borrado activada
+hints:
+  - text: "`gcloud spanner instances create shop-spanner --config=regional-REGION --processing-units=100 --description=shop`"
+  - text: "En `--ddl` puedes pasar varias sentencias separadas por `;`. La intercalación va detrás de la clave: `PRIMARY KEY (CustomerId, OrderId), INTERLEAVE IN PARENT Customers ON DELETE CASCADE`."
+  - text: "`gcloud spanner databases execute-sql shop --instance=shop-spanner --sql=\"SELECT ...\"` y `gcloud spanner databases update shop --instance=shop-spanner --enable-drop-protection`"
+solution: |
+  gcloud services enable spanner.googleapis.com
+  gcloud spanner instances create shop-spanner --config=regional-{{.region}} --processing-units=100 --description=shop
+  gcloud spanner databases create shop --instance=shop-spanner --ddl="CREATE TABLE Customers (CustomerId INT64 NOT NULL, Name STRING(100)) PRIMARY KEY (CustomerId); CREATE TABLE Orders (CustomerId INT64 NOT NULL, OrderId INT64 NOT NULL, Total FLOAT64) PRIMARY KEY (CustomerId, OrderId), INTERLEAVE IN PARENT Customers ON DELETE CASCADE"
+  gcloud spanner databases execute-sql shop --instance=shop-spanner --sql="INSERT INTO Customers (CustomerId, Name) VALUES (1, 'Ana'), (2, 'Luis')"
+  gcloud spanner databases execute-sql shop --instance=shop-spanner --sql="INSERT INTO Orders (CustomerId, OrderId, Total) VALUES (1, 1, 30.5), (1, 2, 12.0), (2, 1, 99.9)"
+  gcloud spanner databases execute-sql shop --instance=shop-spanner --sql="SELECT c.Name, SUM(o.Total) AS Spent FROM Customers c JOIN Orders o ON o.CustomerId = c.CustomerId GROUP BY c.Name ORDER BY Spent DESC"
+  gcloud spanner databases update shop --instance=shop-spanner --enable-drop-protection
+shortcuts:
+  - name: oversized instance without interleaving
+    run: |
+      gcloud services enable spanner.googleapis.com
+      gcloud spanner instances create shop-spanner --config=regional-{{.region}} --nodes=3 --description=shop
+      gcloud spanner databases create shop --instance=shop-spanner --ddl="CREATE TABLE Customers (CustomerId INT64 NOT NULL, Name STRING(100)) PRIMARY KEY (CustomerId); CREATE TABLE Orders (CustomerId INT64 NOT NULL, OrderId INT64 NOT NULL, Total FLOAT64) PRIMARY KEY (OrderId)"
+rubric:
+  - name: Instancia del tamaño justo
+    validator: cost
+    points: 20
+    critical: true
+    checks:
+      - {type: exists, path: "spanner[\"shop-spanner\"]", expect: {config: "regional-{{.region}}", processingUnits: 100}, desc: "Instancia regional de 100 PU"}
+  - name: Esquema
+    validator: state
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "spanner[\"shop-spanner\"].databases.shop", expect: {ddl: {regex: "CREATE TABLE Customers"}}, desc: "Tabla Customers"}
+      - {type: exists, path: "spanner[\"shop-spanner\"].databases.shop", expect: {ddl: {regex: "(?i)PRIMARY KEY \\(CustomerId, OrderId\\), INTERLEAVE IN PARENT Customers ON DELETE CASCADE"}}, desc: "Orders intercalada en Customers con borrado en cascada"}
+  - name: Datos y consulta
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: exists, path: "spanner[\"shop-spanner\"].databases.shop.data.tables.Customers", expect: {rows: {minLen: 2}}, desc: "Al menos 2 clientes"}
+      - {type: exists, path: "spanner[\"shop-spanner\"].databases.shop.data.tables.Orders", expect: {rows: {minLen: 3}}, desc: "Al menos 3 pedidos"}
+      - {type: command, regex: "execute-sql .*(?i)SUM\\(", desc: "Total por cliente calculado con SQL"}
+  - name: Protección
+    validator: reliability
+    points: 20
+    checks:
+      - {type: exists, path: "spanner[\"shop-spanner\"].databases.shop", expect: {enableDropProtection: true}, desc: "Protección contra borrado activada"}
+en:
+  title: "Spanner: an orders schema with interleaved tables"
+  summary: Create a right-sized Spanner instance, design a schema with interleaved tables, load data, query it with SQL and protect the database against deletion.
+  story: |
+    The shop is about to grow into several countries and needs a relational database that scales horizontally.
+    Build the proof of concept on **Spanner**:
+
+    - Regional instance **shop-spanner** in {{.region}} with **100 processing units** (the minimum: it is a trial).
+    - Database **shop** with two tables:
+      - `Customers (CustomerId INT64 NOT NULL, Name STRING(100))`, key `CustomerId`
+      - `Orders (CustomerId INT64 NOT NULL, OrderId INT64 NOT NULL, Total FLOAT64)`, key `(CustomerId, OrderId)`,
+        **interleaved** in `Customers` with cascading delete, so orders are stored next to their customer.
+    - Load at least 2 customers and 3 orders, and compute the total spent per customer with a query.
+    - Turn on the database's **drop protection**.
+  objectives:
+    - 100 PU regional instance
+    - Schema with Orders interleaved in Customers
+    - Data loaded and queried with SQL
+    - Drop protection enabled
+  hints:
+    - "`gcloud spanner instances create shop-spanner --config=regional-REGION --processing-units=100 --description=shop`"
+    - "`--ddl` takes several statements separated by `;`. Interleaving goes after the key: `PRIMARY KEY (CustomerId, OrderId), INTERLEAVE IN PARENT Customers ON DELETE CASCADE`."
+    - "`gcloud spanner databases execute-sql shop --instance=shop-spanner --sql=\"SELECT ...\"` and `gcloud spanner databases update shop --instance=shop-spanner --enable-drop-protection`"
+  text:
+    Instancia del tamaño justo: Right-sized instance
+    Instancia regional de 100 PU: 100 PU regional instance
+    Esquema: Schema
+    Tabla Customers: Customers table
+    Orders intercalada en Customers con borrado en cascada: Orders interleaved in Customers with cascading delete
+    Datos y consulta: Data and query
+    Al menos 2 clientes: At least 2 customers
+    Al menos 3 pedidos: At least 3 orders
+    Total por cliente calculado con SQL: Total per customer computed with SQL
+    Protección: Protection
+    Protección contra borrado activada: Drop protection enabled

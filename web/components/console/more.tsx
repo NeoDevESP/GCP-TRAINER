@@ -20,7 +20,7 @@ const IMAGES = ["debian-12", "debian-11", "ubuntu-2204-lts", "rocky-linux-9", "c
 const MACHINES = ["e2-micro", "e2-small", "e2-medium", "e2-standard-2", "e2-standard-4", "n2-standard-2"];
 
 /** List is a list page with a create form, row actions and a details view. */
-function List<T>({
+export function List<T>({
   ctx,
   title,
   intro,

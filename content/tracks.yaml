@@ -119,6 +119,16 @@ tracks:
     en:
       title: Data & databases
       description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
+  - id: serverless
+    title: Sin servidor, datos gestionados y big data
+    description: 'Cloud Functions, Cloud Scheduler, App Engine, Dataflow, Memorystore, Spanner y Firestore: los servicios gestionados del día a día con eventos, canarios, streaming y SQL real.'
+    level: professional
+    certs: [ACE, PCDE, PCA]
+    phase: V2
+    labs: [serverless-s01-event-function, serverless-s02-appengine-canary, serverless-s03-streaming-pipeline, serverless-s04-redis-cache, serverless-s05-spanner-orders, serverless-s06-firestore-profiles]
+    en:
+      title: Serverless, managed data and big data
+      description: 'Cloud Functions, Cloud Scheduler, App Engine, Dataflow, Memorystore, Spanner and Firestore: everyday managed services with events, canaries, streaming and real SQL.'
   - id: ml
     title: Servicio de modelos de ML y MLOps
     description: Sirve modelos con mínimo privilegio y monitorización y despliega versiones nuevas como canarios.

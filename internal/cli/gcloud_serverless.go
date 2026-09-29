@@ -684,8 +684,12 @@ func init() {
 			scaling = "basic"
 		}
 		resp := fmt.Sprintf("Hello from App Engine (%s, version %s)", svcName, vid)
+		dir := ""
+		if i := strings.LastIndex(file, "/"); i >= 0 {
+			dir = file[:i+1]
+		}
 		for _, f := range []string{"main.py", "app.js", "index.js", "main.go"} {
-			if code, ok := c.S.Files[f]; ok {
+			if code, ok := c.S.Files[c.S.path(dir+f)]; ok {
 				resp = sim.FunctionResponse(code)
 				break
 			}

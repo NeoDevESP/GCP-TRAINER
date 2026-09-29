@@ -1,0 +1,131 @@
+id: serverless-s01-event-function
+title: "Funciones por eventos: pedidos desde Pub/Sub y un informe cada hora"
+summary: Despliega una Cloud Function que procesa los pedidos publicados en Pub/Sub, programa un informe con Cloud Scheduler y protege la función HTTP.
+track: serverless
+day: 1
+level: intermediate
+branch: compute
+type: guided
+skills: [compute.serverless, data.pubsub]
+wellArchitected: [operations, security]
+certs: [ACE, PCDE]
+difficulty: 2
+minutes: 45
+baseline: [default-network]
+files:
+  orders/main.py: |
+    import base64
+    import functions_framework
+
+    @functions_framework.cloud_event
+    def process_order(event):
+        data = base64.b64decode(event.data["message"]["data"]).decode()
+        print(f"Pedido recibido: {data}")
+  report/main.py: |
+    import functions_framework
+
+    @functions_framework.http
+    def report(request):
+        return 'Informe de pedidos generado'
+setup: |
+  gcloud pubsub topics create orders
+  gcloud iam service-accounts create scheduler-invoker --display-name="Cloud Scheduler invoker"
+story: |
+  La tienda publica cada pedido en el tema de Pub/Sub **orders**. Tienes en Cloud Shell el código de dos
+  funciones (pestaña Archivos):
+
+  - `orders/main.py`: procesa cada pedido. Despliégala como **process-order** (2.ª generación, Python 3.12,
+    región {{.region}}) con activador en el tema `orders`.
+  - `report/main.py`: genera un informe. Despliégala como **report** con activador HTTP. **No** debe ser pública:
+    solo puede invocarla la cuenta de servicio `scheduler-invoker`.
+
+  Después crea un trabajo de Cloud Scheduler **hourly-report** que llame a la URL de `report` cada hora en punto
+  (`0 * * * *`) autenticándose con `scheduler-invoker`, y publica un pedido de prueba para comprobar que
+  `process-order` lo procesa.
+objectives:
+  - Habilita las APIs de Functions, Run, Cloud Build y Scheduler
+  - Función process-order activada por el tema orders
+  - Función report privada, invocable solo por scheduler-invoker
+  - Trabajo de Scheduler horario con OIDC
+  - Pedido de prueba procesado
+hints:
+  - text: "`gcloud functions deploy NOMBRE --gen2 --runtime=python312 --region=REGION --source=./orders --entry-point=process_order --trigger-topic=orders`"
+  - text: "En 2.ª generación, invocar es `roles/run.invoker`: `gcloud functions add-invoker-policy-binding report --region=REGION --member=serviceAccount:...`"
+  - text: "`gcloud scheduler jobs create http hourly-report --location=REGION --schedule='0 * * * *' --uri=URL --oidc-service-account-email=SA`"
+solution: |
+  gcloud services enable cloudfunctions.googleapis.com run.googleapis.com cloudbuild.googleapis.com cloudscheduler.googleapis.com
+  gcloud functions deploy process-order --gen2 --runtime=python312 --region={{.region}} --source=./orders --entry-point=process_order --trigger-topic=orders
+  gcloud functions deploy report --gen2 --runtime=python312 --region={{.region}} --source=./report --entry-point=report --trigger-http --no-allow-unauthenticated
+  gcloud functions add-invoker-policy-binding report --region={{.region}} --member=serviceAccount:scheduler-invoker@{{.project}}.iam.gserviceaccount.com
+  gcloud scheduler jobs create http hourly-report --location={{.region}} --schedule='0 * * * *' --uri=$(gcloud functions describe report --region={{.region}} --format='value(url)') --oidc-service-account-email=scheduler-invoker@{{.project}}.iam.gserviceaccount.com
+  gcloud pubsub topics publish orders --message='{"id": 1001, "total": 42.5}'
+  gcloud functions logs read process-order --region={{.region}}
+shortcuts:
+  - name: make the report function public
+    run: |
+      gcloud services enable cloudfunctions.googleapis.com run.googleapis.com cloudbuild.googleapis.com cloudscheduler.googleapis.com
+      gcloud functions deploy process-order --gen2 --runtime=python312 --region={{.region}} --source=./orders --entry-point=process_order --trigger-topic=orders
+      gcloud functions deploy report --gen2 --runtime=python312 --region={{.region}} --source=./report --entry-point=report --trigger-http --allow-unauthenticated
+      gcloud scheduler jobs create http hourly-report --location={{.region}} --schedule='0 * * * *' --uri=$(gcloud functions describe report --region={{.region}} --format='value(url)')
+      gcloud pubsub topics publish orders --message='{"id": 1001}'
+rubric:
+  - name: Procesamiento de pedidos
+    validator: functional
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "functions[\"process-order\"]", expect: {trigger: "topic:orders", runtime: python312, gen2: true, region: "{{.region}}"}, desc: "process-order escucha el tema orders"}
+      - {type: exists, path: "functions[\"process-order\"]", expect: {invocations: {gte: 1}}, desc: "Se ha procesado al menos un pedido"}
+  - name: Informe privado
+    validator: security
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "functions.report", expect: {trigger: http}, desc: "report tiene activador HTTP"}
+      - {type: http, target: "fn:report", status: 403, desc: "report no responde a peticiones anónimas"}
+      - {type: exists, path: "functions.report.iamPolicy", expect: {bindings: {regex: "roles/run.invoker.*scheduler-invoker@|scheduler-invoker@.*roles/run.invoker"}}, desc: "scheduler-invoker puede invocarla"}
+  - name: Programación
+    validator: state
+    points: 35
+    all: true
+    checks:
+      - {type: exists, path: "schedulerJobs[\"hourly-report\"]", expect: {schedule: "0 * * * *", targetType: http, state: ENABLED}, desc: "Trabajo horario activo"}
+      - {type: exists, path: "schedulerJobs[\"hourly-report\"]", expect: {oidcServiceAccount: "scheduler-invoker@{{.project}}.iam.gserviceaccount.com", uri: {regex: "run.app|cloudfunctions.net"}}, desc: "Llama a report con la identidad de scheduler-invoker"}
+en:
+  title: "Event-driven functions: orders from Pub/Sub and an hourly report"
+  summary: Deploy a Cloud Function that processes the orders published to Pub/Sub, schedule a report with Cloud Scheduler and protect the HTTP function.
+  story: |
+    The shop publishes every order to the Pub/Sub topic **orders**. Cloud Shell has the code of two
+    functions (Files tab):
+
+    - `orders/main.py`: processes each order. Deploy it as **process-order** (2nd gen, Python 3.12,
+      region {{.region}}) triggered by the `orders` topic.
+    - `report/main.py`: builds a report. Deploy it as **report** with an HTTP trigger. It must **not** be public:
+      only the service account `scheduler-invoker` may invoke it.
+
+    Then create a Cloud Scheduler job **hourly-report** that calls the `report` URL every hour on the hour
+    (`0 * * * *`) authenticating as `scheduler-invoker`, and publish a test order to check that
+    `process-order` handles it.
+  objectives:
+    - Enable the Functions, Run, Cloud Build and Scheduler APIs
+    - process-order function triggered by the orders topic
+    - Private report function, invokable only by scheduler-invoker
+    - Hourly Scheduler job with OIDC
+    - Test order processed
+  hints:
+    - "`gcloud functions deploy NAME --gen2 --runtime=python312 --region=REGION --source=./orders --entry-point=process_order --trigger-topic=orders`"
+    - "In 2nd gen, invoking is `roles/run.invoker`: `gcloud functions add-invoker-policy-binding report --region=REGION --member=serviceAccount:...`"
+    - "`gcloud scheduler jobs create http hourly-report --location=REGION --schedule='0 * * * *' --uri=URL --oidc-service-account-email=SA`"
+  text:
+    Procesamiento de pedidos: Order processing
+    process-order escucha el tema orders: process-order listens to the orders topic
+    Se ha procesado al menos un pedido: At least one order was processed
+    Informe privado: Private report
+    report tiene activador HTTP: report has an HTTP trigger
+    report no responde a peticiones anónimas: report rejects anonymous requests
+    scheduler-invoker puede invocarla: scheduler-invoker can invoke it
+    Programación: Scheduling
+    Trabajo horario activo: Hourly job enabled
+    Llama a report con la identidad de scheduler-invoker: Calls report as scheduler-invoker

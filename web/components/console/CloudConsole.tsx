@@ -14,6 +14,7 @@ import { Icon } from "./icons";
 import * as P from "./pages";
 import * as O from "./ops";
 import * as M from "./more";
+import * as SV from "./services";
 
 type Sub = { id: string; label: string; count?: (d: any) => number };
 type Product = { id: string; label: string; icon: string; group: string; pages: Sub[] };
@@ -27,9 +28,20 @@ export const PRODUCTS: Product[] = [
   { id: "compute", label: k("Compute Engine"), icon: "compute", group: k("Computación"), pages: [{ id: "vm", label: k("Instancias de VM"), count: (d) => n(d.instances) }, { id: "templates", label: k("Plantillas de instancia"), count: (d) => n(d.instanceTemplates) }, { id: "groups", label: k("Grupos de instancias"), count: (d) => n(d.instanceGroups) }, { id: "healthchecks", label: k("Comprobaciones de estado"), count: (d) => n(d.healthChecks) }, { id: "disks", label: k("Discos"), count: (d) => n(d.disks) }, { id: "snapshots", label: k("Instantáneas"), count: (d) => n(d.snapshots) }] },
   { id: "gke", label: k("Kubernetes Engine"), icon: "gke", group: k("Computación"), pages: [{ id: "gke", label: k("Clústeres"), count: (d) => n(d.clusters) }, { id: "workloads", label: k("Cargas de trabajo") }, { id: "k8sservices", label: k("Servicios e Ingress") }, { id: "k8sconfig", label: k("Secretos y ConfigMaps") }] },
   { id: "run", label: k("Cloud Run"), icon: "run", group: k("Sin servidor"), pages: [{ id: "run", label: k("Servicios"), count: (d) => n(d.runServices) }] },
+  { id: "functions", label: k("Cloud Functions"), icon: "run", group: k("Sin servidor"), pages: [{ id: "functions", label: k("Funciones"), count: (d) => n(d.functions) }] },
+  { id: "appengine", label: k("App Engine"), icon: "run", group: k("Sin servidor"), pages: [{ id: "appengine", label: k("Panel y versiones") }] },
+  { id: "scheduler", label: k("Cloud Scheduler"), icon: "timer", group: k("Integración"), pages: [{ id: "scheduler", label: k("Trabajos"), count: (d) => n(d.schedulerJobs) }] },
+  { id: "tasks", label: k("Cloud Tasks"), icon: "timer", group: k("Integración"), pages: [{ id: "tasks", label: k("Colas"), count: (d) => n(d.taskQueues) }] },
   { id: "storage", label: k("Cloud Storage"), icon: "storage", group: k("Almacenamiento"), pages: [{ id: "buckets", label: k("Buckets"), count: (d) => n(d.buckets) }] },
   { id: "sql", label: k("SQL"), icon: "sql", group: k("Bases de datos"), pages: [{ id: "sql", label: k("Instancias"), count: (d) => n(d.sqlInstances) }] },
+  { id: "filestore", label: k("Filestore"), icon: "folder", group: k("Almacenamiento"), pages: [{ id: "filestore", label: k("Instancias"), count: (d) => n(d.filestore) }] },
+  { id: "spanner", label: k("Spanner"), icon: "sql", group: k("Bases de datos"), pages: [{ id: "spanner", label: k("Instancias"), count: (d) => n(d.spanner) }] },
+  { id: "firestore", label: k("Firestore"), icon: "sql", group: k("Bases de datos"), pages: [{ id: "firestore", label: k("Bases de datos"), count: (d) => n(d.firestore) }] },
+  { id: "redis", label: k("Memorystore"), icon: "sql", group: k("Bases de datos"), pages: [{ id: "redis", label: k("Redis"), count: (d) => n(d.redis) }] },
   { id: "bigquery", label: k("BigQuery"), icon: "bigquery", group: k("Analíticas"), pages: [{ id: "bigquery", label: k("Estudio de BigQuery"), count: (d) => n(d.datasets) }] },
+  { id: "dataflow", label: k("Dataflow"), icon: "bigquery", group: k("Analíticas"), pages: [{ id: "dataflow", label: k("Trabajos"), count: (d) => n(d.dataflowJobs) }] },
+  { id: "dataproc", label: k("Dataproc"), icon: "bigquery", group: k("Analíticas"), pages: [{ id: "dataproc", label: k("Clústeres y trabajos"), count: (d) => n(d.dataprocClusters) }] },
+  { id: "composer", label: k("Composer"), icon: "bigquery", group: k("Analíticas"), pages: [{ id: "composer", label: k("Entornos"), count: (d) => n(d.composer) }] },
   { id: "pubsub", label: k("Pub/Sub"), icon: "pubsub", group: k("Analíticas"), pages: [{ id: "pubsub", label: k("Temas y suscripciones"), count: (d) => n(d.topics) }] },
   { id: "vpc", label: k("Red de VPC"), icon: "network", group: k("Redes"), pages: [{ id: "vpc", label: k("Redes de VPC"), count: (d) => n(d.networks) }, { id: "addresses", label: k("Direcciones IP"), count: (d) => n(d.addresses) }, { id: "firewall", label: k("Cortafuegos"), count: (d) => n(d.firewalls) }, { id: "routes", label: k("Rutas") }] },
   { id: "netservices", label: k("Servicios de red"), icon: "network", group: k("Redes"), pages: [{ id: "lb", label: k("Balanceo de carga"), count: (d) => n(d.forwardingRules) }, { id: "dns", label: k("Cloud DNS"), count: (d) => n(d.dnsZones) }, { id: "nat", label: k("Cloud NAT") }] },
@@ -256,6 +268,17 @@ export default function CloudConsole({
       case "nat": return <M.CloudNAT ctx={ctx} />;
       case "kms": return <M.KMS ctx={ctx} />;
       case "artifacts": return <M.ArtifactRegistry ctx={ctx} />;
+      case "functions": return <SV.Functions ctx={ctx} />;
+      case "appengine": return <SV.AppEngine ctx={ctx} />;
+      case "scheduler": return <SV.Scheduler ctx={ctx} />;
+      case "tasks": return <SV.Tasks ctx={ctx} />;
+      case "firestore": return <SV.Firestore ctx={ctx} />;
+      case "redis": return <SV.Redis ctx={ctx} />;
+      case "spanner": return <SV.Spanner ctx={ctx} />;
+      case "filestore": return <SV.Filestore ctx={ctx} />;
+      case "dataflow": return <SV.Dataflow ctx={ctx} />;
+      case "dataproc": return <SV.Dataproc ctx={ctx} />;
+      case "composer": return <SV.Composer ctx={ctx} />;
       case "build": return <M.CloudBuild ctx={ctx} />;
       case "logmetrics": return <M.LogMetrics ctx={ctx} />;
       case "alerting": return <M.Alerting ctx={ctx} />;

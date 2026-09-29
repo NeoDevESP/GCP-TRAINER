@@ -1,0 +1,124 @@
+id: serverless-s02-appengine-canary
+title: "App Engine: publicar una versión nueva como canario"
+summary: Despliega la versión 2 sin tráfico, pruébala en su propia URL y envíale solo el 10 % de los usuarios, siempre los mismos.
+track: serverless
+day: 2
+level: intermediate
+branch: compute
+type: guided
+skills: [compute.serverless, devops.delivery]
+wellArchitected: [reliability, operations]
+certs: [ACE, PCDE]
+difficulty: 2
+minutes: 40
+baseline: [default-network]
+files:
+  v1/app.yaml: |
+    runtime: python312
+  v1/main.py: |
+    from flask import Flask
+    app = Flask(__name__)
+
+    @app.route('/')
+    def index():
+        return 'Tienda v1'
+  v2/app.yaml: |
+    runtime: python312
+    instance_class: F2
+  v2/main.py: |
+    from flask import Flask
+    app = Flask(__name__)
+
+    @app.route('/')
+    def index():
+        return 'Tienda v2 - nuevo carrito'
+setup: |
+  gcloud services enable appengine.googleapis.com
+  gcloud app create --region=europe-west
+  gcloud app deploy v1/app.yaml --version=v1 --quiet
+story: |
+  La tienda corre en App Engine (servicio `default`, versión **v1**, que recibe el 100 % del tráfico).
+  El equipo ha terminado el nuevo carrito en `v2/` (pestaña Archivos) y quiere un lanzamiento prudente:
+
+  1. Despliega `v2/app.yaml` como versión **v2** **sin** mover tráfico.
+  2. Pruébala en su URL propia (`https://v2-dot-...appspot.com`) antes de que la vea ningún cliente.
+  3. Envía el **10 %** del tráfico a v2 y el 90 % a v1, repartiendo **por IP** para que un mismo cliente
+     no salte de una versión a otra entre peticiones.
+
+  No borres v1: es el camino de vuelta si el canario falla.
+objectives:
+  - v2 desplegada sin recibir tráfico
+  - v2 probada en su URL de versión
+  - División 90/10 por dirección IP
+  - v1 conservada para volver atrás
+hints:
+  - text: "`gcloud app deploy v2/app.yaml --version=v2 --no-promote` despliega sin mover el tráfico."
+  - text: "La URL de una versión es `https://VERSION-dot-HOST`. El host sale de `gcloud app describe --format='value(defaultHostname)'`."
+  - text: "`gcloud app services set-traffic default --splits=v1=0.9,v2=0.1 --split-by=ip`"
+solution: |
+  gcloud app versions list
+  gcloud app deploy v2/app.yaml --version=v2 --no-promote --quiet
+  curl -s https://v2-dot-$(gcloud app describe --format='value(defaultHostname)')
+  gcloud app services set-traffic default --splits=v1=0.9,v2=0.1 --split-by=ip --quiet
+  gcloud app versions list
+shortcuts:
+  - name: promote v2 straight away
+    run: |
+      gcloud app deploy v2/app.yaml --version=v2 --quiet
+rubric:
+  - name: Despliegue seguro
+    validator: reliability
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "appEngine.services.default.versions.v2", expect: {runtime: python312, servingStatus: SERVING}, desc: "Versión v2 desplegada"}
+      - {type: command, regex: "app deploy .*--no-promote", desc: "v2 se desplegó sin mover el tráfico"}
+      - {type: command, regex: "curl .*v2-dot-", desc: "v2 se probó en su URL de versión"}
+  - name: Canario 90/10
+    validator: functional
+    points: 40
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "appEngine.services.default.split", expect: {v1: 0.9, v2: 0.1}, desc: "90 % a v1 y 10 % a v2"}
+      - {type: exists, path: "appEngine.services.default", expect: {shardBy: ip}, desc: "Reparto por IP (clientes estables)"}
+      - {type: http, target: appengine, status: 200, desc: "La tienda sigue respondiendo"}
+  - name: Vuelta atrás posible
+    validator: reliability
+    points: 30
+    checks:
+      - {type: exists, path: "appEngine.services.default.versions.v1", expect: {servingStatus: SERVING}, desc: "v1 sigue disponible"}
+en:
+  title: "App Engine: release a new version as a canary"
+  summary: Deploy version 2 with no traffic, test it on its own URL and send only 10% of users to it, always the same ones.
+  story: |
+    The shop runs on App Engine (service `default`, version **v1**, receiving 100% of the traffic).
+    The team has finished the new cart in `v2/` (Files tab) and wants a careful launch:
+
+    1. Deploy `v2/app.yaml` as version **v2** **without** moving traffic.
+    2. Test it on its own URL (`https://v2-dot-...appspot.com`) before any customer sees it.
+    3. Send **10%** of the traffic to v2 and 90% to v1, splitting **by IP** so the same customer
+       does not jump between versions from one request to the next.
+
+    Do not delete v1: it is the way back if the canary fails.
+  objectives:
+    - v2 deployed without receiving traffic
+    - v2 tested on its version URL
+    - 90/10 split by IP address
+    - v1 kept for rollback
+  hints:
+    - "`gcloud app deploy v2/app.yaml --version=v2 --no-promote` deploys without moving traffic."
+    - "A version URL is `https://VERSION-dot-HOST`. The host comes from `gcloud app describe --format='value(defaultHostname)'`."
+    - "`gcloud app services set-traffic default --splits=v1=0.9,v2=0.1 --split-by=ip`"
+  text:
+    Despliegue seguro: Safe deployment
+    Versión v2 desplegada: Version v2 deployed
+    v2 se desplegó sin mover el tráfico: v2 was deployed without moving traffic
+    v2 se probó en su URL de versión: v2 was tested on its version URL
+    Canario 90/10: 90/10 canary
+    90 % a v1 y 10 % a v2: 90% to v1 and 10% to v2
+    Reparto por IP (clientes estables): Split by IP (sticky customers)
+    La tienda sigue respondiendo: The shop still answers
+    Vuelta atrás posible: Rollback possible
+    v1 sigue disponible: v1 still available

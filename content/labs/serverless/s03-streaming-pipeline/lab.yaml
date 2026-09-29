@@ -1,0 +1,100 @@
+id: serverless-s03-streaming-pipeline
+title: "Dataflow: eventos de Pub/Sub en BigQuery en tiempo real"
+summary: Monta una canalización de streaming con una plantilla de Dataflow que lleva los clics de la web desde Pub/Sub hasta una tabla de BigQuery.
+track: serverless
+day: 3
+level: intermediate
+branch: data
+type: guided
+skills: [data.pipelines, data.pubsub, data.bigquery]
+wellArchitected: [operations, performance]
+certs: [PCDE, PCA]
+difficulty: 3
+minutes: 45
+baseline: [default-network]
+setup: |
+  gcloud services enable bigquery.googleapis.com pubsub.googleapis.com
+  gcloud pubsub topics create clicks
+  bq mk --dataset --location=EU web
+  bq mk --table web.clicks user:STRING,page:STRING,ms:INTEGER
+story: |
+  La web publica cada clic en el tema **clicks** como JSON (`{"user": "...", "page": "...", "ms": 120}`).
+  El equipo de analítica quiere verlos en la tabla de BigQuery **web.clicks** en segundos, no en el informe de mañana.
+
+  - Crea una suscripción **clicks-df** para la canalización (no leas del tema directamente: si la canalización se
+    para, los mensajes deben esperar en la suscripción).
+  - Lanza un trabajo de Dataflow de streaming **clicks-to-bq** en {{.region}} con la plantilla de Google
+    `PubSub_Subscription_to_BigQuery`.
+  - Publica al menos un clic de prueba y comprueba con una consulta que ha llegado a `web.clicks`.
+objectives:
+  - Habilita la API de Dataflow
+  - Suscripción dedicada a la canalización
+  - Trabajo de streaming en ejecución con la plantilla correcta
+  - Filas nuevas en web.clicks comprobadas con una consulta
+hints:
+  - text: "Las plantillas están en `gs://dataflow-templates-REGION/latest/NOMBRE`."
+  - text: "`--parameters=inputSubscription=projects/PROYECTO/subscriptions/clicks-df,outputTableSpec=PROYECTO:web.clicks`"
+  - text: "El trabajo procesa los mensajes a medida que avanza el tiempo: publica, espera un momento y consulta con `bq query --use_legacy_sql=false`."
+solution: |
+  gcloud services enable dataflow.googleapis.com
+  gcloud pubsub subscriptions create clicks-df --topic=clicks
+  gcloud dataflow jobs run clicks-to-bq --gcs-location=gs://dataflow-templates-{{.region}}/latest/PubSub_Subscription_to_BigQuery --region={{.region}} --parameters=inputSubscription=projects/{{.project}}/subscriptions/clicks-df,outputTableSpec={{.project}}:web.clicks
+  gcloud pubsub topics publish clicks --message='{"user": "ana", "page": "/checkout", "ms": 180}'
+  gcloud dataflow jobs list --region={{.region}} --status=active
+  bq query --use_legacy_sql=false 'SELECT user, page, ms FROM web.clicks'
+shortcuts:
+  - name: load the row by hand
+    run: |
+      bq query --use_legacy_sql=false "INSERT INTO web.clicks (user, page, ms) VALUES ('ana', '/checkout', 180)"
+rubric:
+  - name: Canalización en marcha
+    validator: functional
+    points: 45
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "dataflowJobs[0]", expect: {name: clicks-to-bq, template: PubSub_Subscription_to_BigQuery, type: JOB_TYPE_STREAMING, currentState: JOB_STATE_RUNNING}, desc: "Trabajo de streaming clicks-to-bq en ejecución"}
+      - {type: exists, path: "subscriptions[\"clicks-df\"]", expect: {topic: clicks}, desc: "Suscripción dedicada clicks-df"}
+  - name: Datos en BigQuery
+    validator: functional
+    points: 40
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "datasets.web.tables.clicks", expect: {numRows: {gte: 1}}, desc: "Los clics llegan a web.clicks"}
+      - {type: exists, path: "dataflowJobs[0]", expect: {elementsProcessed: {gte: 1}}, desc: "Dataflow ha procesado mensajes"}
+  - name: Verificación
+    validator: evidence
+    points: 15
+    checks:
+      - {type: command, regex: "bq query .*web\\.clicks", desc: "Se comprobó el resultado con una consulta"}
+en:
+  title: "Dataflow: Pub/Sub events into BigQuery in real time"
+  summary: Build a streaming pipeline with a Dataflow template that moves web clicks from Pub/Sub into a BigQuery table.
+  story: |
+    The website publishes every click to the topic **clicks** as JSON (`{"user": "...", "page": "...", "ms": 120}`).
+    The analytics team wants them in the BigQuery table **web.clicks** within seconds, not in tomorrow's report.
+
+    - Create a subscription **clicks-df** for the pipeline (do not read from the topic directly: if the pipeline
+      stops, messages must wait in the subscription).
+    - Launch a streaming Dataflow job **clicks-to-bq** in {{.region}} with the Google template
+      `PubSub_Subscription_to_BigQuery`.
+    - Publish at least one test click and check with a query that it reached `web.clicks`.
+  objectives:
+    - Enable the Dataflow API
+    - Subscription dedicated to the pipeline
+    - Streaming job running with the right template
+    - New rows in web.clicks checked with a query
+  hints:
+    - "Templates live in `gs://dataflow-templates-REGION/latest/NAME`."
+    - "`--parameters=inputSubscription=projects/PROJECT/subscriptions/clicks-df,outputTableSpec=PROJECT:web.clicks`"
+    - "The job processes messages as time goes by: publish, wait a moment and query with `bq query --use_legacy_sql=false`."
+  text:
+    Canalización en marcha: Pipeline running
+    Trabajo de streaming clicks-to-bq en ejecución: Streaming job clicks-to-bq running
+    Suscripción dedicada clicks-df: Dedicated subscription clicks-df
+    Datos en BigQuery: Data in BigQuery
+    Los clics llegan a web.clicks: Clicks reach web.clicks
+    Dataflow ha procesado mensajes: Dataflow processed messages
+    Verificación: Verification
+    Se comprobó el resultado con una consulta: The result was checked with a query

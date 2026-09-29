@@ -124,6 +124,19 @@ func (s *State) ResolveTrafficURL(project, target, path string) string {
 			return svc.URL + path
 		}
 		return ""
+	case strings.HasPrefix(target, "fn:"):
+		if fn := p.Functions[strings.TrimPrefix(target, "fn:")]; fn != nil && fn.URL != "" {
+			return fn.URL + path
+		}
+		return ""
+	case target == "appengine" || strings.HasPrefix(target, "appengine:"):
+		if p.AppEngine == nil {
+			return ""
+		}
+		if svc := strings.TrimPrefix(strings.TrimPrefix(target, "appengine"), ":"); svc != "" && svc != "default" {
+			return "https://" + svc + "-dot-" + p.AppEngine.Host + path
+		}
+		return "https://" + p.AppEngine.Host + path
 	case strings.HasPrefix(target, "lb:"):
 		if fr := p.ForwardingRules[strings.TrimPrefix(target, "lb:")]; fr != nil {
 			return "http://" + fr.IP + path

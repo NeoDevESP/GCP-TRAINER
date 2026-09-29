@@ -1,0 +1,124 @@
+id: serverless-s04-redis-cache
+title: "La caché de sesiones no responde desde la web"
+summary: Una instancia de Memorystore creada en la red equivocada deja a la web sin caché. Encuentra el motivo, crea la caché donde toca y compruébalo con redis-cli.
+track: serverless
+day: 4
+level: intermediate
+branch: databases
+type: incident
+skills: [databases.performance, networking.vpc]
+wellArchitected: [reliability, performance]
+certs: [ACE, PCA]
+difficulty: 3
+minutes: 45
+baseline: [default-network]
+setup: |
+  gcloud services enable redis.googleapis.com
+  gcloud compute networks create shop-vpc --subnet-mode=custom
+  gcloud compute networks subnets create shop-subnet --network=shop-vpc --range=10.10.0.0/24 --region={{.region}}
+  gcloud compute firewall-rules create shop-allow-ssh --network=shop-vpc --allow=tcp:22 --source-ranges=35.235.240.0/20
+  gcloud compute instances create web-1 --zone={{.zone}} --subnet=shop-subnet --machine-type=e2-small
+  gcloud redis instances create sessions --region={{.region}} --size=1 --tier=basic
+ticket:
+  id: INC-3120
+  kind: INC
+  priority: P2
+  sla: 4h
+  summary: "Desde el despliegue de ayer la web tarda 3 s por página: el log dice 'Could not connect to Redis ... Connection timed out'."
+  impact: Todas las páginas van lentas porque cada petición recalcula la sesión.
+  reporter: Equipo web
+actors:
+  - role: developer
+    name: Leo (backend)
+    fallback: "Creé la instancia `sessions` ayer con los valores por defecto y puse su IP en la configuración de web-1."
+    facts:
+      - {keywords: [[network, red, vpc, default]], answer: "¿Red? No indiqué ninguna al crearla. web-1 está en shop-vpc, eso sí lo sé."}
+  - role: sre
+    name: Omar (plataforma)
+    fallback: "Memorystore solo tiene IP privada y únicamente es accesible desde la red autorizada que eliges al crearla. Eso no se puede cambiar después."
+story: |
+  La web (`web-1`, en la red **shop-vpc**) no consigue hablar con la caché de sesiones de Memorystore que se creó ayer.
+  Averigua por qué, deja una caché **Basic de 1 GB** llamada **sessions-cache** que web-1 pueda usar y demuestra desde
+  web-1 con `redis-cli` que responde (PING y guarda la clave `healthcheck`). Elimina lo que ya no sirva: una caché
+  que nadie puede usar también cuesta dinero.
+constraints: [no-public]
+objectives:
+  - Encuentra la causa (red autorizada de la instancia frente a la red de web-1)
+  - Caché sessions-cache en shop-vpc
+  - Conexión comprobada desde web-1 con redis-cli
+  - Instancia inservible eliminada y ticket actualizado
+hints:
+  - text: "Compara `gcloud redis instances describe sessions --region=REGION --format='value(authorizedNetwork)'` con la red de web-1."
+  - text: "La red autorizada no se puede cambiar: crea otra instancia con `--network=shop-vpc`."
+  - text: "En web-1 (por IAP, `--tunnel-through-iap`): `sudo apt-get install -y redis-tools` y después `redis-cli -h IP PING`."
+evidence:
+  fields: [rootCause]
+  sample:
+    rootCause: "La instancia sessions se creó sin --network y quedó autorizada en la red default, mientras que web-1 está en shop-vpc. Memorystore solo acepta conexiones de su red autorizada y no se puede cambiar, así que se creó sessions-cache en shop-vpc y se borró la instancia anterior."
+solution: |
+  gcloud redis instances describe sessions --region={{.region}} --format='value(authorizedNetwork,host)'
+  gcloud compute instances describe web-1 --zone={{.zone}} --format='value(networkInterfaces[0].network)'
+  gcloud redis instances create sessions-cache --region={{.region}} --size=1 --tier=basic --network=shop-vpc
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command='sudo apt-get install -y redis-tools'
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command="redis-cli -h $(gcloud redis instances describe sessions-cache --region={{.region}} --format='value(host)') PING"
+  gcloud compute ssh web-1 --zone={{.zone}} --tunnel-through-iap --command="redis-cli -h $(gcloud redis instances describe sessions-cache --region={{.region}} --format='value(host)') SET healthcheck ok"
+  gcloud redis instances delete sessions --region={{.region}} --quiet
+  ticket update "Resolved: the sessions instance was authorized on the default network while web-1 runs in shop-vpc. Created sessions-cache on shop-vpc, verified PING from web-1, deleted the unusable instance."
+shortcuts:
+  - name: open the old instance to the internet
+    run: |
+      gcloud compute firewall-rules create allow-redis --network=default --allow=tcp:6379 --source-ranges=0.0.0.0/0
+      ticket update "Opened port 6379."
+rubric:
+  - name: Caché accesible
+    validator: functional
+    points: 40
+    critical: true
+    all: true
+    checks:
+      - {type: exists, path: "redis[\"sessions-cache\"]", expect: {authorizedNetwork: shop-vpc, tier: BASIC, memorySizeGb: 1, state: READY}, desc: "sessions-cache en shop-vpc"}
+      - {type: exists, path: "redis[\"sessions-cache\"].data", expect: {healthcheck: ok}, desc: "web-1 ha escrito la clave healthcheck"}
+  - name: Comprobación desde la aplicación
+    validator: functional
+    points: 20
+    checks:
+      - {type: command, regex: "redis-cli -h \\S+ .*PING|redis-cli -h \\S+ PING", desc: "PING desde web-1"}
+  - name: Limpieza
+    validator: cost
+    points: 15
+    checks:
+      - {type: absent, path: "redis.sessions", desc: "La instancia inservible se ha eliminado"}
+  - name: Comunicación
+    validator: evidence
+    points: 25
+    checks:
+      - {type: ticket_update, desc: "Ticket actualizado"}
+      - {type: evidence, fields: [rootCause], keywords: [[network, red, vpc], [authorized, autorizad, default, shop-vpc]], desc: "Explica la causa: red autorizada distinta"}
+en:
+  title: The session cache does not answer from the website
+  summary: A Memorystore instance created on the wrong network leaves the website without cache. Find out why, create the cache where it belongs and prove it with redis-cli.
+  story: |
+    The website (`web-1`, on the **shop-vpc** network) cannot talk to the Memorystore session cache created yesterday.
+    Find out why, leave a **1 GB Basic** cache called **sessions-cache** that web-1 can use and prove from web-1
+    with `redis-cli` that it answers (PING and store the key `healthcheck`). Remove what is no longer useful: a cache
+    nobody can use still costs money.
+  objectives:
+    - Find the cause (the instance's authorized network versus web-1's network)
+    - sessions-cache cache on shop-vpc
+    - Connection checked from web-1 with redis-cli
+    - Unusable instance deleted and ticket updated
+  hints:
+    - "Compare `gcloud redis instances describe sessions --region=REGION --format='value(authorizedNetwork)'` with web-1's network."
+    - "The authorized network cannot be changed: create another instance with `--network=shop-vpc`."
+    - "On web-1 (over IAP, `--tunnel-through-iap`): `sudo apt-get install -y redis-tools` and then `redis-cli -h IP PING`."
+  text:
+    Caché accesible: Reachable cache
+    sessions-cache en shop-vpc: sessions-cache on shop-vpc
+    web-1 ha escrito la clave healthcheck: web-1 wrote the healthcheck key
+    Comprobación desde la aplicación: Check from the application
+    PING desde web-1: PING from web-1
+    Limpieza: Cleanup
+    La instancia inservible se ha eliminado: The unusable instance was deleted
+    Comunicación: Communication
+    Ticket actualizado: Ticket updated
+    "Explica la causa: red autorizada distinta": "Explains the cause: a different authorized network"
