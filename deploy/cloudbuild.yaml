@@ -1,0 +1,46 @@
+# Continuous delivery on Google Cloud:
+#   gcloud builds submit --config deploy/cloudbuild.yaml --substitutions=_REGION=europe-west1
+# Tests and content validation run inside the image build (labctl validate);
+# the unit suite runs first so a broken build never reaches Cloud Run.
+substitutions:
+  _REGION: europe-west1
+  _REPO: gcplab
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+steps:
+  - id: test
+    name: golang:1.25
+    entrypoint: bash
+    args: ["-c", "go vet ./... && go test ./... && go run ./cmd/labctl test"]
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - deploy/Dockerfile
+      - --target
+      - runtime-gcloud
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/gcplab:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/gcplab:latest
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "--all-tags", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/gcplab"]
+
+  # Roll the grader first, then the lab plane, then the public API.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ec
+      - |
+        for svc in gcplab-grader gcplab-labplane gcplab-api; do
+          gcloud run services update "$svc" --region "${_REGION}" \
+            --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/gcplab:$SHORT_SHA" --quiet
+        done

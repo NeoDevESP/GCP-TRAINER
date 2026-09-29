@@ -89,7 +89,7 @@ type PoolEvent struct {
 }
 
 // NewPool creates a pool of warm projects (already created by Terraform in
-// deploy/terraform/sandbox-pool).
+// deploy/terraform/sandbox.tf).
 func NewPool(driver Driver, projectIDs []string) *Pool {
 	p := &Pool{Projects: map[string]*PoolProject{}, Leases: map[string]*Lease{}, Driver: driver}
 	for _, id := range projectIDs {

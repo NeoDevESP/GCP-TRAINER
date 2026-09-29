@@ -1,0 +1,9 @@
+.git
+**/node_modules
+web/.next
+web/out
+data
+bin
+*.test
+coverage.out
+deploy/terraform/.terraform

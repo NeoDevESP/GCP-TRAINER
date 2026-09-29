@@ -5,3 +5,9 @@ node_modules/
 web/out/
 *.test
 coverage.out
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars

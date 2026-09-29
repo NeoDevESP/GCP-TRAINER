@@ -124,6 +124,7 @@ type Service struct {
 	sessions map[string]*Session
 	extra    map[string]*scenario.Lab // generated labs
 	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 // New creates a lab plane.
@@ -520,9 +521,9 @@ func (s *Service) RunJanitor(every time.Duration) {
 	}()
 }
 
-// Close stops background work and flushes sessions.
+// Close stops background work and flushes sessions. It is safe to call twice.
 func (s *Service) Close() {
-	close(s.stop)
+	s.stopOnce.Do(func() { close(s.stop) })
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, se := range s.sessions {

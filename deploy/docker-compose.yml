@@ -1,0 +1,70 @@
+# Local stack: split planes, Postgres, and F1 emulators.
+#   docker compose -f deploy/docker-compose.yml up --build
+# Then open http://localhost:8080
+name: gcplab
+
+x-image: &image
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+    target: runtime
+  image: gcplab:dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gcplab
+      POSTGRES_PASSWORD: gcplab
+      POSTGRES_DB: gcplab
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gcplab"]
+      interval: 5s
+      retries: 20
+
+  # F1 emulators
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=gcplab-f1
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.52
+    command: ["-scheme", "http", "-port", "4443", "-external-url", "http://fake-gcs:4443"]
+
+  grader:
+    <<: *image
+    entrypoint: ["/usr/local/bin/grader-worker"]
+    environment:
+      ADDR: ":8090"
+
+  labplane:
+    <<: *image
+    environment:
+      MODE: labplane
+      ADDR: ":8081"
+      LABPLANE_TOKEN: ${LABPLANE_TOKEN:-dev-labplane-token}
+      GRADER_URL: http://grader:8090
+      DATABASE_URL: postgres://gcplab:gcplab@postgres:5432/gcplab?sslmode=disable
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+    depends_on:
+      postgres: { condition: service_healthy }
+      grader: { condition: service_started }
+
+  api:
+    <<: *image
+    ports: ["8080:8080"]
+    environment:
+      MODE: api
+      LABPLANE_URL: http://labplane:8081
+      LABPLANE_TOKEN: ${LABPLANE_TOKEN:-dev-labplane-token}
+      DATABASE_URL: postgres://gcplab:gcplab@postgres:5432/gcplab?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-32b}
+      MENTOR_LLM: ${MENTOR_LLM:-off}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      postgres: { condition: service_healthy }
+      labplane: { condition: service_started }
+
+volumes:
+  pgdata: {}
