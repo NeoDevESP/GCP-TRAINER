@@ -974,6 +974,9 @@ type TrafficSpec struct {
 	Path    string `json:"path" yaml:"path"`
 	RPS     int    `json:"rps" yaml:"rps"`
 	Project string `json:"project" yaml:"project"`
+	// Principal authenticates the requests (e.g. internal users of a private
+	// Cloud Run service); empty means anonymous internet traffic.
+	Principal string `json:"principal,omitempty" yaml:"principal"`
 }
 
 // New creates an empty world with an organization, a training folder and one

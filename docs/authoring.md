@@ -96,7 +96,7 @@ lo protege).
 | Identidad | `iam` (permiso efectivo, con condiciones y políticas de organización), `no_basic_roles`, `org_policy`, `k8s_rbac` |
 | Seguridad y coste | `policy` (Rego), `forbid_firewall`, `finding_absent`/`finding_present`, `cost_max`/`cost_min`, `bq_bytes_max`, `secret_rotated` |
 | Operaciones | `log_metric`, `alert_policy`, `log_contains`, `terraform_clean`, `tf_state`, `vm_file`, `vm_disk`, `subnet_plan`, `design` |
-| Proceso y comunicación | `command` (lo que ejecutó el alumno; `min`, o `max` para prohibir un comando), `session_config`, `file_contains`, `ticket_update`, `ticket_resolved`, `asked`, `evidence` (palabras clave en los campos del post-mortem), `quiz` |
+| Proceso y comunicación | `command` (lo que ejecutó el alumno; `min`, o `max` para prohibir un comando), `session_config`, `file_contains`, `ticket_update`, `ticket_resolved`, `ticket_escalated` (`team` como regex + palabras clave en el motivo), `asked`, `evidence` (palabras clave en los campos del post-mortem), `quiz` |
 
 Cualquier comprobación puede apuntar a otro proyecto con `on: <clave-de-proyecto>` (misiones de empresa).
 

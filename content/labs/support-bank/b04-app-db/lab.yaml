@@ -1,0 +1,156 @@
+id: bank-b04-app-db
+title: "INC P2 · La app de movimientos no conecta con su base de datos"
+summary: Incidente con impacto en clientes internos. Mantén informados a los afectados mientras investigas, encuentra el cambio que rompió la conexión y arréglalo sin abrir la base de datos a nadie más.
+track: support-bank
+day: 4
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills: [networking.firewall, compute.troubleshooting, observability.incident]
+wellArchitected: [security, reliability]
+certs: [ACE, PCNE]
+difficulty: 3
+minutes: 40
+baseline: [bank-atlas]
+faults:
+  - {type: vm_tag_remove, vm: movimientos-api, tag: movimientos-api, actor: "iac-pipeline@{{.project}}.iam.gserviceaccount.com"}
+ticket:
+  id: INC-21560
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Oficinas · Centro de atención
+  summary: "Los gestores de las oficinas no pueden consultar los movimientos de los clientes: la aplicación da error de conexión con la base de datos desde las 9:10."
+actors:
+  - role: requester
+    name: Marta León (Centro de atención a oficinas)
+    persona: Recibe las llamadas de las oficinas.
+    fallback: "Las oficinas no paran de llamar. ¿Sabéis algo? Necesito algo que contarles."
+    facts:
+      - {keywords: [[cuando, hora, desde, empez, when]], answer: "Desde las 9:10 más o menos. Antes funcionaba con normalidad."}
+      - {keywords: [[todas, oficinas, cuantos, alcance, afect, impact]], answer: "Todas las oficinas: unos 400 gestores sin poder ver movimientos."}
+  - role: dev
+    name: Pablo Ortiz (Plataforma · IaC)
+    persona: Mantiene el Terraform de la plataforma.
+    fallback: "Esta mañana se ha aplicado una limpieza de etiquetas de red con el pipeline de Terraform."
+    facts:
+      - {keywords: [[etiqueta, tag, terraform, pipeline, cambio, change]], answer: "El pipeline de las 9:05 unificó las etiquetas de red de las VMs. Puede que a movimientos-api se le quitara la suya. Si es eso, vuelve a ponérsela y yo lo corrijo en el código."}
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`). **Prioridad P2: plazo de 4 horas.**
+
+  > **INC-21560** · *«Los gestores de las oficinas no pueden consultar los movimientos de los clientes: la aplicación
+  > da error de conexión con la base de datos desde las 9:10.»*
+
+  En un P2 hay que **informar pronto** aunque aún no sepas la causa: publica una primera actualización para
+  las oficinas, investiga, arregla y vuelve a informar. La base de datos (`movimientos-db`, 5432) solo debe
+  aceptar conexiones de la API.
+objectives:
+  - Publica una primera actualización para los afectados
+  - Encuentra qué cambió (auditoría, reglas de cortafuegos, etiquetas de red)
+  - Restablece la conexión API → base de datos sin abrirla a nadie más
+  - Informa de la solución y cierra el ticket con la causa
+hints:
+  - text: "Compara las etiquetas de red de `movimientos-api` con las `source-tags` de la regla `allow-app-to-db`."
+  - text: "`gcloud logging read 'logName:cloudaudit protoPayload.methodName:setTags'` muestra quién cambió las etiquetas."
+solution: |
+  ticket
+  ticket update "Estamos investigando el error de conexión de la aplicación de movimientos con su base de datos. Próxima actualización en 30 minutos."
+  gcloud compute firewall-rules describe allow-app-to-db
+  gcloud compute instances describe movimientos-api --zone={{.zone}} --format='value(tags.items)'
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:setTags' --limit=3
+  ask dev "¿ha cambiado algo esta mañana en las etiquetas de red?"
+  gcloud compute instances add-tags movimientos-api --zone={{.zone}} --tags=movimientos-api
+  ticket comment "Causa: el pipeline de Terraform de las 9:05 quitó la etiqueta de red movimientos-api a la VM, así que la regla allow-app-to-db dejó de aplicarse. Restaurada; Pablo lo corrige en el código."
+  ticket update "Resuelto: la aplicación de movimientos vuelve a conectar con su base de datos. La causa fue un cambio automático en la configuración de red de esta mañana, ya corregido. Las oficinas pueden volver a consultar los movimientos."
+  ticket resolve "Restaurada la etiqueta de red movimientos-api en la VM; la regla allow-app-to-db vuelve a permitir la conexión a la base de datos en el puerto 5432."
+shortcuts:
+  - name: open PostgreSQL to everyone
+    run: |
+      gcloud compute firewall-rules create allow-db-all --network=atlas-vpc --allow=tcp:5432 --source-ranges=0.0.0.0/0 --target-tags=movimientos-db
+      ticket update "Resuelto, la base de datos ya acepta conexiones."
+      ticket resolve "Abierto el puerto 5432 de la base de datos."
+  - name: open PostgreSQL to the whole VPC
+    run: |
+      gcloud compute firewall-rules create allow-db-vpc --network=atlas-vpc --allow=tcp:5432 --source-ranges=10.20.0.0/16 --target-tags=movimientos-db
+      ticket update "Resuelto, la base de datos ya acepta conexiones desde la red."
+      ticket resolve "Abierto el 5432 a toda la VPC."
+rubric:
+  - name: Servicio restablecido
+    validator: functional
+    points: 30
+    checks:
+      - {type: tcp, from: "vm:movimientos-api", to: "vm:movimientos-db", port: 5432, desc: "La API llega a la base de datos"}
+  - name: Base de datos protegida
+    validator: security
+    points: 25
+    critical: true
+    all: true
+    checks:
+      - {type: forbid_firewall, port: 5432, desc: "El 5432 no está abierto a internet"}
+      - {type: count, collection: firewalls, where: {allowed: {regex: "5432"}, sourceRanges: {regex: "."}}, max: 0, desc: "Ninguna regla por rangos de IP amplios hacia la base de datos"}
+  - name: Diagnóstico
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: command, regex: "firewall-rules (describe|list)|instances describe|logging read", min: 2, desc: "Reglas, etiquetas y auditoría revisadas"}
+  - name: Gestión del incidente
+    validator: evidence
+    points: 30
+    all: true
+    checks:
+      - {type: ticket_update, min: 2, desc: "Actualización inicial y otra al resolver"}
+      - {type: ticket_update, public: false, keywords: [[etiqueta, tag], [terraform, pipeline, iac]], desc: "Nota interna con la causa"}
+      - {type: ticket_resolved, keywords: [[etiqueta, tag]], desc: "Cerrado con la causa y la solución"}
+tutor:
+  - {match: "@intro", title: "", why: "En un P2 hay reloj: publica una primera actualización enseguida, aunque todavía no sepas la causa. Así las oficinas saben que alguien lo está mirando."}
+  - {match: "instances describe movimientos-api", title: "Compara etiquetas y regla", why: "La regla de cortafuegos solo permite el tráfico desde VMs con la etiqueta movimientos-api. Si la VM ya no la tiene, la conexión se corta."}
+  - {match: "add-tags", title: "", why: "Restaurar la etiqueta arregla el problema sin abrir la base de datos a nadie más. Abrir el 5432 a toda la red «funcionaría», pero expondría datos de clientes."}
+en:
+  title: "INC P2 · The transactions app can't reach its database"
+  summary: An incident affecting internal customers. Keep those affected informed while you investigate, find the change that broke the connection and fix it without opening the database to anyone else.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`). **Priority P2: 4-hour target.**
+
+    > **INC-21560** · *"Branch managers can't look up customers' transactions: the application has been giving a
+    > database connection error since 9:10."*
+
+    In a P2 you **report early** even before you know the cause: post a first update for the branches,
+    investigate, fix and report again. The database (`movimientos-db`, 5432) must only accept connections
+    from the API.
+  objectives:
+    - Post a first update for those affected
+    - Find what changed (audit logs, firewall rules, network tags)
+    - Restore the API → database connection without opening it to anyone else
+    - Report the fix and close the ticket with the cause
+  hints:
+    - "Compare the network tags of `movimientos-api` with the `source-tags` of the `allow-app-to-db` rule."
+    - "`gcloud logging read 'logName:cloudaudit protoPayload.methodName:setTags'` shows who changed the tags."
+  ticket:
+    summary: "Branch managers can't look up customers' transactions: the application has been giving a database connection error since 9:10."
+  text:
+    Oficinas · Centro de atención: Branches · Service centre
+    Marta León (Centro de atención a oficinas): Marta León (Branch service centre)
+    Recibe las llamadas de las oficinas.: Takes the calls from the branches.
+    Las oficinas no paran de llamar. ¿Sabéis algo? Necesito algo que contarles.: The branches keep calling. Do you know anything? I need something to tell them.
+    Desde las 9:10 más o menos. Antes funcionaba con normalidad.: Since about 9:10. It worked normally before.
+    "Todas las oficinas: unos 400 gestores sin poder ver movimientos.": "All branches: about 400 managers unable to see transactions."
+    Pablo Ortiz (Plataforma · IaC): Pablo Ortiz (Platform · IaC)
+    Mantiene el Terraform de la plataforma.: Maintains the platform's Terraform.
+    Esta mañana se ha aplicado una limpieza de etiquetas de red con el pipeline de Terraform.: This morning the Terraform pipeline applied a network tag cleanup.
+    El pipeline de las 9:05 unificó las etiquetas de red de las VMs. Puede que a movimientos-api se le quitara la suya. Si es eso, vuelve a ponérsela y yo lo corrijo en el código.: The 9:05 pipeline unified the VMs' network tags. movimientos-api may have lost its tag. If so, put it back and I'll fix it in the code.
+    Servicio restablecido: Service restored
+    La API llega a la base de datos: The API reaches the database
+    Base de datos protegida: Database protected
+    El 5432 no está abierto a internet: Port 5432 isn't open to the internet
+    Ninguna regla por rangos de IP amplios hacia la base de datos: No broad IP-range rule towards the database
+    Diagnóstico: Diagnosis
+    Reglas, etiquetas y auditoría revisadas: Rules, tags and audit logs checked
+    Gestión del incidente: Incident handling
+    Actualización inicial y otra al resolver: An initial update and another on resolution
+    Nota interna con la causa: Internal note with the cause
+    Cerrado con la causa y la solución: Closed with the cause and the fix
+    "En un P2 hay reloj: publica una primera actualización enseguida, aunque todavía no sepas la causa. Así las oficinas saben que alguien lo está mirando.": "A P2 has a clock: post a first update straight away, even before you know the cause. That way the branches know someone is on it."
+    "La regla de cortafuegos solo permite el tráfico desde VMs con la etiqueta movimientos-api. Si la VM ya no la tiene, la conexión se corta.": "The firewall rule only allows traffic from VMs tagged movimientos-api. If the VM no longer has it, the connection is cut."
+    "Compara etiquetas y regla": "Compare tags and rule"
+    "Restaurar la etiqueta arregla el problema sin abrir la base de datos a nadie más. Abrir el 5432 a toda la red «funcionaría», pero expondría datos de clientes.": "Restoring the tag fixes it without opening the database to anyone else. Opening 5432 to the whole network would \"work\" but would expose customer data."

@@ -1,0 +1,157 @@
+id: bank-b03-no-egress
+title: "INC · «movimientos-api no descarga los parches: ¿le ponemos IP pública?»"
+summary: Una VM privada ha perdido la salida a internet. Encuentra en la auditoría qué cambió y quién, restablece la salida sin IP pública e informa.
+track: support-bank
+day: 3
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills: [networking.nat, compute.troubleshooting, security.audit]
+wellArchitected: [security, reliability]
+certs: [ACE, PCNE]
+difficulty: 3
+minutes: 35
+baseline: [bank-atlas]
+faults:
+  - {type: nat_delete, router: atlas-router, actor: "finops-cleanup@{{.project}}.iam.gserviceaccount.com"}
+ticket:
+  id: INC-21304
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Sergio Pardo (Operaciones)
+  summary: "Desde anoche movimientos-api no puede descargar los parches de seguridad del SO (apt se queda colgado). Si le ponemos una IP pública se arregla, ¿no?"
+actors:
+  - role: requester
+    name: Sergio Pardo (Operaciones)
+    persona: Técnico de operaciones que aplica los parches mensuales.
+    fallback: "Hasta ayer los parches se bajaban sin problema."
+    facts:
+      - {keywords: [[cambio, cambiado, tocado, change, ayer, anoche]], answer: "Nosotros no hemos tocado nada. Ayer hubo una limpieza de costes en la plataforma, no sé si tendrá que ver."}
+      - {keywords: [[otras, otra, resto, todas, other]], answer: "No lo he probado en otras máquinas; esta es la que parcheamos hoy."}
+  - role: finops
+    name: Ana Vidal (FinOps)
+    persona: Revisa el gasto de la plataforma cada mes.
+    fallback: "Ayer lanzamos el script de limpieza de recursos que parecían sin uso."
+    facts:
+      - {keywords: [[nat, router, limpieza, script, borr, delete, cleanup]], answer: "¿El NAT? El script lo marcó como sin uso y lo borró. No sabía que lo necesitaban las VMs privadas; volvedlo a crear y lo excluimos de la limpieza."}
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-21304** · *«Desde anoche movimientos-api no puede descargar los parches de seguridad del SO. Si le ponemos
+  > una IP pública se arregla, ¿no?»*
+
+  En el banco ninguna VM tiene IP pública: las privadas salen a internet por Cloud NAT. Antes de arreglar,
+  **averigua qué cambió y quién lo hizo** (la auditoría lo registra todo) y deja constancia en el ticket.
+
+  Recuerda: `ticket`, `team`, `ask`, `ticket comment` (nota interna), `ticket update`, `ticket resolve`.
+objectives:
+  - Confirma el síntoma en la VM
+  - Encuentra en los registros de auditoría qué cambio lo provocó y quién lo hizo
+  - Restablece la salida a internet sin IP pública
+  - Deja una nota interna con la causa y contesta al solicitante
+hints:
+  - text: "`gcloud compute instances get-serial-port-output movimientos-api --zone={{.zone}}` muestra los errores de apt."
+  - text: "`gcloud logging read 'logName:cloudaudit protoPayload.methodName:routers'` dice quién cambió el router."
+solution: |
+  ticket
+  gcloud compute instances get-serial-port-output movimientos-api --zone={{.zone}}
+  gcloud compute routers describe atlas-router --region={{.region}}
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:routers' --limit=3 --format='value(protoPayload.authenticationInfo.principalEmail,protoPayload.methodName)'
+  ask finops "¿la limpieza de ayer borró el NAT del router?"
+  gcloud compute routers nats create atlas-nat --router=atlas-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+  gcloud compute ssh movimientos-api --zone={{.zone}} --tunnel-through-iap --command='sudo apt-get update'
+  ticket comment "Causa: el script de limpieza de FinOps (finops-cleanup) borró la configuración NAT atlas-nat del router atlas-router. FinOps lo excluirá de la limpieza."
+  ticket update "Hola Sergio: la VM perdió la salida a internet porque ayer se borró el Cloud NAT de la red en una limpieza de costes. Lo he vuelto a crear y apt update ya funciona, así que podéis parchear. No hace falta IP pública (y en el banco no está permitida)."
+  ticket resolve "Recreado Cloud NAT atlas-nat en atlas-router; movimientos-api vuelve a tener salida a internet sin IP pública."
+shortcuts:
+  - name: lift the policy and give the VM a public IP
+    run: |
+      gcloud resource-manager org-policies disable-enforce compute.vmExternalIpAccess --project={{.project}}
+      gcloud compute instances add-access-config movimientos-api --zone={{.zone}}
+      ticket update "Hola Sergio, le he puesto IP pública a la VM y ya descarga los parches."
+      ticket resolve "Añadida IP pública a movimientos-api."
+rubric:
+  - name: Salida restablecida
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: egress, from: "vm:movimientos-api", desc: "movimientos-api llega a internet"}
+      - {type: exists, path: "routers[\"atlas-router\"].nats[0]", desc: "Cloud NAT configurado de nuevo"}
+  - name: Sin atajos
+    validator: security
+    points: 20
+    critical: true
+    all: true
+    checks:
+      - {type: count, collection: instances, where: {natIP: {empty: false}}, max: 0, desc: "Ninguna VM con IP pública"}
+      - {type: org_policy, constraint: compute.vmExternalIpAccess, enforced: true, desc: "La política del banco sigue aplicada"}
+  - name: Causa encontrada
+    validator: diagnosis
+    points: 20
+    all: true
+    checks:
+      - {type: command, regex: "logging read .*(cloudaudit|routers)", min: 1, desc: "Registros de auditoría consultados"}
+      - {type: ticket_update, public: false, keywords: [[nat], [finops, limpieza, cleanup, borr, delet]], desc: "Nota interna con la causa y quién la provocó"}
+  - name: Comunicación con el solicitante
+    validator: evidence
+    points: 30
+    all: true
+    checks:
+      - {type: ticket_update, keywords: [[nat, salida, internet], [parche, apt, actualiz, patch]], desc: "Respuesta: qué pasó y que ya pueden parchear"}
+      - {type: ticket_resolved, desc: "Ticket cerrado"}
+tutor:
+  - {match: "@intro", title: "", why: "«Ponerle IP pública» arreglaría el síntoma rompiendo una norma. Primero entiende qué cambió: en una plataforma grande casi siempre hay un cambio reciente detrás."}
+  - {match: "logging read", title: "Busca el cambio en la auditoría", why: "Los registros de auditoría dicen quién cambió qué y cuándo. Es la prueba que pondrás en el ticket."}
+  - {match: "^ticket comment", title: "", why: "La causa técnica y el responsable van en una nota interna; al solicitante le basta saber qué pasó y que ya puede trabajar."}
+en:
+  title: "INC · \"movimientos-api can't download patches: shall we give it a public IP?\""
+  summary: A private VM lost internet egress. Find in the audit logs what changed and who did it, restore egress without a public IP and report back.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-21304** · *"Since last night movimientos-api can't download the OS security patches. If we give it a
+    > public IP it'll be fixed, right?"*
+
+    At the bank no VM has a public IP: private VMs reach the internet through Cloud NAT. Before fixing,
+    **find out what changed and who did it** (the audit logs record everything) and note it on the ticket.
+
+    Remember: `ticket`, `team`, `ask`, `ticket comment` (internal note), `ticket update`, `ticket resolve`.
+  objectives:
+    - Confirm the symptom on the VM
+    - Find in the audit logs which change caused it and who made it
+    - Restore internet egress without a public IP
+    - Leave an internal note with the cause and reply to the requester
+  hints:
+    - "`gcloud compute instances get-serial-port-output movimientos-api --zone={{.zone}}` shows the apt errors."
+    - "`gcloud logging read 'logName:cloudaudit protoPayload.methodName:routers'` tells you who changed the router."
+  ticket:
+    summary: "Since last night movimientos-api can't download the OS security patches (apt hangs). If we give it a public IP it'll be fixed, right?"
+  text:
+    Sergio Pardo (Operaciones): Sergio Pardo (Operations)
+    Técnico de operaciones que aplica los parches mensuales.: Operations technician who applies the monthly patches.
+    Hasta ayer los parches se bajaban sin problema.: Until yesterday the patches downloaded fine.
+    Nosotros no hemos tocado nada. Ayer hubo una limpieza de costes en la plataforma, no sé si tendrá que ver.: We haven't touched anything. There was a cost cleanup on the platform yesterday, not sure if it's related.
+    No lo he probado en otras máquinas; esta es la que parcheamos hoy.: I haven't tried other machines; this is the one we're patching today.
+    Ana Vidal (FinOps): Ana Vidal (FinOps)
+    Revisa el gasto de la plataforma cada mes.: Reviews platform spending every month.
+    Ayer lanzamos el script de limpieza de recursos que parecían sin uso.: Yesterday we ran the cleanup script for resources that looked unused.
+    "¿El NAT? El script lo marcó como sin uso y lo borró. No sabía que lo necesitaban las VMs privadas; volvedlo a crear y lo excluimos de la limpieza.": "The NAT? The script flagged it as unused and deleted it. I didn't know the private VMs needed it; recreate it and we'll exclude it from the cleanup."
+    Salida restablecida: Egress restored
+    movimientos-api llega a internet: movimientos-api reaches the internet
+    Cloud NAT configurado de nuevo: Cloud NAT configured again
+    Sin atajos: No shortcuts
+    Ninguna VM con IP pública: No VM with a public IP
+    La política del banco sigue aplicada: The bank policy is still enforced
+    Causa encontrada: Cause found
+    Registros de auditoría consultados: Audit logs checked
+    Nota interna con la causa y quién la provocó: Internal note with the cause and who caused it
+    Comunicación con el solicitante: Communication with the requester
+    "Respuesta: qué pasó y que ya pueden parchear": "Reply: what happened and that they can patch now"
+    Ticket cerrado: Ticket closed
+    "«Ponerle IP pública» arreglaría el síntoma rompiendo una norma. Primero entiende qué cambió: en una plataforma grande casi siempre hay un cambio reciente detrás.": "\"Giving it a public IP\" would fix the symptom by breaking a rule. First understand what changed: on a large platform there's almost always a recent change behind it."
+    "Los registros de auditoría dicen quién cambió qué y cuándo. Es la prueba que pondrás en el ticket.": "The audit logs say who changed what and when. It's the evidence you'll put on the ticket."
+    "Busca el cambio en la auditoría": "Find the change in the audit logs"
+    "La causa técnica y el responsable van en una nota interna; al solicitante le basta saber qué pasó y que ya puede trabajar.": "The technical cause and who did it go in an internal note; the requester just needs to know what happened and that they can work again."

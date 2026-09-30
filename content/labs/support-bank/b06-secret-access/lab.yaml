@@ -1,0 +1,150 @@
+id: bank-b06-secret-access
+title: "INC · «PERMISSION_DENIED al leer el secreto»: pagos-api da error 500"
+summary: La app de pagos ya no puede leer su clave en Secret Manager. Averigua qué cambió y da acceso solo a ese secreto, no a todos los del proyecto, que incluyen claves de otros equipos.
+track: support-bank
+day: 6
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills: [security.secrets, iam.leastprivilege, iam.serviceaccounts]
+wellArchitected: [security]
+certs: [ACE, PCSE]
+difficulty: 3
+minutes: 30
+baseline: [bank-atlas]
+setup: |
+  gcloud iam service-accounts create pagos-sa --display-name="pasarela de pagos"
+  echo -n "psp_live_{{.project}}" | gcloud secrets create pagos-psp-key --data-file=-
+  echo -n "hsm-pin-000000" | gcloud secrets create core-hsm-pin --data-file=-
+  echo -n "swift-cert-pass" | gcloud secrets create swift-cert-password --data-file=-
+  gcloud secrets add-iam-policy-binding pagos-psp-key --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --no-allow-unauthenticated --set-secrets=API_KEY=pagos-psp-key:latest
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=user:gestor@gcplab.dev --role=roles/run.invoker
+faults:
+  - {type: iam_remove, resource: "secret:pagos-psp-key", role: roles/secretmanager.secretAccessor, member: "serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com", actor: "iac-pipeline@{{.project}}.iam.gserviceaccount.com"}
+traffic:
+  - {name: pagos, target: "run:pagos-api", path: /pay, rps: 5, principal: "user:gestor@gcplab.dev"}
+ticket:
+  id: INC-22015
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Nuria Blanco (Pagos)
+  summary: "Desde esta mañana pagos-api da error 500 al leer su clave del proveedor de pagos en Secret Manager (pagos-psp-key). En los logs pone PERMISSION_DENIED. ¿Nos podéis dar acceso a Secret Manager?"
+actors:
+  - role: requester
+    name: Nuria Blanco (Pagos)
+    persona: Desarrolladora del equipo de pagos.
+    fallback: "Solo necesitamos que la app lea su clave del proveedor de pagos."
+    facts:
+      - {keywords: [[secreto, cual, clave, secret, nombre]], answer: "Solo pagos-psp-key. Los demás secretos del proyecto no son nuestros."}
+      - {keywords: [[cuenta, identidad, service account, sa]], answer: "pagos-api se ejecuta con la cuenta pagos-sa."}
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-22015** · *«Desde esta mañana pagos-api da error 500 al leer su clave del proveedor de pagos en Secret
+  > Manager (pagos-psp-key). En los logs pone PERMISSION_DENIED. ¿Nos podéis dar acceso a Secret Manager?»*
+
+  «Acceso a Secret Manager» puede significar muchas cosas. En el proyecto hay secretos de **otros equipos**
+  (el PIN del HSM del core bancario, la contraseña del certificado SWIFT): nadie de pagos debe poder leerlos.
+objectives:
+  - Confirma el error y qué identidad lo recibe
+  - Averigua en la auditoría qué cambió esta mañana
+  - Concede a esa identidad lectura solo sobre su secreto
+  - Comprueba que pagos-api vuelve a funcionar
+  - Explica al equipo qué se ha concedido y cierra
+hints:
+  - text: "`gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5` muestra el permiso denegado y la cuenta."
+  - text: "`gcloud secrets add-iam-policy-binding SECRETO --member=serviceAccount:... --role=roles/secretmanager.secretAccessor` concede sobre un solo secreto."
+solution: |
+  ticket
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5
+  gcloud run services describe pagos-api --region={{.region}}
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:SetIamPolicy' --limit=3
+  ask requester "¿qué secreto necesita la app y con qué cuenta se ejecuta?"
+  gcloud secrets add-iam-policy-binding pagos-psp-key --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  ticket update "Hola Nuria: pagos-api se ejecuta como pagos-sa, que no tenía permiso para leer su secreto. Le he concedido roles/secretmanager.secretAccessor solo sobre pagos-psp-key (no sobre todo Secret Manager, porque hay secretos de otros equipos). La app ya responde con normalidad."
+  ticket resolve "Concedido secretAccessor a pagos-sa solo sobre el secreto pagos-psp-key; pagos-api funciona."
+shortcuts:
+  - name: secret accessor on the whole project
+    run: |
+      gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+      ticket update "Hola Nuria, ya tenéis acceso a Secret Manager en el proyecto."
+      ticket resolve "Concedido secretAccessor a pagos-sa en el proyecto."
+  - name: secret manager admin for the team
+    run: |
+      gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.admin
+      ticket update "Hola Nuria, os he dado admin de Secret Manager."
+      ticket resolve "Concedido admin de Secret Manager."
+rubric:
+  - name: La app funciona
+    validator: functional
+    points: 30
+    checks:
+      - {type: http, target: "run:pagos-api", path: /pay, principal: "user:gestor@gcplab.dev", status: 200, desc: "pagos-api responde"}
+  - name: Solo su secreto
+    validator: security
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: "serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:pagos-psp-key", desc: "pagos-sa lee su secreto"}
+      - {type: iam, principal: "serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:core-hsm-pin", expect: false, desc: "No lee el PIN del HSM"}
+      - {type: iam, principal: "serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com", permission: secretmanager.versions.access, resource: "secret:swift-cert-password", expect: false, desc: "No lee la contraseña de SWIFT"}
+  - name: Diagnóstico
+    validator: diagnosis
+    points: 10
+    checks:
+      - {type: command, regex: "logging read|services describe", min: 1, desc: "Error y cuenta de servicio identificados"}
+  - name: Comunicación
+    validator: evidence
+    points: 25
+    all: true
+    checks:
+      - {type: ticket_update, keywords: [[pagos-psp-key, solo, only, su secreto]], desc: "Explica que el acceso es solo a su secreto"}
+      - {type: ticket_resolved, desc: "Ticket cerrado"}
+tutor:
+  - {match: "@intro", title: "", why: "«Dadnos acceso a Secret Manager» es una petición demasiado amplia: en el proyecto hay secretos de otros equipos. Concreta qué secreto y qué identidad."}
+  - {match: "secrets add-iam-policy-binding pagos-psp-key", title: "", why: "El rol secretAccessor sobre un único secreto: la app lee su clave y nada más. En el proyecto, podría leer el PIN del HSM o el certificado SWIFT."}
+en:
+  title: "INC · \"PERMISSION_DENIED reading the secret\": pagos-api returns 500"
+  summary: The payments app can no longer read its key in Secret Manager. Find out what changed and grant access to that secret only, not to every secret in the project, which include other teams' keys.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-22015** · *"Since this morning pagos-api returns error 500 when reading its payment provider key from
+    > Secret Manager (pagos-psp-key). The logs say PERMISSION_DENIED. Can you give us access to Secret Manager?"*
+
+    "Access to Secret Manager" can mean many things. The project holds **other teams'** secrets
+    (the core banking HSM PIN, the SWIFT certificate password): nobody in payments should be able to read them.
+  objectives:
+    - Confirm the error and which identity gets it
+    - Find in the audit logs what changed this morning
+    - Grant that identity read access to its own secret only
+    - Check that pagos-api works again
+    - Explain to the team what was granted and close
+  hints:
+    - "`gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5` shows the denied permission and the account."
+    - "`gcloud secrets add-iam-policy-binding SECRET --member=serviceAccount:... --role=roles/secretmanager.secretAccessor` grants on a single secret."
+  ticket:
+    summary: "Since this morning pagos-api returns error 500 when reading its payment provider key from Secret Manager (pagos-psp-key). The logs say PERMISSION_DENIED. Can you give us access to Secret Manager?"
+  text:
+    Nuria Blanco (Pagos): Nuria Blanco (Payments)
+    Desarrolladora del equipo de pagos.: Developer on the payments team.
+    Solo necesitamos que la app lea su clave del proveedor de pagos.: We just need the app to read its payment provider key.
+    Solo pagos-psp-key. Los demás secretos del proyecto no son nuestros.: Only pagos-psp-key. The other secrets in the project aren't ours.
+    pagos-api se ejecuta con la cuenta pagos-sa.: pagos-api runs as the pagos-sa account.
+    La app funciona: The app works
+    pagos-api responde: pagos-api responds
+    Solo su secreto: Only its own secret
+    pagos-sa lee su secreto: pagos-sa reads its secret
+    No lee el PIN del HSM: Cannot read the HSM PIN
+    No lee la contraseña de SWIFT: Cannot read the SWIFT password
+    Diagnóstico: Diagnosis
+    Error y cuenta de servicio identificados: Error and service account identified
+    Comunicación: Communication
+    Explica que el acceso es solo a su secreto: Explains the access is to its own secret only
+    Ticket cerrado: Ticket closed
+    "«Dadnos acceso a Secret Manager» es una petición demasiado amplia: en el proyecto hay secretos de otros equipos. Concreta qué secreto y qué identidad.": "\"Give us access to Secret Manager\" is too broad: the project holds other teams' secrets. Pin down which secret and which identity."
+    "El rol secretAccessor sobre un único secreto: la app lee su clave y nada más. En el proyecto, podría leer el PIN del HSM o el certificado SWIFT.": "The secretAccessor role on a single secret: the app reads its key and nothing else. On the project it could read the HSM PIN or the SWIFT certificate."

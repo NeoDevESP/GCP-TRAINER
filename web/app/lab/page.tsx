@@ -11,7 +11,7 @@ import Markdown from "@/components/Markdown";
 import Bar from "@/components/Bar";
 import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
-import { useI18n } from "@/lib/i18n";
+import { k, useI18n } from "@/lib/i18n";
 import { constraint, evidenceField, factor, hintKind, label, labLevel, labMode, role, ticketStatus, validator } from "@/lib/labels";
 import { Icon } from "@/components/console/icons";
 import type { SessionInfo } from "@/lib/types";
@@ -127,10 +127,51 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
   );
 }
 
-function Desk({ data }: { data: any }) {
+// shellWord quotes text as one single-quoted shell word (newlines become spaces).
+const shellWord = (text: string) => "'" + text.replace(/\s*\n\s*/g, " ").trim().replace(/'/g, "'\\''") + "'";
+
+type DeskAction = "update" | "comment" | "resolve" | "escalate";
+const DESK_ACTIONS: [DeskAction, string, string][] = [
+  ["update", k("Responder al solicitante"), k("Lo lee quien abrió el ticket: qué pasa o pasaba, qué has hecho y qué tiene que hacer. Sin jerga.")],
+  ["comment", k("Nota interna"), k("Solo para el equipo: causa técnica, evidencias, quién hizo qué.")],
+  ["resolve", k("Resolver y cerrar"), k("Qué fallaba, qué has cambiado y cómo lo has comprobado.")],
+  ["escalate", k("Escalar"), k("A quién y con todo lo que necesita: qué, dónde, desde cuándo, impacto y qué has hecho ya.")],
+];
+
+/** Desk is the ticket tool of the lab: read the ticket, ask the people involved and work the ticket. */
+function Desk({ data, sessionId, onChange }: { data: any; sessionId: string; onChange: () => void }) {
   const { t: tr } = useI18n();
+  const [who, setWho] = useState("");
+  const [question, setQuestion] = useState("");
+  const [action, setAction] = useState<DeskAction>("update");
+  const [team, setTeam] = useState("");
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   if (!data?.ticket && !data?.actors?.length) return <p className="muted">{tr("Este laboratorio no tiene ticket. Usa la terminal y los objetivos de la izquierda.")}</p>;
   const t = data.ticket;
+  const actor = who || data.actors?.[0]?.role || "";
+  const run = async (line: string, done: () => void) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api<{ output: string; exit: number }>(`/api/sessions/${sessionId}/exec`, { body: { line } });
+      setMsg({ ok: r.exit === 0, text: r.output.trim() });
+      if (r.exit === 0) done();
+      onChange();
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const ask = () => question.trim() && run(`ask ${actor} ${shellWord(question)}`, () => setQuestion(""));
+  const write = () => {
+    if (!text.trim() || (action === "escalate" && !team.trim())) return;
+    const line = action === "escalate" ? `ticket escalate ${shellWord(team.trim().split(/\s+/)[0])} ${shellWord(text)}` : `ticket ${action} ${shellWord(text)}`;
+    run(line, () => setText(""));
+  };
+  const closed = t && (t.status === "RESOLVED" || t.status === "ESCALATED");
   return (
     <div className="col">
       {t && (
@@ -146,8 +187,8 @@ function Desk({ data }: { data: any }) {
           {t.impact && <p className="small"><strong>{tr("Impacto:")}</strong> {t.impact}</p>}
           <p className="small muted">{tr("Abierto por {who}", { who: t.reporter })}{t.service ? ` · ${tr("servicio {name}", { name: t.service })}` : ""}</p>
           {t.comments?.map((c: any, i: number) => (
-            <div key={i} className="small" style={{ borderTop: "1px solid var(--border)", padding: "6px 0" }}>
-              <strong>{c.from}</strong> <span className="muted">{c.at}{c.public ? ` · ${tr("público")}` : ""}</span>
+            <div key={i} className={"small dk-comment" + (c.from === "student" ? (c.public ? " pub" : " int") : "")}>
+              <strong>{c.from === "student" ? tr("Tú") : c.from}</strong> <span className="muted">{c.at}{c.from === "student" ? ` · ${c.public ? tr("respuesta pública") : tr("nota interna")}` : ""}</span>
               <div style={{ whiteSpace: "pre-wrap" }}>{c.text}</div>
             </div>
           ))}
@@ -157,42 +198,76 @@ function Desk({ data }: { data: any }) {
               <pre>{a.content}</pre>
             </details>
           ))}
-          <p className="small muted">
-            {tr("Trabaja el ticket desde la terminal:")} <code>ticket show</code>, <code>ticket comment &quot;…&quot;</code>, <code>ticket resolve &quot;…&quot;</code>, <code>team</code>, <code>ask &lt;{tr("nombre")}&gt; &quot;{tr("pregunta")}&quot;</code>.
-          </p>
         </div>
       )}
       {data.actors?.length ? (
         <div className="card">
-          <h3>{tr("Personas")}</h3>
-          <table>
-            <tbody>
-              {data.actors.map((a: any) => (
-                <tr key={a.name}>
-                  <td><strong>{a.name}</strong></td>
-                  <td className="muted small">{label(role, a.role, tr)}</td>
-                  <td className="small">{a.persona}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h3>{tr("Preguntar a una persona")}</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>{tr("Casi ningún ticket llega completo. Pregunta lo que falta: qué recurso, qué error exacto, desde cuándo, qué ha cambiado, quién aprueba.")}</p>
+          <div className="dk-people">
+            {data.actors.map((a: any) => (
+              <label key={a.role} className={"dk-person" + (actor === a.role ? " on" : "")}>
+                <input type="radio" name="dk-who" checked={actor === a.role} onChange={() => setWho(a.role)} />
+                <span>
+                  <strong>{a.name}</strong>
+                  <span className="small muted">{a.persona}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <label className="sr-only" htmlFor="dk-q">{tr("Tu pregunta")}</label>
+          <textarea id="dk-q" rows={2} value={question} placeholder={tr("Escribe tu pregunta…")} onChange={(e) => setQuestion(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); } }} />
+          <div className="row" style={{ marginTop: 8 }}>
+            <button type="button" className="btn" disabled={busy || !question.trim()} onClick={ask}>{tr("Preguntar")}</button>
+          </div>
         </div>
       ) : null}
       {data.questions?.length ? (
         <div className="card">
           <h3>{tr("Conversaciones")}</h3>
           {data.questions.map((q: any, i: number) => (
-            <div key={i} className="small" style={{ marginBottom: 6 }}>
+            <div key={i} className="small" style={{ marginBottom: 8 }}>
               <strong>{tr("Tú → {who}:", { who: q.actor })}</strong> {q.question}
               <div className="muted">{q.answer}</div>
             </div>
           ))}
         </div>
       ) : null}
+      {t && (
+        <div className="card">
+          <h3>{tr("Trabajar el ticket")}</h3>
+          {closed && <p className="small pill ok" style={{ display: "inline-block" }}>{t.status === "RESOLVED" ? tr("Ticket resuelto") : tr("Ticket escalado a {team}", { team: t.escalatedTo })}</p>}
+          <div className="dk-actions" role="radiogroup" aria-label={tr("Qué quieres hacer")}>
+            {DESK_ACTIONS.map(([id, name]) => (
+              <label key={id} className={"dk-action" + (action === id ? " on" : "")}>
+                <input type="radio" name="dk-action" checked={action === id} onChange={() => setAction(id)} />
+                {tr(name)}
+              </label>
+            ))}
+          </div>
+          <p className="small muted">{tr(DESK_ACTIONS.find(([id]) => id === action)![2])}</p>
+          {action === "escalate" && (
+            <>
+              <label className="small" htmlFor="dk-team">{tr("Equipo")}</label>
+              <input id="dk-team" value={team} placeholder={tr("p. ej. csirt, redes, google")} onChange={(e) => setTeam(e.target.value)} />
+            </>
+          )}
+          <label className="sr-only" htmlFor="dk-text">{tr("Texto")}</label>
+          <textarea id="dk-text" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={tr("Escribe aquí…")} />
+          <div className="row" style={{ marginTop: 8 }}>
+            <button type="button" className="btn" disabled={busy || !text.trim() || (action === "escalate" && !team.trim())} onClick={write}>
+              {action === "update" ? tr("Enviar respuesta") : action === "comment" ? tr("Guardar nota") : action === "resolve" ? tr("Resolver") : tr("Escalar")}
+            </button>
+          </div>
+          <p className="small muted">{tr("También desde la terminal:")} <code>ticket update|comment|resolve &quot;…&quot;</code>, <code>ticket escalate EQUIPO &quot;…&quot;</code>, <code>ask QUIÉN &quot;…&quot;</code>.</p>
+        </div>
+      )}
+      <div aria-live="polite">
+        {msg && <p className={"small " + (msg.ok ? "" : "error")} style={{ whiteSpace: "pre-wrap" }}>{msg.text}</p>}
+      </div>
     </div>
   );
 }
-
 
 /** ShellEditor is the Cloud Shell Editor: an explorer of the shell's files and a code editor. */
 function ShellEditor({ sessionId, tick }: { sessionId: string; tick: number }) {
@@ -566,7 +641,7 @@ function Workspace({ session }: { session: SessionInfo }) {
         </div>
       </div>
       <div className="lp-body" id="lp-body" role="tabpanel" aria-labelledby={`lp-tab-${panel}`}>
-        {panel === "desk" && desk && <Desk data={desk} />}
+        {panel === "desk" && desk && <Desk data={desk} sessionId={session.id} onChange={onCommand} />}
         {panel === "tutor" && (
           <Tutor
             sessionId={session.id}

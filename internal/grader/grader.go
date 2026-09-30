@@ -398,7 +398,7 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		if op != nil {
 			detail = fmt.Sprintf("effective policy enforce=%v", op.Enforce)
 		}
-	case "ticket_update", "ticket_resolved", "asked":
+	case "ticket_update", "ticket_resolved", "ticket_escalated", "asked":
 		ok, detail = c.deskCheck(res.Type, ch)
 	default:
 		return CheckResult{Type: res.Type, Desc: res.Desc, Detail: c.p("tipo de comprobación desconocido", "unknown check type")}
@@ -1518,6 +1518,25 @@ func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
 			return false, c.p("ticket sin resolver", "ticket not resolved")
 		}
 		return match(d.Ticket.Resolution), c.p("resuelto: ", "resolved: ") + d.Ticket.Resolution
+	case "ticket_escalated":
+		// Escalated to the expected team (regex), with a reason that carries
+		// the information the next team needs (keywords).
+		if d.Ticket == nil || d.Ticket.Status != "ESCALATED" {
+			return false, c.p("ticket sin escalar", "ticket not escalated")
+		}
+		team := d.Ticket.EscalatedTo
+		if re := str(ch, "team"); re != "" {
+			if ok, _ := regexp.MatchString("(?i)"+re, team); !ok {
+				return false, c.p("escalado a ", "escalated to ") + team
+			}
+		}
+		reason := ""
+		for _, cm := range d.Ticket.Comments {
+			if strings.HasPrefix(cm.Text, "ESCALADO a ") || strings.HasPrefix(cm.Text, "ESCALATED to ") {
+				reason = cm.Text
+			}
+		}
+		return match(reason), c.p("escalado: ", "escalated: ") + reason
 	case "asked":
 		n := 0
 		for _, q := range d.Questions {

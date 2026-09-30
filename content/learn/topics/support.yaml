@@ -1,0 +1,134 @@
+id: support
+branch: observability
+name: [Soporte GCP en banca, GCP support in banking]
+intro: ["El oficio de soporte de plataforma: cómo se trabaja un ticket de principio a fin en un banco regulado, qué preguntar, cómo responder, cuándo y cómo escalar, y qué normas no se saltan nunca.", "The craft of platform support: how a ticket is worked end to end in a regulated bank, what to ask, how to reply, when and how to escalate, and which rules are never bent."]
+concepts:
+  - id: itil
+    term: [Tipos de ticket (ITIL), Ticket types (ITIL)]
+    what: ["Incidencia, petición, problema y cambio se gestionan de forma distinta.", "Incidents, requests, problems and changes are handled differently."]
+    points:
+      - ["Incidencia (INC): algo que funcionaba ha dejado de funcionar. Objetivo: restaurar el servicio cuanto antes.", "Incident (INC): something that worked has stopped working. Goal: restore service as soon as possible."]
+      - ["Petición (REQ): algo nuevo o estándar (un acceso, un recurso). Se cumple con aprobación.", "Request (REQ): something new or standard (access, a resource). Fulfilled with approval."]
+      - ["Problema (PRB): la causa de fondo de incidencias repetidas. Se investiga sin prisa del reloj.", "Problem (PRB): the underlying cause of repeated incidents. Investigated without the clock pressure."]
+      - ["Cambio (CHG): modificar producción. Va con plan, aprobación (CAB) y vuelta atrás.", "Change (CHG): modifying production. Goes with a plan, approval (CAB) and rollback."]
+    tip: ["Arreglar una incidencia no te autoriza a hacer cambios grandes en producción sin pasar por gestión de cambios.", "Fixing an incident doesn't authorize big production changes without going through change management."]
+  - id: priority
+    term: [Prioridad y plazos, Priority and targets]
+    what: ["La prioridad combina impacto (a cuántos afecta) y urgencia (cuánto duele esperar).", "Priority combines impact (how many are affected) and urgency (how much waiting hurts)."]
+    points:
+      - ["P1: servicio crítico caído para muchos. Actualizaciones frecuentes y todos a una.", "P1: critical service down for many. Frequent updates and all hands."]
+      - ["P2: servicio importante degradado o caído para un grupo.", "P2: important service degraded or down for a group."]
+      - ["P3/P4: afecta a pocos o hay alternativa; peticiones y dudas.", "P3/P4: affects few or there's a workaround; requests and questions."]
+      - ["El SLA marca el tiempo de primera respuesta y de resolución; la primera respuesta cuenta aunque aún no tengas la causa.", "The SLA sets first-response and resolution times; the first response counts even before you know the cause."]
+    tip: ["Si dudas entre dos prioridades, pregunta por el impacto: cuántos usuarios, qué proceso de negocio y si hay alternativa.", "If unsure between two priorities, ask about impact: how many users, which business process and whether there's a workaround."]
+  - id: triage
+    term: [Primer contacto y datos que faltan, First contact and missing details]
+    what: ["Casi ningún ticket llega completo: pide lo que falta antes de actuar.", "Almost no ticket arrives complete: ask for what's missing before acting."]
+    points:
+      - ["Qué recurso exacto (proyecto, nombre, región).", "Which exact resource (project, name, region)."]
+      - ["Qué error exacto (texto literal o captura) y desde cuándo.", "Which exact error (literal text or screenshot) and since when."]
+      - ["Qué ha cambiado recientemente y si afecta a otros.", "What changed recently and whether others are affected."]
+      - ["En peticiones: para quién, qué nivel de acceso y quién lo aprueba.", "For requests: for whom, what level of access and who approves it."]
+    tip: ["«No funciona» no es un diagnóstico: pide el mensaje de error literal.", "\"It doesn't work\" isn't a diagnosis: ask for the literal error message."]
+  - id: reply
+    term: [Cómo responder al solicitante, How to reply to the requester]
+    what: ["Una buena respuesta dice qué pasaba, qué se ha hecho y qué tiene que hacer él, sin jerga.", "A good reply says what was happening, what was done and what they need to do, without jargon."]
+    points:
+      - ["Nota interna (para el equipo): causa técnica, evidencias, quién hizo el cambio.", "Internal note (for the team): technical cause, evidence, who made the change."]
+      - ["Respuesta pública (para el solicitante): lenguaje claro y el siguiente paso para él.", "Public reply (for the requester): plain language and their next step."]
+      - ["Al cerrar: qué fallaba, qué has cambiado y cómo lo has comprobado.", "On closing: what was wrong, what you changed and how you verified it."]
+      - ["Si dices que no a algo (quitar una política), explica el porqué y ofrece la alternativa.", "If you say no to something (removing a policy), explain why and offer the alternative."]
+    tip: ["Nunca culpes a una persona en la respuesta pública: explica la causa, no al culpable.", "Never blame a person in the public reply: explain the cause, not the culprit."]
+  - id: escalate
+    term: [Escalar bien, Escalating well]
+    what: ["Escalar es pasar el caso a quien puede resolverlo, con todo lo que necesita.", "Escalating means handing the case to whoever can solve it, with everything they need."]
+    points:
+      - ["Escala cuando no tienes permisos, conocimiento o autoridad, o cuando lo marca el procedimiento (seguridad).", "Escalate when you lack permissions, knowledge or authority, or when procedure says so (security)."]
+      - ["Incluye siempre: qué pasa, dónde, desde cuándo, impacto, qué has comprobado y qué has hecho ya.", "Always include: what's happening, where, since when, impact, what you've checked and what you've already done."]
+      - ["Seguridad: contén, conserva pruebas y escala al CSIRT; no cierres tú el ticket.", "Security: contain, preserve evidence and escalate to the CSIRT; don't close the ticket yourself."]
+    tip: ["Un escalado sin datos obliga al siguiente equipo a empezar de cero: es casi como no escalar.", "An escalation without details forces the next team to start from scratch: it's almost like not escalating."]
+  - id: google-support
+    term: [Casos con el soporte de Google, Cases with Google support]
+    what: ["Cuando el origen está en Google Cloud se abre un caso con su soporte con la prioridad adecuada.", "When the source is in Google Cloud you open a case with its support at the right priority."]
+    points:
+      - ["P1 impacto crítico (servicio inutilizable en producción); P2 impacto alto; P3 impacto medio; P4 impacto bajo.", "P1 critical impact (service unusable in production); P2 high impact; P3 medium impact; P4 low impact."]
+      - ["Datos que piden siempre: ID del proyecto, región/zona, recurso, hora de inicio (con zona horaria), mensaje de error e impacto.", "Details they always ask for: project ID, region/zone, resource, start time (with time zone), error message and impact."]
+      - ["Comprueba antes el estado de Google Cloud (Service Health) para saber si es una incidencia conocida.", "Check Google Cloud status (Service Health) first to know whether it's a known incident."]
+    tip: ["Durante una incidencia de Google no hagas cambios a ciegas en producción: informa y sigue el caso.", "During a Google incident don't make blind production changes: inform and follow the case."]
+  - id: bank-rules
+    term: [Normas de una plataforma bancaria, Rules of a banking platform]
+    what: ["Guardarraíles que no se saltan por un ticket.", "Guardrails that aren't bypassed because of a ticket."]
+    points:
+      - ["Mínimo privilegio, permisos a grupos y sobre el recurso concreto, con aprobación del responsable del dato.", "Least privilege, permissions to groups and on the specific resource, with the data owner's approval."]
+      - ["Sin IPs públicas, sin buckets públicos, sin claves de cuentas de servicio, datos en la UE: políticas de organización.", "No public IPs, no public buckets, no service account keys, data in the EU: organization policies."]
+      - ["Segregación de funciones: quien pide no aprueba; quien desarrolla no despliega solo en producción.", "Segregation of duties: requesters don't approve; developers don't deploy to production alone."]
+      - ["Cambios de producción por IaC y gestión de cambios; los cambios manuales de urgencia se documentan y se pasan al código.", "Production changes through IaC and change management; emergency manual changes are documented and moved into code."]
+      - ["Acceso de emergencia (break-glass): excepcional, temporal, registrado y revisado después.", "Emergency (break-glass) access: exceptional, temporary, logged and reviewed afterwards."]
+    tip: ["Si la solución pasa por saltarse una norma, la respuesta correcta es otra solución o una excepción aprobada, nunca el atajo.", "If the fix means bypassing a rule, the right answer is another fix or an approved exception, never the shortcut."]
+  - id: regulation
+    term: [Marco regulatorio (visión general), Regulatory framework (overview)]
+    what: ["Por qué un banco es tan estricto: la regulación exige control, trazabilidad y resiliencia.", "Why a bank is so strict: regulation demands control, traceability and resilience."]
+    points:
+      - ["RGPD: protección de datos personales de clientes; las brechas se notifican (el CSIRT/DPO lo gestiona).", "GDPR: protection of customers' personal data; breaches are notified (the CSIRT/DPO handles it)."]
+      - ["DORA (UE): resiliencia operativa digital de entidades financieras: gestión de incidentes TIC, pruebas y riesgo de proveedores.", "DORA (EU): digital operational resilience for financial entities: ICT incident management, testing and third-party risk."]
+      - ["PCI DSS: requisitos para datos de tarjetas.", "PCI DSS: requirements for card data."]
+      - ["Directrices de externalización y nube de los supervisores (EBA/BCE): control y auditoría sobre el proveedor cloud.", "Supervisors' outsourcing and cloud guidelines (EBA/ECB): control and audit over the cloud provider."]
+    tip: ["Tu parte: registrar bien los tickets, conservar evidencias y escalar a tiempo; la notificación a supervisores la hacen los equipos responsables.", "Your part: record tickets properly, preserve evidence and escalate on time; notifying supervisors is done by the responsible teams."]
+scenarios:
+  - q: ["Un ticket dice solo «no me funciona la VM». ¿Qué haces primero?", "A ticket just says \"my VM doesn't work\". What do you do first?"]
+    options: [["Pedir el nombre de la VM, el error literal y desde cuándo ocurre", "Ask for the VM name, the literal error and since when"], ["Reiniciar la VM del solicitante", "Restart the requester's VM"], ["Escalarlo al equipo de redes", "Escalate it to the network team"], ["Cerrarlo pidiendo que abra otro con más datos", "Close it asking them to open another with more details"]]
+    answer: 0
+    why: ["Sin datos no hay diagnóstico; pedirlos en el mismo ticket mantiene el historial y el plazo.", "Without details there's no diagnosis; asking in the same ticket keeps the history and the clock."]
+  - q: ["Un desarrollador pide que desactives la política que prohíbe IP públicas porque necesita SSH.", "A developer asks you to disable the no-public-IP policy because they need SSH."]
+    options: [["Mantener la política y ayudarle a entrar por SSH con IAP", "Keep the policy and help them SSH through IAP"], ["Desactivarla solo en su proyecto durante un día", "Disable it on their project for one day only"], ["Darle una IP pública y una regla de cortafuegos restringida a su IP", "Give them a public IP and a firewall rule limited to their IP"], ["Pedirle que use la VM de otro equipo", "Ask them to use another team's VM"]]
+    answer: 0
+    why: ["IAP cubre la necesidad cumpliendo la norma; las excepciones van por el comité de riesgos.", "IAP covers the need within the rule; exceptions go through the risk committee."]
+  - q: ["Security Command Center avisa de un bucket con datos de clientes concedido a allUsers.", "Security Command Center flags a bucket with customer data granted to allUsers."]
+    options: [["Quitar la concesión sin borrar nada, recoger quién y cuándo y escalar al CSIRT", "Remove the grant without deleting anything, collect who and when, and escalate to the CSIRT"], ["Borrar el bucket para eliminar el riesgo", "Delete the bucket to remove the risk"], ["Quitar la concesión y cerrar el ticket como resuelto", "Remove the grant and close the ticket as resolved"], ["Esperar a confirmar si alguien ha descargado algo", "Wait to confirm whether anyone downloaded anything"]]
+    answer: 0
+    why: ["Contener, conservar pruebas y escalar: la investigación y las notificaciones son del CSIRT.", "Contain, preserve evidence and escalate: the CSIRT owns the investigation and notifications."]
+  - q: ["Todas las alertas de una región saltan a la vez y los avisos de estado de Google confirman una incidencia allí.", "All alerts in a region fire at once and Google status notices confirm an incident there."]
+    options: [["Informar a los afectados y abrir caso P1 a Google con proyecto, región, hora e impacto", "Inform those affected and open a P1 case with Google with project, region, time and impact"], ["Reiniciar las VMs de producción una a una", "Restart the production VMs one by one"], ["Mover todo a otra región sin plan", "Move everything to another region without a plan"], ["Esperar a que Google lo arregle sin comunicar nada", "Wait for Google to fix it without communicating anything"]]
+    answer: 0
+    why: ["No se toca producción a ciegas; se informa y se sigue el caso con el proveedor.", "You don't touch production blindly; you inform and follow the case with the provider."]
+  - q: ["Una analista pide «acceso a Secret Manager» para que su app lea su contraseña.", "An analyst asks for \"access to Secret Manager\" so her app can read its password."]
+    options: [["secretAccessor para la cuenta de la app solo sobre ese secreto", "secretAccessor for the app's account on that secret only"], ["secretAccessor en el proyecto para la cuenta de la app", "secretAccessor on the project for the app's account"], ["Secret Manager Admin para la analista", "Secret Manager Admin for the analyst"], ["Poner la contraseña en una variable de entorno", "Put the password in an environment variable"]]
+    answer: 0
+    why: ["En el proyecto hay secretos de otros equipos: el acceso va sobre el secreto concreto.", "The project holds other teams' secrets: access goes on the specific secret."]
+  - q: ["Arreglas una incidencia a mano en la consola porque era urgente. ¿Qué falta?", "You fixed an incident by hand in the console because it was urgent. What's missing?"]
+    options: [["Documentarlo y pedir que el cambio se refleje en el código de IaC", "Document it and ask for the change to be reflected in the IaC code"], ["Nada, ya funciona", "Nothing, it works now"], ["Borrar el registro de auditoría del cambio", "Delete the audit log entry of the change"], ["Desactivar el pipeline de IaC para que no lo revierta", "Disable the IaC pipeline so it doesn't revert it"]]
+    answer: 0
+    why: ["Si no pasa al código, el siguiente despliegue lo revierte y vuelve la incidencia.", "If it isn't moved into code, the next deployment reverts it and the incident returns."]
+quiz:
+  - q: ["¿Qué tipo de ticket es «dadme acceso de lectura al bucket X»?", "What ticket type is \"give me read access to bucket X\"?"]
+    options: [["Petición (REQ)", "Request (REQ)"], ["Incidencia (INC)", "Incident (INC)"], ["Problema (PRB)", "Problem (PRB)"], ["Cambio (CHG)", "Change (CHG)"]]
+    answer: 0
+    why: ["No hay nada roto: es una solicitud estándar que requiere aprobación.", "Nothing is broken: it's a standard request that needs approval."]
+  - q: ["¿Qué debe llevar siempre una nota de resolución?", "What must a resolution note always include?"]
+    options: [["Qué fallaba, qué se cambió y cómo se comprobó", "What was wrong, what was changed and how it was verified"], ["Solo «resuelto»", "Just \"resolved\""], ["El nombre de quien causó el fallo", "The name of whoever caused the fault"], ["Una copia de todos los registros", "A copy of all the logs"]]
+    answer: 0
+    why: ["Sirve para auditoría y para quien se encuentre el mismo problema.", "It serves audit and whoever meets the same problem."]
+  - q: ["¿Qué información pide siempre el soporte de Google al abrir un caso? (Elige 2)", "What does Google support always ask for when opening a case? (Choose 2)"]
+    options: [["ID del proyecto y región o zona afectada", "Project ID and affected region or zone"], ["Hora de inicio e impacto en el negocio", "Start time and business impact"], ["La contraseña de la cuenta de administrador", "The admin account password"], ["Una clave JSON de cuenta de servicio", "A service account JSON key"]]
+    answers: [0, 1]
+    why: ["Nunca se comparten credenciales; se da contexto para localizar el problema.", "Credentials are never shared; you give context to locate the problem."]
+  - q: ["En la escala de prioridad del soporte de Google Cloud, ¿qué significa P1?", "In Google Cloud support priority, what does P1 mean?"]
+    options: [["Impacto crítico: servicio inutilizable en producción", "Critical impact: service unusable in production"], ["Impacto alto: uso muy degradado", "High impact: use severely impaired"], ["Impacto bajo: consulta general", "Low impact: general question"], ["Petición de mejora", "Feature request"]]
+    answer: 0
+    why: ["P2 es impacto alto, P3 medio y P4 bajo.", "P2 is high impact, P3 medium and P4 low."]
+  - q: ["¿Qué es segregación de funciones?", "What is segregation of duties?"]
+    options: [["Que quien pide o desarrolla no sea quien aprueba o despliega solo en producción", "That whoever requests or develops isn't who approves or deploys alone to production"], ["Separar la red en subredes", "Splitting the network into subnets"], ["Tener un proyecto por aplicación", "Having one project per application"], ["Repartir tickets por turnos", "Sharing tickets by shift"]]
+    answer: 0
+    why: ["Evita que una sola persona pueda hacer y aprobar un cambio de riesgo.", "It prevents one person from both making and approving a risky change."]
+  - q: ["¿Qué regula DORA?", "What does DORA regulate?"]
+    options: [["La resiliencia operativa digital de las entidades financieras de la UE", "The digital operational resilience of EU financial entities"], ["La protección de datos personales en general", "Personal data protection in general"], ["La seguridad de los datos de tarjetas", "Card data security"], ["Los precios de los proveedores cloud", "Cloud provider pricing"]]
+    answer: 0
+    why: ["El RGPD cubre datos personales y PCI DSS los datos de tarjetas.", "GDPR covers personal data and PCI DSS card data."]
+  - q: ["En un P2, ¿cuándo publicas la primera actualización?", "In a P2, when do you post the first update?"]
+    options: [["Enseguida, aunque aún no sepas la causa", "Straight away, even before you know the cause"], ["Cuando lo hayas resuelto", "Once you've fixed it"], ["Cuando tengas la causa raíz confirmada", "When the root cause is confirmed"], ["Solo si el solicitante pregunta", "Only if the requester asks"]]
+    answer: 0
+    why: ["Los afectados necesitan saber que alguien está trabajando en ello y cuándo habrá novedades.", "Those affected need to know someone is on it and when there'll be news."]
+  - q: ["¿Qué caracteriza el acceso de emergencia (break-glass)?", "What characterizes emergency (break-glass) access?"]
+    options: [["Excepcional, temporal, registrado y revisado después", "Exceptional, temporary, logged and reviewed afterwards"], ["Permanente para el equipo de guardia", "Permanent for the on-call team"], ["Sin registro para ir más rápido", "Unlogged to go faster"], ["Compartido en una contraseña del equipo", "Shared through a team password"]]
+    answer: 0
+    why: ["Se usa solo en emergencias y deja rastro para la revisión posterior.", "It's used only in emergencies and leaves a trail for later review."]

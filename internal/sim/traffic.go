@@ -203,7 +203,7 @@ func (s *State) runTraffic(t TrafficSpec) {
 				u = parts[1] + path
 			}
 		}
-		res = s.HTTP(HTTPRequest{From: from, URL: u, SourceIP: "198.51.100.23"})
+		res = s.HTTP(HTTPRequest{From: from, URL: u, SourceIP: "198.51.100.23", Principal: t.Principal})
 	}
 	status := res.Status
 	if status == 0 {

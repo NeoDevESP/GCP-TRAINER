@@ -1,0 +1,161 @@
+id: bank-b05-run-403
+title: "INC · La web de gestores da 502 al consultar límites de tarjeta"
+summary: Un servicio de Cloud Run no puede llamar a otro. Sigue la cadena de errores en los registros hasta el permiso que falta y concédelo solo a quien lo necesita, sin abrir el servicio.
+track: support-bank
+day: 5
+level: intermediate
+branch: iam
+type: incident
+mode: production
+skills: [compute.serverless, iam.serviceaccounts, iam.leastprivilege, observability.logging]
+wellArchitected: [security, reliability]
+certs: [ACE, PCSE, PCDE]
+difficulty: 3
+minutes: 35
+baseline: [bank-atlas]
+setup: |
+  gcloud iam service-accounts create banca-web-sa --display-name="web de gestores"
+  gcloud iam service-accounts create limites-sa --display-name="API de límites"
+  gcloud run deploy limites-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --service-account=limites-sa@{{.project}}.iam.gserviceaccount.com --no-allow-unauthenticated
+  gcloud run deploy banca-web --image=europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0 --region={{.region}} --service-account=banca-web-sa@{{.project}}.iam.gserviceaccount.com --no-allow-unauthenticated --set-env-vars=BACKEND_URL=$(gcloud run services describe limites-api --region={{.region}} --format='value(status.url)')
+  gcloud run services add-iam-policy-binding banca-web --region={{.region}} --member=user:gestor@gcplab.dev --role=roles/run.invoker
+  gcloud run services add-iam-policy-binding limites-api --region={{.region}} --member=serviceAccount:banca-web-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+  - {type: iam_remove, resource: "run:limites-api", role: roles/run.invoker, member: "serviceAccount:banca-web-sa@{{.project}}.iam.gserviceaccount.com", actor: "iac-pipeline@{{.project}}.iam.gserviceaccount.com"}
+traffic:
+  - {name: gestores, target: "run:banca-web", path: /shop, rps: 5, principal: "user:gestor@gcplab.dev"}
+ticket:
+  id: INC-21877
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Raúl Soto (Tarjetas)
+  summary: "Desde el despliegue de anoche, la pantalla de límites de tarjeta de la web de gestores (banca-web) da error 502. El resto de la web funciona."
+actors:
+  - role: requester
+    name: Raúl Soto (Tarjetas)
+    persona: Responsable funcional de la web de gestores.
+    fallback: "Solo falla la parte de límites de tarjeta; lo demás va bien."
+    facts:
+      - {keywords: [[despliegue, cambio, anoche, deploy, change]], answer: "Anoche Plataforma pasó el pipeline de IaC para ordenar los permisos de Cloud Run. Nosotros no desplegamos código."}
+  - role: security
+    name: Elena Castro (Seguridad)
+    persona: Arquitecta de seguridad de la plataforma.
+    fallback: "limites-api es interno: nunca público y solo lo invoca banca-web."
+    facts:
+      - {keywords: [[publico, allusers, abrir, todos, public]], answer: "Ni hablar: limites-api expone datos de tarjetas. Solo la identidad de banca-web puede invocarlo."}
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-21877** · *«Desde el despliegue de anoche, la pantalla de límites de tarjeta de la web de gestores
+  > (banca-web) da error 502. El resto de la web funciona.»*
+
+  `banca-web` (Cloud Run, identidad `banca-web-sa`) llama a `limites-api` (Cloud Run privado). Un 502 en un servicio
+  suele ser **el error de otro servicio** que llega de rebote: sigue la cadena en los registros.
+objectives:
+  - Encuentra en los registros el error real detrás del 502
+  - Averigua qué cambió y qué permiso falta
+  - Concede el permiso solo a banca-web-sa y solo sobre limites-api
+  - Comprueba que funciona, contesta y cierra
+hints:
+  - text: "`gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5` muestra el error de banca-web."
+  - text: "`gcloud run services get-iam-policy limites-api --region={{.region}}` muestra quién puede invocarlo."
+solution: |
+  ticket
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5
+  gcloud run services get-iam-policy limites-api --region={{.region}}
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:SetIamPolicy' --limit=3
+  ask requester "¿qué cambió anoche?"
+  gcloud run services add-iam-policy-binding limites-api --region={{.region}} --member=serviceAccount:banca-web-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  ticket comment "Causa: el pipeline de IaC de anoche quitó roles/run.invoker a banca-web-sa sobre limites-api; banca-web recibía 403 y devolvía 502. Restaurado; hay que corregirlo también en el código de IaC."
+  ticket update "Hola Raúl: la web de gestores no podía llamar a la API de límites porque anoche el pipeline de permisos le quitó a banca-web el permiso para invocarla (roles/run.invoker). Lo he restaurado solo para la cuenta de servicio de banca-web y la pantalla de límites vuelve a funcionar."
+  ticket resolve "Restaurado roles/run.invoker de banca-web-sa sobre limites-api; limites-api sigue siendo privado."
+shortcuts:
+  - name: invoker for the service account on the whole project
+    run: |
+      gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:banca-web-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+      ticket update "Hola Raúl, ya funciona: banca-web puede invocar los servicios del proyecto."
+      ticket resolve "Concedido run.invoker a banca-web-sa en el proyecto."
+  - name: make limites-api public
+    run: |
+      gcloud resource-manager org-policies disable-enforce iam.allowedPolicyMemberDomains --project={{.project}}
+      gcloud run services add-iam-policy-binding limites-api --region={{.region}} --member=allUsers --role=roles/run.invoker
+      ticket update "Hola Raúl, ya funciona, he abierto la API de límites."
+      ticket resolve "Abierto limites-api a allUsers para que funcione."
+rubric:
+  - name: Servicio restablecido
+    validator: functional
+    points: 30
+    checks:
+      - {type: http, target: "run:banca-web", path: /shop, principal: "user:gestor@gcplab.dev", status: 200, desc: "La pantalla de límites responde"}
+  - name: Mínimo privilegio
+    validator: security
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: "serviceAccount:banca-web-sa@{{.project}}.iam.gserviceaccount.com", permission: run.routes.invoke, resource: "run:limites-api", desc: "banca-web-sa puede invocar limites-api"}
+      - {type: iam, principal: "serviceAccount:banca-web-sa@{{.project}}.iam.gserviceaccount.com", permission: run.routes.invoke, resource: project, expect: false, desc: "Sin permiso de invocación en todo el proyecto"}
+      - {type: http, target: "run:limites-api", path: /, status: 403, desc: "limites-api sigue siendo privado"}
+      - {type: org_policy, constraint: iam.allowedPolicyMemberDomains, enforced: true, desc: "Restricción de dominios intacta"}
+  - name: Diagnóstico
+    validator: diagnosis
+    points: 15
+    checks:
+      - {type: command, regex: "logging read|get-iam-policy", min: 2, desc: "Registros y política de IAM revisados"}
+  - name: Comunicación
+    validator: evidence
+    points: 25
+    all: true
+    checks:
+      - {type: ticket_update, keywords: [[invoker, invocar, permiso, permission], [banca-web]], desc: "Respuesta con la causa y la solución"}
+      - {type: ticket_resolved, desc: "Ticket cerrado"}
+tutor:
+  - {match: "@intro", title: "", why: "Un 502 en un servicio suele ser el error de otro que llega de rebote. Sigue la cadena en los registros hasta el primer fallo."}
+  - {match: "get-iam-policy limites-api", title: "", why: "Aquí ves quién puede invocar el servicio. Falta la cuenta de banca-web, que es exactamente lo que el 403 de los registros indicaba."}
+  - {match: "add-iam-policy-binding limites-api", title: "", why: "Permiso para invocar solo este servicio y solo para esa cuenta. Darlo en el proyecto o hacer público el servicio expondría datos de tarjetas."}
+en:
+  title: "INC · The managers' web returns 502 when checking card limits"
+  summary: One Cloud Run service can't call another. Follow the chain of errors in the logs to the missing permission and grant it only to whoever needs it, without opening the service.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-21877** · *"Since last night's deployment, the card-limits screen of the managers' web
+    > (banca-web) returns a 502 error. The rest of the web works."*
+
+    `banca-web` (Cloud Run, identity `banca-web-sa`) calls `limites-api` (private Cloud Run). A 502 from one service
+    is often **another service's error** bouncing back: follow the chain in the logs.
+  objectives:
+    - Find in the logs the real error behind the 502
+    - Find out what changed and which permission is missing
+    - Grant the permission only to banca-web-sa and only on limites-api
+    - Check it works, reply and close
+  hints:
+    - "`gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5` shows banca-web's error."
+    - "`gcloud run services get-iam-policy limites-api --region={{.region}}` shows who can invoke it."
+  ticket:
+    summary: "Since last night's deployment, the card-limits screen of the managers' web (banca-web) returns a 502 error. The rest of the web works."
+  text:
+    Raúl Soto (Tarjetas): Raúl Soto (Cards)
+    Responsable funcional de la web de gestores.: Business owner of the managers' web.
+    Solo falla la parte de límites de tarjeta; lo demás va bien.: Only the card-limits part fails; the rest is fine.
+    Anoche Plataforma pasó el pipeline de IaC para ordenar los permisos de Cloud Run. Nosotros no desplegamos código.: Last night Platform ran the IaC pipeline to tidy up Cloud Run permissions. We didn't deploy any code.
+    Elena Castro (Seguridad): Elena Castro (Security)
+    Arquitecta de seguridad de la plataforma.: Platform security architect.
+    "limites-api es interno: nunca público y solo lo invoca banca-web.": "limites-api is internal: never public and only banca-web invokes it."
+    "Ni hablar: limites-api expone datos de tarjetas. Solo la identidad de banca-web puede invocarlo.": "No way: limites-api exposes card data. Only banca-web's identity may invoke it."
+    Servicio restablecido: Service restored
+    La pantalla de límites responde: The limits screen responds
+    Mínimo privilegio: Least privilege
+    banca-web-sa puede invocar limites-api: banca-web-sa can invoke limites-api
+    Sin permiso de invocación en todo el proyecto: No project-wide invoke permission
+    limites-api sigue siendo privado: limites-api is still private
+    Restricción de dominios intacta: Domain restriction intact
+    Diagnóstico: Diagnosis
+    Registros y política de IAM revisados: Logs and IAM policy checked
+    Comunicación: Communication
+    Respuesta con la causa y la solución: Reply with the cause and the fix
+    Ticket cerrado: Ticket closed
+    "Un 502 en un servicio suele ser el error de otro que llega de rebote. Sigue la cadena en los registros hasta el primer fallo.": "A 502 from one service is often another service's error bouncing back. Follow the chain in the logs to the first failure."
+    "Aquí ves quién puede invocar el servicio. Falta la cuenta de banca-web, que es exactamente lo que el 403 de los registros indicaba.": "This shows who can invoke the service. banca-web's account is missing, which is exactly what the 403 in the logs suggested."
+    "Permiso para invocar solo este servicio y solo para esa cuenta. Darlo en el proyecto o hacer público el servicio expondría datos de tarjetas.": "Permission to invoke only this service and only for that account. Granting it on the project or making the service public would expose card data."

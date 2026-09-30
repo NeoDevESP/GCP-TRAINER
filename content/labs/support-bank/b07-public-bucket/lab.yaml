@@ -1,0 +1,150 @@
+id: bank-b07-public-bucket
+title: "SEC · Alerta: un bucket de extractos concedido a allUsers"
+summary: Un hallazgo de seguridad sobre datos de clientes. Contén sin destruir pruebas, averigua quién y cuándo, y escala a Seguridad con la información que necesitan. No es un ticket que cierres tú solo.
+track: support-bank
+day: 7
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills: [security.incident, security.audit, storage.access, iam.orgpolicy]
+wellArchitected: [security]
+certs: [ACE, PCSE]
+difficulty: 3
+minutes: 35
+baseline: [bank-atlas]
+setup: |
+  gcloud storage buckets create gs://extractos-{{.project}} --location=EU --uniform-bucket-level-access
+  echo "extracto" > extracto.pdf
+  gcloud storage cp extracto.pdf gs://extractos-{{.project}}/2026/09/cliente-000123.pdf
+faults:
+  - {type: bucket_public, bucket: "extractos-{{.project}}", actor: "ext-proveedor-migracion@{{.project}}.iam.gserviceaccount.com"}
+ticket:
+  id: SEC-3321
+  kind: SEC
+  priority: P2
+  sla: 1h
+  reporter: Security Command Center (alerta automática)
+  summary: "Hallazgo PUBLIC_BUCKET_ACL: el bucket extractos-{{.project}} tiene una concesión a allUsers. Contiene extractos de clientes."
+actors:
+  - role: security
+    name: CSIRT (equipo de respuesta a incidentes)
+    persona: Equipo de respuesta a incidentes de seguridad del banco.
+    fallback: "Contened sin borrar nada, recoged quién y cuándo, y escaladnos el ticket con esos datos. La notificación a supervisores la gestionamos nosotros."
+    facts:
+      - {keywords: [[borrar, eliminar, delete, bucket]], answer: "¡No borréis el bucket ni los objetos! Son pruebas. Solo quitad el acceso público."}
+      - {keywords: [[acceso, descarg, accedido, leido, expuesto, exposure]], answer: "La prevención de acceso público de la organización debería haberlo bloqueado, pero necesitamos confirmarlo y saber quién hizo el cambio."}
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`). **Ticket de seguridad, plazo de 1 hora.**
+
+  > **SEC-3321** · *Security Command Center: el bucket `extractos-{{.project}}` tiene una concesión a **allUsers**.
+  > Contiene extractos de clientes.*
+
+  En un incidente de seguridad el orden importa: **contener** (quitar el acceso sin destruir pruebas),
+  **recoger evidencias** (quién, cuándo, qué) y **escalar** al CSIRT con esa información. No lo cierres tú: la
+  investigación y las posibles notificaciones las lleva el CSIRT.
+
+  `ticket escalate EQUIPO "motivo"` pasa el ticket a otro equipo.
+objectives:
+  - Confirma la concesión a allUsers y si el acceso público estaba bloqueado
+  - "Contén: quita la concesión y fuerza la prevención de acceso público en el bucket, sin borrar nada"
+  - Averigua en la auditoría quién hizo el cambio y cuándo
+  - Deja una nota interna con las evidencias y escala al CSIRT
+hints:
+  - text: "`gcloud storage buckets get-iam-policy gs://BUCKET` y `gcloud storage buckets describe gs://BUCKET` muestran la concesión y la prevención de acceso público."
+  - text: "`gcloud logging read 'logName:cloudaudit protoPayload.methodName=storage.setIamPermissions'` dice quién la hizo."
+solution: |
+  ticket
+  gcloud storage buckets get-iam-policy gs://extractos-{{.project}}
+  gcloud storage buckets describe gs://extractos-{{.project}}
+  ask security "¿qué hacemos con el bucket, lo borramos?"
+  gcloud storage buckets remove-iam-policy-binding gs://extractos-{{.project}} --member=allUsers --role=roles/storage.objectViewer
+  gcloud storage buckets update gs://extractos-{{.project}} --public-access-prevention
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName=storage.setIamPermissions' --limit=3 --format='value(timestamp,protoPayload.authenticationInfo.principalEmail)'
+  ticket comment "Evidencias: concesión roles/storage.objectViewer a allUsers en extractos, hecha por ext-proveedor-migracion (cuenta de servicio del proveedor de migración) según la auditoría. La prevención de acceso público de la organización estaba aplicada. Contenido: quitada la concesión y forzada la prevención en el bucket; no se ha borrado nada."
+  ticket escalate csirt "Contenido: quitado allUsers de extractos-{{.project}} y prevención de acceso público forzada. Cambio hecho por ext-proveedor-migracion según la auditoría. Datos de clientes; pendiente de vuestra investigación y posibles notificaciones."
+shortcuts:
+  - name: delete the bucket
+    run: |
+      gcloud storage rm -r gs://extractos-{{.project}}
+      ticket resolve "Borrado el bucket con los extractos públicos."
+  - name: fix and close without escalating
+    run: |
+      gcloud storage buckets remove-iam-policy-binding gs://extractos-{{.project}} --member=allUsers --role=roles/storage.objectViewer
+      ticket resolve "Quitado allUsers del bucket de extractos, resuelto."
+rubric:
+  - name: Contención
+    validator: security
+    points: 30
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: allUsers, permission: storage.objects.get, resource: "bucket:extractos-{{.project}}", expect: false, desc: "Nadie anónimo puede leer los extractos"}
+      - {type: exists, path: "buckets[\"extractos-{{.project}}\"]", expect: {publicAccessPrevention: enforced}, desc: "Prevención de acceso público forzada en el bucket"}
+  - name: Pruebas conservadas
+    validator: security
+    points: 15
+    critical: true
+    checks:
+      - {type: exists, path: "buckets[\"extractos-{{.project}}\"]", desc: "El bucket y sus objetos siguen ahí"}
+  - name: Evidencias
+    validator: diagnosis
+    points: 20
+    all: true
+    checks:
+      - {type: command, regex: "logging read .*(cloudaudit|setIamPermissions)", min: 1, desc: "Auditoría consultada"}
+      - {type: ticket_update, public: false, keywords: [[ext-proveedor, proveedor, migracion]], desc: "Nota interna con quién hizo el cambio"}
+  - name: Escalado correcto
+    validator: evidence
+    points: 35
+    checks:
+      - {type: ticket_escalated, team: "csirt|segur|secur|soc", keywords: [[allusers, publico, public], [ext-proveedor, proveedor, migracion], [conten, quitad, removed, contain]], desc: "Escalado al CSIRT con qué, quién y qué se ha contenido"}
+tutor:
+  - {match: "@intro", title: "", why: "Incidente de seguridad: contener, conservar pruebas y escalar. No borres nada y no lo cierres tú: la investigación y las notificaciones son del CSIRT."}
+  - {match: "remove-iam-policy-binding", title: "Contén quitando la concesión pública", why: "Quitar allUsers corta el acceso anónimo sin tocar los datos, que son pruebas."}
+  - {match: "^ticket escalate", title: "", why: "Al CSIRT le das lo que necesita para empezar: qué se expuso, quién hizo el cambio según la auditoría y qué has contenido ya."}
+en:
+  title: "SEC · Alert: a statements bucket granted to allUsers"
+  summary: A security finding on customer data. Contain without destroying evidence, find out who and when, and escalate to Security with the information they need. This isn't a ticket you close on your own.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`). **Security ticket, 1-hour target.**
+
+    > **SEC-3321** · *Security Command Center: bucket `extractos-{{.project}}` has a grant to **allUsers**.
+    > It holds customer statements.*
+
+    In a security incident order matters: **contain** (remove access without destroying evidence),
+    **collect evidence** (who, when, what) and **escalate** to the CSIRT with that information. Don't close it
+    yourself: the CSIRT owns the investigation and any notifications.
+
+    `ticket escalate TEAM "reason"` hands the ticket to another team.
+  objectives:
+    - Confirm the allUsers grant and whether public access was blocked
+    - "Contain: remove the grant and enforce public access prevention on the bucket, without deleting anything"
+    - Find in the audit logs who made the change and when
+    - Leave an internal note with the evidence and escalate to the CSIRT
+  hints:
+    - "`gcloud storage buckets get-iam-policy gs://BUCKET` and `gcloud storage buckets describe gs://BUCKET` show the grant and public access prevention."
+    - "`gcloud logging read 'logName:cloudaudit protoPayload.methodName=storage.setIamPermissions'` tells you who did it."
+  ticket:
+    summary: "Finding PUBLIC_BUCKET_ACL: bucket extractos-{{.project}} has a grant to allUsers. It holds customer statements."
+  text:
+    Security Command Center (alerta automática): Security Command Center (automatic alert)
+    CSIRT (equipo de respuesta a incidentes): CSIRT (incident response team)
+    Equipo de respuesta a incidentes de seguridad del banco.: The bank's security incident response team.
+    Contened sin borrar nada, recoged quién y cuándo, y escaladnos el ticket con esos datos. La notificación a supervisores la gestionamos nosotros.: Contain without deleting anything, collect who and when, and escalate the ticket to us with that information. We handle any notification to supervisors.
+    ¡No borréis el bucket ni los objetos! Son pruebas. Solo quitad el acceso público.: Don't delete the bucket or the objects! They're evidence. Just remove the public access.
+    La prevención de acceso público de la organización debería haberlo bloqueado, pero necesitamos confirmarlo y saber quién hizo el cambio.: The organization's public access prevention should have blocked it, but we need to confirm that and know who made the change.
+    Contención: Containment
+    Nadie anónimo puede leer los extractos: No anonymous user can read the statements
+    Prevención de acceso público forzada en el bucket: Public access prevention enforced on the bucket
+    Pruebas conservadas: Evidence preserved
+    El bucket y sus objetos siguen ahí: The bucket and its objects are still there
+    Evidencias: Evidence
+    Auditoría consultada: Audit logs checked
+    Nota interna con quién hizo el cambio: Internal note with who made the change
+    Escalado correcto: Correct escalation
+    Escalado al CSIRT con qué, quién y qué se ha contenido: Escalated to the CSIRT with what, who and what was contained
+    "Incidente de seguridad: contener, conservar pruebas y escalar. No borres nada y no lo cierres tú: la investigación y las notificaciones son del CSIRT.": "Security incident: contain, preserve evidence and escalate. Don't delete anything and don't close it yourself: the CSIRT owns the investigation and notifications."
+    "Quitar allUsers corta el acceso anónimo sin tocar los datos, que son pruebas.": "Removing allUsers cuts anonymous access without touching the data, which is evidence."
+    "Contén quitando la concesión pública": "Contain by removing the public grant"
+    "Al CSIRT le das lo que necesita para empezar: qué se expuso, quién hizo el cambio según la auditoría y qué has contenido ya.": "Give the CSIRT what it needs to start: what was exposed, who made the change according to the audit logs and what you've already contained."

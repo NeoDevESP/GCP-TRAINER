@@ -1,0 +1,166 @@
+id: bank-b01-access-request
+title: "REQ · «Necesito acceso al bucket de riesgos»"
+summary: La petición más habitual en soporte. Pide los datos que faltan, concede solo lectura al grupo y solo en el bucket correcto, y contesta al solicitante.
+track: support-bank
+day: 1
+level: basic
+branch: iam
+type: incident
+mode: production
+skills: [iam.leastprivilege, iam.roles, storage.access]
+wellArchitected: [security]
+certs: [ACE, PCSE]
+difficulty: 2
+minutes: 25
+baseline: [bank-atlas]
+setup: |
+  gcloud storage buckets create gs://riesgos-informes-{{.project}} --location=EU --uniform-bucket-level-access
+  gcloud storage buckets create gs://riesgos-clientes-{{.project}} --location=EU --uniform-bucket-level-access
+  echo "informe" > informe.csv
+  gcloud storage cp informe.csv gs://riesgos-informes-{{.project}}/2026/09/informe-mensual.csv
+ticket:
+  id: REQ-10421
+  kind: REQ
+  priority: P4
+  sla: 2d
+  reporter: Laura Gómez (Riesgos)
+  summary: "Hola, necesito acceso al bucket de riesgos para sacar los informes. ¿Me lo das? Gracias."
+actors:
+  - role: requester
+    name: Laura Gómez (Riesgos)
+    persona: Analista de riesgos. Pide las cosas rápido y con pocos detalles.
+    fallback: "Es para sacar los informes de riesgos de cada mes, como siempre."
+    facts:
+      - {keywords: [[bucket, cual, nombre, informes, clientes, which]], answer: "El de informes: riesgos-informes-{{.project}}. El de clientes no lo necesito para nada."}
+      - {keywords: [[leer, lectura, escribir, subir, modificar, read, write, permiso, borrar]], answer: "Solo descargar los CSV. No tengo que subir ni borrar nada."}
+      - {keywords: [[equipo, grupo, compañeros, solo tu, solo para ti, team, group, alguien mas]], answer: "Lo necesitamos todo el equipo de analistas. Estamos en el grupo riesgos-analistas@gcplab.dev."}
+  - role: owner
+    name: Carlos Ruiz (responsable del dato)
+    persona: Propietario de los datos de riesgos. Aprueba los accesos.
+    fallback: "Si es lectura sobre informes para el grupo de analistas, aprobado. Nada sobre clientes."
+    facts:
+      - {keywords: [[aprueb, autoriz, ok, visto bueno, approve, conforme]], answer: "Aprobado: lectura sobre riesgos-informes para el grupo riesgos-analistas. El bucket de clientes tiene datos personales y no entra."}
+story: |
+  Trabajas en **soporte de la plataforma GCP de Banco Atlas** (proyecto `{{.project}}`). Te entra este ticket:
+
+  > **REQ-10421** · *«Hola, necesito acceso al bucket de riesgos para sacar los informes. ¿Me lo das? Gracias.»*
+
+  Así se trabaja un ticket en la terminal:
+
+  - `ticket` muestra el ticket.
+  - `team` lista a las personas implicadas y `ask QUIÉN "pregunta"` les pregunta lo que falta.
+  - `ticket update "texto"` contesta al solicitante; `ticket comment "texto"` deja una nota interna.
+  - `ticket resolve "qué has hecho"` lo cierra; `ticket escalate EQUIPO "motivo"` lo pasa a otro equipo.
+
+  Normas del banco: los permisos se dan a **grupos**, nunca a personas; con el **mínimo privilegio**; sobre el
+  **recurso concreto**, no sobre el proyecto; y con el visto bueno del **responsable del dato**.
+objectives:
+  - Averigua qué bucket, qué tipo de acceso y para quién
+  - Consigue la aprobación del responsable del dato
+  - Concede solo lectura al grupo y solo en ese bucket
+  - Contesta al solicitante y cierra el ticket
+hints:
+  - text: "Pregunta a Laura qué bucket es, si solo necesita leer y si es solo para ella: `ask requester \"¿qué bucket y qué necesitas hacer?\"`."
+  - text: "Para leer objetos basta `roles/storage.objectViewer`, concedido en el bucket: `gcloud storage buckets add-iam-policy-binding gs://BUCKET --member=group:... --role=...`."
+solution: |
+  ticket
+  ask requester "¿qué bucket necesitas exactamente?"
+  ask requester "¿solo leer o también subir o borrar?"
+  ask requester "¿es solo para ti o para tu equipo?"
+  ask owner "¿apruebas lectura de riesgos-informes para el grupo riesgos-analistas?"
+  gcloud storage buckets add-iam-policy-binding gs://riesgos-informes-{{.project}} --member=group:riesgos-analistas@gcplab.dev --role=roles/storage.objectViewer
+  ticket update "Hola Laura: ya tenéis acceso de lectura al bucket riesgos-informes para todo el grupo riesgos-analistas, aprobado por Carlos Ruiz. Podéis descargar los informes con gcloud storage cp o desde la consola. El bucket de clientes no está incluido porque contiene datos personales."
+  ticket resolve "Concedido roles/storage.objectViewer en riesgos-informes al grupo riesgos-analistas, aprobado por el responsable del dato."
+shortcuts:
+  - name: project-wide storage admin for the requester
+    run: |
+      gcloud projects add-iam-policy-binding {{.project}} --member=user:laura.gomez@gcplab.dev --role=roles/storage.admin
+      ticket update "Hola Laura, ya tienes acceso de administrador a Cloud Storage en el proyecto."
+      ticket resolve "Concedido storage admin en el proyecto a Laura."
+  - name: bucket read access for the person instead of the group
+    run: |
+      gcloud storage buckets add-iam-policy-binding gs://riesgos-informes-{{.project}} --member=user:laura.gomez@gcplab.dev --role=roles/storage.objectViewer
+      ticket update "Hola Laura, ya tienes acceso de lectura al bucket riesgos-informes."
+      ticket resolve "Concedido lectura en riesgos-informes a Laura."
+rubric:
+  - name: Acceso correcto
+    validator: security
+    points: 40
+    critical: true
+    all: true
+    checks:
+      - {type: iam, principal: "group:riesgos-analistas@gcplab.dev", permission: storage.objects.get, resource: "bucket:riesgos-informes-{{.project}}", desc: "El grupo puede leer los informes"}
+      - {type: iam, principal: "group:riesgos-analistas@gcplab.dev", permission: storage.objects.create, resource: "bucket:riesgos-informes-{{.project}}", expect: false, desc: "El grupo no puede subir ni modificar"}
+      - {type: iam, principal: "group:riesgos-analistas@gcplab.dev", permission: storage.objects.get, resource: "bucket:riesgos-clientes-{{.project}}", expect: false, desc: "Sin acceso al bucket de clientes"}
+      - {type: iam, principal: "user:laura.gomez@gcplab.dev", permission: storage.objects.get, resource: "bucket:riesgos-clientes-{{.project}}", expect: false, desc: "Ningún permiso amplio a la persona"}
+  - name: Datos y aprobación
+    validator: diagnosis
+    points: 25
+    all: true
+    checks:
+      - {type: asked, actor: requester, min: 2, desc: "Se han pedido los datos que faltaban"}
+      - {type: asked, actor: owner, min: 1, desc: "Aprobación del responsable del dato"}
+  - name: Comunicación con el solicitante
+    validator: evidence
+    points: 35
+    all: true
+    checks:
+      - {type: ticket_update, keywords: [[lectura, leer, read, descargar], [grupo, group, riesgos-analistas]], desc: "Respuesta clara: qué acceso, para quién"}
+      - {type: ticket_resolved, keywords: [[objectviewer, lectura, read]], desc: "Ticket cerrado con lo que se ha hecho"}
+tutor:
+  - {match: "@intro", title: "", why: "Una petición de acceso casi nunca llega completa. Antes de conceder nada necesitas cuatro datos: qué recurso, qué tipo de acceso, para quién y quién lo aprueba."}
+  - {match: "^ask owner", title: "Pide el visto bueno del responsable del dato", why: "En banca los datos tienen un propietario que decide quién accede. Sin su aprobación, el acceso no se da aunque lo pida alguien de dentro."}
+  - {match: "add-iam-policy-binding gs://riesgos-informes", title: "", why: "Grupo en lugar de persona, lectura en lugar de administración, y en el bucket en lugar del proyecto: así cuando alguien cambie de equipo basta con sacarle del grupo."}
+en:
+  title: "REQ · \"I need access to the risk bucket\""
+  summary: The most common support request. Ask for the missing details, grant read-only to the group and only on the right bucket, and reply to the requester.
+  story: |
+    You work in **GCP platform support at Banco Atlas** (project `{{.project}}`). This ticket comes in:
+
+    > **REQ-10421** · *"Hi, I need access to the risk bucket to pull the reports. Can you give it to me? Thanks."*
+
+    This is how you work a ticket in the terminal:
+
+    - `ticket` shows the ticket.
+    - `team` lists the people involved and `ask WHO "question"` asks them for what's missing.
+    - `ticket update "text"` replies to the requester; `ticket comment "text"` leaves an internal note.
+    - `ticket resolve "what you did"` closes it; `ticket escalate TEAM "reason"` hands it to another team.
+
+    Bank rules: permissions go to **groups**, never to individuals; with **least privilege**; on the
+    **specific resource**, not the project; and with the **data owner's** approval.
+  objectives:
+    - Find out which bucket, what kind of access and for whom
+    - Get the data owner's approval
+    - Grant read-only to the group and only on that bucket
+    - Reply to the requester and close the ticket
+  hints:
+    - "Ask Laura which bucket it is, whether she only needs to read and whether it's just for her: `ask requester \"which bucket and what do you need to do?\"`."
+    - "Reading objects only needs `roles/storage.objectViewer`, granted on the bucket: `gcloud storage buckets add-iam-policy-binding gs://BUCKET --member=group:... --role=...`."
+  ticket:
+    summary: "Hi, I need access to the risk bucket to pull the reports. Can you give it to me? Thanks."
+  text:
+    Laura Gómez (Riesgos): Laura Gómez (Risk)
+    Analista de riesgos. Pide las cosas rápido y con pocos detalles.: Risk analyst. Asks for things quickly and with few details.
+    Es para sacar los informes de riesgos de cada mes, como siempre.: It's to pull the monthly risk reports, as always.
+    "El de informes: riesgos-informes-{{.project}}. El de clientes no lo necesito para nada.": "The reports one: riesgos-informes-{{.project}}. I don't need the customers one at all."
+    Solo descargar los CSV. No tengo que subir ni borrar nada.: Just download the CSVs. I don't need to upload or delete anything.
+    Lo necesitamos todo el equipo de analistas. Estamos en el grupo riesgos-analistas@gcplab.dev.: The whole analyst team needs it. We're in the group riesgos-analistas@gcplab.dev.
+    Carlos Ruiz (responsable del dato): Carlos Ruiz (data owner)
+    Propietario de los datos de riesgos. Aprueba los accesos.: Owner of the risk data. Approves access.
+    Si es lectura sobre informes para el grupo de analistas, aprobado. Nada sobre clientes.: If it's read access to the reports for the analyst group, approved. Nothing on customers.
+    "Aprobado: lectura sobre riesgos-informes para el grupo riesgos-analistas. El bucket de clientes tiene datos personales y no entra.": "Approved: read on riesgos-informes for the riesgos-analistas group. The customers bucket holds personal data and is out of scope."
+    Acceso correcto: Correct access
+    El grupo puede leer los informes: The group can read the reports
+    El grupo no puede subir ni modificar: The group cannot upload or modify
+    Sin acceso al bucket de clientes: No access to the customers bucket
+    Ningún permiso amplio a la persona: No broad permission for the individual
+    Datos y aprobación: Details and approval
+    Se han pedido los datos que faltaban: The missing details were requested
+    Aprobación del responsable del dato: Data owner's approval
+    Comunicación con el solicitante: Communication with the requester
+    "Respuesta clara: qué acceso, para quién": "Clear reply: what access, for whom"
+    Ticket cerrado con lo que se ha hecho: Ticket closed with what was done
+    "Una petición de acceso casi nunca llega completa. Antes de conceder nada necesitas cuatro datos: qué recurso, qué tipo de acceso, para quién y quién lo aprueba.": "An access request almost never arrives complete. Before granting anything you need four things: which resource, what kind of access, for whom and who approves it."
+    "En banca los datos tienen un propietario que decide quién accede. Sin su aprobación, el acceso no se da aunque lo pida alguien de dentro.": "In banking, data has an owner who decides who gets access. Without their approval no access is granted, even to an insider."
+    "Pide el visto bueno del responsable del dato": "Get the data owner's approval"
+    "Grupo en lugar de persona, lectura en lugar de administración, y en el bucket en lugar del proyecto: así cuando alguien cambie de equipo basta con sacarle del grupo.": "Group instead of person, read instead of admin, and on the bucket instead of the project: when someone changes team you just remove them from the group."

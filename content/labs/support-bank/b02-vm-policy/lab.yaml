@@ -1,0 +1,156 @@
+id: bank-b02-vm-policy
+title: "INC · «No me deja crear una VM: constraint violated»"
+summary: Un desarrollador choca con una política de organización y pide que se la quites. No se quita; se le ayuda a hacerlo bien (sin IP pública y con SSH por IAP) y se le explica por qué.
+track: support-bank
+day: 2
+level: basic
+branch: iam
+type: incident
+mode: production
+skills: [iam.orgpolicy, compute.vm, networking.firewall]
+wellArchitected: [security]
+certs: [ACE, PCSE]
+difficulty: 2
+minutes: 25
+baseline: [bank-atlas]
+ticket:
+  id: INC-20877
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Javier Martín (Desarrollo · Pagos)
+  summary: "Intento crear una VM de pruebas y me sale «Constraint constraints/compute.vmExternalIpAccess violated». ¿Podéis quitar esa restricción del proyecto? Necesito entrar por SSH para instalar mis herramientas."
+actors:
+  - role: requester
+    name: Javier Martín (Desarrollo · Pagos)
+    persona: Desarrollador. Tiene prisa por empezar a probar.
+    fallback: "Solo quiero una VM pequeña para probar cosas y poder entrar por SSH."
+    facts:
+      - {keywords: [[comando, command, como, ejecut, nombre, maquina, vm]], answer: "Lancé «gcloud compute instances create pagos-test --zone={{.zone}}» sin más. La quería llamar pagos-test, en la subred de aplicaciones."}
+      - {keywords: [[ssh, entrar, acceder, conectar, ip]], answer: "Le puse IP pública porque es la única forma que conozco de entrar por SSH."}
+      - {keywords: [[internet, paquetes, descargar, apt, instalar]], answer: "Tengo que instalar paquetes con apt, así que necesita salir a internet."}
+  - role: security
+    name: Elena Castro (Seguridad)
+    persona: Arquitecta de seguridad de la plataforma.
+    fallback: "Las políticas de organización no se desactivan por un ticket. Si hace falta una excepción, va por el comité de riesgos."
+    facts:
+      - {keywords: [[quitar, desactivar, excepcion, restriccion, politica, disable, exception, policy]], answer: "No: ninguna VM del banco lleva IP pública. Para SSH se usa IAP y para salir a internet ya tenéis Cloud NAT en la red."}
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-20877** · *«Intento crear una VM de pruebas y me sale «Constraint constraints/compute.vmExternalIpAccess
+  > violated». ¿Podéis quitar esa restricción del proyecto? Necesito entrar por SSH.»*
+
+  Una política de organización no es una avería: es una norma del banco. Tu trabajo es que el desarrollador pueda
+  trabajar **dentro de las normas** y que entienda por qué.
+
+  Recuerda: `ticket`, `team`, `ask QUIÉN "pregunta"`, `ticket update "texto"`, `ticket resolve "texto"`.
+objectives:
+  - Reproduce el error y localiza la política que lo provoca
+  - Consulta con Seguridad en lugar de desactivar la política
+  - Crea la VM pagos-test sin IP pública y demuestra el acceso por SSH con IAP
+  - Explica al solicitante qué pasaba y cómo trabajar a partir de ahora
+hints:
+  - text: "`gcloud resource-manager org-policies list --project={{.project}}` muestra las políticas aplicadas."
+  - text: "`--no-address` crea la VM sin IP pública; `gcloud compute ssh VM --tunnel-through-iap` entra por IAP (la regla allow-iap-ssh ya existe)."
+solution: |
+  ticket
+  ask requester "¿qué comando lanzaste y para qué necesitas la IP pública?"
+  gcloud resource-manager org-policies list --project={{.project}}
+  ask security "¿podemos quitar la política o hacer una excepción?"
+  gcloud compute instances create pagos-test --zone={{.zone}} --machine-type=e2-small --subnet=app-subnet --no-address --labels=app=pagos,env=test
+  gcloud compute ssh pagos-test --zone={{.zone}} --tunnel-through-iap --command=hostname
+  ticket update "Hola Javier: el error lo produce la política de organización compute.vmExternalIpAccess, que prohíbe IP públicas en todas las VMs del banco, y Seguridad no la va a desactivar. Te he creado pagos-test sin IP pública en app-subnet. Entra con gcloud compute ssh pagos-test --tunnel-through-iap (SSH por IAP) y para instalar paquetes sale a internet por Cloud NAT. Para futuras VMs usa --no-address."
+  ticket resolve "Creada pagos-test sin IP pública y verificado el SSH por IAP; política compute.vmExternalIpAccess mantenida."
+shortcuts:
+  - name: disable the organization policy
+    run: |
+      gcloud resource-manager org-policies disable-enforce compute.vmExternalIpAccess --project={{.project}}
+      gcloud compute instances create pagos-test --zone={{.zone}} --machine-type=e2-small --subnet=app-subnet --labels=app=pagos,env=test
+      ticket update "Hola Javier, he quitado la restricción del proyecto y ya tienes la VM con IP pública."
+      ticket resolve "Desactivada la política y creada la VM con IP pública."
+rubric:
+  - name: Normas del banco intactas
+    validator: security
+    points: 35
+    critical: true
+    all: true
+    checks:
+      - {type: org_policy, constraint: compute.vmExternalIpAccess, enforced: true, desc: "La política sigue aplicada"}
+      - {type: count, collection: instances, where: {natIP: {empty: false}}, max: 0, desc: "Ninguna VM con IP pública"}
+  - name: El desarrollador puede trabajar
+    validator: functional
+    points: 30
+    all: true
+    checks:
+      - {type: exists, path: "instances[\"pagos-test\"]", expect: {status: RUNNING}, desc: "pagos-test creada y en marcha"}
+      - {type: command, regex: "compute ssh .*tunnel-through-iap", min: 1, desc: "Acceso por SSH con IAP comprobado"}
+      - {type: egress, from: "vm:pagos-test", desc: "Sale a internet por Cloud NAT"}
+  - name: Diagnóstico y consulta
+    validator: diagnosis
+    points: 10
+    all: true
+    checks:
+      - {type: command, regex: "org-policies (list|describe)", min: 1, desc: "Se ha localizado la política"}
+      - {type: asked, actor: security, min: 1, desc: "Consultado con Seguridad"}
+  - name: Comunicación con el solicitante
+    validator: evidence
+    points: 25
+    all: true
+    checks:
+      - {type: ticket_update, keywords: [[politica, policy, vmexternalipaccess, norma], [iap], [no-address, sin ip, ip publica, public ip, external ip]], desc: "Explica la política y cómo trabajar con IAP"}
+      - {type: ticket_resolved, desc: "Ticket cerrado"}
+tutor:
+  - {match: "@intro", title: "", why: "Cuando alguien pide «quitar una restricción», casi siempre hay una forma de hacer lo que necesita cumpliendo la norma. Tu trabajo es encontrarla y explicarla."}
+  - {match: "org-policies (list|describe)", title: "", why: "El mensaje de error nombra la restricción; aquí ves todas las que aplica el banco al proyecto."}
+  - {match: "compute ssh .*tunnel-through-iap", title: "", why: "IAP permite entrar por SSH a VMs sin IP pública, con la identidad de Google y registrado en auditoría. Es la alternativa segura a abrir el puerto 22."}
+en:
+  title: "INC · \"It won't let me create a VM: constraint violated\""
+  summary: A developer hits an organization policy and asks you to remove it. You don't; you help them do it right (no public IP, SSH through IAP) and explain why.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-20877** · *"I'm trying to create a test VM and I get "Constraint constraints/compute.vmExternalIpAccess
+    > violated". Can you remove that restriction from the project? I need to SSH in."*
+
+    An organization policy isn't a fault: it's a bank rule. Your job is to let the developer work
+    **within the rules** and make sure they understand why.
+
+    Remember: `ticket`, `team`, `ask WHO "question"`, `ticket update "text"`, `ticket resolve "text"`.
+  objectives:
+    - Reproduce the error and find the policy behind it
+    - Check with Security instead of disabling the policy
+    - Create the pagos-test VM without a public IP and prove SSH access through IAP
+    - Explain to the requester what happened and how to work from now on
+  hints:
+    - "`gcloud resource-manager org-policies list --project={{.project}}` shows the enforced policies."
+    - "`--no-address` creates the VM without a public IP; `gcloud compute ssh VM --tunnel-through-iap` connects through IAP (the allow-iap-ssh rule already exists)."
+  ticket:
+    summary: "I'm trying to create a test VM and I get \"Constraint constraints/compute.vmExternalIpAccess violated\". Can you remove that restriction from the project? I need to SSH in to install my tools."
+  text:
+    Javier Martín (Desarrollo · Pagos): Javier Martín (Development · Payments)
+    Desarrollador. Tiene prisa por empezar a probar.: Developer. In a hurry to start testing.
+    Solo quiero una VM pequeña para probar cosas y poder entrar por SSH.: I just want a small VM to try things and to SSH into.
+    "Lancé «gcloud compute instances create pagos-test --zone={{.zone}}» sin más. La quería llamar pagos-test, en la subred de aplicaciones.": "I ran \"gcloud compute instances create pagos-test --zone={{.zone}}\" and nothing else. I wanted to call it pagos-test, in the applications subnet."
+    Le puse IP pública porque es la única forma que conozco de entrar por SSH.: I gave it a public IP because it's the only way I know to SSH in.
+    Tengo que instalar paquetes con apt, así que necesita salir a internet.: I need to install packages with apt, so it needs internet access.
+    Elena Castro (Seguridad): Elena Castro (Security)
+    Arquitecta de seguridad de la plataforma.: Platform security architect.
+    Las políticas de organización no se desactivan por un ticket. Si hace falta una excepción, va por el comité de riesgos.: Organization policies aren't disabled because of a ticket. If an exception is needed, it goes through the risk committee.
+    "No: ninguna VM del banco lleva IP pública. Para SSH se usa IAP y para salir a internet ya tenéis Cloud NAT en la red.": "No: no bank VM gets a public IP. SSH goes through IAP and you already have Cloud NAT in the network for internet access."
+    Normas del banco intactas: Bank rules intact
+    La política sigue aplicada: The policy is still enforced
+    Ninguna VM con IP pública: No VM with a public IP
+    El desarrollador puede trabajar: The developer can work
+    pagos-test creada y en marcha: pagos-test created and running
+    Acceso por SSH con IAP comprobado: SSH access through IAP verified
+    Sale a internet por Cloud NAT: Reaches the internet through Cloud NAT
+    Diagnóstico y consulta: Diagnosis and consultation
+    Se ha localizado la política: The policy was located
+    Consultado con Seguridad: Checked with Security
+    Comunicación con el solicitante: Communication with the requester
+    Explica la política y cómo trabajar con IAP: Explains the policy and how to work with IAP
+    Ticket cerrado: Ticket closed
+    "Cuando alguien pide «quitar una restricción», casi siempre hay una forma de hacer lo que necesita cumpliendo la norma. Tu trabajo es encontrarla y explicarla.": "When someone asks to \"remove a restriction\", there's almost always a way to do what they need within the rule. Your job is to find it and explain it."
+    "El mensaje de error nombra la restricción; aquí ves todas las que aplica el banco al proyecto.": "The error message names the constraint; here you see every one the bank enforces on the project."
+    "IAP permite entrar por SSH a VMs sin IP pública, con la identidad de Google y registrado en auditoría. Es la alternativa segura a abrir el puerto 22.": "IAP lets you SSH into VMs without a public IP, using your Google identity and recorded in the audit logs. It's the secure alternative to opening port 22."

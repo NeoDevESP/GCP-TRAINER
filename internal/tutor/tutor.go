@@ -248,12 +248,24 @@ func explainCmd(cmd string, en bool) (Step, bool) {
 		st.Phase = Communicate
 		st.Where = Where{Path: L("Panel del laboratorio › Ticket", "Lab panel › Ticket"), Action: "panel", Target: "desk"}
 		st.Match = prefixMatch(ws[:min(2, len(ws))])
-		if arg(ws, 1) == "resolve" {
+		switch arg(ws, 1) {
+		case "", "show":
+			st.Phase = Investigate
+			st.Title = L("Lee el ticket con calma", "Read the ticket carefully")
+			st.Why = L("Antes de tocar nada: quién lo pide, prioridad y plazo, qué dice exactamente y qué información falta.", "Before touching anything: who is asking, priority and target time, what it says exactly and what information is missing.")
+			st.Match = "^ticket\\s*$|^ticket\\s+show"
+		case "resolve":
 			st.Title = L("Cierra el ticket explicando la solución", "Resolve the ticket explaining the fix")
 			st.Why = L("Cerrar bien un incidente es decir qué pasó, qué se hizo y cómo se comprobó.", "Closing an incident well means saying what happened, what was done and how it was checked.")
-		} else {
-			st.Title = L("Informa al negocio en el ticket", "Update the business on the ticket")
-			st.Why = L("Durante un incidente, informar pronto (qué pasa, impacto, siguiente paso y cuándo vuelves a informar) es parte del trabajo.", "During an incident, updating early (what is happening, impact, next step and when you will update again) is part of the job.")
+		case "comment":
+			st.Title = L("Deja una nota interna", "Leave an internal note")
+			st.Why = L("Las notas internas son para el equipo: causa técnica, evidencias y quién hizo qué. El solicitante no las ve.", "Internal notes are for the team: technical cause, evidence and who did what. The requester doesn't see them.")
+		case "escalate":
+			st.Title = L("Escala al equipo que corresponde: "+arg(ws, 2), "Escalate to the right team: "+arg(ws, 2))
+			st.Why = L("Escalar no es rendirse: es pasar el caso a quien puede resolverlo con todo lo que necesita (qué, dónde, desde cuándo, impacto y qué has hecho ya).", "Escalating isn't giving up: it's handing the case to whoever can solve it, with everything they need (what, where, since when, impact and what you've already done).")
+		default:
+			st.Title = L("Contesta en el ticket", "Reply on the ticket")
+			st.Why = L("La respuesta pública la lee quien abrió el ticket: qué pasa o pasaba, qué has hecho y qué tiene que hacer él, sin jerga. En un incidente, informa pronto y di cuándo vuelves a informar.", "The public reply is read by whoever opened the ticket: what is or was happening, what you did and what they need to do, without jargon. In an incident, update early and say when you'll update again.")
 		}
 	case tool == "ask":
 		st.Phase = Investigate

@@ -1,0 +1,140 @@
+id: bank-b08-region-outage
+title: "INC P1 · Caída general: no es culpa nuestra (y hay que gestionarla igual)"
+summary: Un P1 causado por una incidencia de Google en la región. No hay nada que arreglar en tu lado; tu trabajo es confirmarlo, no empeorarlo, informar con cabeza y abrir el caso a Google con los datos que piden.
+track: support-bank
+day: 8
+level: intermediate
+branch: observability
+type: incident
+mode: production
+skills: [observability.incident, observability.logging, architecture.reliability]
+wellArchitected: [reliability, operations]
+certs: [ACE, PCDE, PCA]
+difficulty: 3
+minutes: 30
+baseline: [bank-atlas]
+faults:
+  - {type: region_outage, region: "{{.region}}"}
+constraints: ['protect:movimientos-api', 'protect:movimientos-db']
+ticket:
+  id: INC-22400
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: Centro de operaciones (NOC)
+  summary: "P1: la aplicación de movimientos y varios servicios internos en {{.region}} no responden desde las 10:02. Las alertas se han disparado a la vez."
+actors:
+  - role: manager
+    name: Lucía Ferrer (responsable de guardia)
+    persona: Coordina el incidente y habla con dirección.
+    fallback: "Necesito saber si es nuestro o de Google, a quién afecta y cuándo tendremos la siguiente actualización."
+    facts:
+      - {keywords: [[reiniciar, recrear, mover, cambiar, restart, migrar, failover]], answer: "No toquéis producción sin un plan de cambio aprobado. Si es de Google, no vamos a mover nada a ciegas."}
+      - {keywords: [[google, caso, soporte, proveedor, support]], answer: "Si es de Google, abrid el caso de soporte ya como P1 con el proyecto, la región, la hora de inicio y el impacto."}
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`). **P1: primera actualización en 15 minutos.**
+
+  > **INC-22400** · *«P1: la aplicación de movimientos y varios servicios internos en {{.region}} no responden desde
+  > las 10:02. Las alertas se han disparado a la vez.»*
+
+  Cuando muchas cosas fallan a la vez, sospecha de algo común. Si el origen es **Google**, lo correcto no es
+  tocar producción a ciegas, sino:
+
+  1. **confirmarlo** con datos (registros, estado del servicio);
+  2. **informar** a los afectados: qué pasa, a quién afecta, qué se está haciendo y cuándo será la próxima actualización;
+  3. **abrir el caso a Google** (`ticket escalate google "..."`) con lo que piden siempre: proyecto, región,
+     hora de inicio, servicios e impacto.
+objectives:
+  - Confirma que el origen es una incidencia de Google en la región
+  - No hagas cambios en producción
+  - Publica una actualización clara para los afectados con la hora de la siguiente
+  - Escala a Google con proyecto, región, hora de inicio e impacto
+hints:
+  - text: "`gcloud logging read 'logName:cloud-status' --limit=5` muestra los avisos de estado de Google Cloud."
+  - text: "Una buena actualización de P1 dice: qué pasa, a quién afecta, qué estamos haciendo y cuándo será la próxima actualización."
+solution: |
+  ticket
+  gcloud compute instances list
+  gcloud logging read 'logName:cloud-status' --limit=5
+  ask manager "¿podemos reiniciar o mover los servicios a otra región?"
+  ask manager "¿abrimos caso de soporte con Google?"
+  ticket update "Actualización P1 (10:15): incidencia de Google Cloud en la región {{.region}} desde las 10:02, confirmada en los avisos de estado. Afecta a la aplicación de movimientos y a otros servicios internos de esa región. No es un cambio nuestro; hemos abierto caso P1 con Google y seguimos su evolución. Próxima actualización a las 10:45."
+  ticket escalate google "Caso P1: proyecto {{.project}}, región {{.region}}, inicio 10:02 UTC. Servicios de Compute Engine sin respuesta (movimientos-api, movimientos-db) e impacto en todas las oficinas del banco. Los avisos de estado de Google indican indisponibilidad en la región."
+shortcuts:
+  - name: restart production blindly
+    run: |
+      gcloud compute instances reset movimientos-api --zone={{.zone}}
+      gcloud compute instances reset movimientos-db --zone={{.zone}}
+      ticket update "Hemos reiniciado los servidores, a ver si se arregla."
+      ticket resolve "Reiniciados movimientos-api y movimientos-db en producción."
+rubric:
+  - name: Diagnóstico
+    validator: diagnosis
+    points: 20
+    checks:
+      - {type: command, regex: "logging read .*cloud-status", min: 1, desc: "Confirmado con los avisos de estado de Google"}
+  - name: No empeorarlo
+    validator: security
+    points: 20
+    critical: true
+    checks:
+      - {type: command, regex: "instances (reset|stop|delete|start)|firewall-rules (create|update|delete)|routes (create|delete)", max: 0, desc: "Ningún cambio en producción"}
+  - name: Comunicación del P1
+    validator: evidence
+    points: 30
+    checks:
+      - {type: ticket_update, keywords: [[google], ["{{.region}}", region], [afecta, impacto, impact, oficinas], [proxima actualizacion, siguiente actualizacion, next update, proxima]], desc: "Actualización: causa, alcance y próxima actualización"}
+  - name: Caso a Google
+    validator: evidence
+    points: 30
+    checks:
+      - {type: ticket_escalated, team: google, keywords: [["{{.project}}"], ["{{.region}}"], ["10:02", inicio, start], [impacto, impact, afecta, oficinas]], desc: "Escalado a Google con proyecto, región, hora e impacto"}
+tutor:
+  - {match: "@intro", title: "", why: "Cuando todo falla a la vez, sospecha de algo común. Si es Google, no toques producción a ciegas: confirma, informa y abre el caso."}
+  - {match: "logging read 'logName:cloud-status'", title: "Confirma que es de Google", why: "Los avisos de estado de Google Cloud confirman la incidencia en la región: ya sabes que no es un cambio vuestro."}
+  - {match: "^ticket escalate google", title: "", why: "El soporte de Google siempre pide lo mismo: proyecto, región, hora de inicio, qué servicios fallan y el impacto. Dárselo de entrada ahorra un tiempo precioso en un P1."}
+en:
+  title: "INC P1 · A general outage: not our fault (and it still has to be handled)"
+  summary: A P1 caused by a Google incident in the region. There's nothing to fix on your side; your job is to confirm it, not make it worse, communicate sensibly and open the case with Google with the details they ask for.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`). **P1: first update within 15 minutes.**
+
+    > **INC-22400** · *"P1: the transactions app and several internal services in {{.region}} have been unresponsive
+    > since 10:02. The alerts fired all at once."*
+
+    When many things fail at once, suspect something common. If the source is **Google**, the right move isn't
+    to touch production blindly, but to:
+
+    1. **confirm it** with data (logs, service status);
+    2. **inform** those affected: what's happening, who's affected, what's being done and when the next update is;
+    3. **open the case with Google** (`ticket escalate google "..."`) with what they always ask for: project, region,
+       start time, services and impact.
+  objectives:
+    - Confirm the source is a Google incident in the region
+    - Make no changes to production
+    - Post a clear update for those affected with the time of the next one
+    - Escalate to Google with project, region, start time and impact
+  hints:
+    - "`gcloud logging read 'logName:cloud-status' --limit=5` shows Google Cloud status notices."
+    - "A good P1 update says: what's happening, who's affected, what we're doing and when the next update is."
+  ticket:
+    summary: "P1: the transactions app and several internal services in {{.region}} have been unresponsive since 10:02. The alerts fired all at once."
+  text:
+    Centro de operaciones (NOC): Operations centre (NOC)
+    Lucía Ferrer (responsable de guardia): Lucía Ferrer (on-call lead)
+    Coordina el incidente y habla con dirección.: Coordinates the incident and talks to management.
+    Necesito saber si es nuestro o de Google, a quién afecta y cuándo tendremos la siguiente actualización.: I need to know whether it's ours or Google's, who's affected and when we'll have the next update.
+    No toquéis producción sin un plan de cambio aprobado. Si es de Google, no vamos a mover nada a ciegas.: Don't touch production without an approved change plan. If it's Google's, we're not moving anything blindly.
+    Si es de Google, abrid el caso de soporte ya como P1 con el proyecto, la región, la hora de inicio y el impacto.: If it's Google's, open the support case now as P1 with the project, region, start time and impact.
+    Diagnóstico: Diagnosis
+    Confirmado con los avisos de estado de Google: Confirmed with Google's status notices
+    No empeorarlo: Don't make it worse
+    Ningún cambio en producción: No changes to production
+    Comunicación del P1: P1 communication
+    "Actualización: causa, alcance y próxima actualización": "Update: cause, scope and next update"
+    Caso a Google: Case with Google
+    Escalado a Google con proyecto, región, hora e impacto: Escalated to Google with project, region, time and impact
+    "Cuando todo falla a la vez, sospecha de algo común. Si es Google, no toques producción a ciegas: confirma, informa y abre el caso.": "When everything fails at once, suspect something common. If it's Google, don't touch production blindly: confirm, inform and open the case."
+    "Los avisos de estado de Google Cloud confirman la incidencia en la región: ya sabes que no es un cambio vuestro.": "Google Cloud status notices confirm the incident in the region: you now know it isn't a change of yours."
+    "Confirma que es de Google": "Confirm it's Google's"
+    "El soporte de Google siempre pide lo mismo: proyecto, región, hora de inicio, qué servicios fallan y el impacto. Dárselo de entrada ahorra un tiempo precioso en un P1.": "Google support always asks for the same things: project, region, start time, which services fail and the impact. Giving it upfront saves precious time in a P1."

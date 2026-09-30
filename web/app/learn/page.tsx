@@ -121,7 +121,14 @@ export default function LearnPage() {
   const certHist = hist.filter((h) => h.cert === cert);
 
   const tp = byId[topic];
-  const tpLabs = useMemo(() => (tp ? labs.filter((l) => l.skills.some((s) => s.split(".")[0] === tp.branch)).slice(0, 6) : []), [tp, labs]);
+  // Topics tied to a practice route show its labs; the rest, labs of their branch.
+  const TOPIC_TRACK: Record<string, string> = { support: "support-bank" };
+  const tpLabs = useMemo(() => {
+    if (!tp) return [];
+    if (TOPIC_TRACK[tp.id]) return labs.filter((l) => l.track === TOPIC_TRACK[tp.id]);
+    return labs.filter((l) => l.skills.some((s) => s.split(".")[0] === tp.branch)).slice(0, 6);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tp, labs]);
   const tpCerts = useMemo(() => (tp ? exams.filter((e) => e.domains.some((d) => d.topics.includes(tp.id))).map((e) => e.cert) : []), [tp, exams]);
   const topicLink = (id: string) => byId[id] ? <button type="button" className="res-skill" style={{ border: 0, cursor: "pointer" }} onClick={() => go(id)}>{byId[id].name}</button> : null;
 
@@ -216,6 +223,18 @@ export default function LearnPage() {
                 <p className="muted" style={{ margin: "6px 0 0", maxWidth: 680 }}>{t("Todo lo que debes saber antes del examen, certificación a certificación: cómo es el examen, qué secciones tiene, los conceptos de cada tema, juegos para fijarlos y simulacros como el real.")}</p>
               </div>
             </header>
+            {byId.support && (
+              <section className="cm-amber ln-support">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2>{t("¿Vas a trabajar en soporte GCP?")}</h2>
+                  <p>{t("Aprende el oficio: tipos de ticket, prioridades, qué preguntar, cómo responder y escalar, y las normas de una plataforma bancaria. Luego practícalo con casos reales de soporte.")}</p>
+                </div>
+                <div className="row">
+                  <button type="button" className="cm-pillbtn ink sm" onClick={() => go("support")}>{t("Estudiar soporte")}</button>
+                  <a className="btn secondary" href="/catalog?track=support-bank">{t("Casos de soporte")}</a>
+                </div>
+              </section>
+            )}
             <div className="cm-levels" role="group" aria-label={t("Certificación")} style={{ marginBottom: 20 }}>
               {certs.map((c) => (
                 <button key={c.id} type="button" aria-pressed={cert === c.id} title={c.name} onClick={() => go("", "concepts", "", c.id)}>

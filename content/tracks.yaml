@@ -119,6 +119,16 @@ tracks:
     en:
       title: Data & databases
       description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
+  - id: support-bank
+    title: Soporte GCP en banca
+    description: 'El día a día de soporte de plataforma GCP en un banco regulado: peticiones de acceso, políticas de organización, redes privadas, permisos entre servicios, secretos, incidentes de seguridad y caídas de Google. Tickets reales, preguntas al solicitante, respuestas escritas y escalados, sin saltarse las normas.'
+    level: associate
+    certs: [ACE, PCSE]
+    phase: V3
+    labs: [bank-b01-access-request, bank-b02-vm-policy, bank-b03-no-egress, bank-b04-app-db, bank-b05-run-403, bank-b06-secret-access, bank-b07-public-bucket, bank-b08-region-outage]
+    en:
+      title: GCP support in banking
+      description: 'Day-to-day GCP platform support in a regulated bank: access requests, organization policies, private networking, service-to-service permissions, secrets, security incidents and Google outages. Real tickets, questions to the requester, written replies and escalations, without bending the rules.'
   - id: serverless
     title: Sin servidor, datos gestionados y big data
     description: 'Cloud Functions, Cloud Scheduler, App Engine, Dataflow, Memorystore, Spanner y Firestore: los servicios gestionados del día a día con eventos, canarios, streaming y SQL real.'
