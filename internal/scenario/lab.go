@@ -52,6 +52,7 @@ type Lab struct {
 	Hints           []Hint              `yaml:"hints" json:"hints"`
 	Solution        string              `yaml:"solution" json:"-"`
 	Shortcuts       []Shortcut          `yaml:"shortcuts" json:"-"` // tempting wrong fixes CI proves do not pass
+	Tutor           []TutorNote         `yaml:"tutor" json:"-"`     // tutor-mode explanations attached to solution steps
 	Evidence        *Evidence           `yaml:"evidence" json:"evidence,omitempty"`
 	Quiz            []Question          `yaml:"quiz" json:"quiz,omitempty"`
 	Rubric          []RubricItem        `yaml:"rubric" json:"rubric"`
@@ -96,6 +97,14 @@ type Student struct {
 	Account      string   `yaml:"account" json:"account"`
 	Roles        []string `yaml:"roles" json:"roles"`
 	Unconfigured bool     `yaml:"unconfigured" json:"unconfigured"` // start with no gcloud project set
+}
+
+// TutorNote explains, in tutor mode, the step of the solution whose command
+// matches Match ("@intro" = introduction, "@fix" = the first change).
+type TutorNote struct {
+	Match string `yaml:"match" json:"match"`
+	Title string `yaml:"title" json:"title"`
+	Why   string `yaml:"why" json:"why"`
 }
 
 // Hint is a progressive hint with an XP cost.
@@ -341,6 +350,14 @@ func (l *Lab) Variant(seed int64, projectID string) (*Lab, map[string]string, er
 	v.InitialState, v.FixedProject = l.InitialState, l.FixedProject
 	v.Instructions, _ = render(l.Instructions)
 	v.Solution, _ = render(l.Solution)
+	if l.Tutor != nil {
+		v.Tutor = make([]TutorNote, len(l.Tutor))
+		for i, n := range l.Tutor {
+			n.Title, _ = render(n.Title)
+			n.Why, _ = render(n.Why)
+			v.Tutor[i] = n
+		}
+	}
 	v.Setup, _ = render(l.Setup)
 	v.Files = map[string]string{}
 	for k, c := range l.Files {

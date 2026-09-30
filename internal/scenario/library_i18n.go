@@ -256,6 +256,9 @@ func textSlots(l *Lab) []string {
 	for _, t := range l.Timeline {
 		out = append(out, t.From)
 	}
+	for _, n := range l.Tutor {
+		out = append(out, n.Title, n.Why)
+	}
 	if l.Ticket != nil {
 		out = append(out, l.Ticket.Reporter)
 		for _, c := range l.Ticket.Comments {

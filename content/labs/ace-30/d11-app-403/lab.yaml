@@ -68,6 +68,11 @@ rubric:
     points: 20
     checks:
       - {type: http, target: "run:report-worker", path: /reports, status: 200, desc: "/reports funciona"}
+tutor:
+  - {match: "@intro", title: "", why: "Un 403 significa «sé quién eres, pero no tienes permiso». La pregunta clave es: ¿qué identidad usa la aplicación y qué permiso le falta, en qué recurso?"}
+  - {match: "logging read", title: "", why: "El mensaje de error dice qué permiso falta (storage.objects.get) y sobre qué bucket."}
+  - {match: "services describe", title: "", why: "La cuenta de servicio del servicio de Cloud Run es la identidad con la que lee el bucket: a ella hay que darle el permiso, no a ti."}
+  - {match: "add-iam-policy-binding", title: "Da a la app permiso de lectura solo en ese bucket", why: "Mínimo privilegio: Storage Object Viewer en el bucket concreto, no Owner ni Editor en el proyecto."}
 en:
   title: Day 11 · The application gets 403 reading a bucket
   summary: Identify the effective service account of a workload and grant exactly the read permission it needs.
@@ -92,3 +97,8 @@ en:
     Sin roles básicos: No basic roles
     Validación: Validation
     /reports funciona: /reports works
+    "Un 403 significa «sé quién eres, pero no tienes permiso». La pregunta clave es: ¿qué identidad usa la aplicación y qué permiso le falta, en qué recurso?": "A 403 means \"I know who you are, but you are not allowed\". The key question: which identity does the app use and which permission is missing, on which resource?"
+    "El mensaje de error dice qué permiso falta (storage.objects.get) y sobre qué bucket.": "The error message says which permission is missing (storage.objects.get) and on which bucket."
+    "La cuenta de servicio del servicio de Cloud Run es la identidad con la que lee el bucket: a ella hay que darle el permiso, no a ti.": "The Cloud Run service's service account is the identity reading the bucket: that is who needs the permission, not you."
+    "Mínimo privilegio: Storage Object Viewer en el bucket concreto, no Owner ni Editor en el proyecto.": "Least privilege: Storage Object Viewer on that specific bucket, not Owner or Editor on the project."
+    "Da a la app permiso de lectura solo en ese bucket": "Give the app read permission on that bucket only"

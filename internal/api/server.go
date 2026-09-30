@@ -243,14 +243,18 @@ func (s *Server) Handler() http.Handler {
 		}
 		return res, err
 	})
+	h("POST /api/sessions/{id}/tutor", s.tutorOn)
 	h("GET /api/sessions/{id}/views/{kind}", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		_, info, err := s.ownSession(r)
+		att, info, err := s.ownSession(r)
 		if err != nil {
 			return nil, err
 		}
 		kind := r.PathValue("kind")
 		if kind == "findings" {
 			return nil, httpErr{403, "findings are visible through `gcloud scc findings list`"}
+		}
+		if kind == "tutor" && (att == nil || !att.Tutor) {
+			return nil, httpErr{403, "turn on tutor mode first"}
 		}
 		params := map[string]string{"filter": r.URL.Query().Get("filter"), "limit": r.URL.Query().Get("limit")}
 		return s.Labs.View(info.ID, kind, params)
@@ -780,6 +784,28 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// tutorOn turns on tutor mode: the walkthrough reveals the solution step by
+// step, so the attempt counts as guided (like showing the solution).
+func (s *Server) tutorOn(w http.ResponseWriter, r *http.Request) (any, error) {
+	att, info, err := s.ownSession(r)
+	if err != nil {
+		return nil, err
+	}
+	if att == nil || att.Status != "running" {
+		return nil, fmt.Errorf("attempt not running")
+	}
+	if l := s.Cat.Lab(info.LabID); l != nil && l.Type == "boss" {
+		return nil, httpErr{403, "boss battles have no tutor"}
+	}
+	if !att.Tutor {
+		att.Tutor, att.SolutionShown = true, true
+		if err := s.Store.Put("attempts", att.ID, att); err != nil {
+			return nil, err
+		}
+	}
+	return map[string]bool{"tutor": true}, nil
 }
 
 func (s *Server) hint(w http.ResponseWriter, r *http.Request) (any, error) {

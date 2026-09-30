@@ -69,6 +69,13 @@ func (l *Lab) Localized(lang string) *Lab {
 		ev.Prompt = pick(e.EvidencePrompt, tr(ev.Prompt))
 		c.Evidence = &ev
 	}
+	if l.Tutor != nil {
+		c.Tutor = make([]TutorNote, len(l.Tutor))
+		for i, n := range l.Tutor {
+			n.Title, n.Why = tr(n.Title), tr(n.Why)
+			c.Tutor[i] = n
+		}
+	}
 	c.Quiz = make([]Question, len(l.Quiz))
 	for i, q := range l.Quiz {
 		q.Question, q.Explanation, q.Probe = tr(q.Question), tr(q.Explanation), tr(q.Probe)
@@ -253,6 +260,9 @@ func (l *Lab) translatableWithSlots() []slot {
 				add(false, d)
 			}
 		}
+	}
+	for _, n := range l.Tutor {
+		add(false, n.Title, n.Why)
 	}
 	for i, t := range l.Timeline {
 		add(false, t.From)

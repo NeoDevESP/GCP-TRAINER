@@ -102,6 +102,13 @@ upload triggers functions, Cloud Scheduler runs its jobs as simulated time
 passes, Dataflow streaming jobs move messages into BigQuery, App Engine splits
 traffic between versions and Firestore answers its REST API through `curl`.
 
+**Tutor mode and assisted incidents**: in any lab (and in the incident
+generator, "Assisted, with a tutor") a tutor walks you through it step by
+step: what to do, why, where it is in the console ("Show me where" opens the
+page and highlights the button or row), which fields to fill in and the
+equivalent command. It notices when you have done each step, in the console or
+in Cloud Shell. It counts as a guided lab (half the XP).
+
 Inside a lab, type `help`. Useful commands: `why <resource>` (causal chain of a
 request), `whatif <command>` (impact preview), `ticket show`, `team`,
 `ask <person> "question"`.

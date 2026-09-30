@@ -41,6 +41,7 @@ type Attempt struct {
 	HintsUsed     []int             `json:"hintsUsed"`
 	HintCost      int               `json:"hintCost"`
 	SolutionShown bool              `json:"solutionShown"`
+	Tutor         bool              `json:"tutor,omitempty"` // walked through with the tutor (counts as solution shown)
 	Score         int               `json:"score"`
 	Passed        bool              `json:"passed"`
 	Critical      bool              `json:"criticalFailed"`

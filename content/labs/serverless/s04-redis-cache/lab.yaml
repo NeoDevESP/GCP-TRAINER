@@ -94,6 +94,10 @@ rubric:
     checks:
       - {type: ticket_update, desc: "Ticket actualizado"}
       - {type: evidence, fields: [rootCause], keywords: [[network, red, vpc], [authorized, autorizad, default, shop-vpc]], desc: "Explica la causa: red autorizada distinta"}
+tutor:
+  - {match: "@intro", title: "", why: "Memorystore solo tiene IP privada y únicamente acepta conexiones de la red que elegiste al crearlo. Si la app está en otra red, nunca llegará, por muchas reglas de cortafuegos que abras."}
+  - {match: "redis instances describe", title: "", why: "Mira «authorizedNetwork»: verás default, pero web-1 está en shop-vpc."}
+  - {match: "redis instances create", title: "Crea la caché en la red de la aplicación", why: "La red autorizada no se puede cambiar después, así que la solución es crear otra instancia en shop-vpc."}
 en:
   ticket:
     summary: "Since yesterday's deployment every page takes 3 s: the log says 'Could not connect to Redis ... Connection timed out'."
@@ -131,3 +135,7 @@ en:
     "¿Red? No indiqué ninguna al crearla. web-1 está en shop-vpc, eso sí lo sé.": "Network? I did not specify one when I created it. web-1 is on shop-vpc, that much I know."
     "Omar (plataforma)": "Omar (platform)"
     "Memorystore solo tiene IP privada y únicamente es accesible desde la red autorizada que eliges al crearla. Eso no se puede cambiar después.": "Memorystore only has a private IP and is only reachable from the authorized network you choose when creating it. That cannot be changed later."
+    "Memorystore solo tiene IP privada y únicamente acepta conexiones de la red que elegiste al crearlo. Si la app está en otra red, nunca llegará, por muchas reglas de cortafuegos que abras.": "Memorystore only has a private IP and only accepts connections from the network chosen at creation. If the app is in another network it will never reach it, however many firewall rules you open."
+    "Mira «authorizedNetwork»: verás default, pero web-1 está en shop-vpc.": "Look at \"authorizedNetwork\": you will see default, but web-1 is on shop-vpc."
+    "La red autorizada no se puede cambiar después, así que la solución es crear otra instancia en shop-vpc.": "The authorized network cannot be changed later, so the fix is a new instance on shop-vpc."
+    "Crea la caché en la red de la aplicación": "Create the cache in the application network"

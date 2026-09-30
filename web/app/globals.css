@@ -651,3 +651,60 @@ tbody tr:hover td { background: color-mix(in srgb, var(--panel-2) 50%, transpare
 @media (prefers-color-scheme: dark) { .lt-more > summary { color: var(--accent); } }
 .lt-steps.stack { grid-template-columns: 1fr; gap: 14px; }
 .lt-steps.compact li { padding: 8px 8px 8px 14px; font-size: 12px; line-height: 16px; }
+
+/* tutor: "show me where" highlight */
+@keyframes glow { 0%, 100% { box-shadow: 0 0 0 3px #fbbc04, 0 0 0 6px rgba(251, 188, 4, 0.35); } 50% { box-shadow: 0 0 0 3px #fbbc04, 0 0 0 12px rgba(251, 188, 4, 0); } }
+[data-glow] { position: relative; animation: glow 1.2s ease-in-out infinite; border-radius: 4px; z-index: 2; }
+tr[data-glow] { background: rgba(251, 188, 4, 0.18) !important; }
+[data-glow]:not(tr)::after { content: "👉 " attr(data-glow); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); padding: 4px 10px; border-radius: 12px; background: #fbbc04; color: #202124; font: 500 12px/16px var(--sans); white-space: nowrap; pointer-events: none; }
+.cc-shell[data-glow]::after { bottom: auto; top: 8px; left: auto; right: 120px; transform: none; }
+@media (prefers-reduced-motion: reduce) { [data-glow] { animation: none; box-shadow: 0 0 0 3px #fbbc04; } }
+
+/* tutor panel */
+.tu-off { display: flex; flex-direction: column; gap: 12px; }
+.tu-hero { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 10px; background: linear-gradient(120deg, var(--accent-bg), var(--panel) 80%); border: 1px solid var(--border); }
+.tu-hero h3 { margin: 0 0 4px; }
+.tu-hero p { margin: 0; color: var(--muted); font-size: 13px; }
+.tu-avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+.tu-list-benefits { margin: 0; padding-left: 18px; font-size: 13px; }
+.tu-phases { display: flex; gap: 4px; margin: 4px 0 10px; }
+.tu-phase { flex: 1; min-width: 0; padding: 4px 6px; border-radius: 6px; background: var(--panel-2); color: var(--muted); font-size: 11px; line-height: 14px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tu-phase.on { background: var(--accent-bg); color: var(--accent-2); font-weight: 500; }
+.tu-phase.done { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+@media (prefers-color-scheme: dark) { .tu-phase.on { color: var(--accent); } }
+.tu-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: var(--panel); box-shadow: var(--shadow); }
+.tu-card.done { border-color: var(--ok); }
+.tu-kicker { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.tu-card h3 { margin: 6px 0 8px; font-size: 16px; line-height: 22px; }
+.tu-why { margin: 0 0 8px; }
+.tu-note { display: flex; gap: 8px; padding: 8px 10px; margin: 0 0 8px; border-radius: 8px; background: #fef7e0; color: #5f4200; font-size: 13px; }
+@media (prefers-color-scheme: dark) { .tu-note { background: #4d4020; color: #fde293; } }
+.tu-concept { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.tu-sec { margin: 10px 0 4px; font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.tu-where { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); font-size: 13px; }
+.tu-fields { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tu-fields td { padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.tu-fields td:first-child { color: var(--muted); width: 45%; }
+.tu-fields td:last-child { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+.tu-cmd { margin: 0; max-height: 160px; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+.tu-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.tu-wait { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.tu-wait .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: tu-pulse 1.2s infinite; }
+@keyframes tu-pulse { 50% { opacity: 0.25; } }
+.tu-okmsg { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); font-weight: 500; }
+.tu-steps { list-style: none; margin: 12px 0 0; padding: 0; }
+.tu-steps li button { display: flex; width: 100%; gap: 8px; align-items: flex-start; padding: 6px 4px; border: 0; border-radius: 6px; background: none; color: var(--text); font: 400 13px/18px var(--sans); text-align: left; cursor: pointer; }
+.tu-steps li button:hover { background: var(--panel-2); }
+.tu-steps li.cur button { background: var(--accent-bg); font-weight: 500; }
+.tu-n { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border); font-size: 11px; color: var(--muted); }
+.tu-steps li.ok .tu-n { background: var(--ok); border-color: var(--ok); color: var(--panel); }
+.tu-steps li.cur .tu-n { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.tu-end { text-align: center; padding: 16px; }
+.tu-end .tu-avatar { margin: 0 auto 8px; background: var(--ok); }
+.inc-mode { border: 0; margin: 0 0 4px; padding: 0; display: grid; gap: 8px; }
+.inc-mode legend { font-weight: 500; margin-bottom: 8px; padding: 0; }
+.inc-mode label { display: flex; gap: 12px; align-items: flex-start; padding: 12px; margin: 0; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-weight: 400; color: var(--text); }
+.inc-mode label.on { border-color: var(--accent); background: var(--accent-bg); }
+.inc-mode label > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.inc-mode input { width: auto; flex: none; margin: 12px 0 0; }
+.tu-avatar.solo { background: var(--panel-2); color: var(--bad); }

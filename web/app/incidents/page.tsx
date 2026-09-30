@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Nav from "@/components/Nav";
+import { Icon } from "@/components/console/icons";
 import Mermaid from "@/components/Mermaid";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
@@ -24,6 +25,7 @@ export default function Incidents() {
   const [context, setContext] = useState("");
   const [difficulty, setDifficulty] = useState(2);
   const [mode, setMode] = useState("");
+  const [assisted, setAssisted] = useState(true);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -68,7 +70,7 @@ export default function Incidents() {
       const s = await api<{ id: string; labId: string }>("/api/incidents", {
         body: { system, symptom: symptom || undefined, context: context || undefined, difficulty, mode: mode || undefined },
       });
-      window.location.href = `/lab?session=${s.id}&id=${encodeURIComponent(s.labId)}`;
+      window.location.href = `/lab?session=${s.id}&id=${encodeURIComponent(s.labId)}${assisted ? "&tutor=1" : ""}`;
     } catch (e: any) {
       setErr(e.message);
       setBusy(false);
@@ -89,6 +91,25 @@ export default function Incidents() {
         {lib && (
           <div className="grid two">
             <div className="card col">
+              <fieldset className="inc-mode">
+                <legend>{t("¿Cómo quieres resolverla?")}</legend>
+                <label className={assisted ? "on" : ""}>
+                  <input type="radio" name="assist" checked={assisted} onChange={() => setAssisted(true)} />
+                  <span className="tu-avatar" aria-hidden="true"><Icon name="school" size={22} /></span>
+                  <span>
+                    <strong>{t("Asistida, con profesor")}</strong>
+                    <span className="small muted">{t("Te guía paso a paso: qué mirar, por qué y dónde está cada cosa en la consola. Ideal para coger soltura.")}</span>
+                  </span>
+                </label>
+                <label className={!assisted ? "on" : ""}>
+                  <input type="radio" name="assist" checked={!assisted} onChange={() => setAssisted(false)} />
+                  <span className="tu-avatar solo" aria-hidden="true"><Icon name="bell" size={22} /></span>
+                  <span>
+                    <strong>{t("Por tu cuenta, como en una guardia real")}</strong>
+                    <span className="small muted">{t("Solo tienes el ticket. Puedes activar al profesor más tarde si te atascas.")}</span>
+                  </span>
+                </label>
+              </fieldset>
               <div>
                 <label htmlFor="sys">{t("Sistema")}</label>
                 <select id="sys" value={system} onChange={(e) => { setSystem(e.target.value); setSymptom(""); }}>
@@ -122,7 +143,7 @@ export default function Incidents() {
                 </select>
               </div>
               <button className="btn" onClick={generate} disabled={busy || !system}>
-                {busy ? t("Preparando el entorno…") : t("Generar incidente")}
+                {busy ? t("Preparando el entorno…") : assisted ? t("Generar incidencia asistida") : t("Generar incidente")}
               </button>
             </div>
             <div className="card">

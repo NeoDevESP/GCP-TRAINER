@@ -109,6 +109,13 @@ trabajos de streaming de Dataflow llevan mensajes a BigQuery, App Engine
 reparte el tráfico entre versiones y Firestore responde a su API REST con
 `curl`.
 
+**Modo profesor e incidencias asistidas**: en cualquier laboratorio (y en el
+generador de incidentes, opción «Asistida, con profesor») un profesor te guía
+paso a paso: qué hacer, por qué, dónde está en la consola (el botón «Muéstrame
+dónde» abre la página y resalta el botón o la fila), qué campos rellenar y el
+comando equivalente. Detecta solo cuándo has hecho cada paso, en la consola o
+en Cloud Shell. Cuenta como laboratorio guiado (mitad de XP).
+
 Dentro de un laboratorio, escribe `help`. Comandos útiles: `why <recurso>`
 (cadena causal de una petición), `whatif <comando>` (vista previa del
 impacto), `ticket show`, `team` y `ask <persona> "pregunta"`.

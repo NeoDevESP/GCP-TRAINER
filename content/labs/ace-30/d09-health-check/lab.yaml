@@ -74,6 +74,11 @@ rubric:
     points: 15
     checks:
       - {type: evidence, fields: [prevention], keywords: [[test, alert, alerta, review, revis, policy, ci, prueba, politica]], desc: "Acción preventiva"}
+tutor:
+  - {match: "@intro", title: "", why: "El balanceador dice que la web está caída pero nginx funciona en las VMs. Cuando el balanceador marca todos los backends como no sanos, casi siempre es que sus comprobaciones de estado no llegan a las VMs."}
+  - {match: "get-health", title: "", why: "Aquí verás UNHEALTHY en todas las VMs: el balanceador no les envía tráfico porque cree que están caídas."}
+  - {match: "firewall-rules list", title: "", why: "Busca la regla que abre el puerto 80. Fíjate en «Intervalos de IPv4 de origen»: las comprobaciones de estado de Google salen de 35.191.0.0/16 y 130.211.0.0/22, y deben estar permitidas."}
+  - {match: "firewall-rules update", title: "Deja entrar a las comprobaciones de estado de Google", why: "La causa: la regla solo permitía otras IPs y las sondas del balanceador quedaban bloqueadas. Añadir sus rangos arregla la causa sin abrir la VM a todo internet."}
 en:
   title: 'Day 9 · INC: the VM ''is down'' but nginx is running'
   summary: The load balancer returns 502 although the web server works. Find why health checks fail and fix only the necessary rule.
@@ -97,3 +102,8 @@ en:
     Verifica la salud del backend o la respuesta: Verify backend health / response
     Post-mortem: Postmortem
     Acción preventiva: Preventive action
+    "El balanceador dice que la web está caída pero nginx funciona en las VMs. Cuando el balanceador marca todos los backends como no sanos, casi siempre es que sus comprobaciones de estado no llegan a las VMs.": "The load balancer says the site is down but nginx runs on the VMs. When the load balancer marks every backend unhealthy, its health checks almost always cannot reach the VMs."
+    "Aquí verás UNHEALTHY en todas las VMs: el balanceador no les envía tráfico porque cree que están caídas.": "Here you will see UNHEALTHY on every VM: the load balancer sends them no traffic because it thinks they are down."
+    "Busca la regla que abre el puerto 80. Fíjate en «Intervalos de IPv4 de origen»: las comprobaciones de estado de Google salen de 35.191.0.0/16 y 130.211.0.0/22, y deben estar permitidas.": "Find the rule that opens port 80. Look at \"Source IPv4 ranges\": Google health checks come from 35.191.0.0/16 and 130.211.0.0/22 and must be allowed."
+    "La causa: la regla solo permitía otras IPs y las sondas del balanceador quedaban bloqueadas. Añadir sus rangos arregla la causa sin abrir la VM a todo internet.": "The cause: the rule only allowed other IPs, so the load balancer probes were blocked. Adding their ranges fixes the cause without opening the VM to the whole internet."
+    "Deja entrar a las comprobaciones de estado de Google": "Let the Google health checks in"

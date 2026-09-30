@@ -365,6 +365,16 @@ func (lib *Library) generate(g GenSpec, lang string) (*Lab, error) {
 		"ticket resolve \"Root cause identified and fixed; verified the service responds correctly again.\"\n"))
 	l.Solution = sol.String()
 
+	// Tutor mode: what each failure is and why the fix works.
+	l.Tutor = append(l.Tutor, TutorNote{Match: "@intro", Why: p(
+		"Vamos a resolverlo como en una guardia real: primero investigamos sin cambiar nada, después arreglamos la causa (no el síntoma), comprobamos que funciona y cerramos informando al negocio.",
+		"We will solve it like a real on-call shift: first investigate without changing anything, then fix the cause (not the symptom), check it works and close by updating the business.")})
+	for _, f := range fails {
+		if f.Evidence.Sample != "" {
+			l.Tutor = append(l.Tutor, TutorNote{Match: "@fix", Why: p("La causa: ", "The cause: ") + f.Evidence.Sample})
+		}
+	}
+
 	// Evidence
 	l.Evidence = &Evidence{Fields: []string{"rootCause", "prevention"}, Sample: map[string]string{}}
 	var rc []string

@@ -120,6 +120,11 @@ rubric:
     points: 10
     checks:
       - {type: evidence, fields: [prevention], keywords: [[review, revisar, ci, policy, politica, alert, alerta, test, revis, prueba]], desc: "Propón un control preventivo"}
+tutor:
+  - {match: "@intro", title: "", why: "La API no llega a PostgreSQL. Entre dos VMs de la misma red, si el puerto está bien, el culpable suele ser una regla de cortafuegos, y en los cortafuegos manda la prioridad: gana el número más bajo."}
+  - {match: "firewall-rules list", title: "", why: "Ordena mentalmente por prioridad: verás una regla de denegación con un número más bajo que la de permitir, así que la denegación gana."}
+  - {match: "compute ssh", title: "", why: "nc prueba la conexión TCP de verdad desde la VM de la API: «timed out» confirma que algo la bloquea."}
+  - {match: "firewall-rules delete", title: "Elimina la regla de denegación que sobraba", why: "La causa: una regla de denegación más prioritaria tapaba la de permitir. Quitarla (o bajar su prioridad) devuelve el tráfico sin abrir nada más."}
 en:
   title: 'INC-2048: checkout-api cannot reach PostgreSQL'
   summary: Customers get HTTP 503 on checkout. Find the conflicting firewall rule and restore traffic without opening the database.
@@ -163,3 +168,8 @@ en:
     Registro de auditoría: audit log
     PagerDuty: PagerDuty
     Soporte: Support
+    "La API no llega a PostgreSQL. Entre dos VMs de la misma red, si el puerto está bien, el culpable suele ser una regla de cortafuegos, y en los cortafuegos manda la prioridad: gana el número más bajo.": "The API cannot reach PostgreSQL. Between two VMs in the same network, if the port is right the culprit is usually a firewall rule, and in firewalls priority rules: the lowest number wins."
+    "Ordena mentalmente por prioridad: verás una regla de denegación con un número más bajo que la de permitir, así que la denegación gana.": "Sort by priority in your head: you will see a deny rule with a lower number than the allow rule, so the deny wins."
+    "nc prueba la conexión TCP de verdad desde la VM de la API: «timed out» confirma que algo la bloquea.": "nc really tests the TCP connection from the API VM: \"timed out\" confirms something blocks it."
+    "La causa: una regla de denegación más prioritaria tapaba la de permitir. Quitarla (o bajar su prioridad) devuelve el tráfico sin abrir nada más.": "The cause: a higher-priority deny rule shadowed the allow rule. Removing it (or lowering its priority) restores traffic without opening anything else."
+    "Elimina la regla de denegación que sobraba": "Delete the unnecessary deny rule"

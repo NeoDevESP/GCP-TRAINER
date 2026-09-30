@@ -1,6 +1,7 @@
 "use client";
 
 import { Checklist, StepGuide, Tour, TypeTag } from "@/components/learn";
+import Tutor from "@/components/Tutor";
 import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Nav from "@/components/Nav";
 import Terminal, { type TerminalHandle } from "@/components/Terminal";
@@ -16,7 +17,7 @@ import { Icon } from "@/components/console/icons";
 import type { SessionInfo } from "@/lib/types";
 
 
-function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionInfo) => void }) {
+function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionInfo, tutor?: boolean) => void }) {
   const { t, lang } = useI18n();
   const [lab, setLab] = useState<any>(null);
   const [fidelity, setFidelity] = useState("");
@@ -30,12 +31,12 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
       })
       .catch((e) => setErr(e.message));
   }, [labId, lang]);
-  const start = async () => {
+  const start = async (tutor?: boolean) => {
     setBusy(true);
     setErr("");
     try {
       const s = await api<SessionInfo>(`/api/labs/${encodeURIComponent(labId)}/start`, { body: { fidelity } });
-      onStarted(s);
+      onStarted(s, tutor);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -85,9 +86,14 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
         </details>
       ) : null}
       <div className="row" style={{ marginTop: 20 }}>
-        <button className="btn" onClick={start} disabled={busy} style={{ height: 40, padding: "0 24px" }}>
+        <button className="btn" onClick={() => start()} disabled={busy} style={{ height: 40, padding: "0 24px" }}>
           {busy ? t("Preparando el entorno…") : t("Empezar laboratorio")}
         </button>
+        {lab.type !== "boss" && (
+          <button className="btn secondary" onClick={() => start(true)} disabled={busy} style={{ height: 40 }}>
+            <Icon name="school" size={18} /> {t("Empezar con el profesor")}
+          </button>
+        )}
         <span className="muted small">{t("No puedes romper nada: es un proyecto de prácticas que se crea solo para ti.")}</span>
       </div>
       <details style={{ marginTop: 12 }}>
@@ -325,7 +331,8 @@ function Result({ out }: { out: any }) {
 function Workspace({ session }: { session: SessionInfo }) {
   const { t: tr } = useI18n();
   const [tick, setTick] = useState(0);
-  const [panel, setPanel] = useState<"guide" | "desk" | "submit">("guide");
+  const tutorAuto = qs("tutor") === "1";
+  const [panel, setPanel] = useState<"guide" | "desk" | "submit" | "tutor">(tutorAuto ? "tutor" : "guide");
   const [hints, setHints] = useState<any[]>([]);
   const [check, setCheck] = useState<any>(null);
   const [evidence, setEvidence] = useState<Record<string, string>>({});
@@ -375,7 +382,7 @@ function Workspace({ session }: { session: SessionInfo }) {
   }, [session.id, tick]);
   const hasDesk = !!desk;
   useEffect(() => {
-    if (hasDesk) setPanel((p) => (p === "guide" ? "desk" : p));
+    if (hasDesk && !tutorAuto) setPanel((p) => (p === "guide" ? "desk" : p));
   }, [hasDesk]);
 
   const onCommand = useCallback(() => setTick((t) => t + 1), []);
@@ -427,8 +434,9 @@ function Workspace({ session }: { session: SessionInfo }) {
     );
   }
 
-  const tabs: ["guide" | "desk" | "submit", string][] = [
+  const tabs: ["guide" | "desk" | "submit" | "tutor", string][] = [
     ...(hasDesk ? ([["desk", tr("Ticket")]] as ["desk", string][]) : []),
+    ...(session.type !== "boss" ? ([["tutor", tr("Profesor")]] as ["tutor", string][]) : []),
     ["guide", tr("Instrucciones")],
     ["submit", tr("Entrega")],
   ];
@@ -457,6 +465,21 @@ function Workspace({ session }: { session: SessionInfo }) {
       </div>
       <div className="lp-body" id="lp-body" role="tabpanel" aria-labelledby={`lp-tab-${panel}`}>
         {panel === "desk" && desk && <Desk data={desk} />}
+        {panel === "tutor" && (
+          <Tutor
+            sessionId={session.id}
+            tick={tick}
+            auto={tutorAuto}
+            labType={session.type}
+            run={(cmd, note) => term.current?.run(cmd, note)}
+            paste={(cmd) => term.current?.paste(cmd)}
+            onPanel={(id) => setPanel(id)}
+            onCheck={() => {
+              setPanel("guide");
+              doCheck();
+            }}
+          />
+        )}
         {panel === "guide" && (
           <>
             <StepGuide compact />
@@ -628,8 +651,8 @@ function LabPage() {
         .catch((e) => setErr(e.message));
     }
   }, []);
-  const started = (s: SessionInfo) => {
-    window.history.replaceState(null, "", `/lab?session=${s.id}&id=${encodeURIComponent(s.labId)}`);
+  const started = (s: SessionInfo, tutor?: boolean) => {
+    window.history.replaceState(null, "", `/lab?session=${s.id}&id=${encodeURIComponent(s.labId)}${tutor ? "&tutor=1" : ""}`);
     setSession(s);
   };
   if (session) return <Workspace session={session} />;

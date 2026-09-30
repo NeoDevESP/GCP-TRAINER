@@ -176,6 +176,48 @@ export default function CloudConsole({
     }
   };
 
+  // "Show me where" from the tutor: open the page and highlight the button,
+  // row or area the step is about.
+  useEffect(() => {
+    const clear = () => root.current?.querySelectorAll("[data-glow]").forEach((e) => e.removeAttribute("data-glow"));
+    const onShow = (ev: Event) => {
+      const d = (ev as CustomEvent).detail ?? {};
+      clear();
+      if (d.action === "shell" || !d.page) {
+        if (shell === "min") setShell("open");
+        setShellMode("terminal");
+        const sh = root.current?.querySelector<HTMLElement>(".cc-shell");
+        sh?.setAttribute("data-glow", t("Aquí"));
+        setTimeout(focusShell, 50);
+        setTimeout(clear, 6000);
+        return;
+      }
+      go(d.page);
+      setTimeout(() => {
+        const main = root.current?.querySelector<HTMLElement>(".cc-main");
+        if (!main) return;
+        const byText = (sel: string, ok: (s: string) => boolean) => Array.from(main.querySelectorAll<HTMLElement>(sel)).find((e) => ok((e.textContent ?? "").trim()));
+        const isCreate = (s: string) => /^(Crear|Añadir|Create|Add|Desplegar|Deploy|Publicar|Publish|Subir|Upload|Conceder|Grant)/i.test(s);
+        let el: HTMLElement | undefined;
+        const target = String(d.target ?? "");
+        if (target) {
+          const hit = byText("table a, table button, table td, .cc-link, .cc-name", (s) => s === target || s.startsWith(target + " ") || s.endsWith("/" + target));
+          el = (hit?.closest("tr") as HTMLElement) ?? hit;
+        }
+        if (!el && (d.action === "create" || d.action === "grant")) el = byText(".cc-toolbar button, .cc-page-head button", (s) => isCreate(s));
+        if (!el) el = main.querySelector<HTMLElement>(".cc-page-head") ?? undefined;
+        if (el) {
+          el.setAttribute("data-glow", t("Aquí"));
+          el.scrollIntoView({ block: "center", behavior: "smooth" });
+          if (el.tagName === "BUTTON") el.focus();
+        }
+        setTimeout(clear, 8000);
+      }, 450);
+    };
+    window.addEventListener("cc:show", onShow);
+    return () => window.removeEventListener("cc:show", onShow);
+  });
+
   const openShell = () => {
     if (shell === "min") setShell("open");
     setShellMode("terminal");

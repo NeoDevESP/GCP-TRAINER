@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/neodevesp/gcp-trainer/internal/company"
+	"github.com/neodevesp/gcp-trainer/internal/tutor"
 	"hash/fnv"
 	"io"
 	"net/http"
@@ -389,6 +390,23 @@ func (s *Service) View(id, kind string, params map[string]string) (any, error) {
 	st := se.Env.World.State
 	p := se.Info.Project
 	switch kind {
+	case "tutor":
+		var notes []tutor.Note
+		for _, n := range se.Lab.Tutor {
+			notes = append(notes, tutor.Note{Match: n.Match, Title: n.Title, Why: n.Why})
+		}
+		plan := tutor.Build(se.Lab.Solution, notes, se.Info.Lang)
+		// steps already done (commands recorded in this session)
+		done := make([]int, 0)
+		for _, stp := range plan.Steps {
+			for _, rec := range se.Env.World.Session.Records {
+				if tutor.MatchLine(stp.Match, rec.Line) {
+					done = append(done, stp.N)
+					break
+				}
+			}
+		}
+		return map[string]any{"intro": plan.Intro, "steps": plan.Steps, "done": done, "type": se.Lab.Type}, nil
 	case "console":
 		v := st.ProjectView(p)
 		delete(v, "findings")
