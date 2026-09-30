@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import Nav from "@/components/Nav";
 import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
-import { useI18n } from "@/lib/i18n";
+import { k, useI18n } from "@/lib/i18n";
 import { label, labLevel } from "@/lib/labels";
 import type { LabSummary } from "@/lib/types";
 import { Icon } from "@/components/console/icons";
-import { PathMap, TrackIcon, TypeLegend, TypeTag, labHref, nextLab, useProgress } from "@/components/learn";
+import { PathMap, TrackBadge, TypeLegend, TypeTag, labHref, nextLab, useProgress } from "@/components/learn";
 
 interface Track {
   id: string;
@@ -24,6 +24,12 @@ interface Catalog {
 }
 
 const LEVELS = ["basic", "intermediate", "advanced", "professional"];
+const TIERS: [string, string][] = [
+  ["", k("Todas")],
+  ["foundational", k("Empiezo de cero")],
+  ["associate", k("Ya trabajo con cloud")],
+  ["professional", k("Profesional")],
+];
 
 function LabCard({ l, trackTitle, st, running }: { l: LabSummary; trackTitle?: string; st?: string; running?: string }) {
   const { t } = useI18n();
@@ -53,6 +59,7 @@ export default function CatalogPage() {
   const [track, setTrack] = useState("");
   const [all, setAll] = useState(false);
   const [level, setLevel] = useState("");
+  const [tier, setTier] = useState("");
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
   const { state, running } = useProgress();
@@ -87,32 +94,37 @@ export default function CatalogPage() {
   const curIndex = cat?.tracks.findIndex((tr) => tr.id === track) ?? 0;
   const flat = all || !!q || !!level;
 
+  const levelOf: Record<string, string> = { foundational: "foundational", associate: "associate", professional: "professional" };
+  const routes = (cat?.tracks ?? []).map((tr, i) => ({ tr, i, done: tr.labs.filter((id) => state[id] === "done").length }));
+  const shownRoutes = routes.filter((r) => !tier || levelOf[r.tr.level ?? ""] === tier);
+  const feature = routes.find((r) => r.done > 0 && r.done < r.tr.labs.length) ?? routes.find((r) => r.tr.id === "ace-30") ?? routes[0];
+
   return (
     <>
       <Nav active="/catalog" />
       <main id="main" className="page">
-        <h1>{t("Catálogo de laboratorios")}</h1>
         {err && <p className="error">{err}</p>}
-
-        <div className="row" style={{ marginBottom: 16 }}>
-          <input placeholder={t("Buscar laboratorios o habilidades…")} aria-label={t("Buscar")} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 360 }} />
-          <div className="lt-chips" role="group" aria-label={t("Nivel")}>
-            <button type="button" className="lt-chip" aria-pressed={!flat && !track} onClick={() => { setAll(false); setLevel(""); setQ(""); open(""); }}>
-              <Icon name="project" size={16} /> {t("Por rutas")}
-            </button>
-            <button type="button" className="lt-chip" aria-pressed={all && !level && !q} onClick={() => { setAll(true); setLevel(""); }}>
-              {t("Todos ({n})", { n: cat?.labs.length ?? 0 })}
-            </button>
-            {LEVELS.map((lv) => (
-              <button key={lv} type="button" className="lt-chip" aria-pressed={level === lv} onClick={() => setLevel(level === lv ? "" : lv)}>
-                {label(labLevel, lv, t)}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {flat ? (
           <>
+            <header className="cm-head">
+              <div>
+                <button type="button" className="cc-link" onClick={() => { setAll(false); setLevel(""); setQ(""); open(""); }} style={{ padding: 0, border: 0, background: "none", color: "var(--cm-accent-2)", font: "500 14px var(--cm-sans)", cursor: "pointer" }}>← {t("Todas las rutas")}</button>
+                <h1>{q ? t("Resultados de «{q}»", { q }) : t("Todos los laboratorios")}</h1>
+              </div>
+              <label className="cm-search">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                <input type="search" placeholder={t("Buscar laboratorios o habilidades…")} aria-label={t("Buscar")} value={q} onChange={(e) => setQ(e.target.value)} />
+              </label>
+            </header>
+            <div className="cm-levels" role="group" aria-label={t("Nivel del laboratorio")} style={{ marginBottom: 20 }}>
+              <button type="button" aria-pressed={!level} onClick={() => setLevel("")}>{t("Todos ({n})", { n: cat?.labs.length ?? 0 })}</button>
+              {LEVELS.map((lv) => (
+                <button key={lv} type="button" aria-pressed={level === lv} onClick={() => setLevel(level === lv ? "" : lv)}>
+                  {label(labLevel, lv, t)}
+                </button>
+              ))}
+            </div>
             <p className="muted small">{t("{n} laboratorios", { n: filtered.length })}</p>
             <div className="grid three">
               {filtered.map((l) => <LabCard key={l.id} l={l} trackTitle={trackTitle[l.track] ?? l.track} st={state[l.id]} running={running[l.id]} />)}
@@ -123,18 +135,25 @@ export default function CatalogPage() {
             <button type="button" className="btn secondary" onClick={() => open("")}>
               <Icon name="back" size={18} /> {t("Todas las rutas")}
             </button>
-            <div className="lt-hero" style={{ marginTop: 16 }}>
-              <TrackIcon id={cur.id} index={curIndex} size={64} />
-              <div style={{ flex: 1 }}>
-                <h2 style={{ marginTop: 0 }}>{cur.title}</h2>
-                <p>{cur.description}</p>
-                <div className="lt-route-foot">
-                  <span>{t("{n} de {total} superados", { n: cur.labs.filter((id) => state[id] === "done").length, total: cur.labs.length })}</span>
-                  <span className="lt-bar" aria-hidden="true"><span style={{ width: `${(cur.labs.filter((id) => state[id] === "done").length / Math.max(1, cur.labs.length)) * 100}%` }} /></span>
-                </div>
+            <section className="cm-dark cm-feature" style={{ marginTop: 16 }}>
+              <TrackBadge id={cur.id} index={curIndex} size={72} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="cm-kick">{t("{n} laboratorios", { n: cur.labs.length })}</div>
+                <h2>{cur.title}</h2>
+                <p style={{ margin: 0 }}>{cur.description}</p>
               </div>
-            </div>
-            <div className="grid two" style={{ marginTop: 16, alignItems: "start" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10, minWidth: 220 }}>
+                <div className="cm-sub">{t("{n} de {total} superados", { n: cur.labs.filter((id) => state[id] === "done").length, total: cur.labs.length })}</div>
+                <span className="cm-prog" style={{ width: 220 }}>
+                  <div><span style={{ width: `${(cur.labs.filter((id) => state[id] === "done").length / Math.max(1, cur.labs.length)) * 100}%` }} /></div>
+                </span>
+                {(() => {
+                  const nx = nextLab(cur.labs, state);
+                  return nx ? <a className="cm-pillbtn light sm" href={labHref(nx, running[nx])}>{t("Continuar ruta")}</a> : null;
+                })()}
+              </div>
+            </section>
+            <div className="grid two" style={{ marginTop: 20, alignItems: "start" }}>
               <div className="card">
                 <h3>{t("Pasos de la ruta")}</h3>
                 <PathMap labs={cur.labs.map((id) => byId[id]).filter(Boolean)} state={state} running={running} />
@@ -147,27 +166,56 @@ export default function CatalogPage() {
           </>
         ) : (
           <>
-            <p className="muted" style={{ marginTop: 0 }}>{t("Elige una ruta y sigue sus pasos en orden. Si no sabes por dónde empezar, prueba «Bases» o el programa de 30 días de Associate Cloud Engineer.")}</p>
-            <div className="lt-routes">
-              {(cat?.tracks ?? []).map((tr, i) => {
-                const done = tr.labs.filter((id) => state[id] === "done").length;
-                const nx = nextLab(tr.labs, state);
-                return (
-                  <button key={tr.id} type="button" className="lt-route" onClick={() => open(tr.id)}>
-                    <span className="lt-route-head">
-                      <TrackIcon id={tr.id} index={i} />
-                      <h3>{tr.title}</h3>
-                    </span>
-                    <p>{tr.description}</p>
-                    <span className="lt-route-foot">
-                      <span>{t("{n} laboratorios", { n: tr.labs.length })}</span>
-                      <span className="lt-bar" aria-hidden="true"><span style={{ width: `${(done / Math.max(1, tr.labs.length)) * 100}%` }} /></span>
-                      <span>{done}/{tr.labs.length}</span>
-                    </span>
-                    {done > 0 && nx && byId[nx] && <span className="small muted">{t("Siguiente:")} {byId[nx].title}</span>}
-                  </button>
-                );
-              })}
+            <header className="cm-head">
+              <div>
+                <h1>{t("¿Qué quieres aprender?")}</h1>
+                <p className="muted" style={{ margin: "6px 0 0" }}>{t("Elige una ruta y sigue sus pasos en orden. Cada paso es un laboratorio real en la consola.")}</p>
+              </div>
+              <label className="cm-search">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                <input type="search" placeholder={t("Buscar laboratorios o habilidades…")} aria-label={t("Buscar")} value={q} onChange={(e) => setQ(e.target.value)} />
+              </label>
+            </header>
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 20 }}>
+              <div className="cm-levels" role="group" aria-label={t("Tu nivel")}>
+                {TIERS.map(([id, name]) => (
+                  <button key={id} type="button" aria-pressed={tier === id} onClick={() => setTier(id)}>{t(name)}</button>
+                ))}
+              </div>
+              <button type="button" className="btn secondary" onClick={() => setAll(true)}>{t("Ver todos los laboratorios ({n})", { n: cat?.labs.length ?? 0 })}</button>
+            </div>
+
+            {feature && !tier && (
+              <button type="button" className="cm-dark cm-feature" onClick={() => open(feature.tr.id)} style={{ width: "100%", border: 0, textAlign: "left", font: "inherit", cursor: "pointer", marginBottom: 20 }}>
+                <TrackBadge id={feature.tr.id} index={feature.i} size={72} />
+                <span style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 0 }}>
+                  <span className="cm-kick" style={{ color: "#C9D6FF", fontWeight: 500 }}>{feature.done > 0 ? t("Tu ruta en curso") : t("Recomendada para empezar")}</span>
+                  <span style={{ font: "700 28px/34px var(--cm-display)" }}>{feature.tr.title}</span>
+                  <span className="cm-sub" style={{ fontSize: 15 }}>{feature.tr.description}</span>
+                </span>
+                <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10, flex: "none" }}>
+                  <span className="cm-sub">{t("{n} de {total} completados", { n: feature.done, total: feature.tr.labs.length })}</span>
+                  <span className="cm-prog" style={{ width: 220 }}><div><span style={{ width: `${(feature.done / Math.max(1, feature.tr.labs.length)) * 100}%` }} /></div></span>
+                  <span className="cm-pillbtn light sm">{feature.done > 0 ? t("Continuar ruta") : t("Ver la ruta")}</span>
+                </span>
+              </button>
+            )}
+
+            <div className="cm-grid3">
+              {shownRoutes.filter((r) => tier || r.tr.id !== feature?.tr.id).map(({ tr, i, done }) => (
+                <button key={tr.id} type="button" className="cm-card" onClick={() => open(tr.id)}>
+                  <span className="row" style={{ justifyContent: "space-between", width: "100%" }}>
+                    <TrackBadge id={tr.id} index={i} size={52} />
+                    <span className="cm-lvl">{t(TIERS.find(([id]) => id === levelOf[tr.level ?? ""])?.[1] ?? "")}</span>
+                  </span>
+                  <h3>{tr.title}</h3>
+                  <p>{tr.description}</p>
+                  <span className="cm-prog" style={{ width: "100%" }}>
+                    <div><span style={{ width: `${(done / Math.max(1, tr.labs.length)) * 100}%` }} /></div>
+                    {t("{n} de {total}", { n: done, total: tr.labs.length })}
+                  </span>
+                </button>
+              ))}
             </div>
             <div className="card lt-section">
               <h3>{t("Tipos de laboratorio")}</h3>

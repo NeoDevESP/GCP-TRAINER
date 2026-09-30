@@ -8,7 +8,15 @@ import { useAuth } from "@/components/useAuth";
 import { useI18n } from "@/lib/i18n";
 import { dimension, label, recKind } from "@/lib/labels";
 import type { LabSummary, Profile, Recommendation } from "@/lib/types";
-import { PathMap, TrackIcon, TypeLegend, TypeTag, StepGuide, labHref, nextLab, useProgress } from "@/components/learn";
+import { RouteLine, StepGuide, TrackBadge, labHref, nextLab, useProgress } from "@/components/learn";
+import { k } from "@/lib/i18n";
+
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 6 ? k("Buenas noches, {name}") : h < 13 ? k("Buenos días, {name}") : h < 21 ? k("Buenas tardes, {name}") : k("Buenas noches, {name}");
+};
+
+const typeName = (ty: string) => ({ guided: k("Guiado"), challenge: k("Reto"), incident: k("Incidente"), capstone: k("Proyecto final"), boss: k("Jefe final"), "case-study": k("Caso práctico"), interview: k("Entrevista") })[ty] ?? ty;
 
 async function startRec(r: Recommendation) {
   if (r.gen) {
@@ -52,7 +60,7 @@ export default function Dashboard() {
   const [track, setTrackState] = useState("ace-30");
   const [tracks, setTracks] = useState<{ id: string; title: string; description?: string; labs: string[] }[]>([]);
   const [labs, setLabs] = useState<Record<string, LabSummary>>({});
-  const [fullPath, setFullPath] = useState(false);
+  const [q, setQ] = useState("");
   const { state, running: runningLab } = useProgress();
   useEffect(() => {
     try {
@@ -64,7 +72,6 @@ export default function Dashboard() {
   }, []);
   const setTrack = (id: string) => {
     setTrackState(id);
-    setFullPath(false);
     try {
       localStorage.setItem("gcplab.track", id);
     } catch {
@@ -102,94 +109,135 @@ export default function Dashboard() {
   const running = attempts.filter((a) => a.status === "running");
   const date = (d: string) => new Date(d).toLocaleDateString(lang === "en" ? "en-GB" : "es-ES");
   const cur = tracks.find((x) => x.id === track) ?? tracks[0];
-  const curIndex = Math.max(0, tracks.findIndex((x) => x.id === cur?.id));
   const pathLabs = (cur?.labs ?? []).map((id) => labs[id]).filter(Boolean) as LabSummary[];
   const doneN = pathLabs.filter((l) => state[l.id] === "done").length;
   const nextId = nextLab(pathLabs.map((l) => l.id), state);
   const next = nextId ? labs[nextId] : undefined;
-  const nextIdx = next ? pathLabs.indexOf(next) : pathLabs.length;
-  const shown = fullPath ? pathLabs : pathLabs.slice(Math.max(0, nextIdx - 2), Math.max(0, nextIdx - 2) + 6);
   return (
     <>
       <Nav active="/dashboard" />
       <main id="main" className="page">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <h1>{t("Hola de nuevo, {name}", { name: p.user.name })}</h1>
-          <div className="lt-chips">
-            <span className="lt-stat">{t("Nivel")} <strong>{p.level}</strong></span>
-            <span className="lt-stat"><strong>{p.xp}</strong> XP</span>
-            <span className="lt-stat"><strong>{p.labsPassed ?? 0}</strong> {t("laboratorios superados")}</span>
-            <span className="lt-stat"><strong>{p.streak}</strong> {t("días seguidos")}</span>
+        <header className="cm-head">
+          <div>
+            <div className="muted">
+              {p.streak > 0 ? t("{n} días seguidos practicando", { n: p.streak }) : t("Hoy es un buen día para empezar")} · {t("Nivel")} {p.level} · {p.xp} XP
+            </div>
+            <h1>{t(greeting(), { name: p.user.name.split(" ")[0] })}</h1>
           </div>
-        </div>
+          <form
+            className="cm-search"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              window.location.href = `/catalog?q=${encodeURIComponent(q)}`;
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Busca un laboratorio o un servicio")} aria-label={t("Buscar laboratorios")} />
+          </form>
+        </header>
 
         {cur && (
-          <section className="lt-hero" aria-labelledby="next-title">
-            <TrackIcon id={cur.id} index={curIndex} size={64} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {next ? (
-                <>
-                  <div className="lt-hero-kicker">{state[next.id] === "doing" ? t("Continúa donde lo dejaste") : doneN === 0 ? t("Empieza aquí") : t("Tu siguiente paso")} · {t("paso {n} de {total}", { n: nextIdx + 1, total: pathLabs.length })}</div>
-                  <h2 id="next-title">{next.title}</h2>
-                  <p>{next.summary}</p>
-                  <div className="row">
-                    <a className="btn" href={labHref(next.id, runningLab[next.id])}>{runningLab[next.id] ? t("Continuar laboratorio") : t("Empezar laboratorio")}</a>
-                    <TypeTag type={next.type} />
-                    <span className="muted small">{t("{n} min", { n: next.minutes })}</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="lt-hero-kicker">{cur.title}</div>
-                  <h2 id="next-title">{t("¡Ruta completada!")}</h2>
-                  <p>{t("Has superado todos los laboratorios de esta ruta. Elige otra abajo.")}</p>
-                </>
-              )}
+          <div className="cm-hero-row">
+            <section className="cm-dark cm-hero" aria-labelledby="next-title">
+              <div className="cm-ring" role="img" aria-label={t("{n} de {total} superados", { n: doneN, total: pathLabs.length })}>
+                <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+                  <circle cx="66" cy="66" r="56" fill="none" stroke="#2A2D35" strokeWidth="12" />
+                  <circle cx="66" cy="66" r="56" fill="none" stroke="#2B59E0" strokeWidth="12" strokeLinecap="round" strokeDasharray={`${Math.max(0.001, (doneN / Math.max(1, pathLabs.length)) * 352)} 352`} transform="rotate(-90 66 66)" />
+                </svg>
+                <div aria-hidden="true">
+                  <strong>{doneN}/{pathLabs.length}</strong>
+                  <span>{t("pasos")}</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1, minWidth: 0 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span className="cm-dark-chip accent">{cur.title}</span>
+                  {next && <span className="cm-dark-chip">{t(typeName(next.type))} · {t("{n} min", { n: next.minutes })}</span>}
+                </div>
+                {next ? (
+                  <>
+                    <div className="cm-kick">{state[next.id] === "doing" ? t("Continúa donde lo dejaste") : doneN === 0 ? t("Empieza aquí") : t("Tu siguiente paso")}</div>
+                    <h2 id="next-title">{next.title}</h2>
+                    <p>{next.summary}</p>
+                    <div className="row" style={{ gap: 12, marginTop: 8 }}>
+                      <a className="cm-pillbtn primary" href={labHref(next.id, runningLab[next.id])}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+                        {runningLab[next.id] ? t("Continuar") : t("Empezar")}
+                      </a>
+                      {next.type !== "boss" && (
+                        <a className="cm-pillbtn dark" href={labHref(next.id, runningLab[next.id]) + "&tutor=1"}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2B64C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z" /><path d="M6 11v5c3 2 9 2 12 0v-5" /></svg>
+                          {t("Con profesor")}
+                        </a>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 id="next-title">{t("¡Ruta completada!")}</h2>
+                    <p>{t("Has superado todos los laboratorios de esta ruta. Elige otra abajo.")}</p>
+                  </>
+                )}
+              </div>
+            </section>
+            <aside className="cm-amber cm-tutor" aria-labelledby="tutor-title">
+              <div className="row" style={{ gap: 12 }}>
+                <span className="cm-tutor-dot" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9l10-5 10 5-10 5z" /><path d="M6 11v5c3 2 9 2 12 0v-5" /></svg>
+                </span>
+                <h3 id="tutor-title" style={{ margin: 0 }}>{t("Tu profesor")}</h3>
+              </div>
+              <p>{t("¿Algo nuevo para ti? Hazlo conmigo: te enseño dónde está cada cosa en la consola y por qué se hace así.")}</p>
+              <a className="cm-pillbtn ink sm" href="/incidents" style={{ marginTop: "auto" }}>{t("Incidencia asistida")}</a>
+            </aside>
+          </div>
+        )}
+
+        {cur && (
+          <section className="cm-section" aria-labelledby="route-title">
+            <div className="cm-section-head">
+              <h2 id="route-title">{t("Tu ruta · {name}", { name: cur.title })}</h2>
+              <div className="row" style={{ gap: 12 }}>
+                <label htmlFor="track" className="sr-only">{t("Cambiar de ruta")}</label>
+                <select id="track" value={cur.id} onChange={(e) => setTrack(e.target.value)}>
+                  {tracks.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+                </select>
+                <a href={`/catalog?track=${encodeURIComponent(cur.id)}`} style={{ fontWeight: 500 }}>{t("Ver las {n} etapas", { n: pathLabs.length })}</a>
+              </div>
             </div>
+            <RouteLine labs={pathLabs} state={state} running={runningLab} />
           </section>
         )}
 
-        <section className="lt-section" aria-labelledby="route-title">
-          <h2 id="route-title">{t("Tu ruta")}</h2>
-          <div className="lt-chips" role="group" aria-label={t("Elige una ruta")}>
-            {tracks.map((x, i) => (
-              <button key={x.id} type="button" className="lt-chip" aria-pressed={x.id === cur?.id} onClick={() => setTrack(x.id)}>
-                <TrackIcon id={x.id} index={i} size={22} /> {x.title}
-              </button>
+        <section className="cm-tiles" aria-label={t("Explora otras rutas")}>
+          {tracks
+            .map((x, i) => ({ x, i, done: x.labs.filter((id) => state[id] === "done").length }))
+            .filter((r) => r.x.id !== cur?.id)
+            .sort((a, b) => (b.done > 0 ? 1 : 0) - (a.done > 0 ? 1 : 0) || a.i - b.i)
+            .slice(0, 4)
+            .map(({ x, i, done }) => (
+              <a key={x.id} className="cm-tile" href={`/catalog?track=${encodeURIComponent(x.id)}`}>
+                <TrackBadge id={x.id} index={i} />
+                <span className="cm-tile-title">{x.title}</span>
+                <span className="cm-prog">
+                  <div><span style={{ width: `${(done / Math.max(1, x.labs.length)) * 100}%` }} /></div>
+                  {done}/{x.labs.length}
+                </span>
+              </a>
             ))}
-          </div>
-          {cur && (
-            <div className="grid two" style={{ marginTop: 16, alignItems: "start" }}>
-              <div className="card">
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                  <strong>{cur.title}</strong>
-                  <span className="muted small">{t("{n} de {total} superados", { n: doneN, total: pathLabs.length })}</span>
-                </div>
-                <div className="lt-bar" style={{ margin: "8px 0 12px" }} aria-hidden="true"><span style={{ width: `${pathLabs.length ? (doneN / pathLabs.length) * 100 : 0}%` }} /></div>
-                <PathMap labs={shown} state={state} running={runningLab} />
-                {pathLabs.length > shown.length || fullPath ? (
-                  <button type="button" className="btn secondary" style={{ marginTop: 8 }} onClick={() => setFullPath(!fullPath)}>
-                    {fullPath ? t("Ver menos") : t("Ver la ruta completa ({n} pasos)", { n: pathLabs.length })}
-                  </button>
-                ) : null}
-              </div>
-              <div className="col" style={{ gap: 16 }}>
-                <div className="card">
-                  <h3>{t("Cómo funciona un laboratorio")}</h3>
-                  <StepGuide stack />
-                </div>
-                <div className="card">
-                  <h3>{t("Tipos de laboratorio")}</h3>
-                  <TypeLegend />
-                </div>
-                <div className="card">
-                  <h3>{t("Recomendado para ti")}</h3>
-                  <RecList items={[...(p.adaptive ?? []), ...(p.recommendations ?? [])].filter((r) => r.labId !== next?.id).slice(0, 3)} />
-                </div>
-              </div>
-            </div>
-          )}
         </section>
+
+        <div className="grid two" style={{ marginTop: 24, alignItems: "start" }}>
+          <div className="card">
+            <h3>{t("Recomendado para ti")}</h3>
+            <RecList items={[...(p.adaptive ?? []), ...(p.recommendations ?? [])].filter((r) => r.labId !== next?.id).slice(0, 3)} />
+          </div>
+          <div className="card">
+            <h3>{t("Cómo funciona un laboratorio")}</h3>
+            <StepGuide stack />
+          </div>
+        </div>
 
         <details className="lt-more lt-section">
           <summary>{t("Estadísticas detalladas: nivel, competencias, certificaciones y más")}</summary>

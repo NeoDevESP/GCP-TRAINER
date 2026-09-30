@@ -251,3 +251,50 @@ export function Tour() {
     </div>
   );
 }
+
+const TRACK_CODE: Record<string, string> = {
+  foundations: "FND", linux: "LNX", "ace-30": "ACE", capstones: "CAP", architect: "ARC", devops: "OPS", sre: "SRE", gke: "GKE",
+  security: "SEC", network: "NET", data: "DAT", serverless: "SRV", ml: "ML", finops: "FIN", career: "CAR",
+};
+
+/** TrackBadge is the short coloured code of a route (ACE, SEC…). */
+export function TrackBadge({ id, index = 0, size = 44 }: { id: string; index?: number; size?: number }) {
+  return (
+    <span className={`cm-badge lt-c${index % 6}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.3) }} aria-hidden="true">
+      {TRACK_CODE[id] ?? id.slice(0, 3).toUpperCase()}
+    </span>
+  );
+}
+
+/** RouteLine draws a window of a route as a horizontal line of steps. */
+export function RouteLine({ labs, state, running, window: size = 7 }: { labs: LabSummary[]; state: Record<string, LabState>; running?: Record<string, string>; window?: number }) {
+  const { t } = useI18n();
+  const cur = nextLab(labs.map((l) => l.id), state);
+  const ci = cur ? labs.findIndex((l) => l.id === cur) : labs.length - 1;
+  const start = Math.max(0, Math.min(ci - 3, labs.length - size));
+  const shown = labs.slice(start, start + size);
+  const doneIdx = shown.map((l) => state[l.id] === "done");
+  const lastDone = doneIdx.lastIndexOf(true);
+  const fill = shown.length > 1 && lastDone >= 0 ? `calc((100% - 120px) * ${lastDone / (shown.length - 1)})` : "0";
+  return (
+    <div className="cm-line">
+      <span className="cm-line-fill" style={{ width: fill }} aria-hidden="true" />
+      <ol className="cm-line-list" aria-label={t("Pasos de la ruta")}>
+      {shown.map((l) => {
+        const i = labs.indexOf(l);
+        const st = state[l.id] === "done" ? "done" : l.id === cur ? "cur" : state[l.id] === "doing" ? "doing" : "todo";
+        const word = st === "done" ? t("superado") : st === "cur" ? t("siguiente") : st === "doing" ? t("empezado") : t("pendiente");
+        return (
+          <li key={l.id}>
+            <a className={`cm-node ${st}`} href={labHref(l.id, running?.[l.id])} aria-label={`${i + 1}. ${l.title} (${word})`}>
+              <span className="cm-node-dot" aria-hidden="true">{st === "done" ? "✓" : i + 1}</span>
+              <span className="cm-node-day" aria-hidden="true">{l.day ? t("Día {n}", { n: l.day }) : t("Paso {n}", { n: i + 1 })}</span>
+              <span className="cm-node-title" aria-hidden="true">{l.title.replace(/^(Día|Day) \d+ · /, "")}</span>
+            </a>
+          </li>
+        );
+      })}
+      </ol>
+    </div>
+  );
+}

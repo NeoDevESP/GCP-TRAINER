@@ -86,13 +86,26 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
         </details>
       ) : null}
       <div className="row" style={{ marginTop: 20 }}>
-        <button className="btn" onClick={() => start()} disabled={busy} style={{ height: 40, padding: "0 24px" }}>
-          {busy ? t("Preparando el entorno…") : t("Empezar laboratorio")}
-        </button>
-        {lab.type !== "boss" && (
-          <button className="btn secondary" onClick={() => start(true)} disabled={busy} style={{ height: 40 }}>
-            <Icon name="school" size={18} /> {t("Empezar con el profesor")}
-          </button>
+        {qs("tutor") === "1" && lab.type !== "boss" ? (
+          <>
+            <button className="btn" onClick={() => start(true)} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
+              <Icon name="school" size={18} /> {busy ? t("Preparando el entorno…") : t("Empezar con el profesor")}
+            </button>
+            <button className="btn secondary" onClick={() => start()} disabled={busy} style={{ height: 44 }}>
+              {t("Empezar sin profesor")}
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="btn" onClick={() => start()} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
+              {busy ? t("Preparando el entorno…") : t("Empezar laboratorio")}
+            </button>
+            {lab.type !== "boss" && (
+              <button className="btn secondary" onClick={() => start(true)} disabled={busy} style={{ height: 44 }}>
+                <Icon name="school" size={18} /> {t("Empezar con el profesor")}
+              </button>
+            )}
+          </>
         )}
         <span className="muted small">{t("No puedes romper nada: es un proyecto de prácticas que se crea solo para ti.")}</span>
       </div>
