@@ -100,7 +100,9 @@ type StudyDomain struct {
 // topic id) and learn/exams.yaml.
 func loadStudy(dir string) ([]StudyTopic, []StudyExam, error) {
 	files, _ := filepath.Glob(filepath.Join(dir, "topics", "*.yaml"))
-	sort.Strings(files)
+	// A topic's base file (iam.yaml) goes before its extensions (iam-2.yaml).
+	base := func(f string) string { return strings.TrimSuffix(filepath.Base(f), ".yaml") }
+	sort.Slice(files, func(i, j int) bool { return base(files[i]) < base(files[j]) })
 	var out []StudyTopic
 	at := map[string]int{}
 	for _, f := range files {

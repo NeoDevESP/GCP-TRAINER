@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
-import { addHistory, buildExam, fmtTime, isRight, type ExamInfo, type ExamQuestion, type Topic } from "@/lib/study";
+import { addHistory, buildExam, fmtTime, isRight, loadRun, saveRun, type ExamInfo, type ExamQuestion, type Topic } from "@/lib/study";
 
 // Choices renders the options of a question as radio buttons, or as
 // checkboxes limited to N picks for a "choose N" question.
@@ -40,22 +40,6 @@ interface Run {
 }
 
 const key = (cert: string, full: boolean) => `cm-exam-run-${cert}-${full ? "full" : "quick"}`;
-function loadRun(k: string): Run | null {
-  try {
-    const v = localStorage.getItem(k);
-    return v ? (JSON.parse(v) as Run) : null;
-  } catch {
-    return null;
-  }
-}
-function saveRun(k: string, r: Run | null) {
-  try {
-    if (r) localStorage.setItem(k, JSON.stringify(r));
-    else localStorage.removeItem(k);
-  } catch {
-    /* ignore */
-  }
-}
 
 export default function Exam({ ex, certName, byId, full, onExit, topicLink }: { ex: ExamInfo; certName: string; byId: Record<string, Topic>; full: boolean; onExit: () => void; topicLink: (id: string) => ReactNode }) {
   const { t } = useI18n();
@@ -70,7 +54,7 @@ export default function Exam({ ex, certName, byId, full, onExit, topicLink }: { 
   const [announce, setAnnounce] = useState("");
 
   useEffect(() => {
-    const r = loadRun(k);
+    const r = loadRun<Run>(k);
     if (r && !r.done) setSaved(r);
   }, [k]);
   useEffect(() => {

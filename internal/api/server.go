@@ -42,6 +42,7 @@ type Server struct {
 	Lib       *scenario.Library   // failure library (incident generator)
 	Company   *company.Definition // persistent company simulation (Career Mode)
 	mu        sync.Mutex
+	studyMu   sync.Mutex
 	rl        map[string][]time.Time
 }
 
@@ -208,6 +209,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		return map[string]any{"branches": cat.Branches, "tracks": cat.Tracks, "certs": cat.Certs, "badges": cat.Badges, "labs": labs, "levels": learning.LevelNames(s.lang(r)), "lang": s.lang(r)}, nil
 	})
+	s.studyRoutes(h)
 	h("GET /api/learn", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		return map[string]any{"topics": s.Cat.StudyView(s.lang(r)), "exams": s.Cat.ExamView(s.lang(r))}, nil
 	})

@@ -5,7 +5,7 @@
 // and the study topics in order of weight; each topic has concept cards,
 // three games (flashcards, matching, "which service?") and a quiz; and a
 // practice exam reproduces the real one (see components/Exam.tsx).
-// Progress is a per-browser convenience kept in localStorage.
+// Progress is saved in the learner's account (see lib/study.ts).
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Nav from "@/components/Nav";
@@ -15,7 +15,7 @@ import { useAuth } from "@/components/useAuth";
 import { k, useI18n } from "@/lib/i18n";
 import type { LabSummary } from "@/lib/types";
 import { TypeTag, labHref, useProgress } from "@/components/learn";
-import { fmtTime, isRight, loadHistory, loadProgress, mix, readiness, saveProgress, shuffle, topicWeights, type Cert, type Concept, type ExamInfo, type ExamRecord, type Progress, type Question, type Topic, type TopicProgress } from "@/lib/study";
+import { fmtTime, isRight, loadHistory, loadProgress, mix, readiness, saveProgress, shuffle, syncStudy, topicWeights, type Cert, type Concept, type ExamInfo, type ExamRecord, type Progress, type Question, type Topic, type TopicProgress } from "@/lib/study";
 
 const TABS: [string, string][] = [
   ["concepts", k("Conceptos")],
@@ -54,12 +54,20 @@ export default function LearnPage() {
   const [prog, setProg] = useState<Progress>({});
   const [hist, setHist] = useState<ExamRecord[]>([]);
   const [round, setRound] = useState(0);
+  const [synced, setSynced] = useState(false);
   const [err, setErr] = useState("");
   const { state, running } = useProgress();
 
   useEffect(() => {
     setProg(loadProgress());
     setHist(loadHistory());
+    syncStudy()
+      .then((r) => {
+        setProg(r.progress);
+        setHist(r.history);
+      })
+      .catch(() => {})
+      .finally(() => setSynced(true));
     const skill = qs("skill");
     if (qs("topic")) setTopic(qs("topic"));
     else if (skill) setTopic("@" + skill.split(".")[0]);
@@ -82,7 +90,7 @@ export default function LearnPage() {
   const update = (id: string, f: (p: TopicProgress) => TopicProgress) => {
     setProg((old) => {
       const next = { ...old, [id]: f(old[id] ?? {}) };
-      saveProgress(next);
+      saveProgress(next, [id]);
       return next;
     });
   };
@@ -122,7 +130,7 @@ export default function LearnPage() {
       <Nav active="/learn" />
       <main id="main" className="page">
         {err && <p className="error">{err}</p>}
-        {!topics ? (
+        {!topics || !synced ? (
           <p className="muted">{t("Cargando…")}</p>
         ) : mode && ex && cur ? (
           <>
