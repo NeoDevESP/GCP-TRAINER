@@ -12,10 +12,17 @@ func TestStudyMaterial(t *testing.T) {
 	}
 	topics := map[string]bool{}
 	for _, s := range c.Study {
-		topics[s.ID] = true
+		topics[s.Branch] = true
 	}
-	// Every branch weighted by a certification blueprint has study material.
+	exams := map[string]bool{}
+	for _, e := range c.Exams {
+		exams[e.Cert] = true
+	}
+	// Every certification has an exam structure and every weighted branch a topic.
 	for _, ce := range c.Certs {
+		if !exams[ce.ID] {
+			t.Errorf("cert %s has no exam structure", ce.ID)
+		}
 		for b := range ce.Weights {
 			if !topics[b] {
 				t.Errorf("cert %s: branch %s has no study topic", ce.ID, b)

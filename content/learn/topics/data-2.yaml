@@ -1,0 +1,104 @@
+id: data
+concepts:
+  - id: bq-design
+    term: [Diseño y gobierno en BigQuery, BigQuery design and governance]
+    what: ["Datasets, particiones, clústeres, vistas y seguridad fina.", "Datasets, partitions, clusters, views and fine-grained security."]
+    points:
+      - ["Partición por fecha de ingesta, columna de fecha/hora o rango entero; caducidad de particiones.", "Partition by ingestion time, date/timestamp column or integer range; partition expiration."]
+      - ["Vistas autorizadas y vistas materializadas.", "Authorized views and materialized views."]
+      - ["Seguridad a nivel de fila (row access policies) y de columna (policy tags).", "Row-level security (row access policies) and column-level (policy tags)."]
+      - ["Time travel (hasta 7 días) y snapshots de tabla.", "Time travel (up to 7 days) and table snapshots."]
+    tip: ["Compartir solo algunas columnas con otro equipo sin copiar datos → vista autorizada o policy tags.", "Share only some columns with another team without copying data → authorized view or policy tags."]
+  - id: bq-load
+    term: [Cargar datos en BigQuery, Loading data into BigQuery]
+    what: ["Cargas por lotes, streaming y tablas externas.", "Batch loads, streaming and external tables."]
+    points:
+      - ["Cargas por lotes gratis desde Cloud Storage (Avro y Parquet conservan el esquema).", "Free batch loads from Cloud Storage (Avro and Parquet keep the schema)."]
+      - ["Storage Write API para streaming con semántica de exactamente una vez.", "Storage Write API for streaming with exactly-once semantics."]
+      - ["Tablas externas y BigLake para consultar Cloud Storage (Parquet, Iceberg) sin cargar.", "External tables and BigLake to query Cloud Storage (Parquet, Iceberg) without loading."]
+      - ["Suscripción de Pub/Sub directa a BigQuery sin Dataflow cuando no hay transformaciones.", "Pub/Sub subscription straight to BigQuery without Dataflow when no transforms are needed."]
+    tip: ["Mensajes de Pub/Sub a BigQuery tal cual, sin transformar → suscripción BigQuery de Pub/Sub.", "Pub/Sub messages into BigQuery as is, no transforms → Pub/Sub BigQuery subscription."]
+  - id: beam
+    term: [Streaming con Dataflow, Streaming with Dataflow]
+    what: ["Ventanas, marcas de agua y datos que llegan tarde.", "Windows, watermarks and late data."]
+    points:
+      - ["Ventanas fijas (cada 5 min), deslizantes (de 1 h cada 5 min) y de sesión (por inactividad).", "Fixed windows (every 5 min), sliding (1 h every 5 min) and session (by inactivity)."]
+      - ["Marca de agua: estimación de que ya llegaron todos los datos de una ventana; triggers para datos tardíos.", "Watermark: estimate that all data for a window has arrived; triggers for late data."]
+      - ["Actualizar un pipeline sin perder datos: update compatible o drain y relanzar.", "Update a pipeline without losing data: compatible update or drain and relaunch."]
+      - ["Dead-letter en el pipeline para registros malformados.", "Dead-letter within the pipeline for malformed records."]
+    tip: ["Agrupar clics de cada usuario hasta que pasa 30 min sin actividad → ventana de sesión.", "Group each user's clicks until 30 min of inactivity → session window."]
+  - id: dataplex
+    term: [Gobierno de datos, Data governance]
+    what: ["Dataplex, Data Catalog y linaje para descubrir y gobernar los datos.", "Dataplex, Data Catalog and lineage to discover and govern data."]
+    points:
+      - ["Dataplex organiza lagos y zonas, calidad de datos y perfiles.", "Dataplex organizes lakes and zones, data quality and profiling."]
+      - ["Catálogo universal para buscar datasets y metadatos.", "Universal catalog to search datasets and metadata."]
+      - ["Analytics Hub para compartir datasets entre organizaciones.", "Analytics Hub to share datasets across organizations."]
+    tip: ["Compartir datos con socios externos sin copiarlos → Analytics Hub.", "Share data with external partners without copying → Analytics Hub."]
+  - id: prep
+    term: [Preparación y orquestación, Preparation and orchestration]
+    what: ["Herramientas para transformar sin código o con SQL, y orquestar.", "Tools to transform without code or with SQL, and orchestrate."]
+    points:
+      - ["Dataform: transformaciones SQL versionadas dentro de BigQuery (ELT).", "Dataform: versioned SQL transformations inside BigQuery (ELT)."]
+      - ["Cloud Data Fusion: ETL visual sin código basado en CDAP.", "Cloud Data Fusion: visual no-code ETL based on CDAP."]
+      - ["Workflows: orquestación ligera de llamadas a APIs; Composer para DAGs complejos.", "Workflows: lightweight API call orchestration; Composer for complex DAGs."]
+      - ["Looker y Looker Studio para visualización y BI.", "Looker and Looker Studio for visualization and BI."]
+    tip: ["Equipo sin programadores que necesita ETL gráfico → Cloud Data Fusion.", "Team without programmers needing graphical ETL → Cloud Data Fusion."]
+scenarios:
+  - q: ["Llegan eventos tarde por la mala cobertura de los móviles y los totales por minuto salen incompletos.", "Events arrive late due to poor mobile coverage and per-minute totals come out incomplete."]
+    options: [["Configurar marca de agua y triggers para datos tardíos en Dataflow", "Configure watermark and late-data triggers in Dataflow"], ["Usar Cloud SQL", "Use Cloud SQL"], ["Aumentar las réplicas de Pub/Sub", "Add Pub/Sub replicas"]]
+    answer: 0
+    why: ["Beam gestiona el tiempo del evento y permite actualizar resultados con datos tardíos.", "Beam handles event time and can update results with late data."]
+  - q: ["El equipo de marketing debe ver solo las filas de su país en una tabla compartida de ventas.", "The marketing team must see only their country's rows in a shared sales table."]
+    options: [["Row access policies de BigQuery", "BigQuery row access policies"], ["Copiar la tabla por país cada noche", "Copy the table per country nightly"], ["Un bucket por país", "A bucket per country"]]
+    answer: 0
+    why: ["Seguridad a nivel de fila sin duplicar datos.", "Row-level security without duplicating data."]
+  - q: ["Hay datos Parquet en Cloud Storage que otros sistemas también leen; quieres consultarlos en BigQuery con seguridad fina sin copiarlos.", "Parquet data in Cloud Storage is read by other systems too; you want to query it in BigQuery with fine-grained security without copying."]
+    options: [["Tablas BigLake", "BigLake tables"], ["Cargar una copia cada hora", "Load a copy hourly"], ["Dataproc", "Dataproc"]]
+    answer: 0
+    why: ["BigLake consulta en su sitio con controles de fila y columna.", "BigLake queries in place with row and column controls."]
+  - q: ["Un pipeline de Dataflow en streaming necesita una versión nueva del código sin perder mensajes.", "A streaming Dataflow pipeline needs new code without losing messages."]
+    options: [["Actualizar el trabajo (--update) o drenar y relanzar", "Update the job (--update) or drain and relaunch"], ["Cancelar y relanzar", "Cancel and relaunch"], ["Borrar la suscripción", "Delete the subscription"]]
+    answer: 0
+    why: ["Cancelar descarta los datos en curso; drain los procesa antes de parar.", "Cancel discards in-flight data; drain processes it before stopping."]
+  - q: ["Los analistas quieren transformar tablas en BigQuery con SQL versionado en Git y dependencias entre pasos.", "Analysts want to transform BigQuery tables with Git-versioned SQL and step dependencies."]
+    options: [["Dataform", "Dataform"], ["Dataproc", "Dataproc"], ["Cloud Functions", "Cloud Functions"]]
+    answer: 0
+    why: ["Dataform gestiona ELT en SQL con control de versiones.", "Dataform manages SQL ELT with version control."]
+  - q: ["Hay que ingerir mensajes de Pub/Sub en BigQuery tal cual, sin transformar, con el mínimo mantenimiento.", "Ingest Pub/Sub messages into BigQuery as is, without transforms, with minimal maintenance."]
+    options: [["Suscripción de BigQuery en Pub/Sub", "Pub/Sub BigQuery subscription"], ["Dataflow con plantilla personalizada", "Dataflow with a custom template"], ["Cloud Run que inserte fila a fila", "Cloud Run inserting row by row"]]
+    answer: 0
+    why: ["Sin pipeline que operar.", "No pipeline to operate."]
+quiz:
+  - q: ["¿Durante cuánto tiempo permite time travel consultar una tabla en el pasado?", "How far back does time travel let you query a table?"]
+    options: [["Hasta 7 días (configurable de 2 a 7)", "Up to 7 days (configurable from 2 to 7)"], ["30 días", "30 days"], ["1 año", "1 year"]]
+    answer: 0
+    why: ["Para más tiempo, usa snapshots de tabla.", "For longer, use table snapshots."]
+  - q: ["¿Qué ventana agrupa eventos por periodos de actividad de cada usuario?", "Which window groups events by each user's activity periods?"]
+    options: [["Ventana de sesión", "Session window"], ["Ventana fija", "Fixed window"], ["Ventana global", "Global window"]]
+    answer: 0
+    why: ["Se cierra tras un hueco de inactividad.", "It closes after an inactivity gap."]
+  - q: ["¿Qué formato de archivo conserva el esquema al cargarlo en BigQuery? (Elige 2)", "Which file formats keep the schema when loading into BigQuery? (Choose 2)"]
+    options: [["Avro", "Avro"], ["Parquet", "Parquet"], ["CSV", "CSV"], ["TXT", "TXT"]]
+    answers: [0, 1]
+    why: ["Son autodescriptivos; CSV requiere esquema o autodetección.", "They are self-describing; CSV needs a schema or autodetect."]
+  - q: ["¿Qué hace una vista materializada en BigQuery?", "What does a BigQuery materialized view do?"]
+    options: [["Precalcula y mantiene el resultado para consultas más rápidas y baratas", "Precomputes and maintains results for faster, cheaper queries"], ["Da acceso a otro proyecto", "Grants access to another project"], ["Cifra la tabla", "Encrypts the table"]]
+    answer: 0
+    why: ["Se refresca automáticamente con los cambios de la tabla base.", "It refreshes automatically with base table changes."]
+  - q: ["¿Qué servicio conviene para orquestar un flujo sencillo de 4 llamadas a APIs con reintentos?", "Which service suits orchestrating a simple 4-API-call flow with retries?"]
+    options: [["Workflows", "Workflows"], ["Cloud Composer", "Cloud Composer"], ["Dataproc", "Dataproc"]]
+    answer: 0
+    why: ["Composer (Airflow) es más pesado; Workflows es serverless y ligero.", "Composer (Airflow) is heavier; Workflows is serverless and light."]
+  - q: ["Se paga mucho por consultas repetidas iguales de un panel. ¿Qué ayuda? (Elige 2)", "Repeated identical dashboard queries cost a lot. What helps? (Choose 2)"]
+    options: [["La caché de resultados de consultas", "The query results cache"], ["Vistas materializadas o BI Engine", "Materialized views or BI Engine"], ["SELECT * en cada consulta", "SELECT * in every query"], ["Desactivar particiones", "Disabling partitions"]]
+    answers: [0, 1]
+    why: ["Reutilizan resultados en lugar de volver a leer datos.", "They reuse results instead of rereading data."]
+  - q: ["¿Qué servicio ofrece Spark sin gestionar clústeres?", "Which service offers Spark without managing clusters?"]
+    options: [["Dataproc Serverless (Google Cloud Serverless for Apache Spark)", "Dataproc Serverless (Google Cloud Serverless for Apache Spark)"], ["Dataflow", "Dataflow"], ["Bigtable", "Bigtable"]]
+    answer: 0
+    why: ["Envía lotes de Spark y Google gestiona la infraestructura.", "Submit Spark batches and Google manages the infrastructure."]
+  - q: ["¿Qué garantiza la Storage Write API de BigQuery en modo comprometido?", "What does BigQuery's Storage Write API guarantee in committed mode?"]
+    options: [["Entrega exactamente una vez", "Exactly-once delivery"], ["Latencia de 1 ns", "1 ns latency"], ["Cifrado con EKM", "EKM encryption"]]
+    answer: 0
+    why: ["Usa offsets de flujo para evitar duplicados.", "It uses stream offsets to avoid duplicates."]

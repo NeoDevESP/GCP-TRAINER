@@ -1,0 +1,85 @@
+id: ml
+concepts:
+  - id: garden
+    term: [Model Garden y modelos fundacionales, Model Garden and foundation models]
+    what: ["Catálogo de modelos de Google, abiertos y de terceros listos para usar o ajustar.", "Catalog of Google, open and third-party models ready to use or tune."]
+    points:
+      - ["Gemini, Imagen, Gemma, Llama y otros, desplegables con un clic.", "Gemini, Imagen, Gemma, Llama and others, deployable with one click."]
+      - ["Evaluación de modelos generativos con el servicio de evaluación de Vertex AI.", "Evaluate generative models with the Vertex AI evaluation service."]
+      - ["Agentes con Agent Builder / Agent Engine y herramientas (function calling).", "Agents with Agent Builder / Agent Engine and tools (function calling)."]
+    tip: ["Necesitas un modelo abierto concreto desplegado en tu proyecto → Model Garden.", "You need a specific open model deployed in your project → Model Garden."]
+  - id: data-prep
+    term: [Preparar datos para ML, Preparing data for ML]
+    what: ["Limpieza, división y aumento de datos antes de entrenar.", "Cleaning, splitting and augmenting data before training."]
+    points:
+      - ["Divide en entrenamiento, validación y prueba; en series temporales, por fecha (no al azar).", "Split into training, validation and test; for time series, split by date (not randomly)."]
+      - ["Normalizar variables numéricas y codificar categóricas (one-hot, embeddings).", "Normalize numeric features and encode categoricals (one-hot, embeddings)."]
+      - ["Aumento de datos en imágenes (giros, recortes) cuando hay pocos ejemplos.", "Image data augmentation (flips, crops) when examples are few."]
+      - ["Etiquetado con servicios de etiquetado humano cuando no hay etiquetas.", "Use human labelling services when there are no labels."]
+    tip: ["Datos de ventas por fecha divididos al azar → fuga del futuro; divide por fecha.", "Sales data by date split randomly → future leakage; split by date."]
+  - id: cost-ml
+    term: [Coste y escala en ML, ML cost and scale]
+    what: ["Entrenar y servir sin gastar de más.", "Train and serve without overspending."]
+    points:
+      - ["VMs Spot con checkpoints para entrenamientos largos.", "Spot VMs with checkpoints for long training runs."]
+      - ["Réplicas mínimas a 0 o 1 para endpoints poco usados; predicción por lotes cuando no hay prisa.", "Min replicas 0 or 1 for rarely used endpoints; batch prediction when there's no rush."]
+      - ["Optimizar modelos (cuantización, destilación) para servir más barato.", "Optimize models (quantization, distillation) to serve cheaper."]
+    tip: ["Endpoint que se usa 1 hora al día y cuesta mucho → réplicas mínimas bajas o predicción por lotes.", "Endpoint used 1 hour a day costing a lot → low min replicas or batch prediction."]
+scenarios:
+  - q: ["Tienes 200 fotos etiquetadas por clase para un clasificador y el modelo sobreajusta.", "You have 200 labelled photos per class for a classifier and the model overfits."]
+    options: [["Aumento de datos y aprendizaje por transferencia desde un modelo preentrenado", "Data augmentation and transfer learning from a pre-trained model"], ["Entrenar más épocas", "Train more epochs"], ["Quitar la validación", "Remove validation"]]
+    answer: 0
+    why: ["Con pocos datos, reutilizar un modelo y ampliar ejemplos generaliza mejor.", "With little data, reusing a model and expanding examples generalizes better."]
+  - q: ["Un modelo de previsión de demanda se entrenó con fechas mezcladas al azar y en producción falla mucho.", "A demand forecasting model was trained with randomly shuffled dates and fails badly in production."]
+    options: [["Dividir los datos por fecha: entrenar con el pasado, validar con lo posterior", "Split by date: train on the past, validate on later data"], ["Usar más GPUs", "Use more GPUs"], ["Cambiar a predicción online", "Switch to online prediction"]]
+    answer: 0
+    why: ["Mezclar fechas deja ver el futuro durante el entrenamiento.", "Shuffling dates lets training see the future."]
+  - q: ["Un entrenamiento de 3 días en GPUs cuesta demasiado y el equipo acepta que se interrumpa.", "A 3-day GPU training run costs too much and the team accepts interruptions."]
+    options: [["VMs Spot con checkpoints periódicos", "Spot VMs with periodic checkpoints"], ["Reservar GPUs 3 años", "Reserve GPUs for 3 years"], ["Entrenar en CPU", "Train on CPU"]]
+    answer: 0
+    why: ["Spot abarata y los checkpoints permiten reanudar.", "Spot is cheaper and checkpoints allow resuming."]
+  - q: ["Un chatbot debe consultar el estado de pedidos en tu API al responder.", "A chatbot must check order status via your API while answering."]
+    options: [["Function calling de Gemini hacia tu API", "Gemini function calling to your API"], ["Reentrenar el modelo cada hora", "Retrain the model hourly"], ["Poner los pedidos en el prompt a mano", "Paste orders into the prompt by hand"]]
+    answer: 0
+    why: ["El modelo decide llamar a la herramienta y usa la respuesta real.", "The model decides to call the tool and uses the real answer."]
+  - q: ["Los científicos de datos repiten las mismas transformaciones de características en cada proyecto y a veces difieren.", "Data scientists repeat the same feature transformations in every project and they sometimes differ."]
+    options: [["Centralizar las características en Vertex AI Feature Store", "Centralize features in Vertex AI Feature Store"], ["Copiar cuadernos entre equipos", "Copy notebooks between teams"], ["Un CSV compartido por correo", "A CSV shared by email"]]
+    answer: 0
+    why: ["Reutilización y coherencia entre entrenamiento y servicio.", "Reuse and consistency between training and serving."]
+quiz:
+  - q: ["¿Qué modelo de BigQuery ML usarías para prever ventas mensuales?", "Which BigQuery ML model would you use to forecast monthly sales?"]
+    options: [["ARIMA_PLUS", "ARIMA_PLUS"], ["KMEANS", "KMEANS"], ["LOGISTIC_REG", "LOGISTIC_REG"]]
+    answer: 0
+    why: ["ARIMA_PLUS es para series temporales.", "ARIMA_PLUS is for time series."]
+  - q: ["¿Qué modelo de BigQuery ML agrupa clientes sin etiquetas?", "Which BigQuery ML model groups customers without labels?"]
+    options: [["KMEANS", "KMEANS"], ["LINEAR_REG", "LINEAR_REG"], ["BOOSTED_TREE_CLASSIFIER", "BOOSTED_TREE_CLASSIFIER"]]
+    answer: 0
+    why: ["k-means es aprendizaje no supervisado de agrupación.", "k-means is unsupervised clustering."]
+  - q: ["¿Qué métrica usarías para clasificación binaria con clases muy desequilibradas?", "Which metric for binary classification with very imbalanced classes?"]
+    options: [["AUC PR (precisión-exhaustividad)", "PR AUC (precision-recall)"], ["Exactitud", "Accuracy"], ["RMSE", "RMSE"]]
+    answer: 0
+    why: ["La exactitud engaña cuando una clase domina.", "Accuracy misleads when one class dominates."]
+  - q: ["¿Qué hace la parada temprana (early stopping)?", "What does early stopping do?"]
+    options: [["Para el entrenamiento cuando la métrica de validación deja de mejorar", "Stops training when the validation metric stops improving"], ["Reduce el tamaño del dataset", "Shrinks the dataset"], ["Detiene el endpoint", "Stops the endpoint"]]
+    answer: 0
+    why: ["Evita seguir sobreajustando.", "It avoids further overfitting."]
+  - q: ["¿Qué dos opciones reducen el coste de servir un modelo poco usado? (Elige 2)", "Which two options cut the cost of serving a rarely used model? (Choose 2)"]
+    options: [["Bajar las réplicas mínimas del endpoint", "Lower the endpoint's min replicas"], ["Usar predicción por lotes si no se necesita tiempo real", "Use batch prediction if real time isn't needed"], ["Añadir GPUs", "Add GPUs"], ["Duplicar el endpoint", "Duplicate the endpoint"]]
+    answers: [0, 1]
+    why: ["Pagas por nodos encendidos; los lotes no necesitan endpoint.", "You pay for running nodes; batch needs no endpoint."]
+  - q: ["¿Qué técnica adapta el estilo de respuesta de Gemini con ejemplos etiquetados?", "Which technique adapts Gemini's response style with labelled examples?"]
+    options: [["Ajuste supervisado (supervised tuning)", "Supervised tuning"], ["RAG", "RAG"], ["Aumentar max tokens", "Raising max tokens"]]
+    answer: 0
+    why: ["RAG aporta conocimiento; el ajuste cambia comportamiento y formato.", "RAG adds knowledge; tuning changes behaviour and format."]
+  - q: ["¿Qué base usarías para búsqueda por similitud de embeddings a gran escala?", "What would you use for large-scale embedding similarity search?"]
+    options: [["Vertex AI Vector Search", "Vertex AI Vector Search"], ["Cloud SQL sin extensiones", "Cloud SQL without extensions"], ["Cloud Storage", "Cloud Storage"]]
+    answer: 0
+    why: ["Vector Search hace búsqueda de vecinos aproximados a baja latencia (también AlloyDB/pgvector o BigQuery vector search).", "Vector Search does low-latency approximate nearest neighbours (also AlloyDB/pgvector or BigQuery vector search)."]
+  - q: ["¿Qué componente de TFX valida el esquema y detecta anomalías en los datos?", "Which TFX component validates schema and detects data anomalies?"]
+    options: [["TensorFlow Data Validation (ExampleValidator)", "TensorFlow Data Validation (ExampleValidator)"], ["Pusher", "Pusher"], ["Trainer", "Trainer"]]
+    answer: 0
+    why: ["TFDV compara estadísticas con el esquema esperado.", "TFDV compares statistics with the expected schema."]
+  - q: ["¿Dónde versionas modelos y marcas cuál está en producción?", "Where do you version models and mark which one is in production?"]
+    options: [["Vertex AI Model Registry con alias", "Vertex AI Model Registry with aliases"], ["Un bucket con nombres de archivo", "A bucket with file names"], ["Cloud Source Repositories", "Cloud Source Repositories"]]
+    answer: 0
+    why: ["El registro guarda versiones, evaluaciones y alias.", "The registry stores versions, evaluations and aliases."]

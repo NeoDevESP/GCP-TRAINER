@@ -1,0 +1,175 @@
+id: ml
+branch: data
+name: [Machine Learning e IA, Machine learning and AI]
+intro: ["Todo el ciclo de vida de un modelo en Google Cloud: elegir la opción con menos esfuerzo, preparar datos, entrenar, servir, automatizar y vigilar, incluida la IA generativa.", "The whole model lifecycle on Google Cloud: pick the least-effort option, prepare data, train, serve, automate and monitor, including generative AI."]
+concepts:
+  - id: ladder
+    term: [La escalera del esfuerzo, The effort ladder]
+    what: ["De menos a más esfuerzo: API preentrenada → BigQuery ML / AutoML → modelo de Model Garden ajustado → entrenamiento personalizado.", "From least to most effort: pre-trained API → BigQuery ML / AutoML → tuned Model Garden model → custom training."]
+    points:
+      - ["APIs preentrenadas: Vision, Speech-to-Text, Translation, Natural Language, Document AI, Video Intelligence.", "Pre-trained APIs: Vision, Speech-to-Text, Translation, Natural Language, Document AI, Video Intelligence."]
+      - ["BigQuery ML: modelos con SQL donde ya están los datos (regresión, clasificación, k-means, ARIMA_PLUS, importar TensorFlow/ONNX, llamar a Gemini).", "BigQuery ML: SQL models where the data already lives (regression, classification, k-means, ARIMA_PLUS, import TensorFlow/ONNX, call Gemini)."]
+      - ["AutoML: entrena con tus datos etiquetados (tabla, imagen, texto, vídeo) sin programar el modelo.", "AutoML: trains on your labelled data (tabular, image, text, video) without coding the model."]
+      - ["Entrenamiento personalizado: control total del código, el marco y el hardware.", "Custom training: full control over code, framework and hardware."]
+    tip: ["El examen premia la opción que resuelve el problema con menos código y mantenimiento.", "The exam rewards the option that solves the problem with the least code and maintenance."]
+  - id: vertex
+    term: [Vertex AI, Vertex AI]
+    what: ["La plataforma unificada de ML: datasets, entrenamiento, registro de modelos, endpoints, pipelines y supervisión.", "The unified ML platform: datasets, training, model registry, endpoints, pipelines and monitoring."]
+    points:
+      - ["Model Registry versiona los modelos y sus alias (p. ej. default, champion).", "Model Registry versions models and their aliases (e.g. default, champion)."]
+      - ["Vertex AI Workbench: cuadernos Jupyter gestionados; Colab Enterprise también está integrado.", "Vertex AI Workbench: managed Jupyter notebooks; Colab Enterprise is integrated too."]
+      - ["Vertex AI Experiments registra parámetros y métricas de cada ejecución.", "Vertex AI Experiments tracks parameters and metrics for each run."]
+    tip: ["Si aparece «gestionado» y «ML» en la misma frase, casi siempre es Vertex AI.", "If \"managed\" and \"ML\" appear in the same sentence, it is almost always Vertex AI."]
+  - id: training
+    term: [Entrenamiento personalizado y hardware, Custom training and hardware]
+    what: ["Trabajos de entrenamiento en contenedores prediseñados o propios, en CPU, GPU o TPU.", "Training jobs in prebuilt or custom containers on CPU, GPU or TPU."]
+    points:
+      - ["GPU: modelos generales y marcos variados. TPU: redes grandes con muchas multiplicaciones de matrices (TensorFlow, JAX, PyTorch/XLA).", "GPU: general models and many frameworks. TPU: large networks dominated by matrix multiplications (TensorFlow, JAX, PyTorch/XLA)."]
+      - ["Entrenamiento distribuido: reduction server, estrategias multiworker, paralelismo de datos.", "Distributed training: reduction server, multi-worker strategies, data parallelism."]
+      - ["Ajuste de hiperparámetros con Vertex AI Vizier (búsqueda bayesiana).", "Hyperparameter tuning with Vertex AI Vizier (Bayesian search)."]
+      - ["Guardar puntos de control (checkpoints) permite usar VMs Spot y reanudar.", "Saving checkpoints lets you use Spot VMs and resume."]
+    tip: ["Entrenamiento lento de una red grande en TensorFlow → TPU o más aceleradores con entrenamiento distribuido.", "Slow training of a large TensorFlow network → TPUs or more accelerators with distributed training."]
+  - id: serving
+    term: [Servir modelos, Serving models]
+    what: ["Predicción online por endpoint (baja latencia) o por lotes (grandes volúmenes, sin endpoint).", "Online prediction through an endpoint (low latency) or batch prediction (large volumes, no endpoint)."]
+    points:
+      - ["Un endpoint puede tener varios modelos desplegados y repartir el tráfico (canary, A/B).", "An endpoint can hold several deployed models and split traffic (canary, A/B)."]
+      - ["Réplicas mínimas y máximas controlan latencia y coste; el autoescalado usa CPU/GPU.", "Min and max replicas control latency and cost; autoscaling uses CPU/GPU."]
+      - ["Predicción por lotes lee y escribe en BigQuery o Cloud Storage.", "Batch prediction reads and writes BigQuery or Cloud Storage."]
+      - ["Endpoints privados (Private Service Connect) para tráfico que no sale a internet.", "Private endpoints (Private Service Connect) for traffic that stays off the internet."]
+    tip: ["«Puntuar 50 millones de filas cada noche» → predicción por lotes, no un endpoint.", "\"Score 50 million rows every night\" → batch prediction, not an endpoint."]
+  - id: features
+    term: [Datos y características, Data and features]
+    what: ["Preparar, transformar y compartir las características que usan los modelos.", "Prepare, transform and share the features models use."]
+    points:
+      - ["Vertex AI Feature Store sirve características desde BigQuery con baja latencia y evita el desfase entre entrenamiento y servicio.", "Vertex AI Feature Store serves features from BigQuery with low latency and avoids training-serving skew."]
+      - ["Dataflow/TFX Transform aplican la misma transformación al entrenar y al servir.", "Dataflow/TFX Transform apply the same transformation at training and serving time."]
+      - ["Clases desequilibradas: sobremuestreo, pesos por clase y métricas como precisión/recall o AUC PR.", "Imbalanced classes: oversampling, class weights and metrics like precision/recall or PR AUC."]
+      - ["Fuga de datos (data leakage): usar en el entrenamiento información que no existirá al predecir.", "Data leakage: training on information that will not exist at prediction time."]
+    tip: ["El modelo va genial en pruebas y mal en producción → sospecha desfase entrenamiento/servicio o fuga de datos.", "Model great in testing but poor in production → suspect training-serving skew or data leakage."]
+  - id: metrics
+    term: [Métricas de evaluación, Evaluation metrics]
+    what: ["Cómo saber si un modelo es bueno según el problema de negocio.", "How to tell whether a model is good for the business problem."]
+    points:
+      - ["Precisión (precision): de los que predije positivos, cuántos lo eran. Importa cuando un falso positivo es caro.", "Precision: of predicted positives, how many were right. Matters when a false positive is costly."]
+      - ["Exhaustividad (recall): de los positivos reales, cuántos encontré. Importa cuando un falso negativo es caro (fraude, enfermedad).", "Recall: of real positives, how many were found. Matters when a false negative is costly (fraud, disease)."]
+      - ["Regresión: RMSE penaliza más los errores grandes; MAE es más robusto a valores atípicos.", "Regression: RMSE penalizes large errors more; MAE is more robust to outliers."]
+      - ["Sobreajuste: va bien en entrenamiento y mal en validación → regularización, más datos, parada temprana.", "Overfitting: good on training, poor on validation → regularization, more data, early stopping."]
+    tip: ["Detectar fraudes sin que se escape ninguno → prioriza el recall.", "Catching fraud without missing any → prioritize recall."]
+  - id: pipelines
+    term: [MLOps y Vertex AI Pipelines, MLOps and Vertex AI Pipelines]
+    what: ["Automatizar el ciclo completo: datos → entrenamiento → evaluación → registro → despliegue.", "Automate the full cycle: data → training → evaluation → registration → deployment."]
+    points:
+      - ["Pipelines con Kubeflow Pipelines SDK o TFX, ejecutadas sin servidores en Vertex AI Pipelines.", "Pipelines with the Kubeflow Pipelines SDK or TFX, run serverlessly on Vertex AI Pipelines."]
+      - ["Metadatos y linaje registran qué datos y parámetros produjeron cada modelo.", "Metadata and lineage record which data and parameters produced each model."]
+      - ["Reentrenar por calendario o cuando la supervisión detecta deriva.", "Retrain on a schedule or when monitoring detects drift."]
+      - ["CI/CD de modelos con Cloud Build y aprobaciones antes de producción.", "Model CI/CD with Cloud Build and approvals before production."]
+    tip: ["«Reproducible, auditable y automatizado» → Vertex AI Pipelines con metadatos.", "\"Reproducible, auditable and automated\" → Vertex AI Pipelines with metadata."]
+  - id: monitoring
+    term: [Supervisión de modelos, Model monitoring]
+    what: ["Vigilar que los datos de producción no se alejen de los de entrenamiento.", "Watch that production data does not drift from training data."]
+    points:
+      - ["Desfase (skew): datos de servicio distintos a los de entrenamiento.", "Skew: serving data differs from training data."]
+      - ["Deriva (drift): los datos de servicio cambian con el tiempo.", "Drift: serving data changes over time."]
+      - ["Vertex AI Model Monitoring compara distribuciones y alerta por umbral.", "Vertex AI Model Monitoring compares distributions and alerts on thresholds."]
+    tip: ["La precisión baja poco a poco tras meses en producción → deriva; activa la supervisión y reentrena.", "Accuracy slowly declines after months in production → drift; enable monitoring and retrain."]
+  - id: genai
+    term: [IA generativa en Vertex AI, Generative AI on Vertex AI]
+    what: ["Modelos Gemini y de Model Garden, con técnicas para adaptarlos a tus datos.", "Gemini and Model Garden models, with techniques to adapt them to your data."]
+    points:
+      - ["Ingeniería de prompts: lo primero y lo más barato.", "Prompt engineering: the first and cheapest step."]
+      - ["RAG (generación aumentada por recuperación): busca en tus documentos y los pasa al modelo; ideal para datos que cambian (Vertex AI Search, RAG Engine, Vector Search).", "RAG (retrieval-augmented generation): searches your documents and passes them to the model; ideal for changing data (Vertex AI Search, RAG Engine, Vector Search)."]
+      - ["Ajuste supervisado (tuning): cambiar estilo o formato con ejemplos etiquetados.", "Supervised tuning: change style or format with labelled examples."]
+      - ["Grounding con Google Search o con tus datos reduce las alucinaciones.", "Grounding with Google Search or your own data reduces hallucinations."]
+    tip: ["Respuestas basadas en documentos internos que cambian a diario → RAG, no reentrenar.", "Answers based on internal documents that change daily → RAG, not retraining."]
+  - id: responsible
+    term: [IA responsable, Responsible AI]
+    what: ["Explicabilidad, equidad, privacidad y seguridad de los modelos.", "Explainability, fairness, privacy and safety of models."]
+    points:
+      - ["Vertex Explainable AI: atribuciones de características (Shapley muestreado, gradientes integrados).", "Vertex Explainable AI: feature attributions (sampled Shapley, integrated gradients)."]
+      - ["Revisar sesgos por grupos antes de desplegar.", "Review bias across groups before deploying."]
+      - ["Filtros de seguridad y Model Armor para contenido y ataques de prompt.", "Safety filters and Model Armor for content and prompt attacks."]
+      - ["Datos sensibles: desidentificar con Sensitive Data Protection antes de entrenar.", "Sensitive data: de-identify with Sensitive Data Protection before training."]
+    tip: ["«Explicar al regulador por qué se denegó un crédito» → Explainable AI con atribuciones.", "\"Explain to the regulator why a loan was denied\" → Explainable AI with attributions."]
+scenarios:
+  - q: ["Una tienda quiere etiquetar automáticamente las fotos de productos con categorías genéricas (zapato, bolso, camiseta). No tiene equipo de ML.", "A shop wants to auto-label product photos with generic categories (shoe, bag, shirt). It has no ML team."]
+    options: [["Cloud Vision API", "Cloud Vision API"], ["AutoML Image entrenado con 50.000 fotos", "AutoML Image trained on 50,000 photos"], ["Una CNN personalizada en TPUs", "A custom CNN on TPUs"], ["BigQuery ML k-means", "BigQuery ML k-means"]]
+    answer: 0
+    why: ["Las etiquetas genéricas ya las reconoce la API preentrenada: cero entrenamiento.", "The pre-trained API already recognizes generic labels: zero training."]
+  - q: ["Ahora la tienda necesita distinguir sus 300 modelos propios de zapatilla, con fotos etiquetadas y sin científicos de datos.", "Now the shop must tell apart its own 300 sneaker models, with labelled photos and no data scientists."]
+    options: [["AutoML Image", "AutoML Image"], ["Cloud Vision API", "Cloud Vision API"], ["Entrenamiento personalizado con PyTorch", "Custom training with PyTorch"]]
+    answer: 0
+    why: ["Clases propias con datos etiquetados y sin programar el modelo: AutoML.", "Custom classes with labelled data and no model code: AutoML."]
+  - q: ["Los analistas tienen los datos de clientes en BigQuery, saben SQL y quieren predecir bajas en una semana.", "Analysts have customer data in BigQuery, know SQL and want churn predictions within a week."]
+    options: [["BigQuery ML (logistic_reg o boosted_tree)", "BigQuery ML (logistic_reg or boosted_tree)"], ["Exportar a CSV y entrenar en Workbench", "Export to CSV and train in Workbench"], ["Dataproc con Spark MLlib", "Dataproc with Spark MLlib"]]
+    answer: 0
+    why: ["Sin mover datos y con SQL: el camino más corto.", "No data movement and plain SQL: the shortest path."]
+  - q: ["Un banco debe puntuar 80 millones de transacciones cada noche y dejar el resultado en BigQuery.", "A bank must score 80 million transactions nightly and write results to BigQuery."]
+    options: [["Predicción por lotes de Vertex AI", "Vertex AI batch prediction"], ["Un endpoint online con 100 réplicas", "An online endpoint with 100 replicas"], ["Cloud Run llamando al modelo fila a fila", "Cloud Run calling the model row by row"]]
+    answer: 0
+    why: ["Volúmenes grandes sin requisitos de latencia → lotes, sin endpoint encendido.", "Large volumes without latency needs → batch, no endpoint running."]
+  - q: ["Un asistente interno debe responder con las políticas de RR. HH., que cambian cada semana, y citar la fuente.", "An internal assistant must answer with HR policies that change weekly and cite the source."]
+    options: [["RAG con Vertex AI Search o RAG Engine sobre los documentos", "RAG with Vertex AI Search or RAG Engine over the documents"], ["Ajustar Gemini cada semana con las políticas", "Tune Gemini weekly on the policies"], ["Entrenar un modelo de lenguaje propio", "Train your own language model"]]
+    answer: 0
+    why: ["RAG usa siempre la versión actual de los documentos y permite citar.", "RAG always uses the current documents and allows citations."]
+  - q: ["El modelo de recomendación funcionaba bien, pero tras 6 meses sus métricas han caído poco a poco.", "The recommendation model worked well but its metrics slowly dropped over 6 months."]
+    options: [["Detectar deriva con Model Monitoring y reentrenar con datos recientes", "Detect drift with Model Monitoring and retrain on recent data"], ["Añadir más réplicas al endpoint", "Add more endpoint replicas"], ["Pasar a TPUs", "Move to TPUs"]]
+    answer: 0
+    why: ["Los datos del mundo cambian; el modelo debe seguirlos.", "Real-world data changes; the model must follow."]
+  - q: ["El equipo quiere que cada modelo nuevo se entrene, evalúe y solo se despliegue si mejora al actual, de forma reproducible.", "The team wants each new model trained, evaluated and deployed only if it beats the current one, reproducibly."]
+    options: [["Vertex AI Pipelines con un paso de evaluación condicional", "Vertex AI Pipelines with a conditional evaluation step"], ["Un cuaderno que alguien ejecuta a mano", "A notebook someone runs by hand"], ["Un cron en una VM", "A cron job on a VM"]]
+    answer: 0
+    why: ["La pipeline registra linaje y automatiza la decisión.", "The pipeline records lineage and automates the decision."]
+  - q: ["Detección de tumores en radiografías: no escapar ningún caso es lo más importante.", "Tumour detection in X-rays: missing no case is the top priority."]
+    options: [["Maximizar el recall", "Maximize recall"], ["Maximizar la precisión", "Maximize precision"], ["Minimizar el RMSE", "Minimize RMSE"]]
+    answer: 0
+    why: ["Un falso negativo es lo más caro; el recall mide cuántos positivos encuentras.", "A false negative is most costly; recall measures how many positives you find."]
+quiz:
+  - q: ["¿Qué servicio ofrece cuadernos Jupyter gestionados integrados con Vertex AI?", "Which service offers managed Jupyter notebooks integrated with Vertex AI?"]
+    options: [["Vertex AI Workbench", "Vertex AI Workbench"], ["Cloud Shell", "Cloud Shell"], ["Dataprep", "Dataprep"], ["Looker", "Looker"]]
+    answer: 0
+    why: ["Workbench (y Colab Enterprise) son los entornos de cuadernos gestionados.", "Workbench (and Colab Enterprise) are the managed notebook environments."]
+  - q: ["El modelo va al 99 % en entrenamiento y al 70 % en validación. ¿Qué ocurre?", "The model scores 99% in training and 70% in validation. What is happening?"]
+    options: [["Sobreajuste", "Overfitting"], ["Subajuste", "Underfitting"], ["Deriva de datos", "Data drift"], ["Falta de GPU", "Lack of GPUs"]]
+    answer: 0
+    why: ["Memoriza el entrenamiento y no generaliza: regularización, más datos o parada temprana.", "It memorizes training data and does not generalize: regularization, more data or early stopping."]
+  - q: ["¿Qué evita que la transformación de datos sea distinta al entrenar y al servir? (Elige 2)", "What prevents data transformation from differing between training and serving? (Choose 2)"]
+    options: [["Vertex AI Feature Store", "Vertex AI Feature Store"], ["Usar TensorFlow Transform en ambos lados", "Using TensorFlow Transform on both sides"], ["Aumentar el tamaño del lote", "Increasing batch size"], ["Usar TPUs", "Using TPUs"]]
+    answers: [0, 1]
+    why: ["Compartir las características o la misma lógica de transformación elimina el desfase.", "Sharing the features or the same transformation logic removes skew."]
+  - q: ["¿Qué hardware conviene para entrenar una red muy grande en JAX con muchas multiplicaciones de matrices?", "Which hardware suits training a very large JAX network dominated by matrix multiplications?"]
+    options: [["TPU", "TPU"], ["CPU con muchos núcleos", "Many-core CPU"], ["Memorystore", "Memorystore"]]
+    answer: 0
+    why: ["Las TPU están diseñadas para operaciones de matrices a gran escala.", "TPUs are designed for large-scale matrix operations."]
+  - q: ["¿Qué servicio busca los mejores hiperparámetros con optimización bayesiana?", "Which service searches for the best hyperparameters with Bayesian optimization?"]
+    options: [["Vertex AI Vizier", "Vertex AI Vizier"], ["Cloud Scheduler", "Cloud Scheduler"], ["Dataflow", "Dataflow"]]
+    answer: 0
+    why: ["Vizier impulsa el ajuste de hiperparámetros de Vertex AI.", "Vizier powers Vertex AI hyperparameter tuning."]
+  - q: ["Quieres probar un modelo nuevo con el 10 % del tráfico del endpoint actual.", "You want to test a new model with 10% of the current endpoint traffic."]
+    options: [["Desplegarlo en el mismo endpoint con reparto 90/10", "Deploy it to the same endpoint with a 90/10 split"], ["Crear otro proyecto", "Create another project"], ["Predicción por lotes", "Batch prediction"]]
+    answer: 0
+    why: ["Un endpoint admite varios modelos con porcentaje de tráfico.", "An endpoint supports several models with traffic percentages."]
+  - q: ["¿Qué técnica reduce alucinaciones anclando las respuestas en fuentes fiables?", "Which technique reduces hallucinations by anchoring answers in trusted sources?"]
+    options: [["Grounding", "Grounding"], ["Aumentar la temperatura", "Raising the temperature"], ["Quitar el system prompt", "Removing the system prompt"]]
+    answer: 0
+    why: ["Grounding con Google Search o tus datos da respuestas verificables.", "Grounding with Google Search or your data gives verifiable answers."]
+  - q: ["Una regresión de precios tiene algunos valores atípicos enormes que no quieres que dominen la métrica.", "A price regression has a few huge outliers you don't want to dominate the metric."]
+    options: [["MAE", "MAE"], ["RMSE", "RMSE"], ["AUC ROC", "ROC AUC"]]
+    answer: 0
+    why: ["RMSE eleva al cuadrado los errores; MAE no.", "RMSE squares errors; MAE does not."]
+  - q: ["Una variable del dataset es «fecha de cancelación», que solo existe cuando el cliente ya se ha ido. ¿Problema?", "A dataset feature is \"cancellation date\", which only exists once the customer has left. Problem?"]
+    options: [["Fuga de datos", "Data leakage"], ["Clases desequilibradas", "Class imbalance"], ["Deriva", "Drift"]]
+    answer: 0
+    why: ["Esa información no está disponible al predecir: el modelo hace trampa.", "That information is unavailable at prediction time: the model cheats."]
+  - q: ["¿Qué registra qué dataset, código y parámetros generaron un modelo concreto?", "What records which dataset, code and parameters produced a given model?"]
+    options: [["Vertex ML Metadata (linaje)", "Vertex ML Metadata (lineage)"], ["Cloud Audit Logs", "Cloud Audit Logs"], ["Artifact Registry", "Artifact Registry"]]
+    answer: 0
+    why: ["El linaje de metadatos permite reproducir y auditar.", "Metadata lineage enables reproduction and audit."]
+  - q: ["Solo el 1 % de los ejemplos son fraude. ¿Qué haces? (Elige 2)", "Only 1% of examples are fraud. What do you do? (Choose 2)"]
+    options: [["Usar pesos por clase o sobremuestreo", "Use class weights or oversampling"], ["Evaluar con precisión/recall o AUC PR, no con exactitud", "Evaluate with precision/recall or PR AUC, not accuracy"], ["Eliminar los ejemplos de fraude", "Remove the fraud examples"], ["Medir solo la exactitud", "Measure accuracy only"]]
+    answers: [0, 1]
+    why: ["Con clases desequilibradas la exactitud engaña (99 % prediciendo siempre «no fraude»).", "With imbalanced classes accuracy misleads (99% by always predicting \"not fraud\")."]
+  - q: ["¿Cómo explicas qué variables influyeron en una predicción concreta?", "How do you explain which features drove a specific prediction?"]
+    options: [["Vertex Explainable AI (atribuciones de características)", "Vertex Explainable AI (feature attributions)"], ["Cloud Trace", "Cloud Trace"], ["Aumentar las réplicas", "Adding replicas"]]
+    answer: 0
+    why: ["Las atribuciones muestran la contribución de cada característica.", "Attributions show each feature's contribution."]

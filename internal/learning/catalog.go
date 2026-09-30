@@ -79,6 +79,7 @@ type Catalog struct {
 	Career      CareerDef                `json:"career"`
 	Labs        map[string]*scenario.Lab `json:"-"`
 	Study       []StudyTopic             `json:"-"` // "Learn" section material
+	Exams       []StudyExam              `json:"-"` // official exam structures
 	LabOrder    []string                 `json:"-"`
 	skillBranch map[string]string
 
@@ -153,11 +154,11 @@ func LoadCatalog(root string) (*Catalog, error) {
 			c.skillBranch[s.ID] = b.ID
 		}
 	}
-	study, err := loadStudy(filepath.Join(root, "learn"))
+	study, exams, err := loadStudy(filepath.Join(root, "learn"))
 	if err != nil {
 		return nil, err
 	}
-	c.Study = study
+	c.Study, c.Exams = study, exams
 	labs, err := scenario.LoadAll(filepath.Join(root, "labs"))
 	if err != nil {
 		return nil, err

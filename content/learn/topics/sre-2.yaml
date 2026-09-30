@@ -1,0 +1,27 @@
+id: sre
+scenarios:
+  - q: ["Un servicio interno por lotes no tiene usuarios esperando en tiempo real. ¿Qué SLI encaja?", "An internal batch service has no users waiting in real time. Which SLI fits?"]
+    options: [["Frescura y cobertura de datos (proporción de trabajos completados a tiempo)", "Data freshness and coverage (share of jobs completed on time)"], ["Latencia p99 por petición HTTP", "p99 latency per HTTP request"], ["Uso de CPU", "CPU usage"]]
+    answer: 0
+    why: ["Para lotes importan la puntualidad y que se procesen todos los datos.", "For batch, timeliness and processing all the data matter."]
+  - q: ["Un incidente se alargó porque nadie sabía quién decidía y varios ingenieros cambiaban cosas a la vez.", "An incident dragged on because nobody knew who decided and several engineers changed things at once."]
+    options: [["Adoptar roles de incidente con un Incident Commander único", "Adopt incident roles with a single Incident Commander"], ["Añadir más ingenieros", "Add more engineers"], ["Desactivar las alertas", "Disable alerts"]]
+    answer: 0
+    why: ["Una sola persona coordina y evita cambios simultáneos.", "One person coordinates and prevents simultaneous changes."]
+  - q: ["El tráfico crece un 8 % al mes y el servicio se satura cada trimestre.", "Traffic grows 8% a month and the service saturates every quarter."]
+    options: [["Planificación de capacidad con previsión y pruebas de carga periódicas", "Capacity planning with forecasting and periodic load tests"], ["Esperar a la próxima caída", "Wait for the next outage"], ["Bajar el SLO", "Lower the SLO"]]
+    answer: 0
+    why: ["La demanda es previsible: se provisiona con antelación y margen.", "Demand is predictable: provision ahead with headroom."]
+quiz:
+  - q: ["¿Qué percentil de latencia refleja mejor la peor experiencia habitual de los usuarios?", "Which latency percentile best reflects the common worst user experience?"]
+    options: [["p99", "p99"], ["La media", "The mean"], ["p50", "p50"]]
+    answer: 0
+    why: ["La media oculta la cola lenta que sufren muchos usuarios.", "The mean hides the slow tail many users suffer."]
+  - q: ["¿Qué cuatro señales doradas propone SRE para supervisar un servicio?", "Which four golden signals does SRE propose for monitoring a service?"]
+    options: [["Latencia, tráfico, errores y saturación", "Latency, traffic, errors and saturation"], ["CPU, RAM, disco y red", "CPU, RAM, disk and network"], ["Usuarios, ventas, costes y clics", "Users, sales, costs and clicks"]]
+    answer: 0
+    why: ["Son las del libro de SRE de Google.", "They come from Google's SRE book."]
+  - q: ["¿Qué hacer con un runbook que se ejecuta siempre igual varias veces por semana?", "What to do with a runbook executed the same way several times a week?"]
+    options: [["Automatizarlo", "Automate it"], ["Imprimirlo", "Print it"], ["Ignorarlo", "Ignore it"]]
+    answer: 0
+    why: ["Es toil claro.", "It is clear toil."]

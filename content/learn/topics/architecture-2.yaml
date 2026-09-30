@@ -1,0 +1,61 @@
+id: architecture
+concepts:
+  - id: casestudy
+    term: [Cómo leer un caso de estudio, How to read a case study]
+    what: ["El examen de arquitecto usa empresas ficticias con requisitos de negocio y técnicos.", "The architect exam uses fictional companies with business and technical requirements."]
+    points:
+      - ["Subraya los requisitos: plazos, presupuesto, cumplimiento, ubicaciones, SLA.", "Underline requirements: deadlines, budget, compliance, locations, SLAs."]
+      - ["Descarta opciones que incumplan cualquier requisito, aunque sean técnicamente válidas.", "Discard options that break any requirement, even if technically valid."]
+      - ["Entre dos opciones válidas, gana la más gestionada y barata.", "Between two valid options, the most managed and cheapest wins."]
+    tip: ["Lee los casos de estudio oficiales antes del examen: vienen en la guía.", "Read the official case studies before the exam: they are in the guide."]
+  - id: global
+    term: [Aplicaciones globales, Global applications]
+    what: ["Servir a usuarios de todo el mundo con baja latencia y alta disponibilidad.", "Serve users worldwide with low latency and high availability."]
+    points:
+      - ["Balanceador global + backends en varias regiones + Cloud CDN.", "Global load balancer + multi-region backends + Cloud CDN."]
+      - ["Datos: Spanner multirregional, Firestore multirregional o réplicas de lectura regionales.", "Data: multi-region Spanner, multi-region Firestore or regional read replicas."]
+      - ["Residencia de datos puede obligar a separar por regiones.", "Data residency may force separation by region."]
+    tip: ["Latencia baja en tres continentes y una sola URL → balanceador global con backends en esas regiones.", "Low latency on three continents with one URL → global load balancer with backends in those regions."]
+  - id: decouple
+    term: [Desacoplar y diseñar para el fallo, Decoupling and designing for failure]
+    what: ["Componentes independientes que fallan sin arrastrar al resto.", "Independent components that fail without taking down the rest."]
+    points:
+      - ["Colas (Pub/Sub, Cloud Tasks) entre productores y consumidores.", "Queues (Pub/Sub, Cloud Tasks) between producers and consumers."]
+      - ["Cloud Tasks: entrega a un destino concreto con control de tasa; Pub/Sub: difusión a muchos suscriptores.", "Cloud Tasks: delivery to a specific target with rate control; Pub/Sub: fan-out to many subscribers."]
+      - ["Idempotencia para que los reintentos no dupliquen efectos.", "Idempotency so retries don't duplicate effects."]
+      - ["Microservicios sin estado; el estado en servicios gestionados.", "Stateless microservices; state in managed services."]
+    tip: ["Llamar a una API externa con un límite de 10 peticiones por segundo → Cloud Tasks con limitación de tasa.", "Call an external API limited to 10 requests per second → Cloud Tasks with rate limiting."]
+scenarios:
+  - q: ["Caso: una empresa de videojuegos lanza un título mundial, espera picos enormes el día de lanzamiento y quiere clasificaciones globales en tiempo real.", "Case: a gaming company launches a worldwide title, expects huge launch-day spikes and wants real-time global leaderboards."]
+    options: [["GKE regional con autoescalado detrás de un balanceador global, y Spanner multirregional para las clasificaciones", "Regional GKE with autoscaling behind a global load balancer, and multi-region Spanner for leaderboards"], ["Una VM grande en una región con MySQL", "One large VM in one region with MySQL"], ["Cloud SQL zonal con réplicas", "Zonal Cloud SQL with replicas"]]
+    answer: 0
+    why: ["Escalado elástico, entrada global y datos consistentes a escala mundial.", "Elastic scaling, global entry and globally consistent data."]
+  - q: ["Caso: una empresa sanitaria debe cumplir normativa de datos de salud, migrar desde colocación y mantener conexión segura con sus centros.", "Case: a healthcare company must meet health-data regulation, migrate from colocation and keep a secure link to its sites."]
+    options: [["Landing zone con controles de cumplimiento, Interconnect o HA VPN, y cifrado con CMEK", "Landing zone with compliance controls, Interconnect or HA VPN, and CMEK encryption"], ["Buckets públicos para compartir historiales", "Public buckets to share records"], ["Mover todo a una sola VM", "Move everything to one VM"]]
+    answer: 0
+    why: ["Cumplimiento, conectividad híbrida y control de claves.", "Compliance, hybrid connectivity and key control."]
+  - q: ["Caso: un fabricante recibe telemetría de 20 millones de vehículos, quiere predecir averías y analizar históricos baratos.", "Case: a manufacturer receives telemetry from 20 million vehicles, wants to predict failures and analyse history cheaply."]
+    options: [["Pub/Sub → Dataflow → Bigtable (reciente) y BigQuery (histórico), con Vertex AI para predicción", "Pub/Sub → Dataflow → Bigtable (recent) and BigQuery (history), with Vertex AI for prediction"], ["Cloud SQL para todo", "Cloud SQL for everything"], ["Hojas de cálculo", "Spreadsheets"]]
+    answer: 0
+    why: ["Ingesta masiva, acceso de baja latencia, analítica y ML.", "Massive ingest, low-latency access, analytics and ML."]
+  - q: ["Una tienda debe enviar correos de confirmación sin saturar a su proveedor, que admite 20 por segundo.", "A shop must send confirmation emails without overwhelming its provider, which accepts 20 per second."]
+    options: [["Cloud Tasks con tasa máxima de 20/s", "Cloud Tasks with a max rate of 20/s"], ["Enviar todos a la vez", "Send them all at once"], ["Una VM con sleep", "A VM with sleep"]]
+    answer: 0
+    why: ["Cloud Tasks controla la tasa y reintenta.", "Cloud Tasks controls rate and retries."]
+quiz:
+  - q: ["¿Qué diferencia principal hay entre Cloud Tasks y Pub/Sub?", "What is the main difference between Cloud Tasks and Pub/Sub?"]
+    options: [["Tasks entrega a un destino concreto con control de tasa; Pub/Sub difunde a suscriptores desacoplados", "Tasks delivers to a specific target with rate control; Pub/Sub fans out to decoupled subscribers"], ["Son idénticos", "They are identical"], ["Pub/Sub solo funciona en una región", "Pub/Sub only works in one region"]]
+    answer: 0
+    why: ["Invocación explícita frente a publicación implícita.", "Explicit invocation versus implicit publishing."]
+  - q: ["Entre dos soluciones que cumplen todos los requisitos, ¿cuál suele ser la correcta en el examen?", "Between two solutions that meet every requirement, which is usually correct in the exam?"]
+    options: [["La más gestionada y de menor coste operativo", "The most managed with lowest operational cost"], ["La que usa más servicios", "The one using more services"], ["La que da más control del SO", "The one with more OS control"]]
+    answer: 0
+    why: ["Google favorece servicios gestionados y simplicidad.", "Google favours managed services and simplicity."]
+  - q: ["¿Qué dos cosas protegen frente a la caída de una región entera? (Elige 2)", "Which two things protect against an entire region failing? (Choose 2)"]
+    options: [["Backends en varias regiones tras un balanceador global", "Backends in several regions behind a global load balancer"], ["Base de datos multirregional o réplica en otra región", "Multi-region database or replica in another region"], ["MIG zonal", "Zonal MIG"], ["Discos SSD locales", "Local SSDs"]]
+    answers: [0, 1]
+    why: ["Cómputo y datos deben existir fuera de la región afectada.", "Compute and data must exist outside the affected region."]
+  - q: ["¿Qué hace que los reintentos no provoquen cobros duplicados?", "What stops retries from causing duplicate charges?"]
+    options: [["Operaciones idempotentes con clave de idempotencia", "Idempotent operations with an idempotency key"], ["Más réplicas", "More replicas"], ["Desactivar los reintentos siempre", "Always disabling retries"]]
+    answer: 0
+    why: ["Repetir la misma operación produce el mismo resultado.", "Repeating the same operation gives the same result."]

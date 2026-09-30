@@ -1,0 +1,18 @@
+id: migration
+quiz:
+  - q: ["¿Qué servicio ejecuta VMware de forma nativa en Google Cloud?", "Which service runs VMware natively on Google Cloud?"]
+    options: [["Google Cloud VMware Engine", "Google Cloud VMware Engine"], ["Migrate to Containers", "Migrate to Containers"], ["Bare Metal Solution", "Bare Metal Solution"]]
+    answer: 0
+    why: ["Bare Metal Solution es para cargas especiales como Oracle en hardware dedicado.", "Bare Metal Solution is for special workloads like Oracle on dedicated hardware."]
+  - q: ["Una base Oracle con licencias y requisitos de hardware certificado debe estar cerca de Google Cloud sin cambios.", "An Oracle database with licensing and certified-hardware needs must sit close to Google Cloud unchanged."]
+    options: [["Bare Metal Solution", "Bare Metal Solution"], ["Cloud SQL", "Cloud SQL"], ["Firestore", "Firestore"]]
+    answer: 0
+    why: ["Servidores dedicados con baja latencia hacia Google Cloud.", "Dedicated servers with low latency to Google Cloud."]
+  - q: ["¿En qué orden conviene migrar las cargas? (Elige 2)", "In which order should workloads be migrated? (Choose 2)"]
+    options: [["Primero cargas sencillas y poco críticas para aprender", "First simple, low-criticality workloads to learn"], ["Por oleadas agrupando dependencias", "In waves grouping dependencies"], ["Todo a la vez el mismo fin de semana", "Everything at once the same weekend"], ["Lo más crítico primero sin pruebas", "Most critical first without testing"]]
+    answers: [0, 1]
+    why: ["Reduce riesgo y aprovecha lo aprendido.", "It reduces risk and builds on what was learned."]
+  - q: ["¿Qué es un corte (cutover) en una migración de base de datos?", "What is a cutover in a database migration?"]
+    options: [["El momento en que la aplicación pasa a usar la base de destino", "The moment the application switches to the target database"], ["Borrar la base de origen", "Deleting the source database"], ["Una copia de seguridad", "A backup"]]
+    answer: 0
+    why: ["Con replicación continua el corte dura muy poco.", "With continuous replication the cutover is very short."]

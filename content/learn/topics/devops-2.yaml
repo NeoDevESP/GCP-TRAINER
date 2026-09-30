@@ -1,0 +1,74 @@
+id: devops
+concepts:
+  - id: gitops
+    term: [Config Sync y GitOps, Config Sync and GitOps]
+    what: ["El estado deseado vive en Git y se aplica solo a los clústeres.", "Desired state lives in Git and is applied automatically to clusters."]
+    points:
+      - ["Config Sync sincroniza manifiestos desde un repositorio a flotas de GKE.", "Config Sync syncs manifests from a repository to GKE fleets."]
+      - ["Policy Controller aplica restricciones (p. ej. no permitir contenedores privilegiados).", "Policy Controller enforces constraints (e.g. no privileged containers)."]
+      - ["Config Connector gestiona recursos de Google Cloud como objetos de Kubernetes.", "Config Connector manages Google Cloud resources as Kubernetes objects."]
+    tip: ["Mantener igual la configuración de 50 clústeres → Config Sync desde Git.", "Keep 50 clusters' configuration identical → Config Sync from Git."]
+  - id: tf-practices
+    term: [Buenas prácticas con Terraform, Terraform best practices]
+    what: ["Módulos, estado remoto, entornos separados y revisión en pull requests.", "Modules, remote state, separate environments and PR review."]
+    points:
+      - ["Un estado por entorno (o workspace) para limitar el alcance de un error.", "One state per environment (or workspace) to limit blast radius."]
+      - ["terraform plan en el PR y apply desde el pipeline, no desde portátiles.", "terraform plan in the PR and apply from the pipeline, not laptops."]
+      - ["terraform import para traer recursos creados a mano.", "terraform import to bring in hand-made resources."]
+      - ["Infrastructure Manager ejecuta Terraform gestionado en Google Cloud.", "Infrastructure Manager runs managed Terraform on Google Cloud."]
+    tip: ["Recurso creado a mano que ahora quieres gestionar con Terraform → terraform import.", "Hand-made resource you now want to manage with Terraform → terraform import."]
+  - id: build-deep
+    term: [Cloud Build a fondo, Cloud Build in depth]
+    what: ["Pasos en contenedores, sustituciones, pools privados y aprobaciones.", "Container steps, substitutions, private pools and approvals."]
+    points:
+      - ["Sustituciones como $SHORT_SHA, $BRANCH_NAME o variables propias _ENV.", "Substitutions like $SHORT_SHA, $BRANCH_NAME or custom _ENV variables."]
+      - ["Pools privados para compilar con acceso a recursos privados de tu VPC.", "Private pools to build with access to private resources in your VPC."]
+      - ["Secretos desde Secret Manager con availableSecrets.", "Secrets from Secret Manager via availableSecrets."]
+      - ["Kaniko o caché de capas para acelerar compilaciones de imágenes.", "Kaniko or layer caching to speed up image builds."]
+    tip: ["La compilación necesita llegar a un repositorio interno sin IP pública → pool privado de Cloud Build.", "The build must reach an internal repository without a public IP → Cloud Build private pool."]
+  - id: testing
+    term: [Pruebas en el pipeline, Testing in the pipeline]
+    what: ["Unitarias, de integración, de carga y de seguridad antes de producción.", "Unit, integration, load and security tests before production."]
+    points:
+      - ["Entornos efímeros por pull request para pruebas de integración.", "Ephemeral per-PR environments for integration tests."]
+      - ["Emuladores locales (Pub/Sub, Firestore, Bigtable, Spanner) para desarrollo sin coste.", "Local emulators (Pub/Sub, Firestore, Bigtable, Spanner) for no-cost development."]
+      - ["Cloud Deploy verify ejecuta pruebas tras desplegar en cada destino.", "Cloud Deploy verify runs tests after deploying to each target."]
+    tip: ["Probar código que usa Pub/Sub sin tocar la nube → emulador de Pub/Sub.", "Test code that uses Pub/Sub without touching the cloud → Pub/Sub emulator."]
+scenarios:
+  - q: ["Hay 3 entornos con el mismo Terraform y un error en desarrollo borró recursos de producción.", "There are 3 environments on the same Terraform and a dev mistake deleted prod resources."]
+    options: [["Separar el estado por entorno y aplicar solo desde el pipeline con aprobación para prod", "Separate state per environment and apply only from the pipeline with prod approval"], ["Dejar de usar Terraform en producción", "Stop using Terraform in prod"], ["Hacer copias del .tfstate en el portátil", "Keep .tfstate copies on laptops"]]
+    answer: 0
+    why: ["Aislar el estado limita el radio de impacto.", "Isolating state limits the blast radius."]
+  - q: ["El equipo quiere que cada commit despliegue en staging automáticamente y en producción tras aprobación manual.", "The team wants each commit auto-deployed to staging and to prod after manual approval."]
+    options: [["Cloud Build para compilar + Cloud Deploy con requireApproval en producción", "Cloud Build to build + Cloud Deploy with requireApproval on prod"], ["Desplegar a mano con kubectl", "Deploy by hand with kubectl"], ["Un cron nocturno", "A nightly cron"]]
+    answer: 0
+    why: ["Cloud Deploy modela etapas y aprobaciones.", "Cloud Deploy models stages and approvals."]
+  - q: ["Las compilaciones de Cloud Build necesitan la contraseña de un registro privado.", "Cloud Build builds need a private registry's password."]
+    options: [["Leerla de Secret Manager con availableSecrets", "Read it from Secret Manager via availableSecrets"], ["Escribirla en cloudbuild.yaml", "Write it in cloudbuild.yaml"], ["Guardarla en la imagen base", "Bake it into the base image"]]
+    answer: 0
+    why: ["Nunca secretos en el repositorio.", "Never secrets in the repository."]
+  - q: ["Un clúster GKE fue modificado a mano y ya no coincide con Git.", "A GKE cluster was changed by hand and no longer matches Git."]
+    options: [["Config Sync lo revierte al estado de Git automáticamente", "Config Sync reverts it to Git's state automatically"], ["Reinstalar el clúster", "Reinstall the cluster"], ["Documentar el cambio", "Document the change"]]
+    answer: 0
+    why: ["GitOps corrige la deriva continuamente.", "GitOps continuously corrects drift."]
+quiz:
+  - q: ["¿Qué sustitución de Cloud Build contiene el hash corto del commit?", "Which Cloud Build substitution holds the short commit hash?"]
+    options: [["$SHORT_SHA", "$SHORT_SHA"], ["$BUILD_ID", "$BUILD_ID"], ["$PROJECT_ID", "$PROJECT_ID"]]
+    answer: 0
+    why: ["Útil para etiquetar imágenes de forma trazable.", "Useful for traceable image tags."]
+  - q: ["¿Qué comando incorpora a Terraform un recurso que ya existe?", "Which command brings an existing resource into Terraform?"]
+    options: [["terraform import", "terraform import"], ["terraform refresh", "terraform refresh"], ["terraform taint", "terraform taint"]]
+    answer: 0
+    why: ["import lo añade al estado para gestionarlo desde el código.", "import adds it to state so code can manage it."]
+  - q: ["¿Qué gestiona recursos de Google Cloud como objetos de Kubernetes?", "What manages Google Cloud resources as Kubernetes objects?"]
+    options: [["Config Connector", "Config Connector"], ["Cloud Deploy", "Cloud Deploy"], ["Artifact Registry", "Artifact Registry"]]
+    answer: 0
+    why: ["Declaras un bucket o una base de datos en YAML de Kubernetes.", "You declare a bucket or database in Kubernetes YAML."]
+  - q: ["¿Qué dos prácticas mejoran la seguridad de la cadena de suministro? (Elige 2)", "Which two practices improve supply-chain security? (Choose 2)"]
+    options: [["Escanear imágenes en Artifact Registry", "Scan images in Artifact Registry"], ["Exigir atestaciones con Binary Authorization", "Require attestations with Binary Authorization"], ["Usar la etiqueta latest en producción", "Use the latest tag in production"], ["Compartir la cuenta de compilación con todos", "Share the build account with everyone"]]
+    answers: [0, 1]
+    why: ["Escanear detecta, Binary Authorization impide desplegar lo no aprobado.", "Scanning detects, Binary Authorization prevents unapproved deploys."]
+  - q: ["¿Qué ejecuta Terraform de forma gestionada en Google Cloud?", "What runs Terraform as a managed service on Google Cloud?"]
+    options: [["Infrastructure Manager", "Infrastructure Manager"], ["Cloud Composer", "Cloud Composer"], ["Deployment Scheduler", "Deployment Scheduler"]]
+    answer: 0
+    why: ["Guarda el estado y ejecuta plan/apply por ti.", "It stores state and runs plan/apply for you."]

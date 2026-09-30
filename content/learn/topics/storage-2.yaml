@@ -1,0 +1,59 @@
+id: storage
+concepts:
+  - id: consistency
+    term: [Consistencia y rendimiento, Consistency and performance]
+    what: ["Cloud Storage ofrece consistencia fuerte global en lecturas tras escribir y listar.", "Cloud Storage offers strong global consistency for read-after-write and listing."]
+    points:
+      - ["Subidas grandes: cargas compuestas en paralelo o reanudables.", "Large uploads: parallel composite or resumable uploads."]
+      - ["Autoclass mueve cada objeto a la clase adecuada según su acceso.", "Autoclass moves each object to the right class based on its access."]
+      - ["Cloud CDN delante de un bucket acelera contenido estático global.", "Cloud CDN in front of a bucket speeds up static global content."]
+    tip: ["No sabes con qué frecuencia se leerán los datos → Autoclass.", "You don't know how often data will be read → Autoclass."]
+  - id: website
+    term: [Sitios estáticos y acceso público controlado, Static sites and controlled public access]
+    what: ["Servir webs estáticas desde un bucket con balanceador, HTTPS y CDN.", "Serve static websites from a bucket with a load balancer, HTTPS and CDN."]
+    points:
+      - ["Bucket backend de un balanceador de aplicaciones externo con certificado gestionado.", "Bucket backend on an external Application Load Balancer with a managed certificate."]
+      - ["Solo el bucket del sitio es público; el resto sigue con prevención de acceso público.", "Only the site bucket is public; the rest keep public access prevention."]
+    tip: ["Web estática global con HTTPS y dominio propio → bucket + balanceador + Cloud CDN.", "Global static site with HTTPS and own domain → bucket + load balancer + Cloud CDN."]
+  - id: holds
+    term: ["Retención, bloqueos y soft delete", "Retention, holds and soft delete"]
+    what: ["Mecanismos para que los datos no se borren antes de tiempo.", "Mechanisms so data is not deleted too early."]
+    points:
+      - ["Soft delete: los objetos borrados se conservan un tiempo (7 días por defecto) y se pueden restaurar.", "Soft delete: deleted objects are kept for a period (7 days by default) and can be restored."]
+      - ["Event-based y temporary holds bloquean objetos concretos (p. ej. por litigio).", "Event-based and temporary holds lock specific objects (e.g. for litigation)."]
+      - ["Retención bloqueada = WORM, cumplimiento tipo SEC 17a-4.", "Locked retention = WORM, compliance like SEC 17a-4."]
+    tip: ["Conservar pruebas de un juicio aunque el ciclo de vida diga borrar → hold en esos objetos.", "Keep litigation evidence even if lifecycle says delete → a hold on those objects."]
+scenarios:
+  - q: ["Un bucket de registros se lee mucho la primera semana y casi nunca después, pero el patrón varía por archivo.", "A log bucket is read a lot in the first week and rarely after, but the pattern varies per file."]
+    options: [["Activar Autoclass", "Enable Autoclass"], ["Todo en Archive desde el principio", "Everything in Archive from day one"], ["Dejarlo todo en Standard", "Keep everything in Standard"]]
+    answer: 0
+    why: ["Autoclass ajusta la clase de cada objeto según su uso real.", "Autoclass adjusts each object's class based on real usage."]
+  - q: ["Una empresa publica su web de marketing (HTML, imágenes) y quiere HTTPS con su dominio y buena velocidad mundial.", "A company publishes its marketing site (HTML, images) and wants HTTPS on its domain with fast global speed."]
+    options: [["Bucket como backend de un balanceador externo con Cloud CDN y certificado gestionado", "Bucket as backend of an external load balancer with Cloud CDN and a managed certificate"], ["Una VM con nginx", "A VM running nginx"], ["Filestore", "Filestore"]]
+    answer: 0
+    why: ["Sin servidores que mantener, con TLS y caché global.", "No servers to maintain, with TLS and global caching."]
+  - q: ["Un empleado borró 200 objetos de un bucket sin versionado hace 2 días.", "An employee deleted 200 objects from a non-versioned bucket 2 days ago."]
+    options: [["Restaurarlos gracias a soft delete (si la retención de soft delete lo cubre)", "Restore them via soft delete (if the soft delete retention covers it)"], ["Imposible", "Impossible"], ["Pedírselo a soporte de Google", "Ask Google support"]]
+    answer: 0
+    why: ["Soft delete conserva objetos borrados durante su periodo configurado.", "Soft delete keeps deleted objects for its configured period."]
+quiz:
+  - q: ["¿Qué afirmación sobre la consistencia de Cloud Storage es correcta?", "Which statement about Cloud Storage consistency is correct?"]
+    options: [["Es fuertemente consistente al leer tras escribir y al listar", "It is strongly consistent for read-after-write and listing"], ["Es eventualmente consistente siempre", "It is always eventually consistent"], ["Solo es consistente en buckets regionales", "Only regional buckets are consistent"]]
+    answer: 0
+    why: ["Desde 2020 la consistencia es fuerte en todas las operaciones de objetos.", "Since 2020 consistency is strong for all object operations."]
+  - q: ["¿Qué comando sincroniza una carpeta local con un bucket?", "Which command syncs a local folder with a bucket?"]
+    options: [["gcloud storage rsync", "gcloud storage rsync"], ["gcloud storage mb", "gcloud storage mb"], ["bq load", "bq load"]]
+    answer: 0
+    why: ["rsync copia solo lo que cambia; mb crea buckets.", "rsync copies only what changed; mb makes buckets."]
+  - q: ["¿Qué dos acciones puede hacer una regla de ciclo de vida? (Elige 2)", "Which two actions can a lifecycle rule take? (Choose 2)"]
+    options: [["Delete", "Delete"], ["SetStorageClass", "SetStorageClass"], ["Cifrar con CMEK", "Encrypt with CMEK"], ["Hacer público el objeto", "Make the object public"]]
+    answers: [0, 1]
+    why: ["Las acciones son borrar, cambiar de clase y abortar subidas multiparte incompletas.", "Actions are delete, change class and abort incomplete multipart uploads."]
+  - q: ["¿Qué ubicación de bucket da redundancia geográfica con dos regiones concretas elegidas por ti?", "Which bucket location gives geo-redundancy across two specific regions you choose?"]
+    options: [["Birregional (dual-region)", "Dual-region"], ["Regional", "Regional"], ["Zonal", "Zonal"]]
+    answer: 0
+    why: ["Dual-region replica en dos regiones concretas; multirregión usa un área amplia.", "Dual-region replicates across two specific regions; multi-region uses a broad area."]
+  - q: ["¿Qué hace la replicación turbo en un bucket birregional?", "What does turbo replication do on a dual-region bucket?"]
+    options: [["Replica los objetos nuevos en 15 minutos (RPO objetivo)", "Replicates new objects within 15 minutes (target RPO)"], ["Hace el bucket más barato", "Makes the bucket cheaper"], ["Cifra los objetos", "Encrypts objects"]]
+    answer: 0
+    why: ["Da un RPO de 15 minutos con SLA.", "It gives a 15-minute RPO backed by an SLA."]

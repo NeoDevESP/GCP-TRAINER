@@ -1,0 +1,92 @@
+id: databases
+concepts:
+  - id: choose
+    term: [Árbol de decisión de bases de datos, Database decision tree]
+    what: ["Relacional o no → alcance regional o global → transaccional o analítico → volumen y latencia.", "Relational or not → regional or global scope → transactional or analytical → volume and latency."]
+    points:
+      - ["Relacional regional: Cloud SQL (o AlloyDB si necesitas más rendimiento PostgreSQL).", "Regional relational: Cloud SQL (or AlloyDB for higher PostgreSQL performance)."]
+      - ["Relacional global o escala horizontal: Spanner.", "Global relational or horizontal scale: Spanner."]
+      - ["Documentos para apps: Firestore. Clave-valor masivo de baja latencia: Bigtable.", "Documents for apps: Firestore. Massive low-latency key-value: Bigtable."]
+      - ["Analítica: BigQuery. Caché: Memorystore.", "Analytics: BigQuery. Cache: Memorystore."]
+    tip: ["Lee dos palabras clave: «SQL/transacciones» y «global/escala» y casi siempre sabrás la respuesta.", "Spot two keywords: \"SQL/transactions\" and \"global/scale\" and you'll usually know the answer."]
+  - id: sql-ops
+    term: [Operar Cloud SQL, Operating Cloud SQL]
+    what: ["Mantenimiento, conexiones, rendimiento y seguridad de Cloud SQL.", "Maintenance, connections, performance and security of Cloud SQL."]
+    points:
+      - ["Ventana de mantenimiento configurable para actualizaciones.", "Configurable maintenance window for updates."]
+      - ["Query Insights para encontrar consultas lentas.", "Query Insights to find slow queries."]
+      - ["Autenticación IAM a la base de datos y conexión con Cloud SQL Auth Proxy/conectores.", "IAM database authentication and connections via Cloud SQL Auth Proxy/connectors."]
+      - ["Aumento automático de almacenamiento para no quedarse sin disco.", "Automatic storage increase to avoid running out of disk."]
+      - ["Réplica entre regiones para recuperación ante desastres (promoverla si cae la región).", "Cross-region replica for disaster recovery (promote it if the region fails)."]
+    tip: ["DR de Cloud SQL en otra región → réplica de lectura entre regiones que se promueve.", "Cloud SQL DR in another region → cross-region read replica that gets promoted."]
+  - id: spanner-design
+    term: [Diseño en Spanner, Spanner design]
+    what: ["Claves primarias bien distribuidas y tablas intercaladas.", "Well-distributed primary keys and interleaved tables."]
+    points:
+      - ["Evita claves monótonas (fechas o contadores crecientes): crean puntos calientes. Usa UUID v4 o hash.", "Avoid monotonic keys (increasing timestamps or counters): they create hotspots. Use UUID v4 or a hash."]
+      - ["Tablas intercaladas (INTERLEAVE IN PARENT) guardan hijos junto a su padre.", "Interleaved tables (INTERLEAVE IN PARENT) store children with their parent."]
+      - ["Configuración regional (99,99 %) o multirregional (99,999 %).", "Regional (99.99%) or multi-region (99.999%) configuration."]
+    tip: ["Escrituras lentas en Spanner con clave de marca de tiempo → cambiar a clave distribuida.", "Slow Spanner writes keyed by timestamp → switch to a distributed key."]
+  - id: bigtable-design
+    term: [Diseño en Bigtable, Bigtable design]
+    what: ["Una sola clave de fila, ordenada lexicográficamente; el diseño de la clave lo es todo.", "A single row key, sorted lexicographically; key design is everything."]
+    points:
+      - ["Pon primero lo que distribuye (id de dispositivo) y luego la fecha: device#timestamp.", "Put the distributing part first (device id) then the time: device#timestamp."]
+      - ["Key Visualizer muestra puntos calientes.", "Key Visualizer shows hotspots."]
+      - ["Replicación entre clústeres con perfiles de aplicación para alta disponibilidad.", "Cluster replication with app profiles for high availability."]
+      - ["Escala casi linealmente añadiendo nodos; no admite SQL transaccional multi-fila.", "Scales almost linearly by adding nodes; no multi-row transactional SQL."]
+    tip: ["Clave que empieza por la marca de tiempo → todo va a un nodo; invierte el orden.", "Key starting with the timestamp → everything hits one node; reverse the order."]
+  - id: firestore-modes
+    term: [Firestore en profundidad, Firestore in depth]
+    what: ["Modo nativo (tiempo real, móvil) o modo Datastore (servidor).", "Native mode (real-time, mobile) or Datastore mode (server)."]
+    points:
+      - ["Transacciones ACID y consultas con índices compuestos.", "ACID transactions and queries with composite indexes."]
+      - ["Ubicación regional o multirregional elegida al crear la base.", "Regional or multi-region location chosen at creation."]
+      - ["Reglas de seguridad para acceso directo desde clientes.", "Security rules for direct client access."]
+    tip: ["App móvil con sincronización sin conexión → Firestore en modo nativo.", "Mobile app with offline sync → Firestore native mode."]
+scenarios:
+  - q: ["Una red social guarda 10 TB de eventos de actividad por día con lecturas de milisegundos por usuario y fecha.", "A social network stores 10 TB of activity events per day with millisecond reads by user and date."]
+    options: [["Bigtable con clave usuario#fecha", "Bigtable keyed by user#date"], ["Cloud SQL", "Cloud SQL"], ["Firestore", "Firestore"], ["Memorystore", "Memorystore"]]
+    answer: 0
+    why: ["Volumen masivo, acceso por clave y baja latencia: Bigtable.", "Massive volume, key access and low latency: Bigtable."]
+  - q: ["Tras migrar a Spanner, las inserciones de pedidos van lentas; la clave primaria es order_timestamp.", "After moving to Spanner, order inserts are slow; the primary key is order_timestamp."]
+    options: [["Usar una clave distribuida (UUID v4 o hash) en lugar de la marca de tiempo", "Use a distributed key (UUID v4 or hash) instead of the timestamp"], ["Añadir índices secundarios", "Add secondary indexes"], ["Reducir nodos", "Reduce nodes"]]
+    answer: 0
+    why: ["Las claves crecientes concentran escrituras en una división.", "Increasing keys concentrate writes on one split."]
+  - q: ["La base PostgreSQL de Cloud SQL debe seguir funcionando si cae toda la región europe-west1.", "The Cloud SQL PostgreSQL database must keep working if all of europe-west1 fails."]
+    options: [["Réplica entre regiones en europe-west4 lista para promoverse", "Cross-region replica in europe-west4 ready to be promoted"], ["Alta disponibilidad regional", "Regional high availability"], ["Copias diarias en la misma región", "Daily backups in the same region"]]
+    answer: 0
+    why: ["La HA regional protege de zonas, no de regiones.", "Regional HA protects against zones, not regions."]
+  - q: ["Los desarrolladores quieren encontrar qué consultas degradan Cloud SQL sin instalar nada.", "Developers want to find which queries degrade Cloud SQL without installing anything."]
+    options: [["Query Insights", "Query Insights"], ["VPC Flow Logs", "VPC Flow Logs"], ["Cloud Profiler", "Cloud Profiler"]]
+    answer: 0
+    why: ["Query Insights muestra carga por consulta, usuario y cliente.", "Query Insights shows load per query, user and client."]
+  - q: ["Hay que servir la cesta de la compra de millones de usuarios con latencia de submilisegundos, tolerando perder datos al reiniciar.", "Serve millions of users' shopping carts with sub-millisecond latency, tolerating data loss on restart."]
+    options: [["Memorystore for Redis", "Memorystore for Redis"], ["BigQuery", "BigQuery"], ["Spanner multirregional", "Multi-region Spanner"]]
+    answer: 0
+    why: ["Caché en memoria para datos efímeros y muy leídos.", "In-memory cache for ephemeral, hot data."]
+quiz:
+  - q: ["¿Qué base elegirías para un almacén de datos analítico con SQL a escala de petabytes?", "Which database for a petabyte-scale SQL analytical warehouse?"]
+    options: [["BigQuery", "BigQuery"], ["Cloud SQL", "Cloud SQL"], ["Firestore", "Firestore"], ["Memorystore", "Memorystore"]]
+    answer: 0
+    why: ["BigQuery es el almacén de datos serverless.", "BigQuery is the serverless data warehouse."]
+  - q: ["¿Qué SLA ofrece Spanner en configuración multirregional?", "What SLA does multi-region Spanner offer?"]
+    options: [["99,999 %", "99.999%"], ["99,9 %", "99.9%"], ["99,5 %", "99.5%"]]
+    answer: 0
+    why: ["Regional 99,99 %, multirregional 99,999 %.", "Regional 99.99%, multi-region 99.999%."]
+  - q: ["¿Qué herramienta muestra puntos calientes en las claves de Bigtable?", "Which tool shows hotspots in Bigtable keys?"]
+    options: [["Key Visualizer", "Key Visualizer"], ["Query Insights", "Query Insights"], ["Cloud Trace", "Cloud Trace"]]
+    answer: 0
+    why: ["Key Visualizer dibuja el acceso por rangos de clave.", "Key Visualizer maps access by key range."]
+  - q: ["¿Qué dos formas seguras hay de conectar una app a Cloud SQL? (Elige 2)", "Which two secure ways connect an app to Cloud SQL? (Choose 2)"]
+    options: [["Conectores de Cloud SQL / Auth Proxy", "Cloud SQL connectors / Auth Proxy"], ["IP privada en la VPC", "Private IP in the VPC"], ["IP pública con redes autorizadas 0.0.0.0/0", "Public IP with authorized network 0.0.0.0/0"], ["Compartir la contraseña de root", "Sharing the root password"]]
+    answers: [0, 1]
+    why: ["El conector cifra y autoriza por IAM; la IP privada evita internet.", "The connector encrypts and authorizes via IAM; private IP avoids the internet."]
+  - q: ["¿Qué base de datos NO es relacional?", "Which database is NOT relational?"]
+    options: [["Bigtable", "Bigtable"], ["Spanner", "Spanner"], ["AlloyDB", "AlloyDB"], ["Cloud SQL", "Cloud SQL"]]
+    answer: 0
+    why: ["Bigtable es NoSQL de columnas anchas.", "Bigtable is wide-column NoSQL."]
+  - q: ["Una réplica de lectura de Cloud SQL empieza a ir con retraso. ¿Qué la causa normalmente?", "A Cloud SQL read replica starts lagging. What usually causes it?"]
+    options: [["La réplica no da abasto con las escrituras del primario (tamaño insuficiente o transacciones largas)", "The replica can't keep up with primary writes (undersized or long transactions)"], ["Demasiados usuarios IAM", "Too many IAM users"], ["El nivel de red", "The network tier"]]
+    answer: 0
+    why: ["Dimensiona la réplica como el primario y evita transacciones enormes.", "Size the replica like the primary and avoid huge transactions."]

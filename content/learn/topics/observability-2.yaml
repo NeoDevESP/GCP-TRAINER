@@ -1,0 +1,57 @@
+id: observability
+concepts:
+  - id: log-routing
+    term: [Enrutamiento de registros, Log routing]
+    what: ["El Log Router decide a dónde va cada registro: buckets de logs, sinks o exclusión.", "The Log Router decides where each log goes: log buckets, sinks or exclusion."]
+    points:
+      - ["Buckets _Required (auditoría, 400 días, no se puede cambiar) y _Default (30 días, configurable).", "_Required (audit, 400 days, fixed) and _Default (30 days, configurable) buckets."]
+      - ["Sinks agregados a nivel de organización o carpeta centralizan registros de todos los proyectos.", "Aggregated sinks at organization or folder level centralize logs from every project."]
+      - ["Filtros de exclusión reducen coste de registros ruidosos.", "Exclusion filters cut the cost of noisy logs."]
+      - ["Log Analytics permite consultar logs con SQL.", "Log Analytics lets you query logs with SQL."]
+    tip: ["Llevar los registros de auditoría de todos los proyectos a un proyecto de seguridad → sink agregado en la organización.", "Send every project's audit logs to a security project → aggregated sink at the organization."]
+  - id: metrics-scope
+    term: [Ámbito de métricas y paneles, Metrics scope and dashboards]
+    what: ["Ver métricas de varios proyectos desde un único proyecto de supervisión.", "View metrics from several projects in one monitoring project."]
+    points:
+      - ["Un ámbito de métricas puede incluir muchos proyectos supervisados.", "A metrics scope can include many monitored projects."]
+      - ["Métricas personalizadas con la API de Monitoring o OpenTelemetry.", "Custom metrics via the Monitoring API or OpenTelemetry."]
+      - ["Managed Service for Prometheus para métricas de Kubernetes con PromQL.", "Managed Service for Prometheus for Kubernetes metrics with PromQL."]
+    tip: ["Un solo panel con métricas de 20 proyectos → ámbito de métricas en un proyecto central.", "One dashboard with metrics from 20 projects → metrics scope in a central project."]
+  - id: uptime
+    term: [Comprobaciones y canales, Checks and channels]
+    what: ["Uptime checks, sondas sintéticas y canales de notificación.", "Uptime checks, synthetic monitors and notification channels."]
+    points:
+      - ["Uptime checks HTTP/TCP desde varias regiones del mundo.", "HTTP/TCP uptime checks from several world regions."]
+      - ["Monitores sintéticos ejecutan recorridos de usuario con scripts.", "Synthetic monitors run scripted user journeys."]
+      - ["Canales: correo, SMS, Slack, PagerDuty, webhooks y Pub/Sub.", "Channels: email, SMS, Slack, PagerDuty, webhooks and Pub/Sub."]
+    tip: ["Saber si la web responde desde fuera antes que los clientes → uptime check + alerta.", "Know whether the site responds from outside before customers do → uptime check + alert."]
+scenarios:
+  - q: ["El coste de Cloud Logging se dispara por registros DEBUG de un servicio muy hablador.", "Cloud Logging cost is soaring due to DEBUG logs from a chatty service."]
+    options: [["Filtro de exclusión en el Log Router para esos registros", "Exclusion filter in the Log Router for those logs"], ["Borrar el proyecto", "Delete the project"], ["Desactivar los registros de auditoría", "Disable audit logs"]]
+    answer: 0
+    why: ["Excluir lo que no aporta reduce el volumen ingerido.", "Excluding what adds nothing reduces ingested volume."]
+  - q: ["El equipo de seguridad necesita todos los registros de auditoría de los 300 proyectos en BigQuery.", "Security needs audit logs from all 300 projects in BigQuery."]
+    options: [["Sink agregado en la organización con destino BigQuery", "Aggregated sink at the organization to BigQuery"], ["300 sinks creados a mano", "300 hand-made sinks"], ["Exportar a CSV cada día", "Export to CSV daily"]]
+    answer: 0
+    why: ["Un sink agregado cubre proyectos presentes y futuros.", "An aggregated sink covers current and future projects."]
+  - q: ["Las métricas de la aplicación se exponen en formato Prometheus en GKE y el equipo quiere seguir usando PromQL.", "App metrics are exposed in Prometheus format on GKE and the team wants to keep using PromQL."]
+    options: [["Google Cloud Managed Service for Prometheus", "Google Cloud Managed Service for Prometheus"], ["Reescribirlas como logs", "Rewrite them as logs"], ["Cloud Trace", "Cloud Trace"]]
+    answer: 0
+    why: ["Recoge métricas Prometheus sin gestionar el servidor.", "It collects Prometheus metrics without running the server."]
+quiz:
+  - q: ["¿Cuánto conserva el bucket _Required los registros de auditoría?", "How long does the _Required bucket keep audit logs?"]
+    options: [["400 días", "400 days"], ["30 días", "30 days"], ["7 días", "7 days"]]
+    answer: 0
+    why: ["No se puede cambiar ni borrar.", "It can't be changed or deleted."]
+  - q: ["¿Qué permite consultar registros con SQL?", "What lets you query logs with SQL?"]
+    options: [["Log Analytics", "Log Analytics"], ["Error Reporting", "Error Reporting"], ["Cloud Profiler", "Cloud Profiler"]]
+    answer: 0
+    why: ["Log Analytics se apoya en BigQuery para consultas SQL.", "Log Analytics is backed by BigQuery for SQL queries."]
+  - q: ["¿Qué dos destinos admite un sink? (Elige 2)", "Which two destinations does a sink support? (Choose 2)"]
+    options: [["Pub/Sub", "Pub/Sub"], ["Un bucket de Cloud Storage", "A Cloud Storage bucket"], ["Memorystore", "Memorystore"], ["Filestore", "Filestore"]]
+    answers: [0, 1]
+    why: ["También BigQuery, buckets de logs y otros proyectos.", "Also BigQuery, log buckets and other projects."]
+  - q: ["¿Qué estándar abierto recomienda Google para instrumentar trazas y métricas?", "Which open standard does Google recommend for instrumenting traces and metrics?"]
+    options: [["OpenTelemetry", "OpenTelemetry"], ["SNMP", "SNMP"], ["Syslog", "Syslog"]]
+    answer: 0
+    why: ["OpenTelemetry envía a Cloud Trace y Cloud Monitoring.", "OpenTelemetry exports to Cloud Trace and Cloud Monitoring."]

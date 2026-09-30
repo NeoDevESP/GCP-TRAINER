@@ -1,0 +1,322 @@
+# Estructura de cada examen según su guía oficial (secciones, peso aproximado
+# y lo que se evalúa). Google revisa las guías de vez en cuando: el enlace
+# "guide" de content/certs.yaml lleva siempre a la versión vigente.
+# Cada texto es un par [español, inglés]. "topics" son temas de content/learn/topics.
+exams:
+  - cert: ACE
+    minutes: 120
+    questions: "50-60"
+    fee: "125 USD"
+    validity: [3 años, 3 years]
+    experience: ["6 meses o más usando Google Cloud", "6+ months of hands-on Google Cloud experience"]
+    format: ["Test de opción única y múltiple, en inglés, japonés o español entre otros; online con supervisión o en un centro de examen.", "Multiple choice and multiple select, available in several languages; online-proctored or at a test centre."]
+    domains:
+      - name: [Configurar el entorno de una solución en la nube, Setting up a cloud solution environment]
+        weight: 23
+        topics: [foundations, iam]
+        objectives:
+          - ["Crear la jerarquía de recursos: organización, carpetas y proyectos", "Create the resource hierarchy: organization, folders and projects"]
+          - ["Gestionar usuarios y grupos en Cloud Identity y conceder roles IAM", "Manage users and groups in Cloud Identity and grant IAM roles"]
+          - ["Habilitar APIs y gestionar cuotas", "Enable APIs and manage quotas"]
+          - ["Vincular proyectos a una cuenta de facturación, presupuestos y alertas, exportar la facturación", "Link projects to billing, set budgets and alerts, export billing data"]
+          - ["Instalar y configurar gcloud y Cloud Shell", "Install and configure gcloud and Cloud Shell"]
+      - name: [Planificar e implementar una solución en la nube, Planning and implementing a cloud solution]
+        weight: 30
+        topics: [compute, gke, storage, databases, networking, data, devops]
+        objectives:
+          - ["Elegir y desplegar cómputo: Compute Engine, GKE, Cloud Run y funciones", "Choose and deploy compute: Compute Engine, GKE, Cloud Run and functions"]
+          - ["Elegir y crear almacenamiento y bases de datos según el caso", "Choose and create storage and databases for the use case"]
+          - ["Crear redes VPC, subredes, reglas de cortafuegos, VPN y balanceadores", "Create VPC networks, subnets, firewall rules, VPN and load balancers"]
+          - ["Desplegar infraestructura como código (Terraform, Config Connector)", "Deploy infrastructure as code (Terraform, Config Connector)"]
+      - name: [Asegurar el funcionamiento correcto de la solución, Ensuring successful operation of a cloud solution]
+        weight: 27
+        topics: [compute, gke, storage, databases, networking, observability]
+        objectives:
+          - ["Gestionar VMs: SSH, snapshots, imágenes, grupos de instancias", "Manage VMs: SSH, snapshots, images, instance groups"]
+          - ["Gestionar GKE y Cloud Run: escalar, actualizar, ver estado", "Manage GKE and Cloud Run: scale, update, view status"]
+          - ["Gestionar almacenamiento y bases de datos: ciclo de vida, copias, consultas", "Manage storage and databases: lifecycle, backups, queries"]
+          - ["Supervisar y registrar: alertas, métricas personalizadas, sinks, agente de operaciones", "Monitor and log: alerts, custom metrics, sinks, Ops Agent"]
+      - name: [Configurar el acceso y la seguridad, Configuring access and security]
+        weight: 20
+        topics: [iam, security]
+        objectives:
+          - ["Gestionar IAM: ver políticas, roles predefinidos y personalizados", "Manage IAM: view policies, predefined and custom roles"]
+          - ["Gestionar cuentas de servicio: crearlas, asignarlas, suplantarlas, credenciales de corta duración", "Manage service accounts: create, attach, impersonate, short-lived credentials"]
+          - ["Ver registros de auditoría", "View audit logs"]
+  - cert: PCA
+    minutes: 120
+    questions: "50-60"
+    fee: "200 USD"
+    validity: [2 años, 2 years]
+    experience: ["3 años o más en la industria, incluido 1 año diseñando en Google Cloud", "3+ years of industry experience including 1+ year designing on Google Cloud"]
+    format: ["Opción única y múltiple; parte de las preguntas se basan en los casos de estudio publicados en la guía oficial.", "Multiple choice and multiple select; some questions are based on the case studies published in the official guide."]
+    domains:
+      - name: [Diseñar y planificar la arquitectura de una solución, Designing and planning a cloud solution architecture]
+        weight: 25
+        topics: [architecture, compute, databases, storage, networking, migration]
+        objectives:
+          - ["Diseñar según requisitos de negocio: coste, cumplimiento, crecimiento", "Design for business requirements: cost, compliance, growth"]
+          - ["Diseñar según requisitos técnicos: alta disponibilidad, escalado, rendimiento", "Design for technical requirements: availability, scalability, performance"]
+          - ["Diseñar red, almacenamiento y cómputo", "Design network, storage and compute resources"]
+          - ["Planificar migraciones y futuras mejoras", "Plan migrations and future improvements"]
+      - name: [Gestionar y aprovisionar la infraestructura, Managing and provisioning a solution infrastructure]
+        weight: 17.5
+        topics: [networking, compute, storage, gke, devops]
+        objectives:
+          - ["Configurar topologías de red: híbrida, multinube, VPC compartida", "Configure network topologies: hybrid, multicloud, Shared VPC"]
+          - ["Configurar sistemas de almacenamiento y cómputo", "Configure storage and compute systems"]
+          - ["Aprovechar Vertex AI y soluciones prediseñadas", "Leverage Vertex AI and prebuilt solutions"]
+      - name: [Diseñar para la seguridad y el cumplimiento, Designing for security and compliance]
+        weight: 17.5
+        topics: [security, iam]
+        objectives:
+          - ["IAM, gestión de secretos, cifrado y separación de funciones", "IAM, secret management, encryption and separation of duties"]
+          - ["Cumplimiento normativo: residencia de datos, auditoría, políticas de organización", "Compliance: data residency, auditing, organization policies"]
+      - name: [Analizar y optimizar procesos técnicos y de negocio, Analyzing and optimizing technical and business processes]
+        weight: 15
+        topics: [architecture, devops, sre]
+        objectives:
+          - ["CI/CD, pruebas, recuperación ante desastres y continuidad del negocio", "CI/CD, testing, disaster recovery and business continuity"]
+          - ["Análisis de costes y gestión del cambio", "Cost analysis and change management"]
+      - name: [Gestionar la implementación, Managing implementation]
+        weight: 12.5
+        topics: [devops, foundations, gke]
+        objectives:
+          - ["Asesorar a equipos de desarrollo y operaciones", "Advise development and operations teams"]
+          - ["Interactuar con Google Cloud mediante consola, gcloud, APIs y emuladores", "Interact with Google Cloud via console, gcloud, APIs and emulators"]
+      - name: [Garantizar la excelencia operativa, Ensuring solution and operations excellence]
+        weight: 12.5
+        topics: [observability, sre, architecture]
+        objectives:
+          - ["Observabilidad con Google Cloud Observability", "Observability with Google Cloud Observability"]
+          - ["Despliegue y lanzamiento, soporte y fiabilidad, calidad", "Deployment and release, support and reliability, quality"]
+  - cert: PCDE
+    minutes: 120
+    questions: "50-60"
+    fee: "200 USD"
+    validity: [2 años, 2 years]
+    experience: ["3 años o más en la industria, incluido 1 año en Google Cloud", "3+ years of industry experience including 1+ year on Google Cloud"]
+    format: ["Opción única y múltiple, muy centrado en SRE y entrega continua.", "Multiple choice and multiple select, strongly focused on SRE and continuous delivery."]
+    domains:
+      - name: [Preparar una organización de Google Cloud para DevOps, Bootstrapping a Google Cloud organization for DevOps]
+        weight: 17
+        topics: [foundations, iam, devops]
+        objectives:
+          - ["Diseñar la jerarquía de recursos y entornos", "Design the resource hierarchy and environments"]
+          - ["Gestionar la infraestructura como código", "Manage infrastructure as code"]
+          - ["Diseñar un entorno de CI/CD", "Design a CI/CD environment"]
+      - name: [Construir e implementar pipelines de CI/CD, Building and implementing CI/CD pipelines]
+        weight: 23
+        topics: [devops, gke, security]
+        objectives:
+          - ["Pipelines para aplicaciones e infraestructura con Cloud Build y Cloud Deploy", "Pipelines for applications and infrastructure with Cloud Build and Cloud Deploy"]
+          - ["Gestionar artefactos, secretos y la seguridad de la cadena de suministro", "Manage artifacts, secrets and supply-chain security"]
+          - ["Estrategias de despliegue y vuelta atrás", "Deployment and rollback strategies"]
+      - name: [Aplicar prácticas de SRE, Applying site reliability engineering practices]
+        weight: 23
+        topics: [sre, observability]
+        objectives:
+          - ["Definir SLIs, SLOs y presupuestos de error", "Define SLIs, SLOs and error budgets"]
+          - ["Planificar capacidad y reducir el trabajo repetitivo (toil)", "Plan capacity and reduce toil"]
+          - ["Gestionar incidentes y postmortems", "Manage incidents and postmortems"]
+      - name: [Implementar prácticas de observabilidad, Implementing observability practices]
+        weight: 23
+        topics: [observability, gke]
+        objectives:
+          - ["Gestionar registros de aplicaciones y plataforma", "Manage application and platform logs"]
+          - ["Métricas, paneles y alertas", "Metrics, dashboards and alerting"]
+          - ["Trazas y perfilado para depurar rendimiento", "Tracing and profiling to debug performance"]
+      - name: [Optimizar rendimiento y coste, Optimizing performance and cost]
+        weight: 14
+        topics: [architecture, compute, gke]
+        objectives:
+          - ["Optimizar recursos y costes de las cargas", "Optimize workload resources and cost"]
+          - ["Descuentos, VMs Spot y autoescalado", "Discounts, Spot VMs and autoscaling"]
+  - cert: PCSE
+    minutes: 120
+    questions: "50-60"
+    fee: "200 USD"
+    validity: [2 años, 2 years]
+    experience: ["3 años o más en la industria, incluido 1 año en Google Cloud", "3+ years of industry experience including 1+ year on Google Cloud"]
+    format: ["Opción única y múltiple sobre identidad, protección de datos y operaciones de seguridad.", "Multiple choice and multiple select on identity, data protection and security operations."]
+    domains:
+      - name: [Configurar el acceso, Configuring access]
+        weight: 27
+        topics: [iam, foundations]
+        objectives:
+          - ["Cloud Identity, federación e inicio de sesión único", "Cloud Identity, federation and single sign-on"]
+          - ["Cuentas de servicio, Workload Identity Federation", "Service accounts, Workload Identity Federation"]
+          - ["Autorización con IAM, condiciones y políticas de denegación", "Authorization with IAM, conditions and deny policies"]
+          - ["Jerarquía de recursos y políticas de organización", "Resource hierarchy and organization policies"]
+      - name: [Proteger las comunicaciones y los perímetros, Securing communications and establishing boundary protection]
+        weight: 21
+        topics: [networking, security]
+        objectives:
+          - ["Cortafuegos, Cloud Armor, IAP y balanceadores", "Firewalls, Cloud Armor, IAP and load balancers"]
+          - ["VPC Service Controls y acceso privado", "VPC Service Controls and private access"]
+          - ["Conectividad híbrida segura", "Secure hybrid connectivity"]
+      - name: [Garantizar la protección de los datos, Ensuring data protection]
+        weight: 20
+        topics: [security, storage]
+        objectives:
+          - ["Datos sensibles con Sensitive Data Protection (DLP)", "Sensitive data with Sensitive Data Protection (DLP)"]
+          - ["Cifrado con Cloud KMS, CMEK, EKM y HSM", "Encryption with Cloud KMS, CMEK, EKM and HSM"]
+          - ["Secret Manager y protección de la IA", "Secret Manager and securing AI workloads"]
+      - name: [Gestionar las operaciones, Managing operations]
+        weight: 22
+        topics: [security, observability, devops]
+        objectives:
+          - ["Seguridad de la infraestructura y la cadena de suministro", "Infrastructure and supply-chain security"]
+          - ["Registro, supervisión y detección con Security Command Center", "Logging, monitoring and detection with Security Command Center"]
+          - ["Respuesta a incidentes de seguridad", "Security incident response"]
+      - name: [Cumplir requisitos normativos, Supporting compliance requirements]
+        weight: 10
+        topics: [security, architecture]
+        objectives:
+          - ["Responsabilidad compartida, residencia de datos y Assured Workloads", "Shared responsibility, data residency and Assured Workloads"]
+  - cert: PCNE
+    minutes: 120
+    questions: "50-60"
+    fee: "200 USD"
+    validity: [2 años, 2 years]
+    experience: ["3 años o más en la industria, incluido 1 año en Google Cloud", "3+ years of industry experience including 1+ year on Google Cloud"]
+    format: ["Opción única y múltiple, con mucho cálculo de rangos, rutas y conectividad híbrida.", "Multiple choice and multiple select, with lots of range planning, routing and hybrid connectivity."]
+    domains:
+      - name: [Diseñar y planificar una red de Google Cloud, "Designing, planning, and prototyping a Google Cloud network"]
+        weight: 26
+        topics: [networking, architecture]
+        objectives:
+          - ["Diseñar la red global: alta disponibilidad, DNS, balanceo", "Design the overall network: availability, DNS, load balancing"]
+          - ["Planificar direccionamiento IP y VPC compartida", "Plan IP addressing and Shared VPC"]
+          - ["Diseñar la conectividad híbrida y para GKE", "Design hybrid and GKE connectivity"]
+      - name: [Implementar redes VPC, Implementing Virtual Private Cloud (VPC) instances]
+        weight: 21
+        topics: [networking, gke]
+        objectives:
+          - ["Subredes, rutas, cortafuegos y peering", "Subnets, routes, firewalls and peering"]
+          - ["VPC compartida y Private Service Connect", "Shared VPC and Private Service Connect"]
+          - ["Redes de GKE: VPC nativa, clústeres privados", "GKE networking: VPC-native, private clusters"]
+      - name: [Configurar servicios de red gestionados, Configuring managed network services]
+        weight: 21
+        topics: [networking, security]
+        objectives:
+          - ["Balanceadores, Cloud CDN y Cloud Armor", "Load balancers, Cloud CDN and Cloud Armor"]
+          - ["Cloud DNS y Cloud NAT", "Cloud DNS and Cloud NAT"]
+      - name: [Implementar conectividad híbrida, Implementing hybrid network interconnectivity]
+        weight: 14
+        topics: [networking]
+        objectives:
+          - ["Cloud Interconnect y HA VPN", "Cloud Interconnect and HA VPN"]
+          - ["Cloud Router y BGP", "Cloud Router and BGP"]
+      - name: ["Operar, supervisar y optimizar la red", "Managing, monitoring, and optimizing network operations"]
+        weight: 18
+        topics: [networking, observability]
+        objectives:
+          - ["Registros de flujo, Connectivity Tests y Network Intelligence Center", "Flow logs, Connectivity Tests and Network Intelligence Center"]
+          - ["Diagnosticar y optimizar coste y rendimiento de red", "Troubleshoot and optimize network cost and performance"]
+  - cert: PDE
+    minutes: 120
+    questions: "50-60"
+    fee: "200 USD"
+    validity: [2 años, 2 years]
+    experience: ["3 años o más en la industria, incluido 1 año con soluciones de datos en Google Cloud", "3+ years of industry experience including 1+ year on Google Cloud data solutions"]
+    format: ["Opción única y múltiple sobre diseño, ingesta, almacenamiento y análisis de datos.", "Multiple choice and multiple select on data design, ingestion, storage and analysis."]
+    domains:
+      - name: [Diseñar sistemas de procesamiento de datos, Designing data processing systems]
+        weight: 22
+        topics: [data, security, architecture]
+        objectives:
+          - ["Diseñar para seguridad y cumplimiento", "Design for security and compliance"]
+          - ["Diseñar para fiabilidad y flexibilidad", "Design for reliability and flexibility"]
+          - ["Planificar migraciones de datos", "Plan data migrations"]
+      - name: [Ingerir y procesar los datos, Ingesting and processing the data]
+        weight: 25
+        topics: [data]
+        objectives:
+          - ["Pipelines por lotes y en streaming con Dataflow, Dataproc y Pub/Sub", "Batch and streaming pipelines with Dataflow, Dataproc and Pub/Sub"]
+          - ["Orquestación con Cloud Composer y Workflows", "Orchestration with Cloud Composer and Workflows"]
+      - name: [Almacenar los datos, Storing the data]
+        weight: 20
+        topics: [databases, storage, data]
+        objectives:
+          - ["Elegir el sistema de almacenamiento adecuado", "Select the right storage system"]
+          - ["Diseñar almacenes de datos y lagos (BigQuery, BigLake, Dataplex)", "Design warehouses and lakes (BigQuery, BigLake, Dataplex)"]
+      - name: [Preparar y usar los datos para análisis, Preparing and using data for analysis]
+        weight: 15
+        topics: [data, ml]
+        objectives:
+          - ["Preparar datos para visualización, compartirlos y usarlos en ML", "Prepare data for visualization, sharing and ML"]
+      - name: [Mantener y automatizar las cargas de datos, Maintaining and automating data workloads]
+        weight: 18
+        topics: [data, observability]
+        objectives:
+          - ["Optimizar recursos, automatizar y supervisar trabajos", "Optimize resources, automate and monitor jobs"]
+          - ["Diseñar para la tolerancia a fallos", "Design for fault tolerance"]
+  - cert: PCDBE
+    minutes: 120
+    questions: "50-60"
+    fee: "200 USD"
+    validity: [2 años, 2 years]
+    experience: ["5 años o más con bases de datos, incluidos 2 en Google Cloud", "5+ years with databases including 2+ on Google Cloud"]
+    format: ["Opción única y múltiple sobre diseño, gestión y migración de bases de datos.", "Multiple choice and multiple select on database design, management and migration."]
+    domains:
+      - name: [Diseñar bases de datos escalables y de alta disponibilidad, Designing scalable and highly available cloud database solutions]
+        weight: 42
+        topics: [databases, architecture]
+        objectives:
+          - ["Analizar requisitos y elegir la base de datos", "Analyze requirements and choose the database"]
+          - ["Diseñar para escalado, alta disponibilidad y recuperación", "Design for scale, availability and recovery"]
+      - name: [Gestionar soluciones con varias bases de datos, Managing a solution that can span multiple database solutions]
+        weight: 34
+        topics: [databases, observability, security]
+        objectives:
+          - ["Conectividad, acceso, supervisión y copias de seguridad", "Connectivity, access, monitoring and backups"]
+          - ["Optimizar rendimiento y coste", "Optimize performance and cost"]
+      - name: [Migrar soluciones de datos, Migrating data solutions]
+        weight: 14
+        topics: [migration, databases]
+        objectives:
+          - ["Planificar y ejecutar migraciones con Database Migration Service", "Plan and run migrations with Database Migration Service"]
+      - name: [Desplegar bases de datos escalables y de alta disponibilidad, Deploying scalable and highly available databases]
+        weight: 10
+        topics: [databases]
+        objectives:
+          - ["Aprovisionar y configurar instancias", "Provision and configure instances"]
+  - cert: PMLE
+    minutes: 120
+    questions: "50-60"
+    fee: "200 USD"
+    validity: [2 años, 2 years]
+    experience: ["3 años o más en la industria, incluido 1 año con soluciones de ML en Google Cloud", "3+ years of industry experience including 1+ year on Google Cloud ML solutions"]
+    format: ["Opción única y múltiple sobre todo el ciclo de vida de ML e IA generativa.", "Multiple choice and multiple select across the ML and generative AI lifecycle."]
+    domains:
+      - name: [Soluciones de IA con poco código, Architecting low-code AI solutions]
+        weight: 13
+        topics: [ml]
+        objectives:
+          - ["BigQuery ML, APIs preentrenadas, AutoML y Model Garden", "BigQuery ML, pre-trained APIs, AutoML and Model Garden"]
+      - name: [Colaborar para gestionar datos y modelos, Collaborating within and across teams to manage data and models]
+        weight: 14
+        topics: [ml, data]
+        objectives:
+          - ["Explorar y preparar datos, Feature Store, experimentos", "Explore and prepare data, Feature Store, experiments"]
+      - name: [Escalar prototipos a modelos, Scaling prototypes into ML models]
+        weight: 18
+        topics: [ml]
+        objectives:
+          - ["Elegir marco y hardware, entrenamiento distribuido, ajuste de hiperparámetros", "Choose frameworks and hardware, distributed training, hyperparameter tuning"]
+      - name: [Servir y escalar modelos, Serving and scaling models]
+        weight: 20
+        topics: [ml]
+        objectives:
+          - ["Predicción online y por lotes, endpoints, escalado", "Online and batch prediction, endpoints, scaling"]
+      - name: [Automatizar y orquestar pipelines de ML, Automating and orchestrating ML pipelines]
+        weight: 22
+        topics: [ml, devops]
+        objectives:
+          - ["Vertex AI Pipelines, CI/CD de modelos, reentrenamiento", "Vertex AI Pipelines, model CI/CD, retraining"]
+      - name: [Supervisar soluciones de IA, Monitoring AI solutions]
+        weight: 13
+        topics: [ml, security]
+        objectives:
+          - ["IA responsable, deriva de datos, seguridad y rendimiento", "Responsible AI, data drift, security and performance"]

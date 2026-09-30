@@ -1,0 +1,74 @@
+id: iam
+concepts:
+  - id: deny
+    term: [Políticas de denegación, Deny policies]
+    what: ["Reglas que quitan permisos aunque un rol los conceda; se evalúan antes que las de permitir.", "Rules that remove permissions even if a role grants them; evaluated before allow policies."]
+    points:
+      - ["Se aplican en organización, carpeta o proyecto y se heredan.", "They attach at organization, folder or project and are inherited."]
+      - ["Admiten excepciones para principales concretos.", "They support exceptions for specific principals."]
+    tip: ["«Nadie salvo el grupo de seguridad puede borrar claves de KMS, tenga el rol que tenga» → política de denegación.", "\"Nobody except the security group may delete KMS keys, whatever role they hold\" → deny policy."]
+  - id: pam
+    term: [Acceso temporal y justificado, Temporary and justified access]
+    what: ["Conceder privilegios elevados solo cuando se necesitan.", "Grant elevated privileges only when needed."]
+    points:
+      - ["Privileged Access Manager (PAM): solicitudes de acceso con aprobación y caducidad.", "Privileged Access Manager (PAM): access requests with approval and expiry."]
+      - ["Condiciones IAM con fecha para accesos puntuales.", "Date-based IAM conditions for one-off access."]
+      - ["Access Transparency y Access Approval registran y controlan el acceso del personal de Google.", "Access Transparency and Access Approval log and control Google staff access."]
+    tip: ["Ingenieros de guardia necesitan Owner solo durante incidentes → acceso justo a tiempo con PAM.", "On-call engineers need Owner only during incidents → just-in-time access with PAM."]
+  - id: recommender
+    term: [Recomendaciones de IAM, IAM recommendations]
+    what: ["El recomendador de roles detecta permisos que no se usan en 90 días.", "The role recommender detects permissions unused for 90 days."]
+    points:
+      - ["Sugiere sustituir roles amplios por otros más pequeños.", "Suggests replacing broad roles with smaller ones."]
+      - ["Policy Analyzer responde «¿quién tiene acceso a qué?» en toda la organización.", "Policy Analyzer answers \"who has access to what?\" across the organization."]
+    tip: ["Reducir permisos sobrantes sin romper nada → recomendaciones de roles de IAM.", "Trim excess permissions without breaking anything → IAM role recommendations."]
+  - id: sa-types
+    term: [Tipos de cuentas de servicio, Service account types]
+    what: ["Gestionadas por el usuario, predeterminadas y agentes de servicio de Google.", "User-managed, default, and Google service agents."]
+    points:
+      - ["La cuenta predeterminada de Compute Engine recibe Editor en proyectos antiguos: evítala.", "The Compute Engine default account gets Editor in older projects: avoid it."]
+      - ["Los agentes de servicio actúan en nombre de un servicio (p. ej. para usar tu clave CMEK).", "Service agents act on behalf of a service (e.g. to use your CMEK key)."]
+      - ["Política de organización para impedir la concesión automática de roles a cuentas predeterminadas.", "Organization policy to disable automatic role grants to default accounts."]
+    tip: ["«La VM tiene demasiados permisos» → cuenta de servicio propia con el mínimo, no la predeterminada.", "\"The VM has too many permissions\" → its own minimal service account, not the default."]
+scenarios:
+  - q: ["Hay que asegurar que nadie pueda borrar los buckets de auditoría, aunque tenga Storage Admin u Owner.", "Ensure nobody can delete audit buckets, even with Storage Admin or Owner."]
+    options: [["Política de denegación sobre storage.buckets.delete con excepción del grupo de seguridad", "Deny policy on storage.buckets.delete with an exception for the security group"], ["Quitar Owner a todos", "Remove Owner from everyone"], ["Una regla de ciclo de vida", "A lifecycle rule"]]
+    answer: 0
+    why: ["La denegación prevalece sobre cualquier concesión.", "Deny overrides any grant."]
+  - q: ["Una VM de informes usa la cuenta de servicio predeterminada, que tiene Editor en el proyecto.", "A reporting VM uses the default service account, which has Editor on the project."]
+    options: [["Crear una cuenta dedicada con los roles mínimos y asignarla a la VM", "Create a dedicated account with minimal roles and attach it to the VM"], ["Mantenerla y limitar los scopes", "Keep it and limit scopes"], ["Descargar una clave de la cuenta predeterminada", "Download a key for the default account"]]
+    answer: 0
+    why: ["Los scopes son un control heredado; lo correcto es IAM con mínimo privilegio.", "Scopes are a legacy control; the right fix is least-privilege IAM."]
+  - q: ["Un desarrollador necesita probar como la cuenta de servicio de la app, sin descargar claves.", "A developer needs to test as the app's service account without downloading keys."]
+    options: [["Suplantarla con Service Account Token Creator (--impersonate-service-account)", "Impersonate it with Service Account Token Creator (--impersonate-service-account)"], ["Crear una clave JSON y enviarla por correo", "Create a JSON key and email it"], ["Darle Owner al desarrollador", "Give the developer Owner"]]
+    answer: 0
+    why: ["La suplantación genera tokens de corta duración auditados.", "Impersonation issues short-lived, audited tokens."]
+  - q: ["Auditoría pregunta qué usuarios pueden leer los datos de un dataset de BigQuery en toda la organización.", "Audit asks which users can read a BigQuery dataset's data across the organization."]
+    options: [["Policy Analyzer", "Policy Analyzer"], ["Cloud Trace", "Cloud Trace"], ["Leer uno a uno los proyectos", "Read projects one by one"]]
+    answer: 0
+    why: ["Analiza políticas heredadas y pertenencia a grupos.", "It analyses inherited policies and group membership."]
+quiz:
+  - q: ["¿Qué se evalúa primero: una política de denegación o una de permitir?", "Which is evaluated first: a deny policy or an allow policy?"]
+    options: [["La de denegación", "The deny policy"], ["La de permitir", "The allow policy"], ["La más reciente", "The most recent"]]
+    answer: 0
+    why: ["Si una denegación aplica, el permiso se rechaza aunque exista una concesión.", "If a deny applies, the permission is refused even if granted."]
+  - q: ["¿Qué rol necesita un usuario para suplantar una cuenta de servicio?", "Which role does a user need to impersonate a service account?"]
+    options: [["Service Account Token Creator", "Service Account Token Creator"], ["Service Account Admin", "Service Account Admin"], ["Viewer", "Viewer"]]
+    answer: 0
+    why: ["Token Creator permite generar tokens de acceso de la cuenta.", "Token Creator allows generating the account's access tokens."]
+  - q: ["¿Dónde conviene conceder roles a un equipo de 40 personas? (Elige 2)", "Where should you grant roles to a 40-person team? (Choose 2)"]
+    options: [["A un grupo de Google del que son miembros", "To a Google group they belong to"], ["En el nivel más bajo de la jerarquía que cubra su trabajo", "At the lowest hierarchy level that covers their work"], ["A cada persona en la organización", "To each person at the organization"], ["Con el rol básico Owner", "With the basic Owner role"]]
+    answers: [0, 1]
+    why: ["Grupos para gestionar personas y ámbito mínimo para limitar el alcance.", "Groups to manage people and minimal scope to limit reach."]
+  - q: ["¿Qué política de organización impide crear claves de cuentas de servicio?", "Which organization policy prevents creating service account keys?"]
+    options: [["iam.disableServiceAccountKeyCreation", "iam.disableServiceAccountKeyCreation"], ["compute.vmExternalIpAccess", "compute.vmExternalIpAccess"], ["gcp.resourceLocations", "gcp.resourceLocations"]]
+    answer: 0
+    why: ["Es la restricción habitual para eliminar claves de larga duración.", "It's the usual constraint to eliminate long-lived keys."]
+  - q: ["¿Qué registro de auditoría hay que habilitar para saber quién leyó objetos de un bucket?", "Which audit log must be enabled to know who read objects in a bucket?"]
+    options: [["Data Access (DATA_READ)", "Data Access (DATA_READ)"], ["Admin Activity", "Admin Activity"], ["System Event", "System Event"]]
+    answer: 0
+    why: ["Leer datos no es actividad de administración.", "Reading data is not admin activity."]
+  - q: ["¿Qué rol predefinido permite ver recursos sin ver datos sensibles, apto para auditores de seguridad?", "Which predefined role lets you view resources without sensitive data, suited to security auditors?"]
+    options: [["Security Reviewer (iam.securityReviewer)", "Security Reviewer (iam.securityReviewer)"], ["Editor", "Editor"], ["Owner", "Owner"]]
+    answer: 0
+    why: ["Permite listar políticas IAM y configuraciones para revisión.", "It can list IAM policies and configurations for review."]

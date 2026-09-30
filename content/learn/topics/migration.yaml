@@ -1,0 +1,106 @@
+id: migration
+branch: architecture
+name: [Migración a Google Cloud, Migrating to Google Cloud]
+intro: ["Cómo llevar servidores, bases de datos y datos a Google Cloud: evaluar, planificar, migrar y optimizar, eligiendo la herramienta adecuada para cada pieza.", "How to move servers, databases and data to Google Cloud: assess, plan, migrate and optimize, choosing the right tool for each piece."]
+concepts:
+  - id: phases
+    term: [Fases de una migración, Migration phases]
+    what: ["Evaluar → planificar (base, landing zone) → desplegar/migrar → optimizar.", "Assess → plan (foundation, landing zone) → deploy/migrate → optimize."]
+    points:
+      - ["Evaluar: inventario, dependencias y coste total (TCO) con Migration Center.", "Assess: inventory, dependencies and total cost (TCO) with Migration Center."]
+      - ["Planificar: la landing zone (jerarquía, red, identidad, seguridad) antes de mover nada.", "Plan: the landing zone (hierarchy, network, identity, security) before moving anything."]
+      - ["Migrar por oleadas, empezando por cargas sencillas y poco críticas.", "Migrate in waves, starting with simple, low-criticality workloads."]
+    tip: ["«¿Qué hacer primero?» en una migración → evaluar e inventariar.", "\"What to do first?\" in a migration → assess and inventory."]
+  - id: six
+    term: [Estrategias (las R), Strategies (the Rs)]
+    what: ["Rehost, replatform, refactor, reimagine, retain y retire.", "Rehost, replatform, refactor, reimagine, retain and retire."]
+    points:
+      - ["Rehost (lift and shift): mover la VM tal cual. Rápido.", "Rehost (lift and shift): move the VM as is. Fast."]
+      - ["Replatform (move and improve): pequeños cambios, p. ej. BD propia → Cloud SQL, app → contenedor.", "Replatform (move and improve): small changes, e.g. own DB → Cloud SQL, app → container."]
+      - ["Refactor/reimagine: rediseñar para cloud nativo (microservicios, serverless).", "Refactor/reimagine: redesign for cloud native (microservices, serverless)."]
+      - ["Retain: dejarlo donde está. Retire: apagarlo porque ya no aporta.", "Retain: leave it where it is. Retire: switch it off because it adds no value."]
+    tip: ["Plazo corto y sin cambios en la app → rehost.", "Short deadline and no app changes → rehost."]
+  - id: vms
+    term: [Migrate to Virtual Machines, Migrate to Virtual Machines]
+    what: ["Migra VMs de VMware, AWS o Azure a Compute Engine con replicación continua.", "Migrates VMs from VMware, AWS or Azure to Compute Engine with continuous replication."]
+    points:
+      - ["Replica en segundo plano, permite clones de prueba y un corte con poca parada.", "Replicates in the background, allows test clones and a cutover with little downtime."]
+      - ["Google Cloud VMware Engine: ejecutar VMware nativo en Google Cloud sin convertir las VMs.", "Google Cloud VMware Engine: run native VMware on Google Cloud without converting VMs."]
+    tip: ["«Mantener las herramientas de VMware y no cambiar nada» → Google Cloud VMware Engine.", "\"Keep VMware tooling and change nothing\" → Google Cloud VMware Engine."]
+  - id: dms
+    term: [Database Migration Service, Database Migration Service]
+    what: ["Migra bases de datos a Cloud SQL o AlloyDB con replicación continua y corte mínimo.", "Migrates databases to Cloud SQL or AlloyDB with continuous replication and minimal cutover."]
+    points:
+      - ["Homogéneas: MySQL → Cloud SQL MySQL, PostgreSQL → Cloud SQL/AlloyDB.", "Homogeneous: MySQL → Cloud SQL MySQL, PostgreSQL → Cloud SQL/AlloyDB."]
+      - ["Heterogéneas: Oracle o SQL Server → PostgreSQL, con conversión de esquema.", "Heterogeneous: Oracle or SQL Server → PostgreSQL, with schema conversion."]
+      - ["Datastream: captura de cambios (CDC) hacia BigQuery o Cloud Storage.", "Datastream: change data capture (CDC) into BigQuery or Cloud Storage."]
+    tip: ["Migrar MySQL con parada de minutos → DMS con replicación continua y luego promover.", "Migrate MySQL with minutes of downtime → DMS with continuous replication, then promote."]
+  - id: data
+    term: [Mover grandes volúmenes de datos, Moving large data volumes]
+    what: ["La herramienta depende del volumen, el ancho de banda y el origen.", "The tool depends on volume, bandwidth and source."]
+    points:
+      - ["gcloud storage: volúmenes pequeños o medianos con buena conexión.", "gcloud storage: small to medium volumes over a good link."]
+      - ["Storage Transfer Service: desde otras nubes, HTTP o on-premises (con agentes), programado.", "Storage Transfer Service: from other clouds, HTTP or on-premises (with agents), scheduled."]
+      - ["Transfer Appliance: dispositivo físico cuando la red tardaría semanas.", "Transfer Appliance: a physical device when the network would take weeks."]
+      - ["BigQuery Data Transfer Service: cargas programadas desde SaaS, S3, Teradata o Redshift.", "BigQuery Data Transfer Service: scheduled loads from SaaS, S3, Teradata or Redshift."]
+    tip: ["1 Gbps transfiere ~10 TB al día; calcula antes de elegir.", "1 Gbps moves ~10 TB per day; do the maths before choosing."]
+  - id: containers
+    term: [Modernizar hacia contenedores, Modernizing to containers]
+    what: ["Pasar aplicaciones de VMs a contenedores en GKE o Cloud Run.", "Moving applications from VMs to containers on GKE or Cloud Run."]
+    points:
+      - ["Migrate to Containers genera artefactos de contenedor a partir de VMs.", "Migrate to Containers generates container artifacts from VMs."]
+      - ["Aplicaciones sin estado → Cloud Run; muchas piezas relacionadas → GKE.", "Stateless apps → Cloud Run; many related pieces → GKE."]
+    tip: ["Reducir la gestión de SO de muchas VMs sin reescribir → contenerizar.", "Reduce OS management across many VMs without rewriting → containerize."]
+  - id: landing
+    term: [Landing zone, Landing zone]
+    what: ["La base preparada antes de migrar: jerarquía, identidad, red, seguridad, facturación y registros.", "The foundation ready before migrating: hierarchy, identity, network, security, billing and logging."]
+    points:
+      - ["Suele desplegarse con Terraform (p. ej. el blueprint de bases empresariales).", "Usually deployed with Terraform (e.g. the enterprise foundations blueprint)."]
+      - ["VPC compartida, conectividad híbrida y políticas de organización desde el inicio.", "Shared VPC, hybrid connectivity and organization policies from the start."]
+    tip: ["Muchas cargas y muchos equipos → primero la landing zone.", "Many workloads and teams → landing zone first."]
+scenarios:
+  - q: ["El contrato del centro de datos termina en 8 semanas y hay 400 VMs VMware. La dirección no quiere cambiar las herramientas de operación.", "The datacenter contract ends in 8 weeks and there are 400 VMware VMs. Management won't change operations tooling."]
+    options: [["Google Cloud VMware Engine", "Google Cloud VMware Engine"], ["Reescribir en Cloud Run", "Rewrite on Cloud Run"], ["Migrate to Containers", "Migrate to Containers"]]
+    answer: 0
+    why: ["Ejecuta VMware tal cual en Google Cloud: rapidez y mismas herramientas.", "Runs VMware as is on Google Cloud: speed and the same tooling."]
+  - q: ["Hay que migrar una base de datos MySQL de 2 TB a Cloud SQL con menos de 10 minutos de parada.", "A 2 TB MySQL database must move to Cloud SQL with under 10 minutes of downtime."]
+    options: [["Database Migration Service con replicación continua", "Database Migration Service with continuous replication"], ["mysqldump y restaurar el fin de semana", "mysqldump and restore over the weekend"], ["Transfer Appliance", "Transfer Appliance"]]
+    answer: 0
+    why: ["DMS mantiene la réplica sincronizada y el corte es solo promover.", "DMS keeps the replica in sync and cutover is just a promotion."]
+  - q: ["Una empresa con Oracle quiere dejar de pagar licencias y pasar a PostgreSQL gestionado.", "An Oracle shop wants to stop paying licences and move to managed PostgreSQL."]
+    options: [["DMS heterogéneo con conversión de esquema a AlloyDB o Cloud SQL", "Heterogeneous DMS with schema conversion to AlloyDB or Cloud SQL"], ["Rehost de Oracle en Compute Engine", "Rehost Oracle on Compute Engine"], ["Bigtable", "Bigtable"]]
+    answer: 0
+    why: ["Es una migración heterogénea: conversión de esquema y datos.", "It is a heterogeneous migration: schema and data conversion."]
+  - q: ["Tienes que llevar 500 TB de archivos a Cloud Storage con una conexión de 200 Mbps y fecha límite en 1 mes.", "You must move 500 TB of files to Cloud Storage over 200 Mbps with a 1-month deadline."]
+    options: [["Transfer Appliance", "Transfer Appliance"], ["Storage Transfer Service por la red", "Storage Transfer Service over the network"], ["gcloud storage cp", "gcloud storage cp"]]
+    answer: 0
+    why: ["200 Mbps ≈ 2 TB/día: tardaría más de 8 meses por red.", "200 Mbps ≈ 2 TB/day: over 8 months across the network."]
+  - q: ["Antes de migrar 30 aplicaciones de 6 departamentos, ¿qué debe existir?", "Before migrating 30 applications from 6 departments, what must exist?"]
+    options: [["Una landing zone con jerarquía, red, identidad y políticas", "A landing zone with hierarchy, network, identity and policies"], ["Un proyecto por persona", "A project per person"], ["Nada, se crea sobre la marcha", "Nothing, build as you go"]]
+    answer: 0
+    why: ["Sin base común aparecen proyectos inseguros e inconsistentes.", "Without a common foundation you get insecure, inconsistent projects."]
+quiz:
+  - q: ["¿Qué estrategia cambia la BD propia por Cloud SQL sin rediseñar la aplicación?", "Which strategy swaps a self-managed DB for Cloud SQL without redesigning the app?"]
+    options: [["Replatform", "Replatform"], ["Rehost", "Rehost"], ["Retire", "Retire"], ["Refactor", "Refactor"]]
+    answer: 0
+    why: ["Move and improve: cambios pequeños para aprovechar servicios gestionados.", "Move and improve: small changes to use managed services."]
+  - q: ["¿Qué herramienta hace inventario y calcula el coste total antes de migrar?", "Which tool inventories and estimates total cost before migrating?"]
+    options: [["Migration Center", "Migration Center"], ["Cloud Deploy", "Cloud Deploy"], ["Cloud Armor", "Cloud Armor"]]
+    answer: 0
+    why: ["Migration Center descubre activos y estima TCO.", "Migration Center discovers assets and estimates TCO."]
+  - q: ["¿Qué servicio replica cambios de una base operativa a BigQuery casi en tiempo real?", "Which service replicates changes from an operational DB into BigQuery in near real time?"]
+    options: [["Datastream", "Datastream"], ["Transfer Appliance", "Transfer Appliance"], ["Cloud Scheduler", "Cloud Scheduler"]]
+    answer: 0
+    why: ["Datastream hace CDC sin servidor.", "Datastream does serverless CDC."]
+  - q: ["¿Cuántos TB al día transfiere aproximadamente una línea de 1 Gbps a plena carga?", "Roughly how many TB per day does a fully used 1 Gbps link move?"]
+    options: [["~10 TB", "~10 TB"], ["~1 TB", "~1 TB"], ["~100 TB", "~100 TB"]]
+    answer: 0
+    why: ["1 Gbps ≈ 125 MB/s × 86.400 s ≈ 10,8 TB.", "1 Gbps ≈ 125 MB/s × 86,400 s ≈ 10.8 TB."]
+  - q: ["Una aplicación antigua ya no la usa nadie. ¿Qué R aplicas?", "An old application is no longer used. Which R applies?"]
+    options: [["Retire", "Retire"], ["Rehost", "Rehost"], ["Retain", "Retain"]]
+    answer: 0
+    why: ["Apagarla ahorra y reduce el alcance de la migración.", "Switching it off saves money and shrinks the migration."]
+  - q: ["¿Qué servicio programa cargas recurrentes desde Amazon S3 o Redshift a BigQuery?", "Which service schedules recurring loads from Amazon S3 or Redshift into BigQuery?"]
+    options: [["BigQuery Data Transfer Service", "BigQuery Data Transfer Service"], ["Cloud VPN", "Cloud VPN"], ["Dataproc", "Dataproc"]]
+    answer: 0
+    why: ["BigQuery DTS tiene conectores gestionados para esas fuentes.", "BigQuery DTS has managed connectors for those sources."]

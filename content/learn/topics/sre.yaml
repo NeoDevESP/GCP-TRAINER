@@ -1,0 +1,126 @@
+id: sre
+branch: observability
+name: [SRE y fiabilidad, SRE and reliability]
+intro: ["Ingeniería de fiabilidad al estilo de Google: medir lo que ven los usuarios, gastar el presupuesto de error con cabeza, eliminar trabajo repetitivo y aprender de cada incidente.", "Google-style reliability engineering: measure what users see, spend the error budget wisely, eliminate toil and learn from every incident."]
+concepts:
+  - id: sli
+    term: [SLI, SLI]
+    what: ["Indicador de nivel de servicio: una medida de lo que experimenta el usuario, expresada como proporción de eventos buenos.", "Service level indicator: a measure of user experience, expressed as the ratio of good events."]
+    points:
+      - ["Disponibilidad: peticiones correctas / peticiones totales.", "Availability: successful requests / total requests."]
+      - ["Latencia: peticiones más rápidas que X ms / peticiones totales.", "Latency: requests faster than X ms / total requests."]
+      - ["Mídelo lo más cerca posible del usuario (balanceador, sondas sintéticas), no en la CPU del servidor.", "Measure as close to the user as possible (load balancer, synthetic probes), not server CPU."]
+    tip: ["Un SLI bueno refleja la experiencia del usuario; «uso de CPU» casi nunca lo es.", "A good SLI reflects user experience; \"CPU usage\" almost never is."]
+  - id: slo
+    term: [SLO y SLA, SLO and SLA]
+    what: ["El SLO es el objetivo interno para un SLI; el SLA es el contrato con el cliente, con penalizaciones.", "The SLO is the internal target for an SLI; the SLA is the customer contract, with penalties."]
+    points:
+      - ["El SLO debe ser más exigente que el SLA para tener margen.", "The SLO should be stricter than the SLA to leave a margin."]
+      - ["100 % nunca es un objetivo razonable: cada 9 extra cuesta mucho más.", "100% is never a sensible target: each extra nine costs far more."]
+      - ["Ventana típica: 28 o 30 días móviles.", "Typical window: rolling 28 or 30 days."]
+    tip: ["SLA 99,5 % para el cliente → SLO interno algo más alto, p. ej. 99,9 %.", "Customer SLA of 99.5% → a slightly higher internal SLO, e.g. 99.9%."]
+  - id: budget
+    term: [Presupuesto de error, Error budget]
+    what: ["1 − SLO: la cantidad de fallo que te puedes permitir en la ventana.", "1 − SLO: the amount of failure you can afford in the window."]
+    points:
+      - ["99,9 % en 30 días ≈ 43 min; 99,99 % ≈ 4,3 min; 99 % ≈ 7,2 h.", "99.9% over 30 days ≈ 43 min; 99.99% ≈ 4.3 min; 99% ≈ 7.2 h."]
+      - ["Si queda presupuesto: se pueden lanzar funciones y asumir riesgos.", "Budget left: ship features and take risks."]
+      - ["Si se agota: congelar lanzamientos no críticos y priorizar fiabilidad (política acordada de antemano).", "Budget exhausted: freeze non-critical launches and prioritize reliability (policy agreed in advance)."]
+    tip: ["Conflicto entre desarrollo y operaciones sobre la velocidad de lanzamiento → presupuesto de error acordado.", "Dev vs ops conflict over release velocity → an agreed error budget."]
+  - id: burn
+    term: [Alertas por tasa de consumo, Burn-rate alerting]
+    what: ["Avisar según la velocidad a la que se gasta el presupuesto, no por cada error.", "Alert on how fast the budget is being spent, not on every error."]
+    points:
+      - ["Consumo rápido (p. ej. 2 % en 1 h) → aviso inmediato (page).", "Fast burn (e.g. 2% in 1 h) → immediate page."]
+      - ["Consumo lento (p. ej. 10 % en 3 días) → ticket.", "Slow burn (e.g. 10% in 3 days) → ticket."]
+      - ["Cloud Monitoring permite definir SLOs y alertas de burn rate por servicio.", "Cloud Monitoring lets you define SLOs and burn-rate alerts per service."]
+    tip: ["Demasiadas alertas que no requieren acción → alertar sobre síntomas y burn rate, no sobre causas.", "Too many non-actionable alerts → alert on symptoms and burn rate, not causes."]
+  - id: toil
+    term: [Toil (trabajo repetitivo), Toil]
+    what: ["Trabajo manual, repetitivo, automatizable y sin valor duradero.", "Manual, repetitive, automatable work without lasting value."]
+    points:
+      - ["Objetivo SRE: que el toil no supere el 50 % del tiempo del equipo.", "SRE goal: keep toil under 50% of the team's time."]
+      - ["Se reduce automatizando: autoescalado, autorreparación, runbooks ejecutables.", "Reduce it by automating: autoscaling, autohealing, executable runbooks."]
+    tip: ["«Reiniciar el servicio a mano cada noche» es toil → automatiza la causa o la recuperación.", "\"Restart the service by hand every night\" is toil → automate the cause or the recovery."]
+  - id: incident
+    term: [Gestión de incidentes, Incident management]
+    what: ["Roles definidos y comunicación clara para restaurar el servicio cuanto antes.", "Defined roles and clear communication to restore service as fast as possible."]
+    points:
+      - ["Incident Commander coordina; Operations Lead actúa; Communications Lead informa a los interesados.", "Incident Commander coordinates; Operations Lead acts; Communications Lead updates stakeholders."]
+      - ["Prioridad: mitigar (rollback, desviar tráfico, escalar) antes de investigar.", "Priority: mitigate (rollback, divert traffic, scale) before investigating."]
+      - ["Un documento vivo del incidente registra decisiones y horas.", "A living incident document records decisions and times."]
+    tip: ["El primer paso ante una caída tras un despliegue es revertirlo.", "The first step on an outage after a deploy is to roll it back."]
+  - id: postmortem
+    term: [Postmortem sin culpas, Blameless postmortem]
+    what: ["Análisis escrito del incidente centrado en causas del sistema y acciones de mejora.", "Written incident analysis focused on system causes and improvement actions."]
+    points:
+      - ["Incluye impacto, cronología, causa raíz, qué salió bien y mal, y acciones con responsable y fecha.", "Includes impact, timeline, root cause, what went well and badly, and actions with owner and date."]
+      - ["Se comparte ampliamente para que toda la organización aprenda.", "It is shared widely so the whole organization learns."]
+    tip: ["Si una respuesta busca «quién tuvo la culpa», es incorrecta.", "If an answer looks for \"who was to blame\", it is wrong."]
+  - id: release
+    term: [Lanzamientos seguros y capacidad, Safe releases and capacity]
+    what: ["Reducir el riesgo de cada cambio y tener capacidad suficiente para la demanda.", "Reduce the risk of each change and have enough capacity for demand."]
+    points:
+      - ["Canary y despliegues progresivos con vuelta atrás automática si empeoran los SLIs.", "Canary and progressive rollouts with automatic rollback if SLIs worsen."]
+      - ["Feature flags separan desplegar de activar.", "Feature flags separate deploying from enabling."]
+      - ["Planificación de capacidad: previsión de demanda + pruebas de carga + margen N+1/N+2.", "Capacity planning: demand forecast + load tests + N+1/N+2 headroom."]
+      - ["Degradación elegante y limitación de carga (load shedding) ante sobrecarga.", "Graceful degradation and load shedding under overload."]
+    tip: ["Evento comercial previsto (Black Friday) → pruebas de carga y reserva de capacidad con antelación.", "Planned commercial event (Black Friday) → load tests and capacity reservation in advance."]
+scenarios:
+  - q: ["Desarrollo quiere lanzar cada día y operaciones quiere congelar cambios porque hubo caídas. ¿Qué propones?", "Dev wants to ship daily and ops wants a change freeze after outages. What do you propose?"]
+    options: [["Definir SLOs y una política de presupuesto de error", "Define SLOs and an error budget policy"], ["Prohibir los lanzamientos en viernes", "Ban Friday releases"], ["Añadir más servidores", "Add more servers"]]
+    answer: 0
+    why: ["El presupuesto convierte la discusión en datos: si hay margen se lanza, si no, fiabilidad.", "The budget turns the debate into data: ship if there is margin, focus on reliability if not."]
+  - q: ["El equipo de guardia recibe 200 alertas a la semana y la mayoría no requieren acción.", "The on-call team gets 200 alerts a week and most need no action."]
+    options: [["Alertar por síntomas visibles y burn rate del SLO", "Alert on user-visible symptoms and SLO burn rate"], ["Contratar más personas de guardia", "Hire more on-call staff"], ["Silenciar todas las alertas de noche", "Mute all alerts at night"]]
+    answer: 0
+    why: ["Las alertas deben ser urgentes, accionables y ligadas al impacto en usuarios.", "Alerts must be urgent, actionable and tied to user impact."]
+  - q: ["Un servicio ha consumido el 100 % de su presupuesto de error del mes a mitad de mes.", "A service has used 100% of its monthly error budget by mid-month."]
+    options: [["Aplicar la política: pausar lanzamientos no críticos y priorizar fiabilidad", "Apply the policy: pause non-critical launches and prioritize reliability"], ["Subir el SLO para el mes que viene", "Raise next month's SLO"], ["Ignorarlo hasta fin de mes", "Ignore it until month end"]]
+    answer: 0
+    why: ["Es exactamente para lo que sirve la política acordada.", "That is exactly what the agreed policy is for."]
+  - q: ["Tras un despliegue sube la latencia p99 y los usuarios se quejan. Eres el Incident Commander.", "After a deploy p99 latency rises and users complain. You are Incident Commander."]
+    options: [["Ordenar el rollback y comunicar el estado", "Order a rollback and communicate status"], ["Depurar el código en producción", "Debug the code in production"], ["Esperar a tener la causa raíz", "Wait for the root cause"]]
+    answer: 0
+    why: ["Mitigar primero; la causa se investiga con el servicio restaurado.", "Mitigate first; investigate the cause once service is restored."]
+  - q: ["¿Qué SLI representa mejor la experiencia de una API pública?", "Which SLI best represents a public API's user experience?"]
+    options: [["% de peticiones con respuesta correcta en menos de 300 ms medido en el balanceador", "% of requests answered successfully under 300 ms measured at the load balancer"], ["Uso medio de CPU de las VMs", "Average VM CPU usage"], ["Número de pods en ejecución", "Number of running pods"]]
+    answer: 0
+    why: ["Mide éxito y velocidad desde el punto de vista del cliente.", "It measures success and speed from the client's point of view."]
+  - q: ["Cada lunes un ingeniero pasa 3 horas rotando certificados a mano.", "Every Monday an engineer spends 3 hours rotating certificates by hand."]
+    options: [["Es toil: automatizarlo (p. ej. certificados gestionados)", "It is toil: automate it (e.g. managed certificates)"], ["Documentarlo mejor", "Document it better"], ["Hacerlo cada dos semanas", "Do it every two weeks"]]
+    answer: 0
+    why: ["Manual, repetitivo y automatizable: la definición de toil.", "Manual, repetitive and automatable: the definition of toil."]
+quiz:
+  - q: ["Un SLO del 99,95 % mensual permite aproximadamente…", "A 99.95% monthly SLO allows approximately…"]
+    options: [["22 minutos de fallo", "22 minutes of failure"], ["43 minutos", "43 minutes"], ["4 minutos", "4 minutes"], ["2 horas", "2 hours"]]
+    answer: 0
+    why: ["0,05 % de 43.200 minutos ≈ 21,6 minutos.", "0.05% of 43,200 minutes ≈ 21.6 minutes."]
+  - q: ["¿Qué relación debe haber entre SLO y SLA?", "What relationship should there be between SLO and SLA?"]
+    options: [["El SLO más exigente que el SLA", "SLO stricter than the SLA"], ["El SLA más exigente que el SLO", "SLA stricter than the SLO"], ["Iguales siempre", "Always equal"]]
+    answer: 0
+    why: ["Así detectas problemas antes de incumplir el contrato.", "That way you catch problems before breaching the contract."]
+  - q: ["¿Qué porcentaje máximo de tiempo recomienda SRE dedicar a toil?", "What maximum share of time does SRE recommend for toil?"]
+    options: [["50 %", "50%"], ["10 %", "10%"], ["90 %", "90%"]]
+    answer: 0
+    why: ["El resto debe ir a ingeniería que reduzca el toil futuro.", "The rest should go to engineering that reduces future toil."]
+  - q: ["¿Qué debe incluir un postmortem? (Elige 2)", "What should a postmortem include? (Choose 2)"]
+    options: [["Cronología y causa raíz", "Timeline and root cause"], ["Acciones con responsable y fecha", "Actions with owner and date"], ["El nombre de quien cometió el error", "The name of whoever made the mistake"], ["Solo el impacto económico", "Only the financial impact"]]
+    answers: [0, 1]
+    why: ["Sin culpas: hechos, causas y mejoras concretas.", "Blameless: facts, causes and concrete improvements."]
+  - q: ["¿Quién coordina un incidente y delega tareas?", "Who coordinates an incident and delegates tasks?"]
+    options: [["Incident Commander", "Incident Commander"], ["El último que desplegó", "Whoever deployed last"], ["El director de producto", "The product director"]]
+    answer: 0
+    why: ["El IC coordina; operaciones ejecuta; comunicaciones informa.", "The IC coordinates; operations executes; communications informs."]
+  - q: ["¿Qué alerta debe despertar a alguien de madrugada?", "Which alert should wake someone up at night?"]
+    options: [["Consumo rápido del presupuesto de error", "Fast error budget burn"], ["Un disco al 60 %", "A disk at 60%"], ["Un pod reiniciado una vez", "A pod restarted once"]]
+    answer: 0
+    why: ["Solo lo urgente y con impacto en usuarios merece un aviso inmediato.", "Only urgent, user-impacting issues deserve an immediate page."]
+  - q: ["¿Qué técnica separa desplegar el código de activar la funcionalidad?", "Which technique separates deploying code from enabling the feature?"]
+    options: [["Feature flags", "Feature flags"], ["Blue/green", "Blue/green"], ["Snapshots", "Snapshots"]]
+    answer: 0
+    why: ["Permite activar/desactivar sin volver a desplegar.", "It lets you switch on/off without redeploying."]
+  - q: ["Ante una sobrecarga imprevista, ¿qué protege a la mayoría de usuarios?", "Under unexpected overload, what protects most users?"]
+    options: [["Limitación de carga y degradación elegante", "Load shedding and graceful degradation"], ["Reiniciar todos los servidores", "Restart every server"], ["Desactivar la supervisión", "Disable monitoring"]]
+    answer: 0
+    why: ["Mejor servir algo a muchos que nada a todos.", "Better to serve something to many than nothing to all."]

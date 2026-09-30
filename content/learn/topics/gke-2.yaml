@@ -1,0 +1,78 @@
+id: gke
+concepts:
+  - id: gke-net
+    term: [Redes en GKE, GKE networking]
+    what: ["VPC nativa, clústeres privados, Gateway y políticas de red.", "VPC-native, private clusters, Gateway and network policies."]
+    points:
+      - ["VPC nativa: pods con IPs de rangos secundarios, enrutables en la VPC (por defecto).", "VPC-native: pods get IPs from secondary ranges, routable in the VPC (default)."]
+      - ["Clúster privado: nodos sin IP pública; endpoint del plano de control privado o con redes autorizadas.", "Private cluster: nodes without public IPs; control plane endpoint private or with authorized networks."]
+      - ["NetworkPolicy limita qué pods hablan entre sí (con Dataplane V2).", "NetworkPolicy limits which pods talk to each other (with Dataplane V2)."]
+      - ["Gateway API / Ingress crean balanceadores de Google Cloud; NEG envía tráfico directo a los pods.", "Gateway API / Ingress create Google Cloud load balancers; NEGs send traffic straight to pods."]
+    tip: ["Solo el frontend puede hablar con la base de datos dentro del clúster → NetworkPolicy.", "Only the frontend may talk to the database inside the cluster → NetworkPolicy."]
+  - id: upgrades
+    term: [Actualizaciones y disponibilidad, Upgrades and availability]
+    what: ["Canales de versión, ventanas de mantenimiento y protección de las cargas.", "Release channels, maintenance windows and workload protection."]
+    points:
+      - ["Canales Rapid, Regular y Stable; las actualizaciones automáticas siguen el canal.", "Rapid, Regular and Stable channels; auto-upgrades follow the channel."]
+      - ["Surge upgrades o blue/green en grupos de nodos.", "Surge or blue/green node pool upgrades."]
+      - ["PodDisruptionBudget garantiza un mínimo de réplicas durante el mantenimiento.", "PodDisruptionBudget guarantees a minimum of replicas during maintenance."]
+      - ["Ventanas y exclusiones de mantenimiento para evitar fechas críticas.", "Maintenance windows and exclusions to avoid critical dates."]
+    tip: ["Actualizaciones que tumban el servicio porque bajan todos los pods → PodDisruptionBudget.", "Upgrades take the service down because all pods go at once → PodDisruptionBudget."]
+  - id: storage-k8s
+    term: [Almacenamiento en Kubernetes, Kubernetes storage]
+    what: ["PersistentVolumes y StorageClasses para datos que sobreviven a los pods.", "PersistentVolumes and StorageClasses for data that outlives pods."]
+    points:
+      - ["PVC pide almacenamiento; la StorageClass crea el disco persistente dinámicamente.", "A PVC requests storage; the StorageClass creates the persistent disk dynamically."]
+      - ["ReadWriteOnce (un nodo) vs ReadWriteMany (varios, p. ej. Filestore).", "ReadWriteOnce (one node) vs ReadWriteMany (several, e.g. Filestore)."]
+      - ["StatefulSet da identidad y volumen estable a cada réplica.", "StatefulSet gives each replica a stable identity and volume."]
+    tip: ["Varios pods en distintos nodos escriben en el mismo volumen → ReadWriteMany con Filestore.", "Several pods on different nodes write the same volume → ReadWriteMany with Filestore."]
+  - id: rbac
+    term: [RBAC y seguridad del clúster, RBAC and cluster security]
+    what: ["IAM controla el acceso al clúster; RBAC controla qué se hace dentro de cada namespace.", "IAM controls cluster access; RBAC controls what happens inside each namespace."]
+    points:
+      - ["Role/RoleBinding por namespace; ClusterRole/ClusterRoleBinding para todo el clúster.", "Role/RoleBinding per namespace; ClusterRole/ClusterRoleBinding cluster-wide."]
+      - ["Google Groups for RBAC para asignar roles a grupos de Workspace.", "Google Groups for RBAC to bind roles to Workspace groups."]
+      - ["Shielded GKE nodes, Binary Authorization y Pod Security Standards.", "Shielded GKE nodes, Binary Authorization and Pod Security Standards."]
+    tip: ["Equipo que solo debe desplegar en su namespace → Role + RoleBinding en ese namespace.", "A team that may only deploy in its namespace → Role + RoleBinding in that namespace."]
+scenarios:
+  - q: ["El equipo de pagos debe poder gestionar pods solo en el namespace «pagos».", "The payments team must manage pods only in the \"payments\" namespace."]
+    options: [["Role y RoleBinding en el namespace pagos para su grupo", "Role and RoleBinding in the payments namespace for their group"], ["Kubernetes Engine Admin en el proyecto", "Kubernetes Engine Admin on the project"], ["ClusterRoleBinding cluster-admin", "ClusterRoleBinding cluster-admin"]]
+    answer: 0
+    why: ["RBAC por namespace limita el alcance.", "Namespaced RBAC limits the scope."]
+  - q: ["Durante las actualizaciones automáticas de nodos la API se queda sin réplicas unos minutos.", "During automatic node upgrades the API is left without replicas for a few minutes."]
+    options: [["Definir un PodDisruptionBudget y varias réplicas repartidas", "Define a PodDisruptionBudget and several spread replicas"], ["Desactivar las actualizaciones para siempre", "Disable upgrades forever"], ["Usar un solo nodo grande", "Use one big node"]]
+    answer: 0
+    why: ["El PDB impide desalojar más pods de los permitidos.", "The PDB prevents evicting more pods than allowed."]
+  - q: ["Seguridad pide que los nodos no tengan IP pública y que el plano de control solo sea accesible desde la red corporativa.", "Security requires nodes without public IPs and a control plane reachable only from the corporate network."]
+    options: [["Clúster privado con redes autorizadas del plano de control", "Private cluster with control plane authorized networks"], ["Clúster público con cortafuegos 0.0.0.0/0", "Public cluster with 0.0.0.0/0 firewall"], ["Cloud Run", "Cloud Run"]]
+    answer: 0
+    why: ["Es exactamente la configuración de clúster privado.", "That is exactly the private cluster setup."]
+  - q: ["Una base de datos en GKE necesita que cada réplica conserve su propio disco y nombre al reiniciarse.", "A database on GKE needs each replica to keep its own disk and name across restarts."]
+    options: [["StatefulSet con volumeClaimTemplates", "StatefulSet with volumeClaimTemplates"], ["Deployment con emptyDir", "Deployment with emptyDir"], ["DaemonSet", "DaemonSet"]]
+    answer: 0
+    why: ["StatefulSet da identidad y PVC estables por réplica.", "StatefulSet gives stable identity and PVC per replica."]
+quiz:
+  - q: ["¿Qué canal de versión de GKE prioriza la estabilidad sobre las novedades?", "Which GKE release channel prioritizes stability over new features?"]
+    options: [["Stable", "Stable"], ["Rapid", "Rapid"], ["Regular", "Regular"]]
+    answer: 0
+    why: ["Stable recibe versiones más probadas y más tarde.", "Stable gets later, more tested versions."]
+  - q: ["¿Qué objeto limita el tráfico entre pods?", "Which object limits traffic between pods?"]
+    options: [["NetworkPolicy", "NetworkPolicy"], ["Service", "Service"], ["ConfigMap", "ConfigMap"]]
+    answer: 0
+    why: ["Las NetworkPolicy definen ingreso y salida permitidos por etiquetas.", "NetworkPolicies define allowed ingress and egress by labels."]
+  - q: ["¿Qué modo de acceso permite que varios nodos escriban el mismo volumen?", "Which access mode lets several nodes write the same volume?"]
+    options: [["ReadWriteMany", "ReadWriteMany"], ["ReadWriteOnce", "ReadWriteOnce"], ["ReadOnlyMany", "ReadOnlyMany"]]
+    answer: 0
+    why: ["Requiere almacenamiento de archivos como Filestore.", "It needs file storage such as Filestore."]
+  - q: ["¿Qué comando da acceso de kubectl a un clúster GKE?", "Which command gives kubectl access to a GKE cluster?"]
+    options: [["gcloud container clusters get-credentials", "gcloud container clusters get-credentials"], ["kubectl login", "kubectl login"], ["gcloud auth kubectl", "gcloud auth kubectl"]]
+    answer: 0
+    why: ["Escribe el contexto en kubeconfig.", "It writes the context into kubeconfig."]
+  - q: ["¿Qué dos cosas hacen falta para Workload Identity? (Elige 2)", "Which two things are required for Workload Identity? (Choose 2)"]
+    options: [["Habilitar Workload Identity en el clúster/grupo de nodos", "Enable Workload Identity on the cluster/node pool"], ["Vincular la cuenta de Kubernetes con la de Google (o conceder IAM al principal de Kubernetes)", "Link the Kubernetes account to the Google one (or grant IAM to the Kubernetes principal)"], ["Montar una clave JSON", "Mount a JSON key"], ["Dar Editor al nodo", "Give the node Editor"]]
+    answers: [0, 1]
+    why: ["Sin claves: federación entre la identidad del pod y IAM.", "No keys: federation between the pod identity and IAM."]
+  - q: ["Un Service de tipo LoadBalancer tarda y queda en <pending>. En un clúster normal suele ser…", "A LoadBalancer Service stays <pending>. In a normal cluster it's usually…"]
+    options: [["Falta de cuota de IPs o reglas de reenvío", "Lack of IP address or forwarding rule quota"], ["Falta de RBAC", "Missing RBAC"], ["Un ConfigMap mal escrito", "A malformed ConfigMap"]]
+    answer: 0
+    why: ["GKE crea recursos de red de Google Cloud que consumen cuota.", "GKE creates Google Cloud network resources that consume quota."]

@@ -1,0 +1,90 @@
+id: security
+concepts:
+  - id: dlp
+    term: [Sensitive Data Protection (DLP), Sensitive Data Protection (DLP)]
+    what: ["Descubre, clasifica y desidentifica datos sensibles (tarjetas, DNI, correos…).", "Discovers, classifies and de-identifies sensitive data (cards, IDs, emails…)."]
+    points:
+      - ["Inspección de Cloud Storage, BigQuery y texto en tiempo real.", "Inspects Cloud Storage, BigQuery and text in real time."]
+      - ["Técnicas: enmascarar, tokenizar (cifrado con preservación de formato), bucketing, fecha desplazada.", "Techniques: masking, tokenization (format-preserving encryption), bucketing, date shifting."]
+      - ["Perfiles de descubrimiento para toda la organización.", "Discovery profiles across the organization."]
+    tip: ["Analistas deben trabajar con datos de clientes sin ver números de tarjeta → desidentificar con Sensitive Data Protection.", "Analysts must work with customer data without seeing card numbers → de-identify with Sensitive Data Protection."]
+  - id: ekm
+    term: [Cloud EKM y HSM, Cloud EKM and HSM]
+    what: ["Opciones de custodia de claves de más control.", "Key custody options with more control."]
+    points:
+      - ["Cloud HSM: claves en HSM gestionados por Google (FIPS 140-2 nivel 3).", "Cloud HSM: keys in Google-managed HSMs (FIPS 140-2 level 3)."]
+      - ["Cloud EKM: la clave vive en un gestor externo tuyo fuera de Google; Google no la tiene nunca.", "Cloud EKM: the key lives in your external manager outside Google; Google never holds it."]
+      - ["Autokey automatiza la creación de claves CMEK por recurso.", "Autokey automates per-resource CMEK key creation."]
+    tip: ["«La clave no debe salir nunca de nuestro proveedor externo» → Cloud EKM.", "\"The key must never leave our external provider\" → Cloud EKM."]
+  - id: supply
+    term: [Seguridad de la cadena de suministro, Supply-chain security]
+    what: ["Garantizar que solo se despliega código e imágenes de confianza.", "Ensure only trusted code and images are deployed."]
+    points:
+      - ["Artifact Analysis escanea vulnerabilidades en imágenes.", "Artifact Analysis scans images for vulnerabilities."]
+      - ["Binary Authorization exige atestaciones firmadas antes de desplegar en GKE o Cloud Run.", "Binary Authorization requires signed attestations before deploying to GKE or Cloud Run."]
+      - ["SLSA y procedencia (provenance) de Cloud Build.", "SLSA and Cloud Build provenance."]
+      - ["Assured Open Source Software: paquetes de código abierto verificados por Google.", "Assured Open Source Software: open-source packages verified by Google."]
+    tip: ["Impedir que llegue a producción una imagen no escaneada → Binary Authorization.", "Stop an unscanned image reaching production → Binary Authorization."]
+  - id: threat
+    term: [Detección de amenazas, Threat detection]
+    what: ["Servicios que detectan comportamientos maliciosos.", "Services that detect malicious behaviour."]
+    points:
+      - ["Event Threat Detection analiza registros (minería de criptomonedas, IAM anómalo, exfiltración).", "Event Threat Detection analyses logs (crypto mining, anomalous IAM, exfiltration)."]
+      - ["Container Threat Detection y VM Threat Detection vigilan en tiempo de ejecución.", "Container Threat Detection and VM Threat Detection watch at runtime."]
+      - ["Web Security Scanner busca XSS y fallos comunes en apps públicas.", "Web Security Scanner looks for XSS and common flaws in public apps."]
+      - ["Google Security Operations (SIEM/SOAR) centraliza y automatiza la respuesta.", "Google Security Operations (SIEM/SOAR) centralizes and automates response."]
+    tip: ["Detectar minería de criptomonedas en tus proyectos → Security Command Center con Event Threat Detection.", "Detect crypto mining in your projects → Security Command Center with Event Threat Detection."]
+  - id: compliance
+    term: [Cumplimiento y responsabilidad compartida, Compliance and shared responsibility]
+    what: ["Google protege la infraestructura; tú, tus datos, identidades y configuración.", "Google secures the infrastructure; you secure your data, identities and configuration."]
+    points:
+      - ["Cuanto más gestionado el servicio, más responsabilidades asume Google.", "The more managed the service, the more Google takes on."]
+      - ["Assured Workloads aplica controles de residencia y personal para regímenes como FedRAMP o soberanía UE.", "Assured Workloads applies residency and personnel controls for regimes like FedRAMP or EU sovereignty."]
+      - ["Informes de cumplimiento (ISO, SOC, PCI) en Compliance Reports Manager.", "Compliance reports (ISO, SOC, PCI) in Compliance Reports Manager."]
+    tip: ["En IaaS tú parcheas el SO; en serverless no.", "In IaaS you patch the OS; in serverless you don't."]
+scenarios:
+  - q: ["Un dataset de BigQuery contiene números de tarjeta y los analistas solo necesitan tendencias.", "A BigQuery dataset holds card numbers and analysts only need trends."]
+    options: [["Desidentificar con Sensitive Data Protection (tokenizar o enmascarar)", "De-identify with Sensitive Data Protection (tokenize or mask)"], ["Quitar a los analistas el acceso a BigQuery", "Remove analysts' BigQuery access"], ["Cifrar con CMEK", "Encrypt with CMEK"]]
+    answer: 0
+    why: ["CMEK no oculta los datos a quien tiene acceso; la desidentificación sí.", "CMEK doesn't hide data from authorized users; de-identification does."]
+  - q: ["Una regulación bancaria exige que las claves de cifrado estén fuera de la nube y bajo control del banco.", "Banking regulation requires encryption keys outside the cloud under the bank's control."]
+    options: [["Cloud EKM", "Cloud EKM"], ["Claves gestionadas por Google", "Google-managed keys"], ["Cloud HSM", "Cloud HSM"]]
+    answer: 0
+    why: ["Con EKM la clave nunca está en Google.", "With EKM the key is never at Google."]
+  - q: ["Security Command Center alerta de minería de criptomonedas en una VM de desarrollo.", "Security Command Center alerts about crypto mining on a dev VM."]
+    options: [["Aislar la VM (cortafuegos/parada), preservar evidencias con snapshot y revisar credenciales comprometidas", "Isolate the VM (firewall/stop), preserve evidence with a snapshot and review compromised credentials"], ["Borrar el proyecto inmediatamente", "Delete the project immediately"], ["Ignorar porque es desarrollo", "Ignore because it's dev"]]
+    answer: 0
+    why: ["Contener, conservar pruebas e investigar el origen.", "Contain, preserve evidence and investigate the source."]
+  - q: ["Solo deben ejecutarse en GKE imágenes compiladas por tu Cloud Build y sin vulnerabilidades críticas.", "Only images built by your Cloud Build and free of critical vulnerabilities may run on GKE."]
+    options: [["Binary Authorization con atestaciones de compilación y escaneo", "Binary Authorization with build and scan attestations"], ["Cloud Armor", "Cloud Armor"], ["Una política de ciclo de vida", "A lifecycle policy"]]
+    answer: 0
+    why: ["Binary Authorization bloquea al desplegar lo que no tenga las atestaciones.", "Binary Authorization blocks at deploy time anything lacking attestations."]
+  - q: ["Una empresa pública en la UE necesita que los datos y el soporte se queden en la UE con controles verificables.", "An EU public body needs data and support to stay in the EU with verifiable controls."]
+    options: [["Assured Workloads con el régimen de soberanía de la UE", "Assured Workloads with the EU sovereignty regime"], ["Solo etiquetas", "Just labels"], ["Un bucket multirregional US", "A US multi-region bucket"]]
+    answer: 0
+    why: ["Assured Workloads aplica residencia, personal y controles de cumplimiento.", "Assured Workloads enforces residency, personnel and compliance controls."]
+quiz:
+  - q: ["¿Qué técnica de Sensitive Data Protection permite revertir el dato original con la clave?", "Which Sensitive Data Protection technique lets you reverse to the original value with the key?"]
+    options: [["Cifrado con preservación de formato (tokenización reversible)", "Format-preserving encryption (reversible tokenization)"], ["Enmascaramiento con asteriscos", "Masking with asterisks"], ["Redacción", "Redaction"]]
+    answer: 0
+    why: ["El enmascaramiento y la redacción son irreversibles.", "Masking and redaction are irreversible."]
+  - q: ["¿Qué servicio busca vulnerabilidades como XSS en una aplicación web pública?", "Which service looks for vulnerabilities like XSS in a public web app?"]
+    options: [["Web Security Scanner", "Web Security Scanner"], ["Cloud Armor", "Cloud Armor"], ["VPC Flow Logs", "VPC Flow Logs"]]
+    answer: 0
+    why: ["Cloud Armor bloquea ataques; el escáner encuentra los fallos.", "Cloud Armor blocks attacks; the scanner finds the flaws."]
+  - q: ["En Cloud Run, ¿quién parchea el sistema operativo subyacente?", "On Cloud Run, who patches the underlying operating system?"]
+    options: [["Google", "Google"], ["El cliente", "The customer"], ["Nadie", "Nobody"]]
+    answer: 0
+    why: ["En serverless la plataforma y el SO son responsabilidad de Google.", "In serverless the platform and OS are Google's responsibility."]
+  - q: ["¿Qué dos mecanismos protegen la conexión de administradores a VMs sin exponerlas? (Elige 2)", "Which two mechanisms protect admin access to VMs without exposing them? (Choose 2)"]
+    options: [["IAP TCP forwarding", "IAP TCP forwarding"], ["OS Login", "OS Login"], ["Abrir el 22 a 0.0.0.0/0", "Opening 22 to 0.0.0.0/0"], ["Contraseñas compartidas", "Shared passwords"]]
+    answers: [0, 1]
+    why: ["IAP evita IPs públicas y OS Login liga el acceso a IAM.", "IAP avoids public IPs and OS Login ties access to IAM."]
+  - q: ["¿Qué nivel de rotación automática admite Cloud KMS?", "What automatic rotation does Cloud KMS support?"]
+    options: [["Periodo de rotación configurable que crea nuevas versiones de la clave", "A configurable rotation period that creates new key versions"], ["Ninguna, siempre manual", "None, always manual"], ["Solo una vez al año obligatoria", "Only a mandatory yearly one"]]
+    answer: 0
+    why: ["Los datos antiguos se siguen descifrando con las versiones anteriores.", "Older data still decrypts with previous versions."]
+  - q: ["Cloud Armor ofrece… (Elige 2)", "Cloud Armor offers… (Choose 2)"]
+    options: [["Reglas WAF preconfiguradas (OWASP)", "Preconfigured WAF rules (OWASP)"], ["Limitación de tasa por cliente", "Per-client rate limiting"], ["Cifrado de discos", "Disk encryption"], ["Gestión de secretos", "Secret management"]]
+    answers: [0, 1]
+    why: ["Es WAF, anti-DDoS y control de tráfico en el borde.", "It is WAF, anti-DDoS and edge traffic control."]
