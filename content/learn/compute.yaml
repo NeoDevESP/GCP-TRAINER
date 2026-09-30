@@ -1,0 +1,90 @@
+id: compute
+name: [Cómputo, Compute]
+intro: ["Dónde se ejecuta tu código: máquinas virtuales, grupos gestionados, contenedores y serverless. La pregunta clave es cuánto control necesitas frente a cuánto quieres gestionar.", "Where your code runs: virtual machines, managed groups, containers and serverless. The key question is how much control you need versus how much you want to manage."]
+concepts:
+  - id: gce
+    term: [Compute Engine, Compute Engine]
+    what: ["Máquinas virtuales con control total del sistema operativo.", "Virtual machines with full control of the operating system."]
+    points:
+      - ["Familias: E2 (general y barata), N2/N4 (equilibradas), C3 (CPU), M3 (memoria), A3 (GPU).", "Families: E2 (general, cheap), N2/N4 (balanced), C3 (CPU), M3 (memory), A3 (GPU)."]
+      - ["Scripts de arranque (startup-script) configuran la VM al iniciar.", "Startup scripts (startup-script) configure the VM on boot."]
+      - ["Las etiquetas de red sirven para aplicar reglas de cortafuegos a VMs concretas.", "Network tags apply firewall rules to specific VMs."]
+    tip: ["«Necesito control del SO o software heredado» → Compute Engine.", "\"I need OS control or legacy software\" → Compute Engine."]
+  - id: spot
+    term: [VMs Spot y descuentos, Spot VMs and discounts]
+    what: ["Formas de pagar menos: Spot (interrumpibles), uso sostenido y compromisos.", "Ways to pay less: Spot (interruptible), sustained use and commitments."]
+    points:
+      - ["Spot cuesta hasta un 60-91 % menos, pero Google puede pararla con 30 s de aviso.", "Spot costs 60-91% less, but Google can stop it with 30 s notice."]
+      - ["Los compromisos de uso (CUD) de 1 o 3 años dan grandes descuentos para cargas estables.", "Committed use discounts (CUD) for 1 or 3 years give big savings for steady workloads."]
+    tip: ["Trabajos por lotes tolerantes a fallos → VMs Spot.", "Fault-tolerant batch jobs → Spot VMs."]
+  - id: mig
+    term: [Grupo de instancias gestionado (MIG), Managed instance group (MIG)]
+    what: ["Conjunto de VMs idénticas creadas desde una plantilla, con autoescalado y autorreparación.", "A set of identical VMs created from a template, with autoscaling and autohealing."]
+    points:
+      - ["La plantilla de instancia es inmutable: para cambiar algo se crea una nueva.", "An instance template is immutable: to change something you create a new one."]
+      - ["La autorreparación recrea VMs que fallan la comprobación de estado.", "Autohealing recreates VMs that fail their health check."]
+      - ["Un MIG regional reparte las VMs entre zonas.", "A regional MIG spreads VMs across zones."]
+      - ["Las actualizaciones progresivas (rolling update) cambian la plantilla poco a poco.", "Rolling updates change the template gradually."]
+    tip: ["«Escalar automáticamente VMs según la carga» → MIG con autoescalado.", "\"Scale VMs automatically with load\" → MIG with autoscaling."]
+  - id: disks
+    term: [Discos persistentes y snapshots, Persistent disks and snapshots]
+    what: ["Almacenamiento en bloque de las VMs, independiente de su vida.", "Block storage for VMs, independent of the VM's lifetime."]
+    points:
+      - ["Tipos: estándar (HDD), balanceado, SSD e Hyperdisk; los regionales se replican en dos zonas.", "Types: standard (HDD), balanced, SSD and Hyperdisk; regional disks replicate across two zones."]
+      - ["Se pueden ampliar en caliente, pero nunca reducir.", "They can be grown online but never shrunk."]
+      - ["Los snapshots son incrementales y sirven para copias y para clonar en otra zona.", "Snapshots are incremental and serve for backups and cloning into another zone."]
+    tip: ["Mover una VM a otra zona: snapshot del disco y crear la VM desde él.", "Moving a VM to another zone: snapshot the disk and create the VM from it."]
+  - id: run
+    term: [Cloud Run, Cloud Run]
+    what: ["Ejecuta contenedores sin servidores; escala a cero y cobra por uso.", "Runs containers serverlessly; scales to zero and charges per use."]
+    points:
+      - ["Cada despliegue crea una revisión; el tráfico se puede repartir entre revisiones.", "Each deployment creates a revision; traffic can be split between revisions."]
+      - ["--no-allow-unauthenticated exige IAM (roles/run.invoker) para llamarlo.", "--no-allow-unauthenticated requires IAM (roles/run.invoker) to call it."]
+      - ["Los jobs de Cloud Run ejecutan tareas que terminan, en lugar de servir peticiones.", "Cloud Run jobs run tasks to completion instead of serving requests."]
+    tip: ["«Contenedor sin gestionar infraestructura, escala a cero» → Cloud Run.", "\"Container without managing infrastructure, scales to zero\" → Cloud Run."]
+  - id: functions
+    term: [Cloud Run functions y App Engine, Cloud Run functions and App Engine]
+    what: ["Funciones que reaccionan a eventos y una plataforma de apps clásica.", "Event-driven functions and a classic app platform."]
+    points:
+      - ["Las funciones se disparan por HTTP, Pub/Sub, Cloud Storage o Eventarc.", "Functions are triggered by HTTP, Pub/Sub, Cloud Storage or Eventarc."]
+      - ["App Engine Standard escala a cero; Flexible usa VMs y no escala a cero.", "App Engine Standard scales to zero; Flexible uses VMs and does not."]
+      - ["App Engine: solo una aplicación por proyecto y su región no se cambia.", "App Engine: one app per project and its region cannot change."]
+    tip: ["«Procesar cada archivo que se sube a un bucket» → función con disparador de Cloud Storage.", "\"Process each file uploaded to a bucket\" → function with a Cloud Storage trigger."]
+scenarios:
+  - q: ["Una aplicación heredada necesita una versión concreta de Windows Server y software instalado a mano.", "A legacy app needs a specific Windows Server version and hand-installed software."]
+    options: [["Compute Engine", "Compute Engine"], ["Cloud Run", "Cloud Run"], ["Cloud Run functions", "Cloud Run functions"], ["App Engine Standard", "App Engine Standard"]]
+    answer: 0
+    why: ["Solo Compute Engine da control total del sistema operativo.", "Only Compute Engine gives full control of the operating system."]
+  - q: ["Una API en contenedor recibe tráfico a ratos y quieres pagar cero cuando no hay peticiones.", "A containerized API gets bursty traffic and you want to pay nothing when idle."]
+    options: [["Cloud Run", "Cloud Run"], ["GKE Standard", "GKE Standard"], ["Un MIG con 2 VMs", "A MIG with 2 VMs"]]
+    answer: 0
+    why: ["Cloud Run escala a cero y cobra por petición procesada.", "Cloud Run scales to zero and charges per request processed."]
+  - q: ["Un proceso nocturno de renderizado de 4 horas puede reintentarse si se corta.", "A 4-hour nightly render job can be retried if interrupted."]
+    options: [["VMs Spot", "Spot VMs"], ["Compromiso de uso de 3 años", "3-year committed use"], ["VMs de nodo único", "Sole-tenant nodes"]]
+    answer: 0
+    why: ["Spot es la opción más barata para cargas tolerantes a interrupciones.", "Spot is the cheapest option for interruption-tolerant workloads."]
+  - q: ["Una web en VMs debe sobrevivir a la caída de una zona y crecer en picos.", "A website on VMs must survive a zone outage and grow during peaks."]
+    options: [["MIG regional con autoescalado", "Regional MIG with autoscaling"], ["Una VM grande", "One large VM"], ["MIG zonal sin autoescalado", "Zonal MIG without autoscaling"]]
+    answer: 0
+    why: ["El MIG regional reparte entre zonas y el autoescalado añade VMs en picos.", "A regional MIG spreads across zones and autoscaling adds VMs at peaks."]
+quiz:
+  - q: ["¿Se puede reducir el tamaño de un disco persistente?", "Can a persistent disk be shrunk?"]
+    options: [["No, solo ampliar", "No, only grown"], ["Sí, en caliente", "Yes, online"], ["Sí, con la VM parada", "Yes, with the VM stopped"]]
+    answer: 0
+    why: ["Los discos se amplían en caliente pero nunca se reducen.", "Disks grow online but never shrink."]
+  - q: ["¿Qué hace la autorreparación de un MIG?", "What does MIG autohealing do?"]
+    options: [["Recrea VMs que fallan la comprobación de estado", "Recreates VMs that fail the health check"], ["Aumenta la CPU", "Increases CPU"], ["Hace snapshots diarios", "Takes daily snapshots"]]
+    answer: 0
+    why: ["Usa una comprobación de estado para detectar VMs enfermas y sustituirlas.", "It uses a health check to detect sick VMs and replace them."]
+  - q: ["Quieres enviar el 10 % del tráfico a la nueva versión de Cloud Run.", "You want to send 10% of traffic to the new Cloud Run version."]
+    options: [["Repartir tráfico entre revisiones", "Split traffic between revisions"], ["Crear otro proyecto", "Create another project"], ["Usar un MIG", "Use a MIG"]]
+    answer: 0
+    why: ["gcloud run services update-traffic permite porcentajes por revisión.", "gcloud run services update-traffic allows percentages per revision."]
+  - q: ["¿Cómo cambias la configuración de las VMs de un MIG?", "How do you change the configuration of a MIG's VMs?"]
+    options: [["Nueva plantilla y actualización progresiva", "New template and a rolling update"], ["Editar la plantilla actual", "Edit the current template"], ["SSH a cada VM", "SSH to each VM"]]
+    answer: 0
+    why: ["Las plantillas son inmutables; se crea otra y se aplica poco a poco.", "Templates are immutable; you create another and roll it out."]
+  - q: ["¿Cuánto aviso da Google antes de parar una VM Spot?", "How much notice does Google give before stopping a Spot VM?"]
+    options: [["30 segundos", "30 seconds"], ["24 horas", "24 hours"], ["Ninguno", "None"], ["10 minutos", "10 minutes"]]
+    answer: 0
+    why: ["La VM recibe una señal de apagado con 30 s para terminar.", "The VM gets a shutdown signal with 30 s to finish."]

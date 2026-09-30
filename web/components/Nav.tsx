@@ -23,12 +23,14 @@ const ICONS: Record<string, ReactNode> = {
   company: S(<><path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16" /><path d="M14 9h5a1 1 0 0 1 1 1v11" /><path d="M8 8h2M8 12h2M8 16h2" /><path d="M2 21h20" /></>),
   graph: S(<><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="8" r="2.5" /><circle cx="9" cy="18" r="2.5" /><path d="M8 7.5l7.7 0M7 8.3l1.4 7.4M16.4 10l-5.6 6.4" /></>),
   trophy: S(<><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4" /><path d="M12 13v4M8 21h8M9 17h6v4H9z" /></>),
+  book: S(<><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 21V5" /><path d="M9 7h6" /></>),
   teacher: S(<><circle cx="12" cy="7" r="3.5" /><path d="M5 21v-1a7 7 0 0 1 14 0v1" /></>),
 };
 
 const links: [string, string, string][] = [
   ["/dashboard", k("Inicio"), "home"],
   ["/catalog", k("Rutas"), "map"],
+  ["/learn", k("Aprende"), "book"],
   ["/incidents", k("Incidencias"), "alert"],
   ["/company", k("Empresa"), "company"],
   ["/skills", k("Habilidades"), "graph"],

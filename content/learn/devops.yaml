@@ -1,0 +1,81 @@
+id: devops
+name: [DevOps y CI/CD, DevOps and CI/CD]
+intro: ["Automatizar: infraestructura como código, compilaciones, registro de artefactos y despliegues seguros con vuelta atrás.", "Automate: infrastructure as code, builds, artifact registry and safe deployments with rollback."]
+concepts:
+  - id: iac
+    term: [Infraestructura como código, Infrastructure as code]
+    what: ["Describir la infraestructura en archivos (Terraform) y aplicarla de forma repetible.", "Describe infrastructure in files (Terraform) and apply it repeatably."]
+    points:
+      - ["terraform init → plan (revisar) → apply.", "terraform init → plan (review) → apply."]
+      - ["El estado se guarda en un backend remoto (bucket de Cloud Storage) con bloqueo.", "State is kept in a remote backend (Cloud Storage bucket) with locking."]
+      - ["Los cambios manuales en la consola crean deriva (drift) respecto al código.", "Manual console changes create drift from the code."]
+    tip: ["«Entornos reproducibles y revisables» → Terraform en un repositorio.", "\"Reproducible, reviewable environments\" → Terraform in a repository."]
+  - id: build
+    term: [Cloud Build, Cloud Build]
+    what: ["Servicio serverless que compila, prueba y publica según un cloudbuild.yaml.", "Serverless service that builds, tests and publishes from a cloudbuild.yaml."]
+    points:
+      - ["Activadores (triggers) por push a una rama, etiqueta o pull request.", "Triggers on push to a branch, tag or pull request."]
+      - ["Usa una cuenta de servicio dedicada con permisos mínimos.", "Use a dedicated service account with minimal permissions."]
+      - ["Etiquetar las imágenes con el SHA del commit da trazabilidad.", "Tagging images with the commit SHA provides traceability."]
+    tip: ["Compilar y publicar la imagen en cada commit → activador de Cloud Build.", "Build and publish the image on every commit → Cloud Build trigger."]
+  - id: registry
+    term: [Artifact Registry, Artifact Registry]
+    what: ["Repositorio de imágenes de contenedor y paquetes (npm, Maven, Python…).", "Repository for container images and packages (npm, Maven, Python…)."]
+    points:
+      - ["Sustituye a Container Registry.", "It replaces Container Registry."]
+      - ["El análisis de vulnerabilidades revisa las imágenes subidas.", "Vulnerability scanning checks pushed images."]
+      - ["Binary Authorization solo deja desplegar imágenes firmadas o verificadas.", "Binary Authorization only allows signed or verified images to deploy."]
+    tip: ["«Solo desplegar imágenes aprobadas en GKE» → Binary Authorization.", "\"Only deploy approved images to GKE\" → Binary Authorization."]
+  - id: deploy
+    term: [Cloud Deploy, Cloud Deploy]
+    what: ["Entrega continua por etapas (dev → staging → prod) con aprobaciones y rollback.", "Staged continuous delivery (dev → staging → prod) with approvals and rollback."]
+    points:
+      - ["Una release se promociona de un destino al siguiente.", "A release is promoted from one target to the next."]
+      - ["Admite canary y verificación automática.", "Supports canary and automated verification."]
+    tip: ["Promociones controladas con aprobación antes de producción → Cloud Deploy.", "Controlled promotions with approval before production → Cloud Deploy."]
+  - id: strategies
+    term: [Estrategias de despliegue, Deployment strategies]
+    what: ["Rolling, blue/green y canary reducen el riesgo de cada versión.", "Rolling, blue/green and canary reduce the risk of each release."]
+    points:
+      - ["Rolling: sustituye poco a poco.", "Rolling: replaces gradually."]
+      - ["Blue/green: dos entornos completos y cambio instantáneo de tráfico.", "Blue/green: two full environments and an instant traffic switch."]
+      - ["Canary: un pequeño porcentaje del tráfico prueba la nueva versión.", "Canary: a small share of traffic tries the new version."]
+    tip: ["«Probar con el 5 % de usuarios reales antes de todos» → canary.", "\"Try with 5% of real users before everyone\" → canary."]
+scenarios:
+  - q: ["Cada push a main debe generar una imagen etiquetada con el commit.", "Each push to main must produce an image tagged with the commit."]
+    options: [["Activador de Cloud Build + Artifact Registry", "Cloud Build trigger + Artifact Registry"], ["Compilar en el portátil del desarrollador", "Build on the developer's laptop"], ["Cloud Scheduler", "Cloud Scheduler"]]
+    answer: 0
+    why: ["Es el CI nativo de Google Cloud.", "It is Google Cloud's native CI."]
+  - q: ["Seguridad exige que en producción solo corran imágenes que pasaron el pipeline.", "Security requires that only images that passed the pipeline run in production."]
+    options: [["Binary Authorization", "Binary Authorization"], ["Cloud Armor", "Cloud Armor"], ["IAM Viewer", "IAM Viewer"]]
+    answer: 0
+    why: ["Verifica atestaciones antes de permitir el despliegue.", "It verifies attestations before allowing deployment."]
+  - q: ["Varios equipos editan la misma infraestructura Terraform y se pisan el estado.", "Several teams edit the same Terraform infra and clobber state."]
+    options: [["Backend remoto en Cloud Storage con bloqueo", "Remote Cloud Storage backend with locking"], ["Cada uno su terraform.tfstate local", "Each their own local terraform.tfstate"], ["Dejar de usar Terraform", "Stop using Terraform"]]
+    answer: 0
+    why: ["El estado compartido con bloqueo evita aplicaciones simultáneas.", "Shared, locked state prevents simultaneous applies."]
+  - q: ["Quieres volver a la versión anterior al instante si la nueva falla.", "You want to return to the previous version instantly if the new one fails."]
+    options: [["Blue/green", "Blue/green"], ["Recrear todo desde cero", "Recreate everything"], ["Desplegar de noche", "Deploy at night"]]
+    answer: 0
+    why: ["El entorno anterior sigue listo: basta con cambiar el tráfico.", "The old environment is still up: just switch traffic."]
+quiz:
+  - q: ["¿Qué comando de Terraform muestra los cambios sin aplicarlos?", "Which Terraform command shows changes without applying them?"]
+    options: [["terraform plan", "terraform plan"], ["terraform apply", "terraform apply"], ["terraform init", "terraform init"]]
+    answer: 0
+    why: ["plan compara el código con el estado real.", "plan compares code with real state."]
+  - q: ["¿Qué servicio sustituye a Container Registry?", "Which service replaces Container Registry?"]
+    options: [["Artifact Registry", "Artifact Registry"], ["Cloud Storage", "Cloud Storage"], ["Cloud Source Repositories", "Cloud Source Repositories"]]
+    answer: 0
+    why: ["Artifact Registry guarda imágenes y paquetes.", "Artifact Registry stores images and packages."]
+  - q: ["¿Qué archivo define los pasos de Cloud Build?", "Which file defines Cloud Build steps?"]
+    options: [["cloudbuild.yaml", "cloudbuild.yaml"], ["app.yaml", "app.yaml"], ["main.tf", "main.tf"]]
+    answer: 0
+    why: ["app.yaml es de App Engine y main.tf de Terraform.", "app.yaml is App Engine's and main.tf Terraform's."]
+  - q: ["¿Qué es un despliegue canary?", "What is a canary deployment?"]
+    options: [["Enviar una parte pequeña del tráfico a la versión nueva", "Sending a small share of traffic to the new version"], ["Desplegar en todas las regiones a la vez", "Deploying to all regions at once"], ["Borrar la versión antigua", "Deleting the old version"]]
+    answer: 0
+    why: ["Si las métricas empeoran, se revierte con poco impacto.", "If metrics worsen, you revert with little impact."]
+  - q: ["Alguien cambió una regla a mano en la consola. ¿Qué detecta terraform plan?", "Someone changed a rule by hand in the console. What does terraform plan detect?"]
+    options: [["Deriva (drift) respecto al código", "Drift from the code"], ["Nada", "Nothing"], ["Un error de sintaxis", "A syntax error"]]
+    answer: 0
+    why: ["plan propondrá devolverla al estado del código.", "plan will propose returning it to the coded state."]

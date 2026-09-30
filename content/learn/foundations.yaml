@@ -1,0 +1,89 @@
+# Sección «Aprende»: lo que hay que saber antes del cuestionario.
+# Cada texto es un par [español, inglés].
+id: foundations
+name: [Bases de Google Cloud, Google Cloud foundations]
+intro: ["Cómo se organiza Google Cloud: jerarquía de recursos, proyectos, facturación, APIs y las herramientas para trabajar con todo ello.", "How Google Cloud is organized: resource hierarchy, projects, billing, APIs and the tools to work with them."]
+concepts:
+  - id: hierarchy
+    term: [Jerarquía de recursos, Resource hierarchy]
+    what: ["Organización → carpetas → proyectos → recursos; las políticas se heredan hacia abajo.", "Organization → folders → projects → resources; policies are inherited downwards."]
+    points:
+      - ["La organización está ligada a un dominio de Cloud Identity o Google Workspace.", "The organization is tied to a Cloud Identity or Google Workspace domain."]
+      - ["Las carpetas agrupan proyectos por departamento o entorno.", "Folders group projects by department or environment."]
+      - ["Un permiso dado arriba no se puede quitar abajo: la política efectiva es la unión.", "A permission granted above cannot be removed below: the effective policy is the union."]
+    tip: ["Si la pregunta habla de aplicar algo a muchos proyectos a la vez, la respuesta suele ser una carpeta o la organización.", "If a question talks about applying something to many projects at once, the answer is usually a folder or the organization."]
+  - id: project
+    term: [Proyecto, Project]
+    what: ["Contenedor básico de recursos, APIs, facturación y permisos.", "Basic container for resources, APIs, billing and permissions."]
+    points:
+      - ["Tiene nombre (editable), ID (único y fijo) y número (lo asigna Google).", "It has a name (editable), an ID (unique and permanent) and a number (assigned by Google)."]
+      - ["Al borrarlo queda 30 días en espera antes de eliminarse.", "Deleting it leaves it pending for 30 days before it is removed."]
+    tip: ["El ID del proyecto no se puede cambiar nunca; el nombre sí.", "The project ID can never be changed; the name can."]
+  - id: billing
+    term: [Cuenta de facturación, Billing account]
+    what: ["Paga los recursos de uno o varios proyectos.", "Pays for the resources of one or more projects."]
+    points:
+      - ["Los presupuestos y alertas avisan, pero no cortan el gasto por sí solos.", "Budgets and alerts notify, but they do not stop spending by themselves."]
+      - ["Exportar la facturación a BigQuery permite analizar costes en detalle.", "Exporting billing to BigQuery lets you analyse costs in detail."]
+      - ["Billing Account User permite vincular proyectos; Billing Account Administrator gestiona la cuenta.", "Billing Account User lets you link projects; Billing Account Administrator manages the account."]
+    tip: ["«Avisar cuando el gasto llegue al 90 %» = presupuesto con umbral de alerta.", "\"Notify when spending reaches 90%\" = a budget with an alert threshold."]
+  - id: apis
+    term: [APIs y servicios, APIs and services]
+    what: ["Cada servicio debe habilitarse en el proyecto antes de usarlo.", "Each service must be enabled in the project before use."]
+    points:
+      - ["gcloud services enable compute.googleapis.com habilita una API.", "gcloud services enable compute.googleapis.com enables an API."]
+      - ["Las cuotas limitan cuánto se puede usar por proyecto y región.", "Quotas limit how much can be used per project and region."]
+    tip: ["Un error «API has not been used in project» se arregla habilitando la API.", "An \"API has not been used in project\" error is fixed by enabling the API."]
+  - id: tools
+    term: ["gcloud, Cloud Shell y consola", "gcloud, Cloud Shell and console"]
+    what: ["Tres formas de gestionar recursos: línea de comandos, terminal en el navegador y web.", "Three ways to manage resources: command line, browser terminal and web."]
+    points:
+      - ["gcloud config set project y configurations permiten cambiar de contexto.", "gcloud config set project and configurations let you switch context."]
+      - ["Cloud Shell trae gcloud, kubectl y terraform ya instalados, con 5 GB persistentes en $HOME.", "Cloud Shell ships gcloud, kubectl and terraform preinstalled, with 5 GB persistent in $HOME."]
+      - ["gsutil y bq son las herramientas clásicas para Cloud Storage y BigQuery (hoy también gcloud storage).", "gsutil and bq are the classic tools for Cloud Storage and BigQuery (today also gcloud storage)."]
+    tip: ["Para alternar entre varios proyectos o cuentas: gcloud config configurations.", "To switch between several projects or accounts: gcloud config configurations."]
+  - id: regions
+    term: [Regiones y zonas, Regions and zones]
+    what: ["Una región es una ubicación geográfica; tiene varias zonas independientes.", "A region is a geographic location with several independent zones."]
+    points:
+      - ["Recursos zonales: VMs, discos persistentes. Regionales: subredes, Cloud Run. Globales: redes VPC, imágenes.", "Zonal resources: VMs, persistent disks. Regional: subnets, Cloud Run. Global: VPC networks, images."]
+      - ["Repartir entre zonas protege frente a la caída de una zona.", "Spreading across zones protects against a zone failure."]
+    tip: ["Alta disponibilidad = varias zonas; recuperación ante desastres = varias regiones.", "High availability = several zones; disaster recovery = several regions."]
+scenarios:
+  - q: ["Quieres dar a todo el equipo de datos acceso a 12 proyectos de analítica, y a los que se creen en el futuro.", "You want to give the whole data team access to 12 analytics projects, and to future ones."]
+    options: [["Conceder el rol en una carpeta que contenga esos proyectos", "Grant the role on a folder containing those projects"], ["Conceder el rol en cada proyecto", "Grant the role on each project"], ["Crear un rol personalizado por proyecto", "Create a custom role per project"]]
+    answer: 0
+    why: ["La herencia hace que todo proyecto de la carpeta, presente o futuro, reciba el permiso.", "Inheritance means every project in the folder, now or later, gets the permission."]
+  - q: ["Finanzas quiere un correo cuando el gasto mensual de un proyecto supere 500 €.", "Finance wants an email when a project's monthly spending passes €500."]
+    options: [["Un presupuesto con alertas", "A budget with alerts"], ["Una cuota de API", "An API quota"], ["Una alerta de Cloud Monitoring sobre la CPU", "A Cloud Monitoring alert on CPU"]]
+    answer: 0
+    why: ["Los presupuestos de facturación envían avisos al llegar a los umbrales.", "Billing budgets send notifications when thresholds are reached."]
+  - q: ["Un comando falla con «Compute Engine API has not been used in project».", "A command fails with \"Compute Engine API has not been used in project\"."]
+    options: [["Habilitar la API compute.googleapis.com", "Enable the compute.googleapis.com API"], ["Pedir más cuota", "Request more quota"], ["Darte el rol Owner", "Grant yourself Owner"]]
+    answer: 0
+    why: ["El mensaje indica que la API no está habilitada en el proyecto.", "The message says the API is not enabled in the project."]
+  - q: ["Trabajas cada día con un proyecto de pruebas y otro de producción, con cuentas distintas.", "You work daily with a test project and a production project, with different accounts."]
+    options: [["gcloud config configurations, una por entorno", "gcloud config configurations, one per environment"], ["Reinstalar gcloud", "Reinstall gcloud"], ["Usar siempre --project en cada comando", "Always pass --project on every command"]]
+    answer: 0
+    why: ["Las configuraciones guardan cuenta, proyecto y región y se cambian con un comando.", "Configurations store account, project and region and are switched with one command."]
+quiz:
+  - q: ["¿Qué dato de un proyecto no se puede cambiar nunca?", "Which project attribute can never be changed?"]
+    options: [["El ID del proyecto", "The project ID"], ["El nombre", "The name"], ["Las etiquetas", "The labels"], ["La cuenta de facturación", "The billing account"]]
+    answer: 0
+    why: ["El ID es único y permanente; el nombre y las etiquetas se editan.", "The ID is unique and permanent; the name and labels are editable."]
+  - q: ["Si das Editor a alguien en una carpeta, ¿puedes quitárselo en un proyecto de esa carpeta?", "If you grant Editor on a folder, can you remove it on a project inside that folder?"]
+    options: [["No, la política efectiva es la unión de lo heredado", "No, the effective policy is the union of inherited grants"], ["Sí, con un binding en el proyecto", "Yes, with a binding on the project"], ["Sí, borrando el proyecto", "Yes, by deleting the project"]]
+    answer: 0
+    why: ["IAM hereda hacia abajo y un nivel inferior no puede restar permisos (salvo políticas de denegación).", "IAM inherits downwards and a lower level cannot subtract permissions (except with deny policies)."]
+  - q: ["¿Qué recurso es zonal?", "Which resource is zonal?"]
+    options: [["Una VM de Compute Engine", "A Compute Engine VM"], ["Una red VPC", "A VPC network"], ["Un servicio de Cloud Run", "A Cloud Run service"], ["Un bucket multirregional", "A multi-region bucket"]]
+    answer: 0
+    why: ["Las VMs y sus discos viven en una zona; la VPC es global y Cloud Run regional.", "VMs and their disks live in one zone; VPC is global and Cloud Run regional."]
+  - q: ["¿Un presupuesto de facturación detiene los recursos al llegar al límite?", "Does a billing budget stop resources when the limit is reached?"]
+    options: [["No, solo avisa (se puede automatizar con Pub/Sub)", "No, it only notifies (can be automated via Pub/Sub)"], ["Sí, siempre", "Yes, always"], ["Solo en proyectos nuevos", "Only in new projects"]]
+    answer: 0
+    why: ["Los presupuestos notifican; para cortar gasto hay que automatizarlo con sus notificaciones.", "Budgets notify; to stop spending you must automate it from their notifications."]
+  - q: ["¿Dónde analizarías el coste por etiqueta de los últimos 6 meses?", "Where would you analyse cost by label over the last 6 months?"]
+    options: [["Exportando la facturación a BigQuery", "Exporting billing to BigQuery"], ["En Cloud Logging", "In Cloud Logging"], ["En la página de cuotas", "On the quotas page"]]
+    answer: 0
+    why: ["La exportación a BigQuery permite consultas SQL sobre el detalle de costes.", "The BigQuery export allows SQL queries over detailed costs."]

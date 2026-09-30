@@ -1,0 +1,90 @@
+id: architecture
+name: [Arquitectura, Architecture]
+intro: ["Diseñar soluciones completas: fiabilidad, recuperación ante desastres, coste, migración y buenas prácticas (Well-Architected Framework).", "Designing complete solutions: reliability, disaster recovery, cost, migration and best practices (Well-Architected Framework)."]
+concepts:
+  - id: waf
+    term: [Well-Architected Framework, Well-Architected Framework]
+    what: ["Pilares: excelencia operativa, seguridad, fiabilidad, coste y rendimiento.", "Pillars: operational excellence, security, reliability, cost and performance."]
+    points:
+      - ["Cada decisión equilibra pilares: más fiabilidad suele costar más.", "Each decision balances pillars: more reliability usually costs more."]
+      - ["Lee los requisitos de negocio del caso antes que los técnicos.", "Read the case's business requirements before the technical ones."]
+    tip: ["En el examen de arquitecto, la respuesta encaja con TODOS los requisitos del enunciado, no solo el técnico.", "In the architect exam, the answer fits ALL requirements in the question, not only the technical one."]
+  - id: rto
+    term: [RTO y RPO, RTO and RPO]
+    what: ["RTO: cuánto puede durar la caída. RPO: cuántos datos se pueden perder.", "RTO: how long an outage can last. RPO: how much data can be lost."]
+    points:
+      - ["Copia y restauración: RTO/RPO de horas, barato.", "Backup and restore: hours of RTO/RPO, cheap."]
+      - ["Espera en frío/templado: infra mínima en otra región lista para crecer.", "Cold/warm standby: minimal infra in another region ready to grow."]
+      - ["Activo-activo multirregión: RTO/RPO casi cero, lo más caro.", "Multi-region active-active: near-zero RTO/RPO, most expensive."]
+    tip: ["Elige la opción más barata que cumpla el RTO/RPO pedido.", "Pick the cheapest option that meets the stated RTO/RPO."]
+  - id: reliability
+    term: [Diseño para fiabilidad, Designing for reliability]
+    what: ["Eliminar puntos únicos de fallo, repartir entre zonas y degradarse con elegancia.", "Remove single points of failure, spread across zones and degrade gracefully."]
+    points:
+      - ["Servicios gestionados regionales en lugar de una sola VM.", "Regional managed services instead of a single VM."]
+      - ["Desacoplar con colas (Pub/Sub) para absorber picos.", "Decouple with queues (Pub/Sub) to absorb peaks."]
+      - ["Reintentos con espera exponencial y circuit breakers.", "Retries with exponential backoff and circuit breakers."]
+    tip: ["«Una sola VM con la base de datos» es siempre un punto único de fallo.", "\"A single VM with the database\" is always a single point of failure."]
+  - id: cost
+    term: [Optimización de costes, Cost optimization]
+    what: ["Pagar solo por lo que se usa: tamaño correcto, descuentos y servicios serverless.", "Pay only for what you use: right-sizing, discounts and serverless."]
+    points:
+      - ["Recomendador de tamaño (rightsizing) de VMs.", "VM rightsizing recommendations."]
+      - ["Compromisos de uso para la carga base; Spot para lotes.", "Committed use for baseline load; Spot for batch."]
+      - ["Apagar entornos de desarrollo fuera de horario.", "Shut down dev environments out of hours."]
+      - ["Ciclo de vida en Storage y particiones en BigQuery.", "Lifecycle in Storage and partitions in BigQuery."]
+    tip: ["Carga estable 24/7 durante años → descuento por compromiso.", "Steady 24/7 load for years → committed use discount."]
+  - id: migration
+    term: [Estrategias de migración, Migration strategies]
+    what: ["Rehost (mover tal cual), replatform (pequeños cambios) y refactor (rediseñar).", "Rehost (lift and shift), replatform (small changes) and refactor (redesign)."]
+    points:
+      - ["Rehost: rápido, poco beneficio cloud (Migrate to Virtual Machines).", "Rehost: fast, little cloud benefit (Migrate to Virtual Machines)."]
+      - ["Replatform: p. ej. base de datos propia → Cloud SQL (Database Migration Service).", "Replatform: e.g. self-managed database → Cloud SQL (Database Migration Service)."]
+      - ["Refactor: microservicios y serverless; más esfuerzo y más beneficio.", "Refactor: microservices and serverless; more effort, more benefit."]
+    tip: ["«Salir del centro de datos en 3 meses» → rehost primero, optimizar después.", "\"Leave the datacenter in 3 months\" → rehost first, optimize later."]
+  - id: choose
+    term: [Elegir el cómputo, Choosing compute]
+    what: ["De más control a menos gestión: Compute Engine → GKE → Cloud Run → funciones.", "From more control to less management: Compute Engine → GKE → Cloud Run → functions."]
+    points:
+      - ["Contenedores sin estado con HTTP → Cloud Run.", "Stateless HTTP containers → Cloud Run."]
+      - ["Muchos microservicios con necesidades de red o estado complejas → GKE.", "Many microservices with complex networking or state → GKE."]
+      - ["Requisitos de SO, licencias o hardware → Compute Engine.", "OS, licensing or hardware requirements → Compute Engine."]
+    tip: ["Prefiere siempre el servicio más gestionado que cumpla los requisitos.", "Always prefer the most managed service that meets the requirements."]
+scenarios:
+  - q: ["El negocio acepta 4 horas de caída y perder 1 hora de datos, con presupuesto ajustado.", "The business accepts 4 hours of downtime and losing 1 hour of data, on a tight budget."]
+    options: [["Copias frecuentes y restauración en otra región", "Frequent backups and restore in another region"], ["Activo-activo multirregión", "Multi-region active-active"], ["Sin plan", "No plan"]]
+    answer: 0
+    why: ["Cumple RTO/RPO a un coste mucho menor.", "Meets RTO/RPO at far lower cost."]
+  - q: ["Un sistema de pagos no puede perder ninguna transacción ni caerse aunque falle una región.", "A payments system cannot lose any transaction nor go down even if a region fails."]
+    options: [["Spanner multirregional y servicios en varias regiones", "Multi-region Spanner and services in several regions"], ["Cloud SQL zonal", "Zonal Cloud SQL"], ["Copias diarias", "Daily backups"]]
+    answer: 0
+    why: ["RPO cero y RTO casi cero exigen activo-activo multirregión.", "Zero RPO and near-zero RTO require multi-region active-active."]
+  - q: ["Hay que cerrar el centro de datos en 10 semanas con 300 VMs.", "The datacenter must close in 10 weeks with 300 VMs."]
+    options: [["Rehost con Migrate to Virtual Machines", "Rehost with Migrate to Virtual Machines"], ["Reescribir todo en microservicios", "Rewrite everything as microservices"], ["Esperar al año siguiente", "Wait until next year"]]
+    answer: 0
+    why: ["Con prisa, mover tal cual y modernizar después.", "Under time pressure, move as is and modernize later."]
+  - q: ["Los servidores de desarrollo están encendidos 24/7 y solo se usan en horario laboral.", "Dev servers run 24/7 but are only used during office hours."]
+    options: [["Programar su apagado fuera de horario", "Schedule them to stop out of hours"], ["Comprar un compromiso de 3 años", "Buy a 3-year commitment"], ["Pasarlos a máquinas más grandes", "Move them to larger machines"]]
+    answer: 0
+    why: ["Apagarlos ahorra más de la mitad del coste.", "Turning them off saves more than half the cost."]
+quiz:
+  - q: ["¿Qué mide el RPO?", "What does RPO measure?"]
+    options: [["Cuántos datos se pueden perder", "How much data can be lost"], ["Cuánto dura la caída", "How long the outage lasts"], ["El coste de la recuperación", "The recovery cost"]]
+    answer: 0
+    why: ["RPO = punto de recuperación; RTO = tiempo de recuperación.", "RPO = recovery point; RTO = recovery time."]
+  - q: ["¿Qué estrategia de migración mueve las VMs sin cambios?", "Which migration strategy moves VMs unchanged?"]
+    options: [["Rehost (lift and shift)", "Rehost (lift and shift)"], ["Refactor", "Refactor"], ["Replatform", "Replatform"]]
+    answer: 0
+    why: ["Rehost es el más rápido y con menos cambios.", "Rehost is fastest with fewest changes."]
+  - q: ["¿Cuál NO es un pilar del Well-Architected Framework?", "Which is NOT a Well-Architected Framework pillar?"]
+    options: [["Marketing", "Marketing"], ["Seguridad", "Security"], ["Fiabilidad", "Reliability"], ["Optimización de costes", "Cost optimization"]]
+    answer: 0
+    why: ["Los pilares son operaciones, seguridad, fiabilidad, coste y rendimiento.", "The pillars are operations, security, reliability, cost and performance."]
+  - q: ["¿Qué servicio prefieres para una API HTTP sin estado sin requisitos especiales?", "Which service do you prefer for a stateless HTTP API with no special requirements?"]
+    options: [["Cloud Run", "Cloud Run"], ["Compute Engine", "Compute Engine"], ["GKE Standard", "GKE Standard"]]
+    answer: 0
+    why: ["El más gestionado que cumple: menos operación.", "The most managed one that fits: less operations."]
+  - q: ["Una arquitectura tiene una sola VM con la base de datos. ¿Qué problema principal tiene?", "An architecture has one VM running the database. What is the main problem?"]
+    options: [["Punto único de fallo", "Single point of failure"], ["Demasiado cara", "Too expensive"], ["Demasiado segura", "Too secure"]]
+    answer: 0
+    why: ["Si la VM o su zona cae, todo cae.", "If the VM or its zone fails, everything fails."]

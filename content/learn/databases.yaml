@@ -1,0 +1,85 @@
+id: databases
+name: [Bases de datos, Databases]
+intro: ["Elegir la base de datos correcta es una de las preguntas más frecuentes: relacional o no, regional o global, transaccional o analítica.", "Choosing the right database is one of the most common questions: relational or not, regional or global, transactional or analytical."]
+concepts:
+  - id: cloudsql
+    term: [Cloud SQL, Cloud SQL]
+    what: ["MySQL, PostgreSQL y SQL Server gestionados, en una región.", "Managed MySQL, PostgreSQL and SQL Server in one region."]
+    points:
+      - ["Alta disponibilidad: instancia regional con réplica en espera en otra zona y conmutación automática.", "High availability: regional instance with a standby in another zone and automatic failover."]
+      - ["Réplicas de lectura para escalar lecturas (también entre regiones).", "Read replicas to scale reads (also cross-region)."]
+      - ["Copias automáticas y recuperación a un momento dado (PITR).", "Automatic backups and point-in-time recovery (PITR)."]
+      - ["Conexión segura con el conector de Cloud SQL o IP privada.", "Secure connection via the Cloud SQL connector or private IP."]
+    tip: ["Aplicación relacional clásica, una región, hasta decenas de TB → Cloud SQL.", "Classic relational app, one region, up to tens of TB → Cloud SQL."]
+  - id: alloydb
+    term: [AlloyDB, AlloyDB]
+    what: ["PostgreSQL compatible de alto rendimiento para cargas exigentes y analítica mixta.", "High-performance PostgreSQL-compatible for demanding and mixed analytical workloads."]
+    points:
+      - ["Más rápido que PostgreSQL estándar en transacciones y analítica.", "Faster than standard PostgreSQL for transactions and analytics."]
+    tip: ["PostgreSQL con mucho rendimiento y consultas analíticas → AlloyDB.", "PostgreSQL with high performance and analytical queries → AlloyDB."]
+  - id: spanner
+    term: [Spanner, Spanner]
+    what: ["Base relacional distribuida globalmente, con consistencia fuerte y escala horizontal.", "Globally distributed relational database with strong consistency and horizontal scale."]
+    points:
+      - ["SLA de hasta 99,999 % en configuración multirregional.", "Up to 99.999% SLA in multi-region configuration."]
+      - ["Escala añadiendo nodos o unidades de procesamiento.", "Scales by adding nodes or processing units."]
+    tip: ["Transacciones SQL globales a escala masiva → Spanner.", "Global SQL transactions at massive scale → Spanner."]
+  - id: firestore
+    term: [Firestore, Firestore]
+    what: ["Base de documentos NoSQL serverless para apps web y móviles.", "Serverless NoSQL document database for web and mobile apps."]
+    points:
+      - ["Sincronización en tiempo real y modo sin conexión en clientes.", "Real-time sync and offline mode on clients."]
+      - ["Escala automáticamente y cobra por operación.", "Scales automatically and charges per operation."]
+    tip: ["Perfiles de usuario de una app móvil con sincronización → Firestore.", "User profiles for a mobile app with sync → Firestore."]
+  - id: bigtable
+    term: [Bigtable, Bigtable]
+    what: ["NoSQL de columnas anchas para enormes volúmenes con baja latencia.", "Wide-column NoSQL for huge volumes with low latency."]
+    points:
+      - ["Ideal para series temporales, IoT y datos financieros; más de 1 TB.", "Ideal for time series, IoT and financial data; more than 1 TB."]
+      - ["El diseño de la clave de fila decide el rendimiento.", "Row key design determines performance."]
+    tip: ["Millones de lecturas/escrituras por segundo de sensores → Bigtable.", "Millions of sensor reads/writes per second → Bigtable."]
+  - id: memorystore
+    term: [Memorystore, Memorystore]
+    what: ["Redis o Memcached gestionado: caché en memoria.", "Managed Redis or Memcached: in-memory cache."]
+    points:
+      - ["Reduce la carga de la base de datos guardando resultados frecuentes.", "Reduces database load by caching frequent results."]
+      - ["También para sesiones y marcadores en tiempo real.", "Also for sessions and real-time leaderboards."]
+    tip: ["Latencia de submilisegundos para datos que se leen mucho → Memorystore.", "Sub-millisecond latency for heavily read data → Memorystore."]
+scenarios:
+  - q: ["Un sistema de reservas mundial necesita SQL, consistencia fuerte y escalar sin límite.", "A worldwide booking system needs SQL, strong consistency and unlimited scale."]
+    options: [["Spanner", "Spanner"], ["Cloud SQL", "Cloud SQL"], ["Firestore", "Firestore"], ["Bigtable", "Bigtable"]]
+    answer: 0
+    why: ["Spanner es el único relacional global con escala horizontal.", "Spanner is the only global relational DB with horizontal scale."]
+  - q: ["Un WordPress con MySQL necesita alta disponibilidad en una región.", "A WordPress on MySQL needs high availability in one region."]
+    options: [["Cloud SQL con alta disponibilidad (regional)", "Cloud SQL with high availability (regional)"], ["Spanner multirregional", "Multi-region Spanner"], ["Bigtable", "Bigtable"]]
+    answer: 0
+    why: ["Cloud SQL HA da conmutación automática entre zonas a menor coste.", "Cloud SQL HA gives automatic cross-zone failover at lower cost."]
+  - q: ["Guardas lecturas de 2 millones de sensores cada segundo.", "You store readings from 2 million sensors every second."]
+    options: [["Bigtable", "Bigtable"], ["Cloud SQL", "Cloud SQL"], ["Memorystore", "Memorystore"]]
+    answer: 0
+    why: ["Bigtable está hecha para series temporales a gran escala.", "Bigtable is built for large-scale time series."]
+  - q: ["La base de datos se satura con las mismas consultas de catálogo una y otra vez.", "The database is saturated by the same catalogue queries over and over."]
+    options: [["Memorystore como caché", "Memorystore as a cache"], ["Más discos", "More disks"], ["Firestore", "Firestore"]]
+    answer: 0
+    why: ["Una caché en memoria evita repetir la misma consulta.", "An in-memory cache avoids repeating the same query."]
+quiz:
+  - q: ["¿Qué ofrece la alta disponibilidad de Cloud SQL?", "What does Cloud SQL high availability provide?"]
+    options: [["Réplica en espera en otra zona con conmutación automática", "Standby in another zone with automatic failover"], ["Réplicas en varios continentes", "Replicas on several continents"], ["Más CPU", "More CPU"]]
+    answer: 0
+    why: ["Es regional: protege de la caída de una zona.", "It is regional: protects against a zone failure."]
+  - q: ["¿Para qué sirven las réplicas de lectura?", "What are read replicas for?"]
+    options: [["Escalar las lecturas", "Scaling reads"], ["Escalar las escrituras", "Scaling writes"], ["Hacer copias de seguridad", "Taking backups"]]
+    answer: 0
+    why: ["Descargan consultas de lectura del primario; no son alta disponibilidad por sí solas.", "They offload read queries from the primary; they are not HA by themselves."]
+  - q: ["¿Qué base de datos es NoSQL de documentos?", "Which database is a NoSQL document store?"]
+    options: [["Firestore", "Firestore"], ["Spanner", "Spanner"], ["AlloyDB", "AlloyDB"], ["Cloud SQL", "Cloud SQL"]]
+    answer: 0
+    why: ["Firestore guarda documentos en colecciones.", "Firestore stores documents in collections."]
+  - q: ["¿Qué permite restaurar la base de datos al estado de hace 2 horas?", "What lets you restore a database to its state 2 hours ago?"]
+    options: [["Recuperación a un momento dado (PITR)", "Point-in-time recovery (PITR)"], ["Una réplica de lectura", "A read replica"], ["Memorystore", "Memorystore"]]
+    answer: 0
+    why: ["PITR usa los registros binarios/WAL para volver a cualquier instante.", "PITR uses binary logs/WAL to return to any moment."]
+  - q: ["¿Qué decide el rendimiento en Bigtable?", "What determines performance in Bigtable?"]
+    options: [["El diseño de la clave de fila", "The row key design"], ["Los índices secundarios", "Secondary indexes"], ["El número de tablas", "The number of tables"]]
+    answer: 0
+    why: ["Claves mal diseñadas concentran la carga en un nodo (hotspot).", "Poor keys concentrate load on one node (hotspot)."]

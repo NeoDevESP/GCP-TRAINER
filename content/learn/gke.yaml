@@ -1,0 +1,89 @@
+id: gke
+name: [Kubernetes y GKE, Kubernetes and GKE]
+intro: ["GKE ejecuta contenedores con Kubernetes gestionado por Google. Hay que conocer los objetos básicos, cómo se escala y cómo se da identidad a los pods.", "GKE runs containers on Kubernetes managed by Google. Know the basic objects, how scaling works and how pods get identity."]
+concepts:
+  - id: modes
+    term: [Autopilot y Standard, Autopilot and Standard]
+    what: ["Autopilot: Google gestiona los nodos y pagas por pod. Standard: gestionas tú los grupos de nodos.", "Autopilot: Google manages nodes and you pay per pod. Standard: you manage node pools."]
+    points:
+      - ["Autopilot es la opción recomendada salvo que necesites control de nodos.", "Autopilot is recommended unless you need node control."]
+      - ["Clúster regional: plano de control y nodos en varias zonas.", "Regional cluster: control plane and nodes across zones."]
+      - ["Clúster privado: nodos sin IP pública.", "Private cluster: nodes without public IPs."]
+    tip: ["«Kubernetes sin gestionar nodos» → GKE Autopilot.", "\"Kubernetes without managing nodes\" → GKE Autopilot."]
+  - id: objects
+    term: ["Pods, Deployments y Services", "Pods, Deployments and Services"]
+    what: ["El pod ejecuta contenedores; el Deployment mantiene N réplicas; el Service les da una dirección estable.", "The pod runs containers; the Deployment keeps N replicas; the Service gives them a stable address."]
+    points:
+      - ["Service ClusterIP: interno. LoadBalancer: IP externa. NodePort: puerto en cada nodo.", "ClusterIP Service: internal. LoadBalancer: external IP. NodePort: a port on each node."]
+      - ["Ingress / Gateway: balanceador HTTP con rutas hacia varios Services.", "Ingress / Gateway: HTTP load balancer routing to several Services."]
+      - ["StatefulSet para apps con estado; DaemonSet para un pod por nodo; Job/CronJob para tareas.", "StatefulSet for stateful apps; DaemonSet for one pod per node; Job/CronJob for tasks."]
+      - ["ConfigMap para configuración, Secret para datos sensibles.", "ConfigMap for configuration, Secret for sensitive data."]
+    tip: ["Un agente de logs en cada nodo → DaemonSet.", "A log agent on every node → DaemonSet."]
+  - id: scaling
+    term: [Autoescalado en GKE, GKE autoscaling]
+    what: ["HPA añade pods, VPA ajusta sus recursos y el autoescalador de clúster añade nodos.", "HPA adds pods, VPA adjusts their resources and the cluster autoscaler adds nodes."]
+    points:
+      - ["El HPA por CPU necesita requests de CPU definidos en los contenedores.", "CPU-based HPA needs CPU requests defined on containers."]
+      - ["Si los pods quedan Pending por falta de sitio, el autoescalador de clúster añade nodos.", "If pods stay Pending for lack of room, the cluster autoscaler adds nodes."]
+    tip: ["El HPA no escala y muestra «unknown» → faltan resources.requests.", "HPA does not scale and shows \"unknown\" → resources.requests missing."]
+  - id: probes
+    term: [Sondas de salud, Health probes]
+    what: ["Readiness decide si el pod recibe tráfico; liveness si hay que reiniciarlo.", "Readiness decides whether the pod gets traffic; liveness whether to restart it."]
+    points:
+      - ["Una liveness demasiado estricta provoca reinicios en bucle (CrashLoopBackOff).", "An overly strict liveness probe causes restart loops (CrashLoopBackOff)."]
+      - ["Startup probe para apps que tardan en arrancar.", "Startup probe for slow-starting apps."]
+    tip: ["Pods que reciben tráfico antes de estar listos → falta readiness probe.", "Pods receiving traffic before they are ready → missing readiness probe."]
+  - id: wi
+    term: [Workload Identity, Workload Identity]
+    what: ["Asocia una cuenta de servicio de Kubernetes a una de Google Cloud, sin claves.", "Links a Kubernetes service account to a Google Cloud one, without keys."]
+    points:
+      - ["Cada app obtiene solo sus permisos, no los del nodo.", "Each app gets only its permissions, not the node's."]
+      - ["RBAC de Kubernetes controla qué pueden hacer los usuarios dentro del clúster.", "Kubernetes RBAC controls what users can do inside the cluster."]
+    tip: ["Pods que acceden a Cloud Storage de forma segura → Workload Identity.", "Pods accessing Cloud Storage securely → Workload Identity."]
+  - id: debug
+    term: [Diagnóstico en GKE, Troubleshooting GKE]
+    what: ["kubectl get, describe, logs y events explican casi todos los fallos.", "kubectl get, describe, logs and events explain almost every failure."]
+    points:
+      - ["ImagePullBackOff: imagen o permisos del registro.", "ImagePullBackOff: image name or registry permissions."]
+      - ["CrashLoopBackOff: la app arranca y muere; mira kubectl logs --previous.", "CrashLoopBackOff: the app starts and dies; check kubectl logs --previous."]
+      - ["Pending: no hay recursos o no encaja en ningún nodo.", "Pending: no resources or no node fits."]
+      - ["OOMKilled: supera el límite de memoria.", "OOMKilled: exceeds the memory limit."]
+    tip: ["Aprende a asociar cada estado de pod con su causa típica.", "Learn to map each pod status to its typical cause."]
+scenarios:
+  - q: ["Un equipo pequeño quiere Kubernetes sin ocuparse de parches ni tamaño de nodos.", "A small team wants Kubernetes without handling patches or node sizing."]
+    options: [["GKE Autopilot", "GKE Autopilot"], ["GKE Standard", "GKE Standard"], ["Kubernetes en VMs propias", "Kubernetes on your own VMs"]]
+    answer: 0
+    why: ["Autopilot gestiona los nodos por ti.", "Autopilot manages nodes for you."]
+  - q: ["Los pods del frontend deben leer un bucket sin claves JSON.", "Frontend pods must read a bucket without JSON keys."]
+    options: [["Workload Identity", "Workload Identity"], ["Clave montada como Secret", "Key mounted as a Secret"], ["Cuenta de servicio del nodo con Editor", "Node service account with Editor"]]
+    answer: 0
+    why: ["Da identidad por aplicación, sin claves de larga duración.", "It gives per-app identity without long-lived keys."]
+  - q: ["Los pods quedan en Pending cuando sube la carga.", "Pods stay Pending when load rises."]
+    options: [["Activar el autoescalador de clúster", "Enable the cluster autoscaler"], ["Subir las réplicas del HPA", "Raise HPA replicas"], ["Borrar el Service", "Delete the Service"]]
+    answer: 0
+    why: ["Pending por falta de sitio se resuelve añadiendo nodos.", "Pending for lack of room is fixed by adding nodes."]
+  - q: ["Necesitas un agente de monitorización en cada nodo del clúster.", "You need a monitoring agent on every node in the cluster."]
+    options: [["DaemonSet", "DaemonSet"], ["Deployment con 3 réplicas", "Deployment with 3 replicas"], ["CronJob", "CronJob"]]
+    answer: 0
+    why: ["El DaemonSet ejecuta exactamente un pod por nodo.", "A DaemonSet runs exactly one pod per node."]
+quiz:
+  - q: ["¿Qué tipo de Service expone una IP externa?", "Which Service type exposes an external IP?"]
+    options: [["LoadBalancer", "LoadBalancer"], ["ClusterIP", "ClusterIP"], ["Headless", "Headless"]]
+    answer: 0
+    why: ["LoadBalancer crea un balanceador de red de Google Cloud.", "LoadBalancer creates a Google Cloud network load balancer."]
+  - q: ["Un pod está en CrashLoopBackOff. ¿Qué comando miras primero?", "A pod is in CrashLoopBackOff. Which command do you check first?"]
+    options: [["kubectl logs --previous", "kubectl logs --previous"], ["kubectl scale", "kubectl scale"], ["gcloud compute ssh", "gcloud compute ssh"]]
+    answer: 0
+    why: ["Muestra la salida del contenedor que acaba de morir.", "It shows the output of the container that just died."]
+  - q: ["¿Qué sonda impide que un pod reciba tráfico antes de estar listo?", "Which probe stops a pod from receiving traffic before it is ready?"]
+    options: [["Readiness", "Readiness"], ["Liveness", "Liveness"], ["Ninguna", "None"]]
+    answer: 0
+    why: ["Liveness reinicia; readiness quita o añade el pod al Service.", "Liveness restarts; readiness removes or adds the pod to the Service."]
+  - q: ["¿Qué necesita el HPA para escalar por CPU?", "What does HPA need to scale on CPU?"]
+    options: [["Requests de CPU en los contenedores", "CPU requests on containers"], ["Un clúster regional", "A regional cluster"], ["Un Ingress", "An Ingress"]]
+    answer: 0
+    why: ["El porcentaje se calcula sobre lo pedido (requests).", "The percentage is computed against the request."]
+  - q: ["Estado OOMKilled significa…", "OOMKilled status means…"]
+    options: [["El contenedor superó su límite de memoria", "The container exceeded its memory limit"], ["No encuentra la imagen", "The image is not found"], ["El nodo no tiene CPU", "The node has no CPU"]]
+    answer: 0
+    why: ["Sube el límite o corrige el consumo de memoria.", "Raise the limit or fix memory usage."]

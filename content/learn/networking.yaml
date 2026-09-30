@@ -1,0 +1,98 @@
+id: networking
+name: [Redes, Networking]
+intro: ["La red VPC conecta todo: subredes, rutas, cortafuegos, salida a internet, balanceadores, DNS y conexión con tu oficina.", "The VPC network connects everything: subnets, routes, firewalls, internet egress, load balancers, DNS and the link to your office."]
+concepts:
+  - id: vpc
+    term: [VPC y subredes, VPC and subnets]
+    what: ["La VPC es global; sus subredes son regionales y tienen un rango IP.", "The VPC is global; its subnets are regional with an IP range."]
+    points:
+      - ["Modo automático crea una subred por región; el personalizado te deja decidir (recomendado).", "Auto mode creates a subnet per region; custom mode lets you decide (recommended)."]
+      - ["Un rango de subred se puede ampliar, no reducir.", "A subnet range can be expanded, not shrunk."]
+      - ["Los rangos de redes que se van a conectar no pueden solaparse.", "Ranges of networks you will connect cannot overlap."]
+    tip: ["Redes que se unirán por peering o VPN → planifica rangos sin solapes.", "Networks to be joined via peering or VPN → plan non-overlapping ranges."]
+  - id: firewall
+    term: [Reglas de cortafuegos, Firewall rules]
+    what: ["Permiten o deniegan tráfico según dirección, origen, destino, puerto y prioridad.", "Allow or deny traffic by direction, source, target, port and priority."]
+    points:
+      - ["Por defecto: se deniega todo lo entrante y se permite todo lo saliente.", "By default: all ingress denied and all egress allowed."]
+      - ["Menor número = mayor prioridad (0 es la más alta).", "Lower number = higher priority (0 is highest)."]
+      - ["Se aplican a VMs por etiqueta de red o por cuenta de servicio.", "They target VMs by network tag or by service account."]
+      - ["Son con estado: la respuesta a una conexión permitida vuelve sola.", "They are stateful: the reply to an allowed connection returns automatically."]
+    tip: ["SSH seguro sin IP pública → permitir 35.235.240.0/20 (IAP) en el puerto 22.", "Secure SSH without a public IP → allow 35.235.240.0/20 (IAP) on port 22."]
+  - id: nat
+    term: [Cloud NAT y acceso privado, Cloud NAT and private access]
+    what: ["Salida a internet para VMs sin IP pública, y acceso a APIs de Google por red privada.", "Internet egress for VMs without public IPs, and private access to Google APIs."]
+    points:
+      - ["Cloud NAT solo permite conexiones salientes, nunca entrantes.", "Cloud NAT only allows outbound connections, never inbound."]
+      - ["Private Google Access deja a VMs sin IP pública usar Cloud Storage, BigQuery, etc.", "Private Google Access lets VMs without public IPs use Cloud Storage, BigQuery, etc."]
+      - ["Cloud NAT se configura sobre un Cloud Router.", "Cloud NAT is configured on a Cloud Router."]
+    tip: ["VM privada que debe descargar paquetes de internet → Cloud NAT.", "Private VM that must download packages from the internet → Cloud NAT."]
+  - id: lb
+    term: [Balanceadores de carga, Load balancers]
+    what: ["Reparten tráfico entre backends; se eligen por capa (HTTP o TCP/UDP), alcance e interno/externo.", "Distribute traffic across backends; chosen by layer (HTTP or TCP/UDP), scope and internal/external."]
+    points:
+      - ["Aplicación externo (HTTP/S): global, IP anycast, TLS, rutas por URL, Cloud CDN y Cloud Armor.", "External Application LB (HTTP/S): global, anycast IP, TLS, URL routing, Cloud CDN and Cloud Armor."]
+      - ["Red (TCP/UDP): regional, de paso directo, conserva la IP del cliente.", "Network LB (TCP/UDP): regional, passthrough, keeps the client IP."]
+      - ["Interno: tráfico dentro de la VPC entre capas de la aplicación.", "Internal: traffic inside the VPC between app tiers."]
+      - ["Las sondas de salud vienen de 35.191.0.0/16 y 130.211.0.0/22.", "Health probes come from 35.191.0.0/16 and 130.211.0.0/22."]
+    tip: ["Usuarios de todo el mundo, una sola IP y HTTPS → balanceador de aplicaciones externo global.", "Users worldwide, one IP and HTTPS → global external Application Load Balancer."]
+  - id: hybrid
+    term: [Conectividad híbrida, Hybrid connectivity]
+    what: ["Cloud VPN (por internet cifrado) o Cloud Interconnect (enlace dedicado).", "Cloud VPN (encrypted over the internet) or Cloud Interconnect (dedicated link)."]
+    points:
+      - ["HA VPN: dos túneles, SLA 99,99 %, rutas por BGP con Cloud Router.", "HA VPN: two tunnels, 99.99% SLA, BGP routes via Cloud Router."]
+      - ["Dedicated Interconnect: 10/100 Gbps directos en una instalación de colocación.", "Dedicated Interconnect: 10/100 Gbps direct at a colocation facility."]
+      - ["Partner Interconnect: a través de un proveedor, desde 50 Mbps.", "Partner Interconnect: through a provider, from 50 Mbps."]
+    tip: ["Mucho ancho de banda y tráfico privado sin internet → Interconnect; rápido y barato → VPN.", "High bandwidth, private non-internet traffic → Interconnect; fast and cheap → VPN."]
+  - id: peering
+    term: [Peering y VPC compartida, Peering and Shared VPC]
+    what: ["Peering une dos VPC; la VPC compartida deja a varios proyectos usar la red de un proyecto host.", "Peering joins two VPCs; Shared VPC lets several projects use a host project's network."]
+    points:
+      - ["El peering no es transitivo: A-B y B-C no conecta A con C.", "Peering is not transitive: A-B and B-C does not connect A with C."]
+      - ["VPC compartida: el equipo de red controla la red, los equipos de apps crean VMs en ella.", "Shared VPC: the network team controls the network, app teams create VMs in it."]
+    tip: ["Gobierno centralizado de red para muchos proyectos de una organización → VPC compartida.", "Central network governance for many projects in an organization → Shared VPC."]
+  - id: dns
+    term: [Cloud DNS, Cloud DNS]
+    what: ["DNS gestionado con zonas públicas y privadas.", "Managed DNS with public and private zones."]
+    points:
+      - ["Registro A: nombre → IPv4; CNAME: alias de otro nombre.", "A record: name → IPv4; CNAME: alias of another name."]
+      - ["Las zonas privadas solo se resuelven desde las VPC autorizadas.", "Private zones resolve only from authorized VPCs."]
+    tip: ["Nombres internos para servicios solo visibles en la VPC → zona privada.", "Internal names visible only in the VPC → private zone."]
+scenarios:
+  - q: ["VMs sin IP pública deben instalar actualizaciones de internet sin ser accesibles desde fuera.", "VMs without public IPs must install updates from the internet without being reachable."]
+    options: [["Cloud NAT", "Cloud NAT"], ["Dar IP pública", "Assign public IPs"], ["Cloud VPN", "Cloud VPN"], ["Peering", "Peering"]]
+    answer: 0
+    why: ["Cloud NAT da salida sin permitir conexiones entrantes.", "Cloud NAT gives egress without allowing inbound connections."]
+  - q: ["La oficina necesita conectarse hoy mismo a la VPC, de forma cifrada y con alta disponibilidad.", "The office needs an encrypted, highly available link to the VPC today."]
+    options: [["HA VPN", "HA VPN"], ["Dedicated Interconnect", "Dedicated Interconnect"], ["Peering", "Peering"]]
+    answer: 0
+    why: ["HA VPN se monta en minutos sobre internet con SLA 99,99 %.", "HA VPN is set up in minutes over the internet with a 99.99% SLA."]
+  - q: ["Una tienda global quiere una IP, HTTPS, caché y protección contra ataques web.", "A global shop wants one IP, HTTPS, caching and protection against web attacks."]
+    options: [["Balanceador de aplicaciones externo + Cloud CDN + Cloud Armor", "External Application LB + Cloud CDN + Cloud Armor"], ["Balanceador de red de paso directo", "Passthrough Network LB"], ["Balanceador interno", "Internal LB"]]
+    answer: 0
+    why: ["Es el único global de capa 7 que integra CDN y Armor.", "It is the only global layer-7 option integrating CDN and Armor."]
+  - q: ["30 proyectos de distintos equipos deben usar una red común controlada por el equipo de redes.", "30 projects from different teams must use a common network controlled by the network team."]
+    options: [["VPC compartida", "Shared VPC"], ["30 peerings", "30 peerings"], ["Una VPN por proyecto", "One VPN per project"]]
+    answer: 0
+    why: ["La VPC compartida centraliza la red y delega los recursos.", "Shared VPC centralizes the network and delegates resources."]
+quiz:
+  - q: ["¿Cuál es el comportamiento por defecto del cortafuegos de una VPC?", "What is a VPC firewall's default behaviour?"]
+    options: [["Denegar entrada y permitir salida", "Deny ingress and allow egress"], ["Permitir todo", "Allow everything"], ["Denegar todo", "Deny everything"]]
+    answer: 0
+    why: ["Reglas implícitas: deny ingress y allow egress con la prioridad más baja.", "Implied rules: deny ingress and allow egress at the lowest priority."]
+  - q: ["Dos reglas chocan: una con prioridad 100 y otra con 1000. ¿Cuál gana?", "Two rules conflict: one with priority 100 and another with 1000. Which wins?"]
+    options: [["La de prioridad 100", "Priority 100"], ["La de 1000", "Priority 1000"], ["La más reciente", "The most recent"]]
+    answer: 0
+    why: ["El número más bajo tiene más prioridad.", "The lower number has higher priority."]
+  - q: ["Las VPC A y B tienen peering, y B y C también. ¿A llega a C?", "VPCs A and B are peered, and so are B and C. Can A reach C?"]
+    options: [["No, el peering no es transitivo", "No, peering is not transitive"], ["Sí, siempre", "Yes, always"], ["Solo por IPv6", "Only over IPv6"]]
+    answer: 0
+    why: ["Hay que crear un peering directo A-C (u otra solución).", "You need a direct A-C peering (or another solution)."]
+  - q: ["¿De qué rango llega el SSH por IAP?", "Which range does IAP SSH come from?"]
+    options: [["35.235.240.0/20", "35.235.240.0/20"], ["0.0.0.0/0", "0.0.0.0/0"], ["10.0.0.0/8", "10.0.0.0/8"], ["130.211.0.0/22", "130.211.0.0/22"]]
+    answer: 0
+    why: ["IAP TCP forwarding usa 35.235.240.0/20.", "IAP TCP forwarding uses 35.235.240.0/20."]
+  - q: ["Las VMs de un backend salen todas como no sanas en el balanceador. ¿Qué revisas primero?", "All backend VMs show unhealthy on the load balancer. What do you check first?"]
+    options: [["La regla que permite los rangos de las sondas de salud", "The rule allowing the health-check ranges"], ["La cuota de CPU", "CPU quota"], ["Cloud DNS", "Cloud DNS"]]
+    answer: 0
+    why: ["Sin permitir 35.191.0.0/16 y 130.211.0.0/22 las sondas no llegan.", "Without allowing 35.191.0.0/16 and 130.211.0.0/22 probes cannot reach."]

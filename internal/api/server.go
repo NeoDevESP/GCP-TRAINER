@@ -208,6 +208,9 @@ func (s *Server) Handler() http.Handler {
 		}
 		return map[string]any{"branches": cat.Branches, "tracks": cat.Tracks, "certs": cat.Certs, "badges": cat.Badges, "labs": labs, "levels": learning.LevelNames(s.lang(r)), "lang": s.lang(r)}, nil
 	})
+	h("GET /api/learn", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return map[string]any{"topics": s.Cat.StudyView(s.lang(r))}, nil
+	})
 	h("GET /api/labs/{id}", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		l := s.cat(r).Lab(r.PathValue("id"))
 		if l == nil {

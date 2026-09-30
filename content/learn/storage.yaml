@@ -1,0 +1,88 @@
+id: storage
+name: [Almacenamiento, Storage]
+intro: ["Cloud Storage guarda objetos (archivos) en buckets. Hay que saber elegir la clase según la frecuencia de acceso, proteger el acceso y automatizar el ciclo de vida.", "Cloud Storage keeps objects (files) in buckets. You must pick the class by access frequency, secure access and automate the lifecycle."]
+concepts:
+  - id: classes
+    term: [Clases de almacenamiento, Storage classes]
+    what: ["Standard, Nearline, Coldline y Archive: más barato guardar, más caro leer.", "Standard, Nearline, Coldline and Archive: cheaper to store, dearer to read."]
+    points:
+      - ["Duración mínima: Nearline 30 días, Coldline 90, Archive 365.", "Minimum duration: Nearline 30 days, Coldline 90, Archive 365."]
+      - ["Nearline: acceso ~1 vez al mes; Coldline: ~1 vez al trimestre; Archive: menos de 1 vez al año.", "Nearline: access ~once a month; Coldline: ~once a quarter; Archive: less than once a year."]
+      - ["Todas tienen la misma latencia de milisegundos; cambia el precio.", "All have the same millisecond latency; only the price changes."]
+    tip: ["«Copias que se leen una vez al año por auditoría» → Archive.", "\"Backups read once a year for audit\" → Archive."]
+  - id: location
+    term: [Ubicación del bucket, Bucket location]
+    what: ["Regional, birregional o multirregional; no se cambia tras crearlo.", "Regional, dual-region or multi-region; it cannot change after creation."]
+    points:
+      - ["Regional: menor latencia con cómputo en la misma región.", "Regional: lowest latency with compute in the same region."]
+      - ["Multirregional/birregional: más disponibilidad y geo-redundancia.", "Multi/dual-region: higher availability and geo-redundancy."]
+    tip: ["Residencia de datos en la UE → bucket en una región o multirregión EU.", "EU data residency → bucket in an EU region or multi-region."]
+  - id: access
+    term: [Control de acceso, Access control]
+    what: ["IAM a nivel de bucket (uniforme), URLs firmadas y prevención de acceso público.", "Bucket-level IAM (uniform), signed URLs and public access prevention."]
+    points:
+      - ["El acceso uniforme desactiva las ACL por objeto: todo por IAM.", "Uniform access disables per-object ACLs: everything via IAM."]
+      - ["Una URL firmada da acceso temporal a un objeto sin cuenta de Google.", "A signed URL grants temporary access to an object without a Google account."]
+      - ["allUsers = público en internet; allAuthenticatedUsers = cualquier cuenta de Google.", "allUsers = public on the internet; allAuthenticatedUsers = any Google account."]
+    tip: ["«Un cliente sin cuenta debe descargar un archivo durante 1 hora» → URL firmada.", "\"A customer without an account must download a file for 1 hour\" → signed URL."]
+  - id: lifecycle
+    term: [Ciclo de vida y versionado, Lifecycle and versioning]
+    what: ["Reglas que cambian de clase o borran objetos; versiones que guardan lo sobrescrito.", "Rules that change class or delete objects; versions that keep what was overwritten."]
+    points:
+      - ["Condiciones: edad, clase actual, número de versiones más nuevas, fecha.", "Conditions: age, current class, number of newer versions, date."]
+      - ["Con versionado, borrar un objeto lo convierte en versión no actual (recuperable).", "With versioning, deleting an object makes it a noncurrent (recoverable) version."]
+      - ["La retención (retention policy) impide borrar antes de un plazo; bloquearla es irreversible.", "A retention policy prevents deletion before a period; locking it is irreversible."]
+    tip: ["«Mover a Coldline a los 90 días y borrar a los 365» → regla de ciclo de vida.", "\"Move to Coldline at 90 days and delete at 365\" → lifecycle rule."]
+  - id: transfer
+    term: [Mover datos, Moving data]
+    what: ["gcloud storage, Storage Transfer Service y Transfer Appliance.", "gcloud storage, Storage Transfer Service and Transfer Appliance."]
+    points:
+      - ["gcloud storage cp / rsync para volúmenes pequeños o medianos.", "gcloud storage cp / rsync for small to medium volumes."]
+      - ["Storage Transfer Service: desde S3, Azure, HTTP u on-premises, programado.", "Storage Transfer Service: from S3, Azure, HTTP or on-premises, scheduled."]
+      - ["Transfer Appliance: disco físico para cientos de TB con poca red.", "Transfer Appliance: a physical device for hundreds of TB with little bandwidth."]
+    tip: ["Petabytes con conexión lenta → Transfer Appliance.", "Petabytes over a slow link → Transfer Appliance."]
+  - id: others
+    term: [Filestore y otros, Filestore and others]
+    what: ["Filestore es NFS gestionado; los discos son bloque; Cloud Storage es objeto.", "Filestore is managed NFS; disks are block; Cloud Storage is object."]
+    points:
+      - ["Varias VMs que comparten un sistema de archivos POSIX → Filestore.", "Several VMs sharing a POSIX filesystem → Filestore."]
+      - ["Cloud Storage no es un sistema de archivos: no se edita un objeto por partes.", "Cloud Storage is not a filesystem: objects are not edited in place."]
+    tip: ["Identifica el tipo: archivo compartido (Filestore), disco de VM (Persistent Disk) o objeto (Cloud Storage).", "Identify the type: shared file (Filestore), VM disk (Persistent Disk) or object (Cloud Storage)."]
+scenarios:
+  - q: ["Guardas grabaciones que se consultan una vez al mes para informes.", "You store recordings consulted once a month for reports."]
+    options: [["Nearline", "Nearline"], ["Standard", "Standard"], ["Archive", "Archive"], ["Coldline", "Coldline"]]
+    answer: 0
+    why: ["Nearline está pensada para acceso aproximadamente mensual.", "Nearline is designed for roughly monthly access."]
+  - q: ["Un proveedor externo sin cuenta de Google debe subir un archivo hoy.", "An external supplier without a Google account must upload a file today."]
+    options: [["URL firmada", "Signed URL"], ["Hacer el bucket público", "Make the bucket public"], ["Darle Storage Admin", "Grant them Storage Admin"]]
+    answer: 0
+    why: ["La URL firmada caduca y no requiere cuenta ni exponer el bucket.", "A signed URL expires and requires no account nor exposing the bucket."]
+  - q: ["Hay que migrar 300 TB desde un centro de datos con una línea de 100 Mbps.", "You must migrate 300 TB from a datacenter over a 100 Mbps line."]
+    options: [["Transfer Appliance", "Transfer Appliance"], ["gcloud storage cp", "gcloud storage cp"], ["Cloud VPN", "Cloud VPN"]]
+    answer: 0
+    why: ["Por red tardaría meses; el dispositivo físico es mucho más rápido.", "Over the network it would take months; the physical device is far faster."]
+  - q: ["Diez VMs necesitan leer y escribir en la misma carpeta compartida.", "Ten VMs need to read and write the same shared folder."]
+    options: [["Filestore", "Filestore"], ["Un disco persistente por VM", "One persistent disk per VM"], ["BigQuery", "BigQuery"]]
+    answer: 0
+    why: ["Filestore ofrece NFS compartido y gestionado.", "Filestore offers shared, managed NFS."]
+quiz:
+  - q: ["¿Cuál es la duración mínima de almacenamiento en Coldline?", "What is the minimum storage duration in Coldline?"]
+    options: [["90 días", "90 days"], ["30 días", "30 days"], ["365 días", "365 days"], ["Ninguna", "None"]]
+    answer: 0
+    why: ["Nearline 30, Coldline 90, Archive 365.", "Nearline 30, Coldline 90, Archive 365."]
+  - q: ["¿Qué hace el acceso uniforme a nivel de bucket?", "What does uniform bucket-level access do?"]
+    options: [["Desactiva las ACL y deja solo IAM", "Disables ACLs, leaving only IAM"], ["Hace el bucket público", "Makes the bucket public"], ["Cifra con CMEK", "Encrypts with CMEK"]]
+    answer: 0
+    why: ["Con acceso uniforme los permisos se gestionan solo con IAM.", "With uniform access permissions are managed only with IAM."]
+  - q: ["Alguien borró un objeto por error. ¿Qué habría permitido recuperarlo?", "Someone deleted an object by mistake. What would have allowed recovery?"]
+    options: [["El versionado de objetos", "Object versioning"], ["La clase Archive", "The Archive class"], ["Una URL firmada", "A signed URL"]]
+    answer: 0
+    why: ["Con versionado el objeto borrado queda como versión no actual.", "With versioning the deleted object remains as a noncurrent version."]
+  - q: ["¿Se puede cambiar la ubicación de un bucket?", "Can a bucket's location be changed?"]
+    options: [["No, hay que crear otro y copiar los datos", "No, you create another and copy the data"], ["Sí, desde la consola", "Yes, from the console"], ["Solo de regional a multirregional", "Only from regional to multi-region"]]
+    answer: 0
+    why: ["La ubicación se fija al crear el bucket.", "The location is fixed at bucket creation."]
+  - q: ["¿Qué impide que un objeto se borre antes de 7 años por normativa?", "What prevents an object being deleted before 7 years for compliance?"]
+    options: [["Una política de retención bloqueada", "A locked retention policy"], ["Una regla de ciclo de vida", "A lifecycle rule"], ["El versionado", "Versioning"]]
+    answer: 0
+    why: ["La retención bloqueada no la puede quitar ni un administrador.", "A locked retention policy cannot be removed even by an admin."]

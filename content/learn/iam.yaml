@@ -1,0 +1,88 @@
+id: iam
+name: [IAM, IAM]
+intro: ["IAM responde a «quién puede hacer qué sobre qué recurso». Principales, roles y políticas, siempre con el mínimo privilegio.", "IAM answers \"who can do what on which resource\". Principals, roles and policies, always with least privilege."]
+concepts:
+  - id: principals
+    term: [Principales, Principals]
+    what: ["Quién recibe permisos: cuentas de Google, grupos, cuentas de servicio o dominios.", "Who receives permissions: Google accounts, groups, service accounts or domains."]
+    points:
+      - ["Da permisos a grupos, no a personas: altas y bajas se gestionan en el grupo.", "Grant to groups, not people: joiners and leavers are handled in the group."]
+      - ["Una política une principales con un rol sobre un recurso (binding).", "A policy binds principals to a role on a resource."]
+    tip: ["«Muchos usuarios con el mismo acceso y rotación de personal» → grupo de Google.", "\"Many users with the same access and staff turnover\" → Google group."]
+  - id: roles
+    term: [Tipos de roles, Role types]
+    what: ["Básicos (Owner, Editor, Viewer), predefinidos por servicio y personalizados.", "Basic (Owner, Editor, Viewer), predefined per service and custom."]
+    points:
+      - ["Los básicos son demasiado amplios para producción.", "Basic roles are too broad for production."]
+      - ["Los predefinidos los mantiene Google (p. ej. roles/storage.objectViewer).", "Predefined roles are maintained by Google (e.g. roles/storage.objectViewer)."]
+      - ["Los personalizados se usan cuando ningún predefinido encaja; tú los mantienes.", "Custom roles are for when no predefined role fits; you maintain them."]
+    tip: ["Casi siempre la respuesta correcta es el rol predefinido más pequeño que funcione.", "The right answer is almost always the smallest predefined role that works."]
+  - id: sa
+    term: [Cuentas de servicio, Service accounts]
+    what: ["Identidades para aplicaciones y VMs, no para personas.", "Identities for applications and VMs, not people."]
+    points:
+      - ["Una cuenta por aplicación, con solo los permisos que usa.", "One account per application, with only the permissions it uses."]
+      - ["Evita las claves JSON: usa la cuenta asociada al recurso o Workload Identity Federation.", "Avoid JSON keys: use the account attached to the resource or Workload Identity Federation."]
+      - ["Service Account User permite desplegar recursos que actúan como esa cuenta.", "Service Account User lets you deploy resources that act as that account."]
+      - ["Suplantación (Token Creator) da credenciales de corta duración.", "Impersonation (Token Creator) yields short-lived credentials."]
+    tip: ["Una app fuera de Google Cloud (AWS, GitHub Actions) sin claves → Workload Identity Federation.", "An app outside Google Cloud (AWS, GitHub Actions) without keys → Workload Identity Federation."]
+  - id: conditions
+    term: [Condiciones IAM, IAM Conditions]
+    what: ["Permisos que solo se aplican si se cumple una condición (fecha, recurso, etc.).", "Permissions that apply only when a condition holds (date, resource, etc.)."]
+    points:
+      - ["Ejemplo: acceso temporal hasta una fecha.", "Example: temporary access until a date."]
+      - ["Ejemplo: solo objetos con cierto prefijo de nombre.", "Example: only objects with a certain name prefix."]
+    tip: ["«Acceso a un contratista solo durante este mes» → condición IAM con fecha.", "\"Contractor access only this month\" → IAM condition with a date."]
+  - id: orgpolicy
+    term: [Políticas de organización, Organization policies]
+    what: ["Restricciones sobre QUÉ se puede configurar, independientemente de quién.", "Constraints on WHAT can be configured, regardless of who."]
+    points:
+      - ["Ejemplos: restringir ubicaciones, impedir IPs externas, impedir claves de cuentas de servicio.", "Examples: restrict locations, forbid external IPs, forbid service account keys."]
+      - ["Se heredan por la jerarquía como IAM.", "They inherit through the hierarchy like IAM."]
+      - ["IAM = quién; política de organización = qué configuraciones se permiten.", "IAM = who; organization policy = which configurations are allowed."]
+    tip: ["«Nadie debe poder crear recursos fuera de la UE» → política de organización de ubicaciones.", "\"Nobody may create resources outside the EU\" → resource locations organization policy."]
+  - id: troubleshoot
+    term: [Diagnóstico de permisos, Permission troubleshooting]
+    what: ["Policy Troubleshooter y Policy Analyzer explican por qué alguien tiene o no acceso.", "Policy Troubleshooter and Policy Analyzer explain why someone has access or not."]
+    points:
+      - ["Los registros de auditoría de administrador están siempre activos y son gratuitos.", "Admin Activity audit logs are always on and free."]
+      - ["Los de acceso a datos (Data Access) hay que activarlos (salvo BigQuery).", "Data Access logs must be enabled (except BigQuery)."]
+    tip: ["«¿Quién borró la VM?» → registros de auditoría de actividad de administrador.", "\"Who deleted the VM?\" → Admin Activity audit logs."]
+scenarios:
+  - q: ["Una aplicación en Cloud Run debe leer un único bucket.", "A Cloud Run app must read a single bucket."]
+    options: [["Cuenta de servicio propia con Storage Object Viewer en ese bucket", "Its own service account with Storage Object Viewer on that bucket"], ["Cuenta por defecto con Editor", "Default account with Editor"], ["Storage Admin en el proyecto", "Storage Admin on the project"]]
+    answer: 0
+    why: ["Identidad dedicada + rol mínimo + ámbito del recurso = mínimo privilegio.", "Dedicated identity + minimal role + resource scope = least privilege."]
+  - q: ["Un pipeline de GitHub Actions debe desplegar en Google Cloud sin guardar claves.", "A GitHub Actions pipeline must deploy to Google Cloud without storing keys."]
+    options: [["Workload Identity Federation", "Workload Identity Federation"], ["Clave JSON en un secreto de GitHub", "JSON key in a GitHub secret"], ["Usuario personal", "A personal user"]]
+    answer: 0
+    why: ["La federación intercambia el token de GitHub por credenciales temporales.", "Federation exchanges the GitHub token for temporary credentials."]
+  - q: ["Seguridad quiere impedir en toda la organización que se creen VMs con IP pública.", "Security wants to prevent public-IP VMs across the organization."]
+    options: [["Política de organización (vmExternalIpAccess)", "Organization policy (vmExternalIpAccess)"], ["Quitar Compute Admin a todos", "Remove Compute Admin from everyone"], ["Una regla de cortafuegos", "A firewall rule"]]
+    answer: 0
+    why: ["Las políticas de organización limitan configuraciones para todos.", "Organization policies limit configurations for everyone."]
+  - q: ["Un auditor externo necesita ver la configuración durante dos semanas.", "An external auditor needs to view the configuration for two weeks."]
+    options: [["Rol de lectura con condición IAM de fecha", "Viewer-type role with a date IAM condition"], ["Owner y recordar quitarlo", "Owner and remember to remove it"], ["Compartir tu contraseña", "Share your password"]]
+    answer: 0
+    why: ["La condición caduca sola: no depende de que alguien se acuerde.", "The condition expires on its own: nobody has to remember."]
+quiz:
+  - q: ["¿Qué rol básico permite modificar recursos pero no gestionar IAM?", "Which basic role can modify resources but not manage IAM?"]
+    options: [["Editor", "Editor"], ["Owner", "Owner"], ["Viewer", "Viewer"], ["Browser", "Browser"]]
+    answer: 0
+    why: ["Owner además gestiona IAM y facturación; Viewer solo lee.", "Owner also manages IAM and billing; Viewer only reads."]
+  - q: ["¿Qué registro de auditoría está siempre activo y no se puede desactivar?", "Which audit log is always on and cannot be disabled?"]
+    options: [["Admin Activity", "Admin Activity"], ["Data Access", "Data Access"], ["VPC Flow Logs", "VPC Flow Logs"]]
+    answer: 0
+    why: ["Admin Activity registra cambios de configuración y siempre está activo.", "Admin Activity records configuration changes and is always on."]
+  - q: ["¿Qué rol necesitas para desplegar una VM que se ejecute como una cuenta de servicio?", "Which role do you need to deploy a VM that runs as a service account?"]
+    options: [["Service Account User sobre esa cuenta", "Service Account User on that account"], ["Service Account Key Admin", "Service Account Key Admin"], ["Security Reviewer", "Security Reviewer"]]
+    answer: 0
+    why: ["actAs (Service Account User) permite asignar la cuenta a un recurso.", "actAs (Service Account User) lets you attach the account to a resource."]
+  - q: ["¿Cuál es la diferencia entre IAM y las políticas de organización?", "What is the difference between IAM and organization policies?"]
+    options: [["IAM dice quién; la política de organización limita qué configuraciones se permiten", "IAM says who; org policy limits which configurations are allowed"], ["Son lo mismo", "They are the same"], ["La política de organización da permisos", "Org policy grants permissions"]]
+    answer: 0
+    why: ["Se complementan: una no concede permisos, la otra no limita configuraciones.", "They complement each other: one grants no permissions, the other limits no configurations."]
+  - q: ["¿Qué es preferible a descargar claves JSON de cuentas de servicio?", "What is preferable to downloading service account JSON keys?"]
+    options: [["Cuentas asociadas, suplantación o federación", "Attached accounts, impersonation or federation"], ["Rotar la clave cada año", "Rotate the key yearly"], ["Guardar la clave en el repositorio", "Store the key in the repo"]]
+    answer: 0
+    why: ["Las claves de larga duración son el mayor riesgo de filtración.", "Long-lived keys are the biggest leak risk."]
