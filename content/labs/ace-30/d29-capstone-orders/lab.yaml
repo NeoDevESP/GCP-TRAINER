@@ -89,6 +89,11 @@ rubric:
     points: 20
     checks:
       - {type: evidence, fields: [architecture], keywords: [[pub/sub, pubsub], [service account, cuenta de servicio], [secret, secreto], [bigquery]], desc: "Arquitectura explicada"}
+tutor:
+  - {match: "@intro", title: "", why: "Proyecto final: una identidad por componente, cada una con el mínimo permiso, secretos en Secret Manager y la comunicación entre servicios autenticada."}
+  - {match: "service-accounts create orders-api-sa", title: "", why: "Cada servicio con su propia cuenta: si uno se compromete, el resto no."}
+  - {match: "secrets create orders-db-password", title: "", why: "La contraseña nunca va en el código ni en variables en claro."}
+  - {match: "run deploy orders-worker", title: "", why: "--no-allow-unauthenticated: el worker solo lo invoca Pub/Sub, no internet."}
 en:
   title: 'Day 29 · Capstone: orders platform'
   summary: Build an end-to-end orders platform — API, database, events, analytics sink, least privilege, observability and budget.
@@ -124,3 +129,7 @@ en:
     Dentro del presupuesto: Within budget
     Nota de arquitectura: Architecture note
     Arquitectura explicada: Architecture explained
+    "Proyecto final: una identidad por componente, cada una con el mínimo permiso, secretos en Secret Manager y la comunicación entre servicios autenticada.": "Capstone: one identity per component, each with minimum permissions, secrets in Secret Manager and authenticated service-to-service communication."
+    "Cada servicio con su propia cuenta: si uno se compromete, el resto no.": "Each service with its own account: if one is compromised the rest are not."
+    "La contraseña nunca va en el código ni en variables en claro.": "The password never goes in code or plain variables."
+    "--no-allow-unauthenticated: el worker solo lo invoca Pub/Sub, no internet.": "--no-allow-unauthenticated: only Pub/Sub invokes the worker, not the internet."

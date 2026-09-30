@@ -97,6 +97,11 @@ rubric:
     points: 10
     checks:
       - {type: evidence, fields: [explanation], keywords: [[request, solicitud, peticion], [scale, escal]], desc: "Explica la causa y la demostración"}
+tutor:
+  - {match: "@intro", title: "", why: "El autoescalado horizontal (HPA) calcula el uso de CPU en porcentaje de lo que cada pod pide (requests). Sin requests, no sabe calcularlo y no escala."}
+  - {match: "describe hpa", title: "", why: "Aquí verás el aviso: falta el request de CPU."}
+  - {match: "set resources", title: "Pon requests y limits de CPU y memoria", why: "Con requests definidos el HPA ya puede calcular el porcentaje de uso."}
+  - {match: "kubectl run load", title: "", why: "Genera carga para demostrar que escala hacia fuera; al quitarla debe volver a bajar."}
 en:
   title: Day 17 · The app does not scale during the peak
   summary: Make the Horizontal Pod Autoscaler work, generate load and demonstrate scale-out and scale-in.
@@ -120,3 +125,8 @@ en:
     Escalado hacia dentro demostrado: Scale-in demonstrated
     Explicación: Explanation
     Explica la causa y la demostración: Explain the cause and demonstration
+    "El autoescalado horizontal (HPA) calcula el uso de CPU en porcentaje de lo que cada pod pide (requests). Sin requests, no sabe calcularlo y no escala.": "The Horizontal Pod Autoscaler measures CPU as a percentage of what each pod requests. Without requests it cannot compute it and does not scale."
+    "Aquí verás el aviso: falta el request de CPU.": "You will see the warning here: the CPU request is missing."
+    "Con requests definidos el HPA ya puede calcular el porcentaje de uso.": "With requests defined the HPA can compute the usage percentage."
+    "Pon requests y limits de CPU y memoria": "Set CPU and memory requests and limits"
+    "Genera carga para demostrar que escala hacia fuera; al quitarla debe volver a bajar.": "Generates load to prove it scales out; removing it must bring it back down."

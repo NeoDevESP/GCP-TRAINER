@@ -82,6 +82,12 @@ rubric:
     points: 10
     checks:
       - {type: count, collection: firewalls, where: {sourceRanges: {contains: "0.0.0.0/0"}, targetTags: {regex: "web|api"}}, max: 0, desc: "Los backends no están expuestos directamente a internet"}
+tutor:
+  - {match: "@intro", title: "", why: "Un balanceador HTTP de Google tiene piezas encadenadas: grupos de instancias → comprobaciones de estado → servicios de backend → mapa de URLs → proxy → regla de reenvío (IP). Y DNS apunta a esa IP."}
+  - {match: "allow-gfe", title: "", why: "Los balanceadores y sus sondas salen de 35.191.0.0/16 y 130.211.0.0/22: sin esta regla todo sale no sano."}
+  - {match: "set-named-ports web-ig", title: "", why: "El puerto con nombre (http:80) es cómo el servicio de backend sabe a qué puerto llamar."}
+  - {match: "add-path-matcher", title: "", why: "Aquí se decide el enrutamiento: /products va a la API y el resto a la web."}
+  - {match: "record-sets create", title: "", why: "El registro A traduce www.dominio a la IP reservada del balanceador."}
 en:
   title: Day 13 · Publish two backends behind one load balancer and DNS
   summary: Route / to the web tier and /products to the API tier through a global HTTP load balancer and publish it in Cloud DNS.
@@ -113,3 +119,8 @@ en:
     /products dirigido a la API: /products routed to the API
     Prueba y alcance: Test & scope
     Los backends no están expuestos directamente a internet: Backends not exposed to the internet directly
+    "Un balanceador HTTP de Google tiene piezas encadenadas: grupos de instancias → comprobaciones de estado → servicios de backend → mapa de URLs → proxy → regla de reenvío (IP). Y DNS apunta a esa IP.": "A Google HTTP load balancer is a chain: instance groups → health checks → backend services → URL map → proxy → forwarding rule (IP). DNS points at that IP."
+    "Los balanceadores y sus sondas salen de 35.191.0.0/16 y 130.211.0.0/22: sin esta regla todo sale no sano.": "Load balancers and their probes come from 35.191.0.0/16 and 130.211.0.0/22: without this rule everything is unhealthy."
+    "El puerto con nombre (http:80) es cómo el servicio de backend sabe a qué puerto llamar.": "The named port (http:80) is how the backend service knows which port to call."
+    "Aquí se decide el enrutamiento: /products va a la API y el resto a la web.": "Routing is decided here: /products goes to the API and everything else to the website."
+    "El registro A traduce www.dominio a la IP reservada del balanceador.": "The A record translates www.domain to the load balancer's reserved IP."

@@ -64,6 +64,10 @@ rubric:
     points: 15
     checks:
       - {type: evidence, fields: [explanation], keywords: [[partition, particion], [cluster], [bytes, TB, GB, MB]], desc: "Explica el ahorro"}
+tutor:
+  - {match: "@intro", title: "", why: "En BigQuery pagas por los bytes que lee la consulta. SELECT * sobre toda la tabla lee todo; particionar por fecha, agrupar (cluster) por país y pedir solo las columnas necesarias lo reduce muchísimo."}
+  - {match: "dry_run --use_legacy_sql=false \"SELECT \\*", title: "", why: "--dry_run dice cuánto leería sin ejecutarla: mide antes de optimizar."}
+  - {match: "PARTITION BY", title: "", why: "Particionar por fecha hace que un filtro de fechas solo lea esas particiones."}
 en:
   title: Day 21 · Cut the cost of a BigQuery report
   summary: Redesign a table with partitioning and clustering and rewrite the query to process less data, proving it with dry runs.
@@ -93,3 +97,6 @@ en:
     Dry runs de antes y después: Before/after dry runs
     Explicación: Explanation
     Explica el ahorro: Explain the saving
+    "En BigQuery pagas por los bytes que lee la consulta. SELECT * sobre toda la tabla lee todo; particionar por fecha, agrupar (cluster) por país y pedir solo las columnas necesarias lo reduce muchísimo.": "In BigQuery you pay for the bytes a query reads. SELECT * over the whole table reads everything; partitioning by date, clustering by country and selecting only needed columns cuts it drastically."
+    "--dry_run dice cuánto leería sin ejecutarla: mide antes de optimizar.": "--dry_run says how much it would read without running it: measure before optimizing."
+    "Particionar por fecha hace que un filtro de fechas solo lea esas particiones.": "Partitioning by date makes a date filter read only those partitions."

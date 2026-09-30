@@ -66,6 +66,10 @@ rubric:
     points: 10
     checks:
       - {type: exists, path: "sqlInstances[\"{{.db}}\"]", expect: {authorizedNetworks: {empty: true}}, desc: "Sin redes autorizadas"}
+tutor:
+  - {match: "@intro", title: "", why: "Cloud Run se conecta a Cloud SQL con el conector de Cloud SQL, autorizado por IAM, sin abrir la base de datos a ninguna red."}
+  - {match: "roles/cloudsql.client", title: "Da a la app permiso para conectarse", why: "Cloud SQL Client es el rol que permite a la identidad del servicio usar el conector."}
+  - {match: "add-cloudsql-instances", title: "", why: "DB_HOST=/cloudsql/PROYECTO:REGIÓN:INSTANCIA es el socket que abre el conector dentro del contenedor."}
 en:
   title: Day 7 · Connect an application to Cloud SQL
   summary: Create a PostgreSQL instance, database and user, and connect a Cloud Run service securely through the Cloud SQL connector.
@@ -96,3 +100,7 @@ en:
     Sin roles básicos para el servicio: No basic roles for the service
     Prueba: Test
     Sin redes autorizadas: No authorised networks
+    "Cloud Run se conecta a Cloud SQL con el conector de Cloud SQL, autorizado por IAM, sin abrir la base de datos a ninguna red.": "Cloud Run connects to Cloud SQL through the Cloud SQL connector, authorized by IAM, without opening the database to any network."
+    "Cloud SQL Client es el rol que permite a la identidad del servicio usar el conector.": "Cloud SQL Client is the role that lets the service identity use the connector."
+    "Da a la app permiso para conectarse": "Let the app connect"
+    "DB_HOST=/cloudsql/PROYECTO:REGIÓN:INSTANCIA es el socket que abre el conector dentro del contenedor.": "DB_HOST=/cloudsql/PROJECT:REGION:INSTANCE is the socket the connector opens inside the container."

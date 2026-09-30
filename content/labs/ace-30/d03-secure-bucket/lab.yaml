@@ -71,6 +71,10 @@ rubric:
     points: 10
     checks:
       - {type: absent, path: "buckets[\"tmp-upload-{{.project}}\"]", desc: "Bucket temporal eliminado"}
+tutor:
+  - {match: "@intro", title: "", why: "Un bucket seguro se decide al crearlo: ubicación (residencia de datos), acceso uniforme por IAM y prevención de acceso público. Luego se añaden versiones y ciclo de vida."}
+  - {match: "buckets create", title: "", why: "--uniform-bucket-level-access elimina las ACL por objeto y --public-access-prevention impide hacer público nada, aunque alguien lo intente."}
+  - {match: "buckets update", title: "", why: "El versionado guarda las versiones anteriores (recuperas sobrescrituras) y el ciclo de vida mueve a Nearline y borra solo, para ahorrar."}
 en:
   title: Day 3 · A secure documents bucket with lifecycle
   summary: Create a regional bucket that can never become public, keeps versions and moves old documents to cheaper storage.
@@ -105,3 +109,6 @@ en:
     Borrado a los 365 días: Deletion after 365 days
     Limpieza: Cleanup
     Bucket temporal eliminado: Temporary bucket removed
+    "Un bucket seguro se decide al crearlo: ubicación (residencia de datos), acceso uniforme por IAM y prevención de acceso público. Luego se añaden versiones y ciclo de vida.": "A secure bucket is decided at creation: location (data residency), uniform IAM access and public access prevention. Versioning and lifecycle come next."
+    "--uniform-bucket-level-access elimina las ACL por objeto y --public-access-prevention impide hacer público nada, aunque alguien lo intente.": "--uniform-bucket-level-access removes per-object ACLs and --public-access-prevention blocks making anything public, even if someone tries."
+    "El versionado guarda las versiones anteriores (recuperas sobrescrituras) y el ciclo de vida mueve a Nearline y borra solo, para ahorrar.": "Versioning keeps previous versions (you recover overwrites) and lifecycle moves to Nearline and deletes automatically to save money."

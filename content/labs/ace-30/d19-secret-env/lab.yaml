@@ -79,6 +79,11 @@ rubric:
     points: 10
     checks:
       - {type: evidence, fields: [prevention], keywords: [[rotat, rota], [secret manager, secret, secreto]], desc: "Prevención"}
+tutor:
+  - {match: "@intro", title: "", why: "Un secreto visible en la configuración ya está comprometido: se rota (clave nueva) y se guarda en Secret Manager, que la app lee sin mostrarlo."}
+  - {match: "secrets create", title: "", why: "Guardas la clave nueva como secreto con versiones; nunca la vieja."}
+  - {match: "secretmanager.secretAccessor", title: "", why: "Solo la cuenta del servicio de pagos puede leer ese secreto."}
+  - {match: "remove-env-vars", title: "Cambia la variable en claro por el secreto", why: "--set-secrets monta el secreto como variable, pero describe ya no muestra su valor."}
 en:
   title: 'Day 19 · INC: an API key sits in a plain environment variable'
   summary: Move an exposed secret to Secret Manager, scope access to one identity and rotate the exposed value.
@@ -112,3 +117,8 @@ en:
     El valor expuesto ya no se sirve: The exposed value is not served
     Evidencias: Evidence
     Prevención: Prevention
+    "Un secreto visible en la configuración ya está comprometido: se rota (clave nueva) y se guarda en Secret Manager, que la app lee sin mostrarlo.": "A secret visible in the configuration is already compromised: rotate it (new key) and keep it in Secret Manager, which the app reads without showing it."
+    "Guardas la clave nueva como secreto con versiones; nunca la vieja.": "You store the new key as a versioned secret; never the old one."
+    "Solo la cuenta del servicio de pagos puede leer ese secreto.": "Only the payments service account can read that secret."
+    "--set-secrets monta el secreto como variable, pero describe ya no muestra su valor.": "--set-secrets mounts the secret as a variable, but describe no longer shows its value."
+    "Cambia la variable en claro por el secreto": "Replace the plain variable with the secret"

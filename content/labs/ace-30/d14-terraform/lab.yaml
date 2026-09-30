@@ -107,6 +107,10 @@ rubric:
     points: 15
     checks:
       - {type: forbid_firewall, port: 22, desc: "SSH no abierto a internet"}
+tutor:
+  - {match: "@intro", title: "", why: "Infraestructura como código: describes en Terraform lo que quieres y la herramienta lo crea igual cada vez. Así el entorno se puede reproducir."}
+  - {match: "terraform init", title: "", why: "Descarga el proveedor de Google y prepara el estado."}
+  - {match: "terraform plan", title: "", why: "Lee el plan siempre antes de aplicar: dice qué se crea, cambia o destruye."}
 en:
   title: Day 14 · Reproduce the environment with Terraform
   summary: Codify a network, firewall and VM in idempotent Terraform with variables and outputs.
@@ -139,3 +143,6 @@ en:
     Variables y outputs declarados: Variables and outputs declared
     Seguridad: Security
     SSH no abierto a internet: SSH not open to the internet
+    "Infraestructura como código: describes en Terraform lo que quieres y la herramienta lo crea igual cada vez. Así el entorno se puede reproducir.": "Infrastructure as code: you describe what you want in Terraform and the tool builds it the same way every time. The environment becomes reproducible."
+    "Descarga el proveedor de Google y prepara el estado.": "Downloads the Google provider and prepares the state."
+    "Lee el plan siempre antes de aplicar: dice qué se crea, cambia o destruye.": "Always read the plan before applying: it says what gets created, changed or destroyed."

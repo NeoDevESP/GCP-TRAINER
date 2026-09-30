@@ -872,6 +872,10 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	all, _ := s.attemptsOf(u.ID)
 	prof := s.eng(r).Profile(*u, all, att.Track)
 	out := map[string]any{"result": res, "xp": att.XP, "bonus": att.Bonus, "bonusReasons": att.BonusReasons, "profile": prof, "mentor": mentor.Socratic(s.Cat.Lab(info.LabID).Localized(info.Lang), res, info.Lang)}
+	out["tutor"] = att.Tutor
+	if l := s.Cat.Lab(info.LabID); l != nil {
+		out["skills"] = l.Skills
+	}
 	if companyOut != nil {
 		out["company"] = companyOut
 	}

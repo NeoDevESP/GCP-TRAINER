@@ -68,6 +68,10 @@ rubric:
     checks:
       - {type: count, collection: aiEndpoints, where: {modelMonitoring: true}, min: 1, desc: "Monitorización activada"}
       - {type: count, collection: aiEndpoints, where: {deployedModels: {regex: "\"acceleratorCount\":[1-9]"}}, max: 0, desc: "Sin GPU"}
+tutor:
+  - {match: "@intro", title: "", why: "Servir un modelo en Vertex AI: se sube al registro de modelos, se crea un endpoint y se despliega el modelo en él con máquinas y réplicas acotadas."}
+  - {match: "deploy-model", title: "", why: "Réplicas mínimas y máximas limitan coste y capacidad; la cuenta de servicio es la identidad del modelo."}
+  - {match: "aiplatform.user", title: "", why: "La app cliente necesita este rol para pedir predicciones."}
 en:
   title: Day 23 · Publish a controlled inference endpoint
   summary: Serve a trained model on a Vertex AI endpoint with a dedicated identity, no GPUs, a caller with least privilege and monitoring.
@@ -98,3 +102,6 @@ en:
     Monitorización y coste: Monitoring & cost
     Monitorización activada: Monitoring enabled
     Sin GPU: No GPUs
+    "Servir un modelo en Vertex AI: se sube al registro de modelos, se crea un endpoint y se despliega el modelo en él con máquinas y réplicas acotadas.": "Serving a model on Vertex AI: upload it to the model registry, create an endpoint and deploy the model on it with bounded machines and replicas."
+    "Réplicas mínimas y máximas limitan coste y capacidad; la cuenta de servicio es la identidad del modelo.": "Minimum and maximum replicas bound cost and capacity; the service account is the model's identity."
+    "La app cliente necesita este rol para pedir predicciones.": "The client app needs this role to request predictions."

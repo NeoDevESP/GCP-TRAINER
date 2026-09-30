@@ -57,6 +57,10 @@ rubric:
     checks:
       - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {machineType: {in: [e2-micro, e2-small]}}, desc: "Tipo de máquina pequeño"}
       - {type: exists, path: "instances[\"{{.vm}}\"]", expect: {gpus: 0}, desc: "Sin aceleradores"}
+tutor:
+  - {match: "@intro", title: "", why: "Para publicar una web en una VM hacen falta tres cosas: la VM, algo que sirva HTTP (nginx) y una regla de cortafuegos que deje entrar el puerto 80."}
+  - {match: "instances create", title: "", why: "El script de arranque instala nginx solo cada vez que arranca la VM. La etiqueta de red web es lo que usará la regla de cortafuegos para apuntar solo a esta VM."}
+  - {match: "firewall-rules create", title: "", why: "Con --target-tags=web solo se abre el puerto 80 en las VMs con esa etiqueta, no en toda la red."}
 en:
   title: Day 4 · A minimal web VM
   summary: Deploy a small VM that serves HTTP from a startup script, exposed only on port 80 by network tag.
@@ -86,3 +90,6 @@ en:
     Coste: Cost
     Tipo de máquina pequeño: Small machine type
     Sin aceleradores: No accelerators
+    "Para publicar una web en una VM hacen falta tres cosas: la VM, algo que sirva HTTP (nginx) y una regla de cortafuegos que deje entrar el puerto 80.": "Publishing a website on a VM takes three things: the VM, something serving HTTP (nginx) and a firewall rule letting port 80 in."
+    "El script de arranque instala nginx solo cada vez que arranca la VM. La etiqueta de red web es lo que usará la regla de cortafuegos para apuntar solo a esta VM.": "The startup script installs nginx whenever the VM boots. The web network tag is what the firewall rule uses to target only this VM."
+    "Con --target-tags=web solo se abre el puerto 80 en las VMs con esa etiqueta, no en toda la red.": "With --target-tags=web port 80 opens only on VMs carrying that tag, not on the whole network."

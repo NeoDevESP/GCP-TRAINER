@@ -127,6 +127,10 @@ rubric:
       - {type: rollout, target: checkout-prod, imageContains: "1.4", state: SUCCEEDED, desc: "r14 promocionada a prod"}
       - {type: http, target: "run:checkout-prod", path: /search, status: 200, desc: "/search sano en prod"}
       - {type: http, target: "run:checkout-staging", path: /search, status: 200, desc: "Staging sano"}
+tutor:
+  - {match: "@intro", title: "", why: "Cloud Deploy promociona cada versión por entornos (staging → prod) con verificación, y puede volver atrás solo si la verificación falla."}
+  - {match: "deploy apply", title: "", why: "Crea el pipeline, los destinos y la automatización de reparación (rollback)."}
+  - {match: "releases promote", title: "", why: "Promocionar mueve la versión a producción solo cuando staging la ha verificado."}
 en:
   title: Day 27 · Progressive delivery with automatic rollback
   summary: Build a Cloud Deploy pipeline with verification and automatic rollback, prove it with a bad release and ship the good one.
@@ -156,3 +160,6 @@ en:
     r14 promocionada a prod: r14 promoted to prod
     /search sano en prod: /search healthy in prod
     Staging sano: Staging healthy
+    "Cloud Deploy promociona cada versión por entornos (staging → prod) con verificación, y puede volver atrás solo si la verificación falla.": "Cloud Deploy promotes each release through environments (staging → prod) with verification, and can roll back automatically if verification fails."
+    "Crea el pipeline, los destinos y la automatización de reparación (rollback).": "Creates the pipeline, targets and the repair (rollback) automation."
+    "Promocionar mueve la versión a producción solo cuando staging la ha verificado.": "Promoting moves the release to production only once staging has verified it."

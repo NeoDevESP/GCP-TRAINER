@@ -85,6 +85,11 @@ rubric:
     points: 15
     checks:
       - {type: evidence, fields: [explanation], keywords: [[build, compil, compilacion], [sha, commit]], desc: "Explica las evidencias"}
+tutor:
+  - {match: "@intro", title: "", why: "Integración continua: cada commit en main lanza una compilación que publica una imagen con el SHA del commit. Así sabes siempre qué código hay en cada imagen."}
+  - {match: "artifactregistry.writer", title: "", why: "La cuenta de compilación necesita escribir en el repositorio, y nada más."}
+  - {match: "triggers create", title: "", why: "El activador une repositorio, rama, archivo de compilación y cuenta de servicio."}
+  - {match: "git push", title: "", why: "El push a main es lo que dispara el activador."}
 en:
   title: 'Day 15 · Automatic builds: commit → Cloud Build → Artifact Registry'
   summary: Create a trigger that builds every commit on main with a dedicated service account and publishes an image tagged with the commit SHA.
@@ -115,3 +120,7 @@ en:
     Sin roles básicos para la compilación: No basic roles for the builder
     Evidencias: Evidence
     Explica las evidencias: Explain the evidence
+    "Integración continua: cada commit en main lanza una compilación que publica una imagen con el SHA del commit. Así sabes siempre qué código hay en cada imagen.": "Continuous integration: every commit on main starts a build that publishes an image tagged with the commit SHA. You always know which code is in each image."
+    "La cuenta de compilación necesita escribir en el repositorio, y nada más.": "The build account needs to write to the repository, nothing more."
+    "El activador une repositorio, rama, archivo de compilación y cuenta de servicio.": "The trigger ties together repository, branch, build file and service account."
+    "El push a main es lo que dispara el activador.": "Pushing to main is what fires the trigger."

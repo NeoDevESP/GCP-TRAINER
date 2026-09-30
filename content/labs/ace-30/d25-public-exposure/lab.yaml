@@ -76,6 +76,11 @@ rubric:
     checks:
       - {type: evidence, fields: [impact], keywords: [[download, descarg], [anonym, anonim, external, extern]], desc: "Impacto"}
       - {type: evidence, fields: [rootCause, prevention], keywords: [[allusers], [org policy, organization policy, organizacion, publicaccessprevention, politica de organizacion]], desc: "Causa raíz y prevención"}
+tutor:
+  - {match: "@intro", title: "", why: "Ante una exposición: primero contener (quitar el acceso público), después evitar que se repita (política de organización) y por último saber quién lo hizo (auditoría)."}
+  - {match: "scc findings", title: "", why: "Security Command Center lista qué está expuesto."}
+  - {match: "remove-iam-policy-binding gs://backups", title: "", why: "allUsers significa cualquiera en internet: quitarlo corta la descarga anónima."}
+  - {match: "enable-enforce", title: "", why: "La política de organización impide que vuelva a hacerse público nada, aunque alguien lo intente."}
 en:
   title: 'Day 25 · INC: admin portal and backups exposed to the internet'
   summary: Contain a public exposure, remove anonymous access, add a preventive guardrail and document the incident.
@@ -104,3 +109,7 @@ en:
     Post-mortem: Postmortem
     Impacto: Impact
     Causa raíz y prevención: Root cause and prevention
+    "Ante una exposición: primero contener (quitar el acceso público), después evitar que se repita (política de organización) y por último saber quién lo hizo (auditoría).": "Facing an exposure: first contain it (remove public access), then prevent a repeat (organization policy) and finally find out who did it (audit)."
+    "Security Command Center lista qué está expuesto.": "Security Command Center lists what is exposed."
+    "allUsers significa cualquiera en internet: quitarlo corta la descarga anónima.": "allUsers means anyone on the internet: removing it stops the anonymous download."
+    "La política de organización impide que vuelva a hacerse público nada, aunque alguien lo intente.": "The organization policy prevents anything from being made public again, even if someone tries."

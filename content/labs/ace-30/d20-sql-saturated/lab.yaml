@@ -72,6 +72,11 @@ rubric:
     points: 15
     checks:
       - {type: evidence, fields: [prevention], keywords: [[alert, alerta, load test, prueba de carga, max-instances, limit, limite]], desc: "Control preventivo"}
+tutor:
+  - {match: "@intro", title: "", why: "Si la base de datos se satura justo tras una versión, sospecha de la versión: compara qué cambió antes de ampliar la base de datos."}
+  - {match: "cloudsql_database", title: "", why: "Los errores de Cloud SQL hablan de demasiadas conexiones."}
+  - {match: "ReplaceService", title: "", why: "La auditoría confirma que la versión 7.3 se desplegó a las 09:00."}
+  - {match: "DB_POOL_SIZE", title: "Vuelve a un tamaño de pool razonable", why: "La versión subió el pool de conexiones: cada instancia abría demasiadas y ahogaba a Cloud SQL."}
 en:
   title: 'Day 20 · INC: Cloud SQL saturated after a release'
   summary: Correlate metrics, logs and configuration to find the connection-pool regression and restore the database.
@@ -96,3 +101,8 @@ en:
     Evidencias reunidas: Evidence gathered
     Prevención: Prevention
     Control preventivo: Preventive control
+    "Si la base de datos se satura justo tras una versión, sospecha de la versión: compara qué cambió antes de ampliar la base de datos.": "If the database saturates right after a release, suspect the release: compare what changed before scaling the database."
+    "Los errores de Cloud SQL hablan de demasiadas conexiones.": "The Cloud SQL errors talk about too many connections."
+    "La auditoría confirma que la versión 7.3 se desplegó a las 09:00.": "The audit log confirms release 7.3 was deployed at 09:00."
+    "La versión subió el pool de conexiones: cada instancia abría demasiadas y ahogaba a Cloud SQL.": "The release raised the connection pool: each instance opened too many and choked Cloud SQL."
+    "Vuelve a un tamaño de pool razonable": "Go back to a sensible pool size"

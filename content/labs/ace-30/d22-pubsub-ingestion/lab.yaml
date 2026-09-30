@@ -70,6 +70,11 @@ rubric:
     points: 15
     checks:
       - {type: alert_policy, filterContains: num_undelivered_messages, desc: "Alerta sobre la cola pendiente"}
+tutor:
+  - {match: "@intro", title: "", why: "Pub/Sub desacopla productores y consumidores. Una suscripción push entrega a una URL, autenticada; los mensajes que fallan varias veces van a un tema de mensajes fallidos para no perderlos."}
+  - {match: "roles/run.invoker", title: "", why: "push-sa es quien llama al procesador: necesita permiso para invocarlo."}
+  - {match: "subscriptions create events-push", title: "", why: "--dead-letter-topic y --max-delivery-attempts: tras 5 fallos el mensaje se aparta en lugar de reintentarse sin fin."}
+  - {match: "num_undelivered_messages", title: "", why: "Alertar sobre la cola pendiente avisa si el procesador se queda atrás."}
 en:
   title: Day 22 · Near-real-time event ingestion
   summary: Connect producers to a private Cloud Run processor through Pub/Sub push with authentication and a dead-letter topic.
@@ -101,3 +106,7 @@ en:
     Se puede inspeccionar la DLQ: DLQ can be inspected
     Observabilidad: Observability
     Alerta sobre la cola pendiente: Backlog alert
+    "Pub/Sub desacopla productores y consumidores. Una suscripción push entrega a una URL, autenticada; los mensajes que fallan varias veces van a un tema de mensajes fallidos para no perderlos.": "Pub/Sub decouples producers and consumers. A push subscription delivers to a URL, authenticated; messages failing several times go to a dead-letter topic so they are not lost."
+    "push-sa es quien llama al procesador: necesita permiso para invocarlo.": "push-sa is who calls the processor: it needs permission to invoke it."
+    "--dead-letter-topic y --max-delivery-attempts: tras 5 fallos el mensaje se aparta en lugar de reintentarse sin fin.": "--dead-letter-topic and --max-delivery-attempts: after 5 failures the message is set aside instead of retried forever."
+    "Alertar sobre la cola pendiente avisa si el procesador se queda atrás.": "Alerting on the backlog warns you when the processor falls behind."

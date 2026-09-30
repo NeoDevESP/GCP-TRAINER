@@ -63,6 +63,11 @@ rubric:
     points: 10
     checks:
       - {type: evidence, fields: [explanation], keywords: [["500", "5xx"]], desc: "Menciona el código de estado"}
+tutor:
+  - {match: "@intro", title: "", why: "Primero encuentra el problema en los registros y después haz que la próxima vez te avise solo: métrica basada en registros → política de alertas → canal de correo."}
+  - {match: "logging read", title: "", why: "Filtrar por httpRequest.status>=500 muestra qué URL devuelve los errores."}
+  - {match: "metrics create", title: "", why: "La métrica cuenta líneas de registro; sobre ella ya se puede poner una alerta."}
+  - {match: "policies create", title: "", why: "La política vigila la métrica y avisa al canal cuando pasa de 0 durante un minuto."}
 en:
   title: Day 8 · Find the 500s and alert on them
   summary: Query Cloud Logging to find the failing endpoint, then create a log-based metric and an alert that notifies the on-call team.
@@ -88,3 +93,7 @@ en:
     Alerta sobre la métrica con un canal de notificación: Alert on the metric with a notification channel
     Explicación: Explanation
     Menciona el código de estado: Mention the status code
+    "Primero encuentra el problema en los registros y después haz que la próxima vez te avise solo: métrica basada en registros → política de alertas → canal de correo.": "First find the problem in the logs, then make it alert you next time: log-based metric → alerting policy → email channel."
+    "Filtrar por httpRequest.status>=500 muestra qué URL devuelve los errores.": "Filtering on httpRequest.status>=500 shows which URL returns the errors."
+    "La métrica cuenta líneas de registro; sobre ella ya se puede poner una alerta.": "The metric counts log lines; now you can alert on it."
+    "La política vigila la métrica y avisa al canal cuando pasa de 0 durante un minuto.": "The policy watches the metric and notifies the channel when it goes above 0 for a minute."

@@ -59,6 +59,11 @@ rubric:
     points: 20
     checks:
       - {type: command, regex: "troubleshoot-policy|get-iam-policy", desc: "Verifica la política efectiva"}
+tutor:
+  - {match: "@intro", title: "", why: "Principio de mínimo privilegio: da exactamente el permiso necesario, sobre el recurso concreto. Owner o Editor en el proyecto sería darle las llaves de todo."}
+  - {match: "iam roles describe", title: "", why: "Mira qué permisos trae el rol antes de darlo: Storage Object Viewer solo permite listar y leer objetos."}
+  - {match: "add-iam-policy-binding gs://reports", title: "Da acceso de lectura solo a ese bucket", why: "Al concederlo en el bucket (y no en el proyecto), el analista no ve el bucket de finanzas."}
+  - {match: "storage.objects.delete", title: "", why: "Comprueba también lo que NO debe poder hacer: borrar tiene que salir denegado."}
 en:
   title: Day 2 · Read access to reports without Owner or Editor
   summary: Give an analyst read access to one bucket, applying least privilege, and prove access and denial.
@@ -84,3 +89,8 @@ en:
     Sin roles básicos para la analista: No basic roles for the analyst
     Acceso verificado: Access verified
     Verifica la política efectiva: Verify the effective policy
+    "Principio de mínimo privilegio: da exactamente el permiso necesario, sobre el recurso concreto. Owner o Editor en el proyecto sería darle las llaves de todo.": "Principle of least privilege: grant exactly the permission needed, on the specific resource. Owner or Editor on the project would hand over the keys to everything."
+    "Mira qué permisos trae el rol antes de darlo: Storage Object Viewer solo permite listar y leer objetos.": "Check which permissions a role carries before granting it: Storage Object Viewer only lists and reads objects."
+    "Al concederlo en el bucket (y no en el proyecto), el analista no ve el bucket de finanzas.": "Granting it on the bucket (not the project) keeps the finance bucket out of the analyst's reach."
+    "Da acceso de lectura solo a ese bucket": "Grant read access to that bucket only"
+    "Comprueba también lo que NO debe poder hacer: borrar tiene que salir denegado.": "Also check what they must NOT be able to do: delete must come out denied."

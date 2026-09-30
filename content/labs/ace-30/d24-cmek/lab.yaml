@@ -73,6 +73,11 @@ rubric:
     points: 20
     checks:
       - {type: evidence, fields: [explanation], keywords: [[cmek, kms, key, clave], [service agent, agente, agente de servicio], [rotat, rota]], desc: "Explica el modelo de claves"}
+tutor:
+  - {match: "@intro", title: "", why: "Con CMEK los datos se cifran con una clave que controla tu empresa en Cloud KMS. Si se desactiva la clave, nadie puede leerlos."}
+  - {match: "keys create", title: "", why: "El periodo de rotación genera versiones nuevas de la clave automáticamente."}
+  - {match: "cryptoKeyEncrypterDecrypter", title: "", why: "Quien cifra es el agente de servicio de Cloud Storage, no tú: es a él a quien hay que dar permiso sobre la clave."}
+  - {match: "default-encryption-key", title: "", why: "A partir de ahora los objetos nuevos del bucket se cifran con tu clave."}
 en:
   title: Day 24 · Protect data with customer-managed keys
   summary: Encrypt a bucket with a rotating Cloud KMS key, authorising only the Cloud Storage service agent.
@@ -104,3 +109,7 @@ en:
     Archivo subido tras el cifrado: File uploaded after encryption
     Explicación: Explanation
     Explica el modelo de claves: Explain the key model
+    "Con CMEK los datos se cifran con una clave que controla tu empresa en Cloud KMS. Si se desactiva la clave, nadie puede leerlos.": "With CMEK data is encrypted with a key your company controls in Cloud KMS. If the key is disabled nobody can read the data."
+    "El periodo de rotación genera versiones nuevas de la clave automáticamente.": "The rotation period creates new key versions automatically."
+    "Quien cifra es el agente de servicio de Cloud Storage, no tú: es a él a quien hay que dar permiso sobre la clave.": "The Cloud Storage service agent does the encrypting, not you: it is the one that needs permission on the key."
+    "A partir de ahora los objetos nuevos del bucket se cifran con tu clave.": "From now on new objects in the bucket are encrypted with your key."

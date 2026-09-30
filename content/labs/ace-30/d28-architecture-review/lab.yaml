@@ -82,6 +82,11 @@ rubric:
     points: 10
     checks:
       - {type: command, regex: "billing estimate", min: 2, desc: "Coste medido antes y después"}
+tutor:
+  - {match: "@intro", title: "", why: "Una revisión de arquitectura equilibra fiabilidad y coste: quita puntos únicos de fallo y a la vez ajusta lo que está sobredimensionado o sin usar."}
+  - {match: "availability-type=REGIONAL", title: "", why: "Regional = réplica en otra zona con conmutación automática; las copias diarias cubren el RPO de 24 h."}
+  - {match: "resize web-mig", title: "", why: "Con 2 VMs y autorreparación, un fallo ya no es una caída."}
+  - {match: "set-machine-type", title: "", why: "Ajustar el tamaño de la máquina al uso real ahorra sin perder servicio."}
 en:
   title: 'Day 28 · Architecture review: reliable and affordable'
   summary: Redesign an over-provisioned, fragile stack to meet reliability and budget targets, justifying each trade-off.
@@ -121,3 +126,7 @@ en:
     Preguntas de la revisión respondidas y justificadas: Review questions answered and justified
     Medición: Measurement
     Coste medido antes y después: Cost measured before and after
+    "Una revisión de arquitectura equilibra fiabilidad y coste: quita puntos únicos de fallo y a la vez ajusta lo que está sobredimensionado o sin usar.": "An architecture review balances reliability and cost: remove single points of failure while resizing what is oversized or unused."
+    "Regional = réplica en otra zona con conmutación automática; las copias diarias cubren el RPO de 24 h.": "Regional = a standby in another zone with automatic failover; daily backups cover the 24 h RPO."
+    "Con 2 VMs y autorreparación, un fallo ya no es una caída.": "With 2 VMs and autohealing a failure is no longer an outage."
+    "Ajustar el tamaño de la máquina al uso real ahorra sin perder servicio.": "Right-sizing the machine to real usage saves money without losing service."

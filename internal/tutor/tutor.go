@@ -137,6 +137,20 @@ func explain(cmd string, en bool) (Step, bool) {
 }
 
 func explainCmd(cmd string, en bool) (Step, bool) {
+	// "echo secret | gcloud secrets create …": the command that matters is
+	// the last one of the pipeline.
+	if first := strings.SplitN(cmd, "\n", 2)[0]; strings.Contains(first, " | ") {
+		if w := firstWord(first); w == "echo" || w == "printf" || w == "cat" {
+			tail := strings.TrimSpace(first[strings.LastIndex(first, " | ")+3:])
+			if st, ok := explainCmd(tail, en); ok {
+				st.Command = cmd
+				if st.Match != "" {
+					st.Match = "\\|\\s*" + strings.TrimPrefix(st.Match, "^")
+				}
+				return st, true
+			}
+		}
+	}
 	L := func(es, e string) string {
 		if en {
 			return e

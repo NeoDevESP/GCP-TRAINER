@@ -76,6 +76,12 @@ rubric:
     points: 10
     checks:
       - {type: evidence, fields: [explanation], keywords: [[curl, nc, ssh], [tag, etiqueta]], desc: "Cómo has verificado el camino"}
+tutor:
+  - {match: "@intro", title: "", why: "Separar capas en subredes y controlar quién habla con quién mediante etiquetas es la base de una red segura: el backend nunca debe estar expuesto a internet."}
+  - {match: "networks create", title: "", why: "Modo personalizado: tú decides las subredes y sus rangos, en lugar de una por región automática."}
+  - {match: "no-address", title: "", why: "--no-address deja al backend sin IP pública: solo se llega a él por la red privada."}
+  - {match: "fe-to-be", title: "", why: "La regla usa etiquetas de origen y destino: solo las VMs frontend pueden abrir el puerto del backend."}
+  - {match: "35.235.240.0/20", title: "", why: "Ese rango es el de IAP: permite SSH sin exponer el puerto 22 a internet."}
 en:
   title: Day 5 · Isolate frontend and backend
   summary: Build a custom VPC with two subnets and allow only the traffic the application needs.
@@ -113,3 +119,8 @@ en:
     La regla interna usa etiquetas: Internal rule uses tags
     Evidencias: Evidence
     Cómo has verificado el camino: How you verified the path
+    "Separar capas en subredes y controlar quién habla con quién mediante etiquetas es la base de una red segura: el backend nunca debe estar expuesto a internet.": "Splitting tiers into subnets and controlling who talks to whom with tags is the basis of a secure network: the backend must never face the internet."
+    "Modo personalizado: tú decides las subredes y sus rangos, en lugar de una por región automática.": "Custom mode: you decide the subnets and their ranges instead of one automatic subnet per region."
+    "--no-address deja al backend sin IP pública: solo se llega a él por la red privada.": "--no-address leaves the backend without a public IP: it is only reachable over the private network."
+    "La regla usa etiquetas de origen y destino: solo las VMs frontend pueden abrir el puerto del backend.": "The rule uses source and target tags: only frontend VMs may open the backend port."
+    "Ese rango es el de IAP: permite SSH sin exponer el puerto 22 a internet.": "That range is IAP's: it allows SSH without exposing port 22 to the internet."

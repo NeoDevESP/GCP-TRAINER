@@ -74,6 +74,11 @@ rubric:
     points: 10
     checks:
       - {type: evidence, fields: [explanation], keywords: [[folder, carpeta, lab-sandboxes], [organi]], desc: "Menciona la carpeta y la organización"}
+tutor:
+  - {match: "@intro", title: "", why: "Antes de tocar nada en Google Cloud hay que saber dónde estás: qué organización, qué proyecto y qué región. Equivocarse de proyecto es el error más caro del primer día."}
+  - {match: "projects list", title: "", why: "Busca el proyecto con la etiqueta purpose=training-lab: las etiquetas son la forma habitual de distinguir sandbox, staging y producción."}
+  - {match: "config set project", title: "Fija tu proyecto de trabajo", why: "A partir de aquí, gcloud usará este proyecto por defecto. En la consola es el selector de proyecto de arriba."}
+  - {match: "get-ancestors", title: "", why: "Muestra la jerarquía: organización → carpetas → proyecto. Los permisos y políticas de arriba se heredan hacia abajo."}
 en:
   title: Day 1 · Where am I? Organisation, project, region and CLI context
   summary: Find the right project among several, configure gcloud defaults and verify your identity before operating.
@@ -108,3 +113,8 @@ en:
     Revisa los proyectos a los que tienes acceso: Inspect the projects you can access
     Explicación: Explanation
     Menciona la carpeta y la organización: Mention folder and organisation
+    "Antes de tocar nada en Google Cloud hay que saber dónde estás: qué organización, qué proyecto y qué región. Equivocarse de proyecto es el error más caro del primer día.": "Before touching anything in Google Cloud you must know where you are: which organization, which project and which region. Using the wrong project is the costliest first-day mistake."
+    "Busca el proyecto con la etiqueta purpose=training-lab: las etiquetas son la forma habitual de distinguir sandbox, staging y producción.": "Look for the project labelled purpose=training-lab: labels are the usual way to tell sandbox, staging and production apart."
+    "A partir de aquí, gcloud usará este proyecto por defecto. En la consola es el selector de proyecto de arriba.": "From now on gcloud uses this project by default. In the console it is the project picker at the top."
+    "Fija tu proyecto de trabajo": "Set your working project"
+    "Muestra la jerarquía: organización → carpetas → proyecto. Los permisos y políticas de arriba se heredan hacia abajo.": "Shows the hierarchy: organization → folders → project. Permissions and policies above are inherited downwards."

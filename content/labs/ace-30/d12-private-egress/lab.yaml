@@ -69,6 +69,11 @@ rubric:
     points: 20
     checks:
       - {type: command, regex: "ssh .*(apt|curl)", desc: "Demuestra la salida desde la VM"}
+tutor:
+  - {match: "@intro", title: "", why: "Una VM sin IP pública no puede salir a internet por sí sola. La solución segura no es darle IP pública, sino Cloud NAT."}
+  - {match: "serial-port-output", title: "", why: "La consola en serie enseña lo que ve la VM: los timeouts al descargar paquetes."}
+  - {match: "methodName:routers", title: "", why: "El registro de auditoría dice quién tocó el router y cuándo: aquí está la causa."}
+  - {match: "nats create", title: "Recrea la pasarela NAT", why: "Cloud NAT da salida a internet a toda la subred sin exponer ninguna VM a conexiones entrantes."}
 en:
   title: 'Day 12 · INC: a private VM cannot download dependencies'
   summary: A build VM without public IP lost internet egress. Restore egress without giving it a public IP.
@@ -94,3 +99,8 @@ en:
     SSH solo a través de IAP: SSH only via IAP
     Prueba: Test
     Demuestra la salida desde la VM: Prove egress from the VM
+    "Una VM sin IP pública no puede salir a internet por sí sola. La solución segura no es darle IP pública, sino Cloud NAT.": "A VM without a public IP cannot reach the internet on its own. The secure fix is not a public IP, it is Cloud NAT."
+    "La consola en serie enseña lo que ve la VM: los timeouts al descargar paquetes.": "The serial console shows what the VM sees: timeouts when downloading packages."
+    "El registro de auditoría dice quién tocó el router y cuándo: aquí está la causa.": "The audit log says who touched the router and when: that is the cause."
+    "Cloud NAT da salida a internet a toda la subred sin exponer ninguna VM a conexiones entrantes.": "Cloud NAT gives the whole subnet internet egress without exposing any VM to inbound connections."
+    "Recrea la pasarela NAT": "Recreate the NAT gateway"

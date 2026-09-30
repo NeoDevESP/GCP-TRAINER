@@ -112,6 +112,10 @@ rubric:
     points: 15
     checks:
       - {type: evidence, fields: [explanation], keywords: [[service, servicio], [ready, listo, pods, preparad]], desc: "Explica cómo lo has verificado"}
+tutor:
+  - {match: "@intro", title: "", why: "En Kubernetes describes el estado deseado en YAML: Deployments (cuántas réplicas de qué imagen) y Services (cómo se encuentran y cómo se exponen)."}
+  - {match: "get-credentials", title: "", why: "Conecta kubectl a este clúster."}
+  - {match: "kubectl apply", title: "", why: "Las sondas readiness y liveness hacen que Kubernetes solo envíe tráfico a pods listos y reinicie los colgados. El Service catalog es interno; frontend es LoadBalancer (público)."}
 en:
   title: Day 16 · Deploy a two-service app on GKE
   summary: Deploy frontend and catalog Deployments with probes and Services and prove internal communication.
@@ -143,3 +147,6 @@ en:
     frontend → catalog funciona de extremo a extremo: frontend → catalog works end to end
     Evidencias: Evidence
     Explica cómo lo has verificado: Explain how you verified
+    "En Kubernetes describes el estado deseado en YAML: Deployments (cuántas réplicas de qué imagen) y Services (cómo se encuentran y cómo se exponen).": "In Kubernetes you describe the desired state in YAML: Deployments (how many replicas of which image) and Services (how they find each other and how they are exposed)."
+    "Conecta kubectl a este clúster.": "Connects kubectl to this cluster."
+    "Las sondas readiness y liveness hacen que Kubernetes solo envíe tráfico a pods listos y reinicie los colgados. El Service catalog es interno; frontend es LoadBalancer (público).": "Readiness and liveness probes make Kubernetes send traffic only to ready pods and restart hung ones. The catalog Service is internal; frontend is a public LoadBalancer."

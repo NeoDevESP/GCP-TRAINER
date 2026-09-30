@@ -78,6 +78,10 @@ rubric:
     checks:
       - {type: exists, path: "routers[\"onprem-router\"]", expect: {asn: 64514, bgpPeers: {minLen: 2}}, desc: "Una sesión BGP por túnel"}
       - {type: exists, path: "routers[\"onprem-router\"].bgpPeers", expect: {"": {regex: "\"peerAsn\":{{.peerasn}}"}}, desc: "El ASN del par coincide con el de on-premise"}
+tutor:
+  - {match: "@intro", title: "", why: "Para conectar la oficina con alta disponibilidad se usa HA VPN: dos túneles y BGP con Cloud Router, que aprende las rutas del otro lado automáticamente."}
+  - {match: "routers create", title: "", why: "Cloud Router habla BGP con el router de la oficina."}
+  - {match: "vpn-tunnels create tunnel-0", title: "", why: "Dos túneles por dos interfaces dan el SLA del 99,99 %."}
 en:
   title: 'Day 26 · Case study: connect the on-prem datacenter'
   summary: Choose and justify the hybrid connectivity design, then build the HA VPN with dynamic routing.
@@ -124,3 +128,6 @@ en:
     Enrutamiento dinámico: Dynamic routing
     Una sesión BGP por túnel: One BGP session per tunnel
     El ASN del par coincide con el de on-premise: Peer ASN matches on-prem
+    "Para conectar la oficina con alta disponibilidad se usa HA VPN: dos túneles y BGP con Cloud Router, que aprende las rutas del otro lado automáticamente.": "To connect the office with high availability use HA VPN: two tunnels and BGP with Cloud Router, which learns the other side's routes automatically."
+    "Cloud Router habla BGP con el router de la oficina.": "Cloud Router speaks BGP with the office router."
+    "Dos túneles por dos interfaces dan el SLA del 99,99 %.": "Two tunnels over two interfaces give the 99.99% SLA."

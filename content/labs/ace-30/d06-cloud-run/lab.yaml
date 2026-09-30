@@ -69,6 +69,11 @@ rubric:
     points: 10
     checks:
       - {type: absent, path: "runServices[\"hello-test\"]", desc: "Servicio de demo eliminado"}
+tutor:
+  - {match: "@intro", title: "", why: "El camino de un contenedor a producción: repositorio en Artifact Registry → compilar la imagen con Cloud Build → desplegarla en Cloud Run."}
+  - {match: "builds submit", title: "", why: "Cloud Build compila el Dockerfile en la nube y sube la imagen con su etiqueta al repositorio."}
+  - {match: "run deploy", title: "", why: "La configuración va en variables de entorno, no en la imagen: así la misma imagen sirve para varios entornos."}
+  - {match: "services delete hello-test", title: "", why: "Borrar lo que ya no se usa evita costes y superficie de ataque."}
 en:
   title: Day 6 · Containerise and deploy an API on Cloud Run
   summary: Build an image into Artifact Registry and deploy it to Cloud Run with the right configuration.
@@ -98,3 +103,7 @@ en:
     APP_ENV configurada: APP_ENV configured
     Limpieza: Cleanup
     Servicio de demo eliminado: Demo service removed
+    "El camino de un contenedor a producción: repositorio en Artifact Registry → compilar la imagen con Cloud Build → desplegarla en Cloud Run.": "A container's path to production: repository in Artifact Registry → build the image with Cloud Build → deploy it on Cloud Run."
+    "Cloud Build compila el Dockerfile en la nube y sube la imagen con su etiqueta al repositorio.": "Cloud Build builds the Dockerfile in the cloud and pushes the tagged image to the repository."
+    "La configuración va en variables de entorno, no en la imagen: así la misma imagen sirve para varios entornos.": "Configuration goes in environment variables, not in the image: the same image serves several environments."
+    "Borrar lo que ya no se usa evita costes y superficie de ataque.": "Deleting what is no longer used avoids cost and attack surface."

@@ -268,74 +268,163 @@ function ShellEditor({ sessionId, tick }: { sessionId: string; tick: number }) {
   );
 }
 
-function Result({ out }: { out: any }) {
-  const { t } = useI18n();
+function Result({ out, session }: { out: any; session: SessionInfo }) {
+  const { t, lang } = useI18n();
   const r = out.result;
+  const [skillNames, setSkillNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    api<any>("/api/catalog")
+      .then((c) => {
+        const m: Record<string, string> = {};
+        for (const b of c.branches ?? []) for (const sk of b.skills ?? []) m[sk.id] = sk.name;
+        setSkillNames(m);
+      })
+      .catch(() => {});
+  }, [lang]);
+  const pct = r.max ? r.score / r.max : 0;
+  const good = r.items.filter((it: any) => it.earned >= it.points);
+  const missing = r.items.flatMap((it: any) => (it.checks ?? []).filter((c: any) => !c.pass).map((c: any) => ({ ...c, item: it.name, critical: it.critical })));
+  const verdict = r.passed ? t("¡Superado!") : r.criticalFailed ? t("Aún no: falta algo esencial") : pct >= 0.6 ? t("Casi: te falta muy poco") : t("Aún no, pero ya sabes qué falta");
+  const retry = `/lab?id=${encodeURIComponent(session.labId)}`;
   return (
-    <div className="card" style={{ borderColor: r.passed ? "var(--ok)" : "var(--bad)" }}>
-      <h2>{r.passed ? t("Superado") : t("Aún no superado")} — {r.score}/{r.max}</h2>
-      {r.criticalFailed && <p className="error">{t("Ha fallado un criterio crítico.")}</p>}
-      <p className="small">+{out.xp} XP{out.bonus ? ` (+${out.bonus} ${t("de bonificación")}: ${out.bonusReasons?.join(", ")})` : ""}</p>
-      <table>
-        <tbody>
-          {r.items.map((it: any) => (
-            <tr key={it.name}>
-              <td>
-                {it.name} {it.critical && <span className="pill">{t("crítico")}</span>}
-                {it.checks?.filter((c: any) => !c.pass && c.desc).map((c: any, i: number) => (
-                  <div key={i} className="small error">✗ {c.desc}</div>
-                ))}
-              </td>
-              <td style={{ width: 90 }}>{Math.round(it.earned * 10) / 10}/{it.points}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {r.process && (
-        <>
-          <h3>{t("Cómo has trabajado")}</h3>
-          <table>
-            <tbody>
-              {r.process.factors.map((f: any) => (
-                <tr key={f.name}>
-                  <td style={{ width: 140 }}>{label(factor, f.name, t)}</td>
-                  <td><Bar value={f.score * 100} label={label(factor, f.name, t)} /></td>
-                  <td className="small muted">{f.signals?.join("; ")}</td>
-                </tr>
+    <div className="res">
+      <section className="cm-dark res-hero" aria-labelledby="res-title">
+        <div className="cm-ring" role="img" aria-label={t("{n} de {total} puntos", { n: r.score, total: r.max })}>
+          <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+            <circle cx="66" cy="66" r="56" fill="none" stroke="#2A2D35" strokeWidth="12" />
+            <circle cx="66" cy="66" r="56" fill="none" stroke={r.passed ? "#3DBA7E" : "#F2B64C"} strokeWidth="12" strokeLinecap="round" strokeDasharray={`${Math.max(0.001, pct * 352)} 352`} transform="rotate(-90 66 66)" />
+          </svg>
+          <div aria-hidden="true">
+            <strong>{r.score}</strong>
+            <span>{t("de {n}", { n: r.max })}</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minWidth: 0 }}>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="cm-dark-chip accent">+{out.xp} XP</span>
+            {out.bonus ? <span className="cm-dark-chip">+{out.bonus} {t("de bonificación")}</span> : null}
+            {out.tutor && <span className="cm-dark-chip" style={{ color: "#F2B64C" }}>{t("Hecho con el profesor")}</span>}
+          </div>
+          <div className="cm-kick">{session.title}</div>
+          <h1 id="res-title" style={{ margin: 0, color: "#FFFFFF" }}>{verdict}</h1>
+          <p style={{ margin: 0 }}>
+            {r.passed
+              ? out.tutor
+                ? t("Lo has conseguido con ayuda. Repítelo sin el profesor para fijarlo y que cuente del todo.")
+                : t("Lo has resuelto por tu cuenta. Sigue con el siguiente paso de tu ruta.")
+              : t("Abajo tienes qué falta y por qué. Vuelve a intentarlo: cada intento cuenta para aprender.")}
+          </p>
+          <div className="row" style={{ gap: 12, marginTop: 6 }}>
+            {!r.passed ? (
+              <a className="cm-pillbtn primary" href={retry}>{t("Reintentar")}</a>
+            ) : out.tutor ? (
+              <a className="cm-pillbtn primary" href={retry}>{t("Repetir sin profesor")}</a>
+            ) : (
+              <a className="cm-pillbtn primary" href="/dashboard">{t("Siguiente paso")}</a>
+            )}
+            {!r.passed && session.type !== "boss" && !out.tutor && (
+              <a className="cm-pillbtn dark" href={retry + "&tutor=1"}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F2B64C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z" /><path d="M6 11v5c3 2 9 2 12 0v-5" /></svg>
+                {t("Reintentar con profesor")}
+              </a>
+            )}
+            <a className="cm-pillbtn dark" href="/dashboard">{t("Inicio")}</a>
+          </div>
+        </div>
+      </section>
+
+      <div className="res-grid">
+        <section className="res-card" aria-labelledby="res-good">
+          <h2 id="res-good"><span className="res-ico ok" aria-hidden="true">✓</span>{t("Lo que has hecho bien")}</h2>
+          {good.length ? (
+            <ul>
+              {good.map((it: any) => (
+                <li key={it.name}>
+                  <strong>{it.name}</strong>
+                  <span className="muted small">{Math.round(it.earned * 10) / 10}/{it.points} {t("puntos")}</span>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+          ) : (
+            <p className="muted">{t("Todavía nada completo. Empieza por lo que marca el primer objetivo.")}</p>
+          )}
+        </section>
+        <section className="res-card" aria-labelledby="res-miss">
+          <h2 id="res-miss"><span className="res-ico bad" aria-hidden="true">!</span>{t("Lo que falta y por qué")}</h2>
+          {missing.length ? (
+            <ul>
+              {missing.map((c: any, i: number) => (
+                <li key={i}>
+                  <span className="row" style={{ gap: 8 }}>
+                    <strong>{c.desc || c.type}</strong>
+                    {c.critical && <span className="pill bad">{t("esencial")}</span>}
+                  </span>
+                  {c.detail && <span className="res-why">{c.detail}</span>}
+                  <span className="muted small">{c.item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">{t("¡Nada! Has cumplido todas las comprobaciones.")}</p>
+          )}
+        </section>
+      </div>
+
+      {(out.mentor?.length || out.skills?.length) ? (
+        <section className="res-card res-review" aria-labelledby="res-rev">
+          <h2 id="res-rev"><span className="res-ico amber" aria-hidden="true">?</span>{t("Qué repasar")}</h2>
+          {out.mentor?.length ? (
+            <ul>
+              {out.mentor.map((m: string, i: number) => <li key={i}>{m}</li>)}
+            </ul>
+          ) : null}
+          {out.skills?.length ? (
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <span className="muted small">{t("Conceptos de este laboratorio:")}</span>
+              {out.skills.map((sk: string) => (
+                <a key={sk} className="res-skill" href={`/learn?skill=${encodeURIComponent(sk)}`}>{skillNames[sk] ?? sk}</a>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {r.process && (
+        <details className="res-card">
+          <summary><strong>{t("Cómo has trabajado")}</strong> <span className="muted small">{t("diagnóstico, seguridad, coste, comunicación…")}</span></summary>
+          <div className="res-factors">
+            {r.process.factors.map((f: any) => (
+              <div key={f.name}>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <span>{label(factor, f.name, t)}</span>
+                  <span className="muted small">{Math.round(f.score * 100)}%</span>
+                </div>
+                <Bar value={f.score * 100} label={label(factor, f.name, t)} />
+                {f.signals?.length ? <div className="muted small">{f.signals.join("; ")}</div> : null}
+              </div>
+            ))}
+          </div>
           {r.process.blindFixes?.length ? <p className="small warn">{t("Cambios antes de reunir evidencias:")} {r.process.blindFixes.join(", ")}</p> : null}
           {r.process.constraintViolations?.length ? <p className="small error">{t("Restricciones incumplidas:")} {r.process.constraintViolations.join(", ")}</p> : null}
-        </>
+          {r.feedback?.length ? <ul className="small">{r.feedback.map((f: string, i: number) => <li key={i}>{f}</li>)}</ul> : null}
+        </details>
       )}
-      {r.feedback?.length ? <ul className="small">{r.feedback.map((f: string, i: number) => <li key={i}>{f}</li>)}</ul> : null}
-      {out.mentor?.length ? (
-        <>
-          <h3>{t("Mentor")}</h3>
-          <ul className="small">{out.mentor.map((m: string, i: number) => <li key={i}>{m}</li>)}</ul>
-        </>
-      ) : null}
       {out.postmortemReview && (
-        <>
-          <h3>{t("Revisión del post-mortem")}</h3>
+        <section className="res-card">
+          <h2>{t("Revisión del post-mortem")}</h2>
           <Markdown text={out.postmortemReview} />
-        </>
+        </section>
       )}
       {out.company && (
-        <>
-          <h3>Nebula Corporation</h3>
+        <section className="res-card">
+          <h2>Nebula Corporation</h2>
           <p className="small">
             {t("Día {n}.", { n: out.company.day })}{" "}
             {out.company.latentRisks ? t("Quedan {n} riesgo(s) latente(s) en el entorno…", { n: out.company.latentRisks }) : t("Ningún riesgo latente nuevo.")}
           </p>
           <a href="/company">{t("Volver a la empresa →")}</a>
-        </>
+        </section>
       )}
-      <div className="row" style={{ marginTop: 10 }}>
-        <a className="btn secondary" href="/dashboard">{t("Panel")}</a>
-        <a className="btn secondary" href="/catalog">{t("Más laboratorios")}</a>
-      </div>
     </div>
   );
 }
@@ -440,8 +529,8 @@ function Workspace({ session }: { session: SessionInfo }) {
     return (
       <>
         <Nav />
-        <main id="main" className="page" style={{ maxWidth: 900 }}>
-          <Result out={out} />
+        <main id="main" className="page" style={{ maxWidth: 1100 }}>
+          <Result out={out} session={session} />
         </main>
       </>
     );

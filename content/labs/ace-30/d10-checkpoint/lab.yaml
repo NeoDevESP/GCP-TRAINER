@@ -94,6 +94,11 @@ rubric:
     points: 10
     checks:
       - {type: quiz, ratio: 0.8, desc: "Al menos 4 de 5 correctas"}
+tutor:
+  - {match: "@intro", title: "", why: "Punto de control: juntas red, almacenamiento, identidad, Cloud Run y observabilidad. La clave es que cada pieza tenga el mínimo acceso necesario."}
+  - {match: "service-accounts create reports-sa", title: "", why: "Una cuenta de servicio propia para la app: nunca uses la cuenta por defecto, que tiene permisos de más."}
+  - {match: "add-iam-policy-binding gs://assets", title: "", why: "Solo lectura y solo en ese bucket."}
+  - {match: "run deploy reports", title: "", why: "--service-account hace que la app se ejecute con reports-sa, así hereda solo ese permiso de lectura."}
 en:
   title: 'Day 10 · ACE checkpoint: build a mini-stack from scratch'
   summary: Quiz plus a practical build combining VPC, Cloud Run, Storage, IAM and logging.
@@ -153,3 +158,7 @@ en:
     Métrica de errores: Error metric
     Test del punto de control: Checkpoint quiz
     Al menos 4 de 5 correctas: At least 4 of 5 correct
+    "Punto de control: juntas red, almacenamiento, identidad, Cloud Run y observabilidad. La clave es que cada pieza tenga el mínimo acceso necesario.": "Checkpoint: networking, storage, identity, Cloud Run and observability together. The key is that each piece gets the minimum access it needs."
+    "Una cuenta de servicio propia para la app: nunca uses la cuenta por defecto, que tiene permisos de más.": "A dedicated service account for the app: never use the default account, it has too many permissions."
+    "Solo lectura y solo en ese bucket.": "Read-only and only on that bucket."
+    "--service-account hace que la app se ejecute con reports-sa, así hereda solo ese permiso de lectura.": "--service-account runs the app as reports-sa so it only inherits that read permission."
