@@ -51,19 +51,19 @@ concepts:
     tip: ["Alta disponibilidad = varias zonas; recuperación ante desastres = varias regiones.", "High availability = several zones; disaster recovery = several regions."]
 scenarios:
   - q: ["Quieres dar a todo el equipo de datos acceso a 12 proyectos de analítica, y a los que se creen en el futuro.", "You want to give the whole data team access to 12 analytics projects, and to future ones."]
-    options: [["Conceder el rol en una carpeta que contenga esos proyectos", "Grant the role on a folder containing those projects"], ["Conceder el rol en cada proyecto", "Grant the role on each project"], ["Crear un rol personalizado por proyecto", "Create a custom role per project"]]
+    options: [["Conceder el rol en una carpeta que contenga esos proyectos", "Grant the role on a folder containing those projects"], ["Conceder el rol en cada uno de los 12 proyectos", "Grant the role on each of the 12 projects"], ["Conceder el rol en la organización", "Grant the role at the organization"], ["Crear un rol personalizado y asignarlo proyecto a proyecto", "Create a custom role and assign it project by project"]]
     answer: 0
     why: ["La herencia hace que todo proyecto de la carpeta, presente o futuro, reciba el permiso.", "Inheritance means every project in the folder, now or later, gets the permission."]
   - q: ["Finanzas quiere un correo cuando el gasto mensual de un proyecto supere 500 €.", "Finance wants an email when a project's monthly spending passes €500."]
-    options: [["Un presupuesto con alertas", "A budget with alerts"], ["Una cuota de API", "An API quota"], ["Una alerta de Cloud Monitoring sobre la CPU", "A Cloud Monitoring alert on CPU"]]
+    options: [["Un presupuesto con alertas", "A budget with alerts"], ["Una cuota de API sobre el proyecto", "An API quota on the project"], ["Una alerta de Cloud Monitoring sobre el uso de CPU", "A Cloud Monitoring alert on CPU usage"], ["Un límite de gasto en la cuenta de facturación que para los recursos", "A billing account spending cap that stops resources"]]
     answer: 0
     why: ["Los presupuestos de facturación envían avisos al llegar a los umbrales.", "Billing budgets send notifications when thresholds are reached."]
   - q: ["Un comando falla con «Compute Engine API has not been used in project».", "A command fails with \"Compute Engine API has not been used in project\"."]
-    options: [["Habilitar la API compute.googleapis.com", "Enable the compute.googleapis.com API"], ["Pedir más cuota", "Request more quota"], ["Darte el rol Owner", "Grant yourself Owner"]]
+    options: [["Habilitar la API compute.googleapis.com", "Enable the compute.googleapis.com API"], ["Solicitar aumento de cuota de Compute Engine", "Request a Compute Engine quota increase"], ["Concederte Compute Admin", "Grant yourself Compute Admin"], ["Vincular el proyecto a otra cuenta de facturación", "Link the project to another billing account"]]
     answer: 0
     why: ["El mensaje indica que la API no está habilitada en el proyecto.", "The message says the API is not enabled in the project."]
   - q: ["Trabajas cada día con un proyecto de pruebas y otro de producción, con cuentas distintas.", "You work daily with a test project and a production project, with different accounts."]
-    options: [["gcloud config configurations, una por entorno", "gcloud config configurations, one per environment"], ["Reinstalar gcloud", "Reinstall gcloud"], ["Usar siempre --project en cada comando", "Always pass --project on every command"]]
+    options: [["gcloud config configurations, una por entorno", "gcloud config configurations, one per environment"], ["Usar siempre --project y --account en cada comando", "Always pass --project and --account on each command"], ["Instalar gcloud dos veces en carpetas distintas", "Install gcloud twice in different folders"], ["gcloud auth login cada vez que cambias", "gcloud auth login each time you switch"]]
     answer: 0
     why: ["Las configuraciones guardan cuenta, proyecto y región y se cambian con un comando.", "Configurations store account, project and region and are switched with one command."]
 quiz:
@@ -72,7 +72,7 @@ quiz:
     answer: 0
     why: ["El ID es único y permanente; el nombre y las etiquetas se editan.", "The ID is unique and permanent; the name and labels are editable."]
   - q: ["Si das Editor a alguien en una carpeta, ¿puedes quitárselo en un proyecto de esa carpeta?", "If you grant Editor on a folder, can you remove it on a project inside that folder?"]
-    options: [["No, la política efectiva es la unión de lo heredado", "No, the effective policy is the union of inherited grants"], ["Sí, con un binding en el proyecto", "Yes, with a binding on the project"], ["Sí, borrando el proyecto", "Yes, by deleting the project"]]
+    options: [["No, la política efectiva es la unión de lo heredado", "No, the effective policy is the union of inherited grants"], ["Sí, con un binding sin el rol en el proyecto", "Yes, with a binding without the role on the project"], ["Sí, con una condición IAM en el proyecto que lo excluya", "Yes, with an IAM condition on the project excluding them"], ["Sí, moviendo la carpeta a otra organización", "Yes, by moving the folder to another organization"]]
     answer: 0
     why: ["IAM hereda hacia abajo y un nivel inferior no puede restar permisos (salvo políticas de denegación).", "IAM inherits downwards and a lower level cannot subtract permissions (except with deny policies)."]
   - q: ["¿Qué recurso es zonal?", "Which resource is zonal?"]
@@ -80,10 +80,10 @@ quiz:
     answer: 0
     why: ["Las VMs y sus discos viven en una zona; la VPC es global y Cloud Run regional.", "VMs and their disks live in one zone; VPC is global and Cloud Run regional."]
   - q: ["¿Un presupuesto de facturación detiene los recursos al llegar al límite?", "Does a billing budget stop resources when the limit is reached?"]
-    options: [["No, solo avisa (se puede automatizar con Pub/Sub)", "No, it only notifies (can be automated via Pub/Sub)"], ["Sí, siempre", "Yes, always"], ["Solo en proyectos nuevos", "Only in new projects"]]
+    options: [["No, solo avisa (se puede automatizar con Pub/Sub)", "No, it only notifies (can be automated via Pub/Sub)"], ["Sí, apaga los recursos al 100 %", "Yes, it shuts resources down at 100%"], ["Sí, pero solo en proyectos con Compute Engine", "Yes, but only in projects with Compute Engine"], ["Solo si el presupuesto está en la organización", "Only if the budget is set at the organization"]]
     answer: 0
     why: ["Los presupuestos notifican; para cortar gasto hay que automatizarlo con sus notificaciones.", "Budgets notify; to stop spending you must automate it from their notifications."]
   - q: ["¿Dónde analizarías el coste por etiqueta de los últimos 6 meses?", "Where would you analyse cost by label over the last 6 months?"]
-    options: [["Exportando la facturación a BigQuery", "Exporting billing to BigQuery"], ["En Cloud Logging", "In Cloud Logging"], ["En la página de cuotas", "On the quotas page"]]
+    options: [["Exportando la facturación a BigQuery", "Exporting billing to BigQuery"], ["En el informe de facturación de la consola, que guarda solo 30 días", "In the console billing report, which keeps only 30 days"], ["En Cloud Logging con un filtro por etiqueta", "In Cloud Logging with a label filter"], ["En Recommender", "In Recommender"]]
     answer: 0
     why: ["La exportación a BigQuery permite consultas SQL sobre el detalle de costes.", "The BigQuery export allows SQL queries over detailed costs."]

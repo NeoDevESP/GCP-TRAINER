@@ -50,19 +50,19 @@ concepts:
     tip: ["«¿Quién borró la VM?» → registros de auditoría de actividad de administrador.", "\"Who deleted the VM?\" → Admin Activity audit logs."]
 scenarios:
   - q: ["Una aplicación en Cloud Run debe leer un único bucket.", "A Cloud Run app must read a single bucket."]
-    options: [["Cuenta de servicio propia con Storage Object Viewer en ese bucket", "Its own service account with Storage Object Viewer on that bucket"], ["Cuenta por defecto con Editor", "Default account with Editor"], ["Storage Admin en el proyecto", "Storage Admin on the project"]]
+    options: [["Cuenta de servicio propia con Storage Object Viewer en ese bucket", "Its own service account with Storage Object Viewer on that bucket"], ["Cuenta de servicio propia con Storage Object Viewer en el proyecto", "Its own service account with Storage Object Viewer on the project"], ["Cuenta de servicio predeterminada con Storage Object Viewer en el bucket", "Default service account with Storage Object Viewer on the bucket"], ["Cuenta de servicio propia con Storage Admin en ese bucket", "Its own service account with Storage Admin on that bucket"]]
     answer: 0
     why: ["Identidad dedicada + rol mínimo + ámbito del recurso = mínimo privilegio.", "Dedicated identity + minimal role + resource scope = least privilege."]
   - q: ["Un pipeline de GitHub Actions debe desplegar en Google Cloud sin guardar claves.", "A GitHub Actions pipeline must deploy to Google Cloud without storing keys."]
-    options: [["Workload Identity Federation", "Workload Identity Federation"], ["Clave JSON en un secreto de GitHub", "JSON key in a GitHub secret"], ["Usuario personal", "A personal user"]]
+    options: [["Workload Identity Federation", "Workload Identity Federation"], ["Clave JSON de una cuenta de servicio guardada en un secreto de GitHub", "Service account JSON key stored in a GitHub secret"], ["Suplantación de cuenta de servicio desde un usuario personal", "Service account impersonation from a personal user"], ["OAuth con la cuenta de un administrador", "OAuth with an administrator's account"]]
     answer: 0
     why: ["La federación intercambia el token de GitHub por credenciales temporales.", "Federation exchanges the GitHub token for temporary credentials."]
   - q: ["Seguridad quiere impedir en toda la organización que se creen VMs con IP pública.", "Security wants to prevent public-IP VMs across the organization."]
-    options: [["Política de organización (vmExternalIpAccess)", "Organization policy (vmExternalIpAccess)"], ["Quitar Compute Admin a todos", "Remove Compute Admin from everyone"], ["Una regla de cortafuegos", "A firewall rule"]]
+    options: [["Política de organización (vmExternalIpAccess)", "Organization policy (vmExternalIpAccess)"], ["Una regla de cortafuegos jerárquica que bloquee la salida", "A hierarchical firewall rule blocking egress"], ["Quitar Compute Admin a todos los desarrolladores", "Remove Compute Admin from all developers"], ["Una política de denegación sobre compute.instances.create", "A deny policy on compute.instances.create"]]
     answer: 0
     why: ["Las políticas de organización limitan configuraciones para todos.", "Organization policies limit configurations for everyone."]
   - q: ["Un auditor externo necesita ver la configuración durante dos semanas.", "An external auditor needs to view the configuration for two weeks."]
-    options: [["Rol de lectura con condición IAM de fecha", "Viewer-type role with a date IAM condition"], ["Owner y recordar quitarlo", "Owner and remember to remove it"], ["Compartir tu contraseña", "Share your password"]]
+    options: [["Rol de lectura con condición IAM de fecha", "Viewer-type role with a date IAM condition"], ["Viewer en el proyecto y recordar quitarlo", "Project Viewer and remember to remove it"], ["Security Reviewer con Privileged Access Manager sin caducidad", "Security Reviewer via Privileged Access Manager without expiry"], ["Una cuenta de servicio con Viewer y su clave JSON", "A service account with Viewer and its JSON key"]]
     answer: 0
     why: ["La condición caduca sola: no depende de que alguien se acuerde.", "The condition expires on its own: nobody has to remember."]
 quiz:
@@ -71,18 +71,18 @@ quiz:
     answer: 0
     why: ["Owner además gestiona IAM y facturación; Viewer solo lee.", "Owner also manages IAM and billing; Viewer only reads."]
   - q: ["¿Qué registro de auditoría está siempre activo y no se puede desactivar?", "Which audit log is always on and cannot be disabled?"]
-    options: [["Admin Activity", "Admin Activity"], ["Data Access", "Data Access"], ["VPC Flow Logs", "VPC Flow Logs"]]
+    options: [["Admin Activity", "Admin Activity"], ["Data Access", "Data Access"], ["VPC Flow Logs", "VPC Flow Logs"], ["Access Transparency", "Access Transparency"]]
     answer: 0
     why: ["Admin Activity registra cambios de configuración y siempre está activo.", "Admin Activity records configuration changes and is always on."]
   - q: ["¿Qué rol necesitas para desplegar una VM que se ejecute como una cuenta de servicio?", "Which role do you need to deploy a VM that runs as a service account?"]
-    options: [["Service Account User sobre esa cuenta", "Service Account User on that account"], ["Service Account Key Admin", "Service Account Key Admin"], ["Security Reviewer", "Security Reviewer"]]
+    options: [["Service Account User sobre esa cuenta", "Service Account User on that account"], ["Service Account Token Creator sobre esa cuenta", "Service Account Token Creator on that account"], ["Service Account Admin en el proyecto", "Service Account Admin on the project"], ["Compute Viewer", "Compute Viewer"]]
     answer: 0
     why: ["actAs (Service Account User) permite asignar la cuenta a un recurso.", "actAs (Service Account User) lets you attach the account to a resource."]
   - q: ["¿Cuál es la diferencia entre IAM y las políticas de organización?", "What is the difference between IAM and organization policies?"]
-    options: [["IAM dice quién; la política de organización limita qué configuraciones se permiten", "IAM says who; org policy limits which configurations are allowed"], ["Son lo mismo", "They are the same"], ["La política de organización da permisos", "Org policy grants permissions"]]
+    options: [["IAM dice quién; la política de organización limita qué configuraciones se permiten", "IAM says who; org policy limits which configurations are allowed"], ["IAM limita configuraciones; la política de organización concede roles", "IAM limits configurations; org policy grants roles"], ["Las políticas de organización solo se aplican a proyectos nuevos", "Organization policies only apply to new projects"], ["IAM se hereda y la política de organización no", "IAM is inherited and organization policy is not"]]
     answer: 0
     why: ["Se complementan: una no concede permisos, la otra no limita configuraciones.", "They complement each other: one grants no permissions, the other limits no configurations."]
   - q: ["¿Qué es preferible a descargar claves JSON de cuentas de servicio?", "What is preferable to downloading service account JSON keys?"]
-    options: [["Cuentas asociadas, suplantación o federación", "Attached accounts, impersonation or federation"], ["Rotar la clave cada año", "Rotate the key yearly"], ["Guardar la clave en el repositorio", "Store the key in the repo"]]
+    options: [["Cuentas asociadas, suplantación o federación", "Attached accounts, impersonation or federation"], ["Rotar las claves JSON cada 90 días", "Rotate JSON keys every 90 days"], ["Guardar las claves en Secret Manager y seguir usándolas", "Store the keys in Secret Manager and keep using them"], ["Usar claves JSON de cuentas de usuario", "Use user account JSON keys"]]
     answer: 0
     why: ["Las claves de larga duración son el mayor riesgo de filtración.", "Long-lived keys are the biggest leak risk."]

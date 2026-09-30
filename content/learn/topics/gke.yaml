@@ -51,39 +51,39 @@ concepts:
     tip: ["Aprende a asociar cada estado de pod con su causa típica.", "Learn to map each pod status to its typical cause."]
 scenarios:
   - q: ["Un equipo pequeño quiere Kubernetes sin ocuparse de parches ni tamaño de nodos.", "A small team wants Kubernetes without handling patches or node sizing."]
-    options: [["GKE Autopilot", "GKE Autopilot"], ["GKE Standard", "GKE Standard"], ["Kubernetes en VMs propias", "Kubernetes on your own VMs"]]
+    options: [["GKE Autopilot", "GKE Autopilot"], ["GKE Standard con autoescalado de clúster", "GKE Standard with cluster autoscaling"], ["GKE Standard con actualizaciones automáticas", "GKE Standard with auto-upgrades"], ["Cloud Run for Anthos en VMs propias", "Cloud Run for Anthos on your own VMs"]]
     answer: 0
     why: ["Autopilot gestiona los nodos por ti.", "Autopilot manages nodes for you."]
   - q: ["Los pods del frontend deben leer un bucket sin claves JSON.", "Frontend pods must read a bucket without JSON keys."]
-    options: [["Workload Identity", "Workload Identity"], ["Clave montada como Secret", "Key mounted as a Secret"], ["Cuenta de servicio del nodo con Editor", "Node service account with Editor"]]
+    options: [["Workload Identity", "Workload Identity"], ["Clave JSON montada como Secret de Kubernetes", "JSON key mounted as a Kubernetes Secret"], ["Clave JSON guardada en un ConfigMap", "JSON key stored in a ConfigMap"], ["Scopes de acceso de la VM con storage-ro", "VM access scopes with storage-ro"]]
     answer: 0
     why: ["Da identidad por aplicación, sin claves de larga duración.", "It gives per-app identity without long-lived keys."]
   - q: ["Los pods quedan en Pending cuando sube la carga.", "Pods stay Pending when load rises."]
-    options: [["Activar el autoescalador de clúster", "Enable the cluster autoscaler"], ["Subir las réplicas del HPA", "Raise HPA replicas"], ["Borrar el Service", "Delete the Service"]]
+    options: [["Activar el autoescalador de clúster", "Enable the cluster autoscaler"], ["Aumentar maxReplicas del HPA", "Raise the HPA maxReplicas"], ["Añadir un PodDisruptionBudget", "Add a PodDisruptionBudget"], ["Activar el VPA en modo recomendación", "Enable VPA in recommendation mode"]]
     answer: 0
     why: ["Pending por falta de sitio se resuelve añadiendo nodos.", "Pending for lack of room is fixed by adding nodes."]
   - q: ["Necesitas un agente de monitorización en cada nodo del clúster.", "You need a monitoring agent on every node in the cluster."]
-    options: [["DaemonSet", "DaemonSet"], ["Deployment con 3 réplicas", "Deployment with 3 replicas"], ["CronJob", "CronJob"]]
+    options: [["DaemonSet", "DaemonSet"], ["Deployment con una réplica por nodo", "Deployment with one replica per node"], ["StatefulSet", "StatefulSet"], ["CronJob cada minuto", "CronJob every minute"]]
     answer: 0
     why: ["El DaemonSet ejecuta exactamente un pod por nodo.", "A DaemonSet runs exactly one pod per node."]
 quiz:
   - q: ["¿Qué tipo de Service expone una IP externa?", "Which Service type exposes an external IP?"]
-    options: [["LoadBalancer", "LoadBalancer"], ["ClusterIP", "ClusterIP"], ["Headless", "Headless"]]
+    options: [["LoadBalancer", "LoadBalancer"], ["ClusterIP", "ClusterIP"], ["Headless", "Headless"], ["ExternalName", "ExternalName"]]
     answer: 0
     why: ["LoadBalancer crea un balanceador de red de Google Cloud.", "LoadBalancer creates a Google Cloud network load balancer."]
   - q: ["Un pod está en CrashLoopBackOff. ¿Qué comando miras primero?", "A pod is in CrashLoopBackOff. Which command do you check first?"]
-    options: [["kubectl logs --previous", "kubectl logs --previous"], ["kubectl scale", "kubectl scale"], ["gcloud compute ssh", "gcloud compute ssh"]]
+    options: [["kubectl logs --previous", "kubectl logs --previous"], ["kubectl describe service", "kubectl describe service"], ["kubectl get nodes", "kubectl get nodes"], ["kubectl rollout restart", "kubectl rollout restart"]]
     answer: 0
     why: ["Muestra la salida del contenedor que acaba de morir.", "It shows the output of the container that just died."]
   - q: ["¿Qué sonda impide que un pod reciba tráfico antes de estar listo?", "Which probe stops a pod from receiving traffic before it is ready?"]
-    options: [["Readiness", "Readiness"], ["Liveness", "Liveness"], ["Ninguna", "None"]]
+    options: [["Readiness", "Readiness"], ["Liveness", "Liveness"], ["Startup", "Startup"], ["PodDisruptionBudget", "PodDisruptionBudget"]]
     answer: 0
     why: ["Liveness reinicia; readiness quita o añade el pod al Service.", "Liveness restarts; readiness removes or adds the pod to the Service."]
   - q: ["¿Qué necesita el HPA para escalar por CPU?", "What does HPA need to scale on CPU?"]
-    options: [["Requests de CPU en los contenedores", "CPU requests on containers"], ["Un clúster regional", "A regional cluster"], ["Un Ingress", "An Ingress"]]
+    options: [["Requests de CPU en los contenedores", "CPU requests on containers"], ["Límites de memoria en los contenedores", "Memory limits on containers"], ["El autoescalador de clúster activado", "The cluster autoscaler enabled"], ["Un clúster regional", "A regional cluster"]]
     answer: 0
     why: ["El porcentaje se calcula sobre lo pedido (requests).", "The percentage is computed against the request."]
   - q: ["Estado OOMKilled significa…", "OOMKilled status means…"]
-    options: [["El contenedor superó su límite de memoria", "The container exceeded its memory limit"], ["No encuentra la imagen", "The image is not found"], ["El nodo no tiene CPU", "The node has no CPU"]]
+    options: [["El contenedor superó su límite de memoria", "The container exceeded its memory limit"], ["No encuentra la imagen en el registro", "The image cannot be found in the registry"], ["El nodo se quedó sin CPU", "The node ran out of CPU"], ["Falló la sonda liveness", "The liveness probe failed"]]
     answer: 0
     why: ["Sube el límite o corrige el consumo de memoria.", "Raise the limit or fix memory usage."]

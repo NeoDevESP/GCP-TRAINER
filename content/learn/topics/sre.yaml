@@ -68,27 +68,27 @@ concepts:
     tip: ["Evento comercial previsto (Black Friday) → pruebas de carga y reserva de capacidad con antelación.", "Planned commercial event (Black Friday) → load tests and capacity reservation in advance."]
 scenarios:
   - q: ["Desarrollo quiere lanzar cada día y operaciones quiere congelar cambios porque hubo caídas. ¿Qué propones?", "Dev wants to ship daily and ops wants a change freeze after outages. What do you propose?"]
-    options: [["Definir SLOs y una política de presupuesto de error", "Define SLOs and an error budget policy"], ["Prohibir los lanzamientos en viernes", "Ban Friday releases"], ["Añadir más servidores", "Add more servers"]]
+    options: [["Definir SLOs y una política de presupuesto de error", "Define SLOs and an error budget policy"], ["Prohibir los despliegues en viernes", "Ban Friday deployments"], ["Exigir aprobación del director para cada lanzamiento", "Require director approval for every release"], ["Lanzar solo una vez al mes", "Release only once a month"]]
     answer: 0
     why: ["El presupuesto convierte la discusión en datos: si hay margen se lanza, si no, fiabilidad.", "The budget turns the debate into data: ship if there is margin, focus on reliability if not."]
   - q: ["El equipo de guardia recibe 200 alertas a la semana y la mayoría no requieren acción.", "The on-call team gets 200 alerts a week and most need no action."]
-    options: [["Alertar por síntomas visibles y burn rate del SLO", "Alert on user-visible symptoms and SLO burn rate"], ["Contratar más personas de guardia", "Hire more on-call staff"], ["Silenciar todas las alertas de noche", "Mute all alerts at night"]]
+    options: [["Alertar por síntomas visibles y burn rate del SLO", "Alert on user-visible symptoms and SLO burn rate"], ["Silenciar las alertas nocturnas", "Mute night-time alerts"], ["Añadir más personas a la rotación de guardia", "Add more people to the on-call rotation"], ["Subir los umbrales de CPU y memoria", "Raise CPU and memory thresholds"]]
     answer: 0
     why: ["Las alertas deben ser urgentes, accionables y ligadas al impacto en usuarios.", "Alerts must be urgent, actionable and tied to user impact."]
   - q: ["Un servicio ha consumido el 100 % de su presupuesto de error del mes a mitad de mes.", "A service has used 100% of its monthly error budget by mid-month."]
-    options: [["Aplicar la política: pausar lanzamientos no críticos y priorizar fiabilidad", "Apply the policy: pause non-critical launches and prioritize reliability"], ["Subir el SLO para el mes que viene", "Raise next month's SLO"], ["Ignorarlo hasta fin de mes", "Ignore it until month end"]]
+    options: [["Aplicar la política: pausar lanzamientos no críticos y priorizar fiabilidad", "Apply the policy: pause non-critical launches and prioritize reliability"], ["Subir el SLO para el mes siguiente", "Raise the SLO for next month"], ["Bajar el SLO para no incumplirlo", "Lower the SLO so it isn't breached"], ["Seguir lanzando y revisarlo a fin de mes", "Keep releasing and review at month end"]]
     answer: 0
     why: ["Es exactamente para lo que sirve la política acordada.", "That is exactly what the agreed policy is for."]
   - q: ["Tras un despliegue sube la latencia p99 y los usuarios se quejan. Eres el Incident Commander.", "After a deploy p99 latency rises and users complain. You are Incident Commander."]
-    options: [["Ordenar el rollback y comunicar el estado", "Order a rollback and communicate status"], ["Depurar el código en producción", "Debug the code in production"], ["Esperar a tener la causa raíz", "Wait for the root cause"]]
+    options: [["Ordenar el rollback y comunicar el estado", "Order a rollback and communicate status"], ["Depurar el código en producción", "Debug the code in production"], ["Escalar el servicio y seguir observando", "Scale the service and keep watching"], ["Esperar a tener la causa raíz antes de actuar", "Wait for the root cause before acting"]]
     answer: 0
     why: ["Mitigar primero; la causa se investiga con el servicio restaurado.", "Mitigate first; investigate the cause once service is restored."]
   - q: ["¿Qué SLI representa mejor la experiencia de una API pública?", "Which SLI best represents a public API's user experience?"]
-    options: [["% de peticiones con respuesta correcta en menos de 300 ms medido en el balanceador", "% of requests answered successfully under 300 ms measured at the load balancer"], ["Uso medio de CPU de las VMs", "Average VM CPU usage"], ["Número de pods en ejecución", "Number of running pods"]]
+    options: [["% de peticiones con respuesta correcta en menos de 300 ms medido en el balanceador", "% of requests answered successfully under 300 ms measured at the load balancer"], ["Uso medio de CPU de las VMs", "Average VM CPU usage"], ["Número de pods en ejecución", "Number of running pods"], ["Tiempo medio entre despliegues", "Mean time between deployments"]]
     answer: 0
     why: ["Mide éxito y velocidad desde el punto de vista del cliente.", "It measures success and speed from the client's point of view."]
   - q: ["Cada lunes un ingeniero pasa 3 horas rotando certificados a mano.", "Every Monday an engineer spends 3 hours rotating certificates by hand."]
-    options: [["Es toil: automatizarlo (p. ej. certificados gestionados)", "It is toil: automate it (e.g. managed certificates)"], ["Documentarlo mejor", "Document it better"], ["Hacerlo cada dos semanas", "Do it every two weeks"]]
+    options: [["Es toil: automatizarlo (p. ej. certificados gestionados)", "It is toil: automate it (e.g. managed certificates)"], ["Documentarlo mejor en un runbook", "Document it better in a runbook"], ["Rotar entre varias personas", "Rotate it among several people"], ["Hacerlo cada dos semanas", "Do it every two weeks"]]
     answer: 0
     why: ["Manual, repetitivo y automatizable: la definición de toil.", "Manual, repetitive and automatable: the definition of toil."]
 quiz:
@@ -97,11 +97,11 @@ quiz:
     answer: 0
     why: ["0,05 % de 43.200 minutos ≈ 21,6 minutos.", "0.05% of 43,200 minutes ≈ 21.6 minutes."]
   - q: ["¿Qué relación debe haber entre SLO y SLA?", "What relationship should there be between SLO and SLA?"]
-    options: [["El SLO más exigente que el SLA", "SLO stricter than the SLA"], ["El SLA más exigente que el SLO", "SLA stricter than the SLO"], ["Iguales siempre", "Always equal"]]
+    options: [["El SLO más exigente que el SLA", "SLO stricter than the SLA"], ["El SLA más exigente que el SLO", "SLA stricter than the SLO"], ["Deben ser siempre iguales", "They must always be equal"], ["No tienen relación", "They are unrelated"]]
     answer: 0
     why: ["Así detectas problemas antes de incumplir el contrato.", "That way you catch problems before breaching the contract."]
   - q: ["¿Qué porcentaje máximo de tiempo recomienda SRE dedicar a toil?", "What maximum share of time does SRE recommend for toil?"]
-    options: [["50 %", "50%"], ["10 %", "10%"], ["90 %", "90%"]]
+    options: [["50 %", "50%"], ["10 %", "10%"], ["25 %", "25%"], ["75 %", "75%"]]
     answer: 0
     why: ["El resto debe ir a ingeniería que reduzca el toil futuro.", "The rest should go to engineering that reduces future toil."]
   - q: ["¿Qué debe incluir un postmortem? (Elige 2)", "What should a postmortem include? (Choose 2)"]
@@ -109,18 +109,18 @@ quiz:
     answers: [0, 1]
     why: ["Sin culpas: hechos, causas y mejoras concretas.", "Blameless: facts, causes and concrete improvements."]
   - q: ["¿Quién coordina un incidente y delega tareas?", "Who coordinates an incident and delegates tasks?"]
-    options: [["Incident Commander", "Incident Commander"], ["El último que desplegó", "Whoever deployed last"], ["El director de producto", "The product director"]]
+    options: [["Incident Commander", "Incident Commander"], ["El último ingeniero que desplegó", "The last engineer who deployed"], ["El responsable de comunicaciones", "The communications lead"], ["El jefe del equipo afectado, siempre", "The affected team's manager, always"]]
     answer: 0
     why: ["El IC coordina; operaciones ejecuta; comunicaciones informa.", "The IC coordinates; operations executes; communications informs."]
   - q: ["¿Qué alerta debe despertar a alguien de madrugada?", "Which alert should wake someone up at night?"]
-    options: [["Consumo rápido del presupuesto de error", "Fast error budget burn"], ["Un disco al 60 %", "A disk at 60%"], ["Un pod reiniciado una vez", "A pod restarted once"]]
+    options: [["Consumo rápido del presupuesto de error", "Fast error budget burn"], ["Un disco al 70 %", "A disk at 70%"], ["Consumo lento del presupuesto de error", "Slow error budget burn"], ["Un pod reiniciado una vez", "A pod restarted once"]]
     answer: 0
     why: ["Solo lo urgente y con impacto en usuarios merece un aviso inmediato.", "Only urgent, user-impacting issues deserve an immediate page."]
   - q: ["¿Qué técnica separa desplegar el código de activar la funcionalidad?", "Which technique separates deploying code from enabling the feature?"]
-    options: [["Feature flags", "Feature flags"], ["Blue/green", "Blue/green"], ["Snapshots", "Snapshots"]]
+    options: [["Feature flags", "Feature flags"], ["Blue/green", "Blue/green"], ["Canary", "Canary"], ["Rolling update", "Rolling update"]]
     answer: 0
     why: ["Permite activar/desactivar sin volver a desplegar.", "It lets you switch on/off without redeploying."]
   - q: ["Ante una sobrecarga imprevista, ¿qué protege a la mayoría de usuarios?", "Under unexpected overload, what protects most users?"]
-    options: [["Limitación de carga y degradación elegante", "Load shedding and graceful degradation"], ["Reiniciar todos los servidores", "Restart every server"], ["Desactivar la supervisión", "Disable monitoring"]]
+    options: [["Limitación de carga y degradación elegante", "Load shedding and graceful degradation"], ["Reiniciar todos los servidores", "Restart every server"], ["Aumentar los tiempos de espera de los clientes", "Increase client timeouts"], ["Reintentar sin límite desde los clientes", "Retry without limits from clients"]]
     answer: 0
     why: ["Mejor servir algo a muchos que nada a todos.", "Better to serve something to many than nothing to all."]

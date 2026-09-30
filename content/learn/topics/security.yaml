@@ -49,39 +49,39 @@ concepts:
     tip: ["«Empleados acceden a una app interna sin VPN» → IAP (modelo de confianza cero).", "\"Employees access an internal app without VPN\" → IAP (zero trust)."]
 scenarios:
   - q: ["Una app usa una clave de API de pago que ahora está en una variable de entorno visible.", "An app uses a payment API key currently in a visible environment variable."]
-    options: [["Rotarla y guardarla en Secret Manager", "Rotate it and store it in Secret Manager"], ["Cifrarla en base64", "Encode it in base64"], ["Moverla al código", "Move it to the code"]]
+    options: [["Rotarla y guardarla en Secret Manager", "Rotate it and store it in Secret Manager"], ["Moverla a Secret Manager sin rotarla", "Move it to Secret Manager without rotating it"], ["Cifrarla con Cloud KMS y dejarla en la variable", "Encrypt it with Cloud KMS and keep it in the variable"], ["Restringir quién puede ver la configuración del servicio", "Restrict who can view the service configuration"]]
     answer: 0
     why: ["Ya está expuesta: se rota, y la nueva vive en Secret Manager.", "It is already exposed: rotate it and keep the new one in Secret Manager."]
   - q: ["Una web pública recibe ataques de inyección SQL.", "A public website is receiving SQL injection attacks."]
-    options: [["Cloud Armor con reglas WAF", "Cloud Armor with WAF rules"], ["Cloud NAT", "Cloud NAT"], ["VPC Service Controls", "VPC Service Controls"]]
+    options: [["Cloud Armor con reglas WAF", "Cloud Armor with WAF rules"], ["VPC Service Controls", "VPC Service Controls"], ["Identity-Aware Proxy", "Identity-Aware Proxy"], ["Reglas de cortafuegos de la VPC", "VPC firewall rules"]]
     answer: 0
     why: ["Cloud Armor filtra patrones de ataque web en el balanceador.", "Cloud Armor filters web attack patterns at the load balancer."]
   - q: ["Un banco teme que alguien con acceso copie datos de BigQuery a un proyecto personal.", "A bank fears someone with access copies BigQuery data to a personal project."]
-    options: [["VPC Service Controls", "VPC Service Controls"], ["CMEK", "CMEK"], ["Cloud Armor", "Cloud Armor"]]
+    options: [["VPC Service Controls", "VPC Service Controls"], ["CMEK con Cloud KMS", "CMEK with Cloud KMS"], ["Quitar el rol BigQuery Data Viewer", "Remove the BigQuery Data Viewer role"], ["Sensitive Data Protection", "Sensitive Data Protection"]]
     answer: 0
     why: ["El perímetro bloquea mover datos fuera, aunque IAM lo permita.", "The perimeter blocks moving data out, even if IAM allows it."]
   - q: ["Hay que poder «apagar» el acceso a los datos de un bucket en caso de brecha.", "You must be able to \"switch off\" access to a bucket's data after a breach."]
-    options: [["CMEK: desactivar la clave en Cloud KMS", "CMEK: disable the key in Cloud KMS"], ["Borrar el proyecto", "Delete the project"], ["Cambiar la clase de almacenamiento", "Change the storage class"]]
+    options: [["CMEK: desactivar la clave en Cloud KMS", "CMEK: disable the key in Cloud KMS"], ["Activar el versionado del bucket", "Enable bucket versioning"], ["Cambiar a CSEK", "Switch to CSEK"], ["Una política de retención bloqueada", "A locked retention policy"]]
     answer: 0
     why: ["Sin la clave, los datos cifrados son ilegibles.", "Without the key the encrypted data is unreadable."]
 quiz:
   - q: ["¿Los datos en Google Cloud están cifrados si no haces nada?", "Is data in Google Cloud encrypted if you do nothing?"]
-    options: [["Sí, siempre en reposo con claves de Google", "Yes, always at rest with Google keys"], ["No", "No"], ["Solo en Cloud Storage", "Only in Cloud Storage"]]
+    options: [["Sí, siempre en reposo con claves de Google", "Yes, always at rest with Google keys"], ["Solo si activas CMEK", "Only if you enable CMEK"], ["Solo en tránsito, no en reposo", "Only in transit, not at rest"], ["Solo en Cloud Storage y BigQuery", "Only in Cloud Storage and BigQuery"]]
     answer: 0
     why: ["El cifrado en reposo es por defecto; CMEK añade control.", "Encryption at rest is by default; CMEK adds control."]
   - q: ["¿Quién necesita el rol Encrypter/Decrypter para que Cloud Storage use tu CMEK?", "Who needs Encrypter/Decrypter for Cloud Storage to use your CMEK?"]
-    options: [["El agente de servicio de Cloud Storage", "The Cloud Storage service agent"], ["Cada usuario", "Each user"], ["Nadie", "Nobody"]]
+    options: [["El agente de servicio de Cloud Storage", "The Cloud Storage service agent"], ["Cada usuario que lee los objetos", "Each user reading the objects"], ["La cuenta de servicio predeterminada de Compute Engine", "The Compute Engine default service account"], ["El administrador del bucket", "The bucket administrator"]]
     answer: 0
     why: ["El servicio cifra en tu nombre con su agente de servicio.", "The service encrypts on your behalf with its service agent."]
   - q: ["¿Qué rol permite leer el valor de un secreto?", "Which role allows reading a secret's value?"]
-    options: [["Secret Manager Secret Accessor", "Secret Manager Secret Accessor"], ["Secret Manager Viewer", "Secret Manager Viewer"], ["Viewer del proyecto", "Project Viewer"]]
+    options: [["Secret Manager Secret Accessor", "Secret Manager Secret Accessor"], ["Secret Manager Viewer", "Secret Manager Viewer"], ["Secret Manager Secret Version Manager", "Secret Manager Secret Version Manager"], ["Cloud KMS CryptoKey Decrypter", "Cloud KMS CryptoKey Decrypter"]]
     answer: 0
     why: ["Viewer ve metadatos; Accessor lee el valor.", "Viewer sees metadata; Accessor reads the value."]
   - q: ["¿Primer paso ante un bucket con backups expuesto públicamente?", "First step with a publicly exposed backup bucket?"]
-    options: [["Contener: quitar allUsers", "Contain: remove allUsers"], ["Escribir el informe", "Write the report"], ["Esperar a ver si alguien descarga", "Wait to see if someone downloads"]]
+    options: [["Contener: quitar allUsers", "Contain: remove allUsers"], ["Revisar los registros de acceso para ver si alguien descargó", "Review access logs to see if anyone downloaded"], ["Activar el versionado del bucket", "Enable bucket versioning"], ["Mover los backups a la clase Archive", "Move the backups to the Archive class"]]
     answer: 0
     why: ["Primero se contiene; después se previene, investiga y documenta.", "First contain; then prevent, investigate and document."]
   - q: ["¿Qué ofrece IAP frente a una VPN?", "What does IAP offer compared to a VPN?"]
-    options: [["Acceso por identidad a cada app, sin abrir la red", "Per-app identity-based access without opening the network"], ["Más ancho de banda", "More bandwidth"], ["Cifrado de discos", "Disk encryption"]]
+    options: [["Acceso por identidad a cada app, sin abrir la red", "Per-app identity-based access without opening the network"], ["Túneles cifrados con IPsec entre sedes", "IPsec encrypted tunnels between sites"], ["Más ancho de banda hacia la VPC", "More bandwidth into the VPC"], ["Protección DDoS en capa 3 y 4", "Layer 3 and 4 DDoS protection"]]
     answer: 0
     why: ["IAP decide por usuario y aplicación (confianza cero).", "IAP decides per user and application (zero trust)."]

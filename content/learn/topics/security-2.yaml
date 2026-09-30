@@ -44,36 +44,36 @@ concepts:
     tip: ["En IaaS tú parcheas el SO; en serverless no.", "In IaaS you patch the OS; in serverless you don't."]
 scenarios:
   - q: ["Un dataset de BigQuery contiene números de tarjeta y los analistas solo necesitan tendencias.", "A BigQuery dataset holds card numbers and analysts only need trends."]
-    options: [["Desidentificar con Sensitive Data Protection (tokenizar o enmascarar)", "De-identify with Sensitive Data Protection (tokenize or mask)"], ["Quitar a los analistas el acceso a BigQuery", "Remove analysts' BigQuery access"], ["Cifrar con CMEK", "Encrypt with CMEK"]]
+    options: [["Desidentificar con Sensitive Data Protection (tokenizar o enmascarar)", "De-identify with Sensitive Data Protection (tokenize or mask)"], ["Cifrar la tabla con CMEK", "Encrypt the table with CMEK"], ["VPC Service Controls alrededor del proyecto", "VPC Service Controls around the project"], ["Quitar a los analistas el acceso a BigQuery", "Remove analysts' BigQuery access"]]
     answer: 0
     why: ["CMEK no oculta los datos a quien tiene acceso; la desidentificación sí.", "CMEK doesn't hide data from authorized users; de-identification does."]
   - q: ["Una regulación bancaria exige que las claves de cifrado estén fuera de la nube y bajo control del banco.", "Banking regulation requires encryption keys outside the cloud under the bank's control."]
-    options: [["Cloud EKM", "Cloud EKM"], ["Claves gestionadas por Google", "Google-managed keys"], ["Cloud HSM", "Cloud HSM"]]
+    options: [["Cloud EKM", "Cloud EKM"], ["Cloud HSM", "Cloud HSM"], ["CMEK con Cloud KMS", "CMEK with Cloud KMS"], ["CSEK en Cloud Storage", "CSEK in Cloud Storage"]]
     answer: 0
     why: ["Con EKM la clave nunca está en Google.", "With EKM the key is never at Google."]
   - q: ["Security Command Center alerta de minería de criptomonedas en una VM de desarrollo.", "Security Command Center alerts about crypto mining on a dev VM."]
-    options: [["Aislar la VM (cortafuegos/parada), preservar evidencias con snapshot y revisar credenciales comprometidas", "Isolate the VM (firewall/stop), preserve evidence with a snapshot and review compromised credentials"], ["Borrar el proyecto inmediatamente", "Delete the project immediately"], ["Ignorar porque es desarrollo", "Ignore because it's dev"]]
+    options: [["Aislar la VM (cortafuegos/parada), preservar evidencias con snapshot y revisar credenciales comprometidas", "Isolate the VM (firewall/stop), preserve evidence with a snapshot and review compromised credentials"], ["Borrar la VM de inmediato para cortar la minería", "Delete the VM immediately to stop the mining"], ["Reiniciar la VM y cambiar su tipo de máquina", "Restart the VM and change its machine type"], ["Silenciar el hallazgo porque es un entorno de desarrollo", "Mute the finding because it is a dev environment"]]
     answer: 0
     why: ["Contener, conservar pruebas e investigar el origen.", "Contain, preserve evidence and investigate the source."]
   - q: ["Solo deben ejecutarse en GKE imágenes compiladas por tu Cloud Build y sin vulnerabilidades críticas.", "Only images built by your Cloud Build and free of critical vulnerabilities may run on GKE."]
-    options: [["Binary Authorization con atestaciones de compilación y escaneo", "Binary Authorization with build and scan attestations"], ["Cloud Armor", "Cloud Armor"], ["Una política de ciclo de vida", "A lifecycle policy"]]
+    options: [["Binary Authorization con atestaciones de compilación y escaneo", "Binary Authorization with build and scan attestations"], ["Artifact Analysis con escaneo automático", "Artifact Analysis with automatic scanning"], ["Policy Controller con restricciones de imágenes privilegiadas", "Policy Controller with privileged-image constraints"], ["Shielded GKE nodes", "Shielded GKE nodes"]]
     answer: 0
     why: ["Binary Authorization bloquea al desplegar lo que no tenga las atestaciones.", "Binary Authorization blocks at deploy time anything lacking attestations."]
   - q: ["Una empresa pública en la UE necesita que los datos y el soporte se queden en la UE con controles verificables.", "An EU public body needs data and support to stay in the EU with verifiable controls."]
-    options: [["Assured Workloads con el régimen de soberanía de la UE", "Assured Workloads with the EU sovereignty regime"], ["Solo etiquetas", "Just labels"], ["Un bucket multirregional US", "A US multi-region bucket"]]
+    options: [["Assured Workloads con el régimen de soberanía de la UE", "Assured Workloads with the EU sovereignty regime"], ["Política de organización de ubicaciones de recursos en la UE", "EU resource locations organization policy"], ["CMEK con claves en una región de la UE", "CMEK with keys in an EU region"], ["Access Transparency", "Access Transparency"]]
     answer: 0
     why: ["Assured Workloads aplica residencia, personal y controles de cumplimiento.", "Assured Workloads enforces residency, personnel and compliance controls."]
 quiz:
   - q: ["¿Qué técnica de Sensitive Data Protection permite revertir el dato original con la clave?", "Which Sensitive Data Protection technique lets you reverse to the original value with the key?"]
-    options: [["Cifrado con preservación de formato (tokenización reversible)", "Format-preserving encryption (reversible tokenization)"], ["Enmascaramiento con asteriscos", "Masking with asterisks"], ["Redacción", "Redaction"]]
+    options: [["Cifrado con preservación de formato (tokenización reversible)", "Format-preserving encryption (reversible tokenization)"], ["Enmascaramiento con caracteres", "Character masking"], ["Hash criptográfico (CryptoHash)", "Cryptographic hashing (CryptoHash)"], ["Bucketing por rangos", "Range bucketing"]]
     answer: 0
-    why: ["El enmascaramiento y la redacción son irreversibles.", "Masking and redaction are irreversible."]
+    why: ["El enmascaramiento, el hash y el bucketing son irreversibles.", "Masking, hashing and bucketing are irreversible."]
   - q: ["¿Qué servicio busca vulnerabilidades como XSS en una aplicación web pública?", "Which service looks for vulnerabilities like XSS in a public web app?"]
-    options: [["Web Security Scanner", "Web Security Scanner"], ["Cloud Armor", "Cloud Armor"], ["VPC Flow Logs", "VPC Flow Logs"]]
+    options: [["Web Security Scanner", "Web Security Scanner"], ["Cloud Armor", "Cloud Armor"], ["Security Health Analytics", "Security Health Analytics"], ["Event Threat Detection", "Event Threat Detection"]]
     answer: 0
     why: ["Cloud Armor bloquea ataques; el escáner encuentra los fallos.", "Cloud Armor blocks attacks; the scanner finds the flaws."]
   - q: ["En Cloud Run, ¿quién parchea el sistema operativo subyacente?", "On Cloud Run, who patches the underlying operating system?"]
-    options: [["Google", "Google"], ["El cliente", "The customer"], ["Nadie", "Nobody"]]
+    options: [["Google", "Google"], ["El cliente, con VM Manager", "The customer, with VM Manager"], ["El cliente, reconstruyendo la imagen base", "The customer, by rebuilding the base image"], ["Compartido: Google el kernel y el cliente las librerías del SO", "Shared: Google the kernel and the customer the OS libraries"]]
     answer: 0
     why: ["En serverless la plataforma y el SO son responsabilidad de Google.", "In serverless the platform and OS are Google's responsibility."]
   - q: ["¿Qué dos mecanismos protegen la conexión de administradores a VMs sin exponerlas? (Elige 2)", "Which two mechanisms protect admin access to VMs without exposing them? (Choose 2)"]
@@ -81,7 +81,7 @@ quiz:
     answers: [0, 1]
     why: ["IAP evita IPs públicas y OS Login liga el acceso a IAM.", "IAP avoids public IPs and OS Login ties access to IAM."]
   - q: ["¿Qué nivel de rotación automática admite Cloud KMS?", "What automatic rotation does Cloud KMS support?"]
-    options: [["Periodo de rotación configurable que crea nuevas versiones de la clave", "A configurable rotation period that creates new key versions"], ["Ninguna, siempre manual", "None, always manual"], ["Solo una vez al año obligatoria", "Only a mandatory yearly one"]]
+    options: [["Periodo de rotación configurable que crea nuevas versiones de la clave", "A configurable rotation period that creates new key versions"], ["Rotación manual obligatoria cada 90 días", "Mandatory manual rotation every 90 days"], ["Rotación que vuelve a cifrar todos los datos existentes", "Rotation that re-encrypts all existing data"], ["Solo para claves de Cloud HSM", "Only for Cloud HSM keys"]]
     answer: 0
     why: ["Los datos antiguos se siguen descifrando con las versiones anteriores.", "Older data still decrypts with previous versions."]
   - q: ["Cloud Armor ofrece… (Elige 2)", "Cloud Armor offers… (Choose 2)"]

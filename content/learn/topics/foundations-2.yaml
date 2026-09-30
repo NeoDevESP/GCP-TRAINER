@@ -40,36 +40,36 @@ concepts:
     tip: ["Encontrar VMs inactivas o sobredimensionadas → Recommender.", "Find idle or oversized VMs → Recommender."]
 scenarios:
   - q: ["La empresa usa Active Directory y quiere que los empleados entren a Google Cloud con su contraseña de siempre.", "The company uses Active Directory and wants staff to sign in to Google Cloud with their usual password."]
-    options: [["Sincronizar con GCDS y configurar SSO SAML con AD FS", "Sync with GCDS and configure SAML SSO with AD FS"], ["Crear las cuentas a mano en Cloud Identity", "Create accounts by hand in Cloud Identity"], ["Compartir una cuenta de servicio", "Share a service account"]]
+    options: [["Sincronizar con GCDS y configurar SSO SAML con AD FS", "Sync with GCDS and configure SAML SSO with AD FS"], ["Sincronizar con GCDS y usar las contraseñas de Google por separado", "Sync with GCDS and use separate Google passwords"], ["Workload Identity Federation con Active Directory", "Workload Identity Federation with Active Directory"], ["Crear las cuentas a mano y activar la verificación en dos pasos", "Create accounts by hand and enable two-step verification"]]
     answer: 0
     why: ["GCDS mantiene usuarios y grupos; SAML delega la contraseña en AD.", "GCDS keeps users and groups in sync; SAML delegates the password to AD."]
   - q: ["Un desarrollador no puede crear VMs: «Quota 'CPUS' exceeded in region europe-west1».", "A developer cannot create VMs: \"Quota 'CPUS' exceeded in region europe-west1\"."]
-    options: [["Solicitar aumento de cuota de CPUs en europe-west1", "Request a CPU quota increase in europe-west1"], ["Darle Compute Admin", "Grant Compute Admin"], ["Habilitar la API de Compute", "Enable the Compute API"]]
+    options: [["Solicitar aumento de cuota de CPUs en europe-west1", "Request a CPU quota increase in europe-west1"], ["Concederle Compute Instance Admin", "Grant them Compute Instance Admin"], ["Habilitar la API de Compute Engine", "Enable the Compute Engine API"], ["Crear las VMs en otro proyecto de la misma cuenta de facturación", "Create the VMs in another project on the same billing account"]]
     answer: 0
     why: ["Es un límite de cuota, no de permisos ni de API.", "It is a quota limit, not permissions or API."]
   - q: ["Dirección quiere un informe mensual del coste de cada equipo, que comparten proyectos.", "Management wants a monthly cost report per team, and teams share projects."]
-    options: [["Etiquetar recursos por equipo y analizar la exportación de facturación en BigQuery", "Label resources by team and analyse the billing export in BigQuery"], ["Crear una cuenta de facturación por persona", "Create a billing account per person"], ["Mirar la página de cuotas", "Check the quotas page"]]
+    options: [["Etiquetar recursos por equipo y analizar la exportación de facturación en BigQuery", "Label resources by team and analyse the billing export in BigQuery"], ["Crear un presupuesto por equipo en cada proyecto", "Create a budget per team in each project"], ["Una cuenta de facturación por equipo", "One billing account per team"], ["Revisar el informe de facturación filtrando por proyecto", "Check the billing report filtered by project"]]
     answer: 0
     why: ["Las etiquetas viajan a la exportación y permiten agrupar el coste.", "Labels flow into the export and let you group costs."]
   - q: ["Quieres separar entornos de desarrollo, pruebas y producción con políticas distintas y aislamiento.", "You want to separate dev, test and prod with different policies and isolation."]
-    options: [["Un proyecto por entorno, agrupados en carpetas", "One project per environment, grouped in folders"], ["Un solo proyecto con etiquetas", "A single project with labels"], ["Una organización por entorno", "One organization per environment"]]
+    options: [["Un proyecto por entorno, agrupados en carpetas", "One project per environment, grouped in folders"], ["Un proyecto con una VPC por entorno", "One project with a VPC per environment"], ["Un solo proyecto con etiquetas env=dev/test/prod", "A single project with env=dev/test/prod labels"], ["Una organización por entorno", "One organization per environment"]]
     answer: 0
     why: ["El proyecto es la frontera de aislamiento de permisos, cuotas y facturación.", "The project is the isolation boundary for permissions, quotas and billing."]
 quiz:
   - q: ["¿Qué se necesita para crear un recurso de organización?", "What is required to create an organization resource?"]
-    options: [["Un dominio en Cloud Identity o Google Workspace", "A domain in Cloud Identity or Google Workspace"], ["Una cuenta de facturación", "A billing account"], ["Un proyecto con Owner", "A project with Owner"]]
+    options: [["Un dominio en Cloud Identity o Google Workspace", "A domain in Cloud Identity or Google Workspace"], ["Una cuenta de facturación activa", "An active billing account"], ["Un proyecto con el rol Owner", "A project with the Owner role"], ["Un contrato de soporte Enhanced", "An Enhanced support contract"]]
     answer: 0
     why: ["La organización se crea automáticamente al asociar un dominio de Cloud Identity/Workspace.", "The organization is created automatically when a Cloud Identity/Workspace domain is linked."]
   - q: ["¿Qué rol permite vincular un proyecto a una cuenta de facturación (junto con permisos en el proyecto)?", "Which role allows linking a project to a billing account (together with project permissions)?"]
-    options: [["Billing Account User", "Billing Account User"], ["Billing Account Viewer", "Billing Account Viewer"], ["Project Viewer", "Project Viewer"]]
+    options: [["Billing Account User", "Billing Account User"], ["Billing Account Viewer", "Billing Account Viewer"], ["Billing Account Costs Manager", "Billing Account Costs Manager"], ["Project Billing Manager sin rol en la cuenta", "Project Billing Manager with no role on the account"]]
     answer: 0
     why: ["Billing Account User en la cuenta + Project Billing Manager u Owner en el proyecto.", "Billing Account User on the account + Project Billing Manager or Owner on the project."]
   - q: ["¿Dónde ves si una incidencia de Google afecta a tus proyectos?", "Where do you see whether a Google incident affects your projects?"]
-    options: [["Personalized Service Health", "Personalized Service Health"], ["Cloud Trace", "Cloud Trace"], ["Security Command Center", "Security Command Center"]]
+    options: [["Personalized Service Health", "Personalized Service Health"], ["Security Command Center", "Security Command Center"], ["Cloud Monitoring (uptime checks)", "Cloud Monitoring (uptime checks)"], ["Recommender", "Recommender"]]
     answer: 0
     why: ["Muestra eventos de servicio relevantes para tus recursos.", "It shows service events relevant to your resources."]
   - q: ["¿Qué comando cambia la zona por defecto de gcloud?", "Which command changes gcloud's default zone?"]
-    options: [["gcloud config set compute/zone europe-west1-b", "gcloud config set compute/zone europe-west1-b"], ["gcloud zone set europe-west1-b", "gcloud zone set europe-west1-b"], ["gcloud init --zone", "gcloud init --zone"]]
+    options: [["gcloud config set compute/zone europe-west1-b", "gcloud config set compute/zone europe-west1-b"], ["gcloud config set zone europe-west1-b", "gcloud config set zone europe-west1-b"], ["gcloud compute zones set europe-west1-b", "gcloud compute zones set europe-west1-b"], ["gcloud init --zone=europe-west1-b", "gcloud init --zone=europe-west1-b"]]
     answer: 0
     why: ["Las propiedades compute/region y compute/zone guardan los valores por defecto.", "The compute/region and compute/zone properties store defaults."]
   - q: ["¿Qué afirmaciones sobre las carpetas son ciertas? (Elige 2)", "Which statements about folders are true? (Choose 2)"]
@@ -77,10 +77,10 @@ quiz:
     answers: [0, 1]
     why: ["Las carpetas se anidan y transmiten políticas; la facturación va por proyecto.", "Folders nest and pass down policies; billing is per project."]
   - q: ["Un becario borró un proyecto por error hace 5 días. ¿Se puede recuperar?", "An intern deleted a project by mistake 5 days ago. Can it be recovered?"]
-    options: [["Sí, restaurándolo dentro de los 30 días", "Yes, by restoring it within 30 days"], ["No, el borrado es inmediato", "No, deletion is immediate"], ["Solo contactando con ventas", "Only by contacting sales"]]
+    options: [["Sí, restaurándolo dentro de los 30 días", "Yes, by restoring it within 30 days"], ["No, el borrado es inmediato e irreversible", "No, deletion is immediate and irreversible"], ["Sí, pero solo durante 7 días", "Yes, but only for 7 days"], ["Sí, restaurando un snapshot del proyecto", "Yes, by restoring a project snapshot"]]
     answer: 0
     why: ["El proyecto queda pendiente de eliminación 30 días (gcloud projects undelete).", "The project stays pending deletion for 30 days (gcloud projects undelete)."]
   - q: ["¿Qué comando lista las APIs habilitadas en el proyecto?", "Which command lists the APIs enabled in the project?"]
-    options: [["gcloud services list --enabled", "gcloud services list --enabled"], ["gcloud apis show", "gcloud apis show"], ["gcloud projects describe --apis", "gcloud projects describe --apis"]]
+    options: [["gcloud services list --enabled", "gcloud services list --enabled"], ["gcloud services list --available", "gcloud services list --available"], ["gcloud projects describe PROJECT --format=apis", "gcloud projects describe PROJECT --format=apis"], ["gcloud apis list", "gcloud apis list"]]
     answer: 0
     why: ["gcloud services list/enable/disable gestiona las APIs.", "gcloud services list/enable/disable manages APIs."]

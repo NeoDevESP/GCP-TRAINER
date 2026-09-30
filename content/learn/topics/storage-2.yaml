@@ -25,24 +25,24 @@ concepts:
     tip: ["Conservar pruebas de un juicio aunque el ciclo de vida diga borrar → hold en esos objetos.", "Keep litigation evidence even if lifecycle says delete → a hold on those objects."]
 scenarios:
   - q: ["Un bucket de registros se lee mucho la primera semana y casi nunca después, pero el patrón varía por archivo.", "A log bucket is read a lot in the first week and rarely after, but the pattern varies per file."]
-    options: [["Activar Autoclass", "Enable Autoclass"], ["Todo en Archive desde el principio", "Everything in Archive from day one"], ["Dejarlo todo en Standard", "Keep everything in Standard"]]
+    options: [["Activar Autoclass", "Enable Autoclass"], ["Todo en Nearline desde el principio", "Everything in Nearline from the start"], ["Regla de ciclo de vida a Coldline a los 7 días para todos", "Lifecycle rule to Coldline at 7 days for all"], ["Todo en Standard", "Everything in Standard"]]
     answer: 0
     why: ["Autoclass ajusta la clase de cada objeto según su uso real.", "Autoclass adjusts each object's class based on real usage."]
   - q: ["Una empresa publica su web de marketing (HTML, imágenes) y quiere HTTPS con su dominio y buena velocidad mundial.", "A company publishes its marketing site (HTML, images) and wants HTTPS on its domain with fast global speed."]
-    options: [["Bucket como backend de un balanceador externo con Cloud CDN y certificado gestionado", "Bucket as backend of an external load balancer with Cloud CDN and a managed certificate"], ["Una VM con nginx", "A VM running nginx"], ["Filestore", "Filestore"]]
+    options: [["Bucket como backend de un balanceador externo con Cloud CDN y certificado gestionado", "Bucket as backend of an external load balancer with Cloud CDN and a managed certificate"], ["Bucket público con website config y un CNAME a storage.googleapis.com", "Public bucket with website config and a CNAME to storage.googleapis.com"], ["Una VM con nginx detrás de un balanceador regional", "A VM with nginx behind a regional load balancer"], ["Firebase Hosting en otro proyecto sin CDN", "Firebase Hosting in another project without CDN"]]
     answer: 0
     why: ["Sin servidores que mantener, con TLS y caché global.", "No servers to maintain, with TLS and global caching."]
   - q: ["Un empleado borró 200 objetos de un bucket sin versionado hace 2 días.", "An employee deleted 200 objects from a non-versioned bucket 2 days ago."]
-    options: [["Restaurarlos gracias a soft delete (si la retención de soft delete lo cubre)", "Restore them via soft delete (if the soft delete retention covers it)"], ["Imposible", "Impossible"], ["Pedírselo a soporte de Google", "Ask Google support"]]
+    options: [["Restaurarlos gracias a soft delete (si la retención de soft delete lo cubre)", "Restore them via soft delete (if the soft delete retention covers it)"], ["No se pueden recuperar sin versionado", "They cannot be recovered without versioning"], ["Con time travel de Cloud Storage", "With Cloud Storage time travel"], ["Desde un snapshot automático del bucket", "From an automatic bucket snapshot"]]
     answer: 0
     why: ["Soft delete conserva objetos borrados durante su periodo configurado.", "Soft delete keeps deleted objects for its configured period."]
 quiz:
   - q: ["¿Qué afirmación sobre la consistencia de Cloud Storage es correcta?", "Which statement about Cloud Storage consistency is correct?"]
-    options: [["Es fuertemente consistente al leer tras escribir y al listar", "It is strongly consistent for read-after-write and listing"], ["Es eventualmente consistente siempre", "It is always eventually consistent"], ["Solo es consistente en buckets regionales", "Only regional buckets are consistent"]]
+    options: [["Es fuertemente consistente al leer tras escribir y al listar", "It is strongly consistent for read-after-write and listing"], ["Es eventualmente consistente al listar objetos", "It is eventually consistent when listing objects"], ["Solo es fuertemente consistente en buckets regionales", "It is only strongly consistent in regional buckets"], ["Es fuertemente consistente solo al leer, no al sobrescribir", "It is strongly consistent only on reads, not overwrites"]]
     answer: 0
     why: ["Desde 2020 la consistencia es fuerte en todas las operaciones de objetos.", "Since 2020 consistency is strong for all object operations."]
   - q: ["¿Qué comando sincroniza una carpeta local con un bucket?", "Which command syncs a local folder with a bucket?"]
-    options: [["gcloud storage rsync", "gcloud storage rsync"], ["gcloud storage mb", "gcloud storage mb"], ["bq load", "bq load"]]
+    options: [["gcloud storage rsync", "gcloud storage rsync"], ["gcloud storage cp -r", "gcloud storage cp -r"], ["gcloud storage mb", "gcloud storage mb"], ["gcloud storage mv", "gcloud storage mv"]]
     answer: 0
     why: ["rsync copia solo lo que cambia; mb crea buckets.", "rsync copies only what changed; mb makes buckets."]
   - q: ["¿Qué dos acciones puede hacer una regla de ciclo de vida? (Elige 2)", "Which two actions can a lifecycle rule take? (Choose 2)"]
@@ -50,10 +50,10 @@ quiz:
     answers: [0, 1]
     why: ["Las acciones son borrar, cambiar de clase y abortar subidas multiparte incompletas.", "Actions are delete, change class and abort incomplete multipart uploads."]
   - q: ["¿Qué ubicación de bucket da redundancia geográfica con dos regiones concretas elegidas por ti?", "Which bucket location gives geo-redundancy across two specific regions you choose?"]
-    options: [["Birregional (dual-region)", "Dual-region"], ["Regional", "Regional"], ["Zonal", "Zonal"]]
+    options: [["Birregional (dual-region)", "Dual-region"], ["Multirregional", "Multi-region"], ["Regional", "Regional"], ["Regional con replicación asíncrona", "Regional with asynchronous replication"]]
     answer: 0
     why: ["Dual-region replica en dos regiones concretas; multirregión usa un área amplia.", "Dual-region replicates across two specific regions; multi-region uses a broad area."]
   - q: ["¿Qué hace la replicación turbo en un bucket birregional?", "What does turbo replication do on a dual-region bucket?"]
-    options: [["Replica los objetos nuevos en 15 minutos (RPO objetivo)", "Replicates new objects within 15 minutes (target RPO)"], ["Hace el bucket más barato", "Makes the bucket cheaper"], ["Cifra los objetos", "Encrypts objects"]]
+    options: [["Replica los objetos nuevos en 15 minutos (RPO objetivo)", "Replicates new objects within 15 minutes (target RPO)"], ["Replica todos los objetos de forma síncrona", "Replicates every object synchronously"], ["Replica los objetos en 1 hora", "Replicates objects within 1 hour"], ["Replica en una tercera región", "Replicates to a third region"]]
     answer: 0
     why: ["Da un RPO de 15 minutos con SLA.", "It gives a 15-minute RPO backed by an SLA."]

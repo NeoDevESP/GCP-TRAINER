@@ -51,39 +51,39 @@ concepts:
     tip: ["Elige la opción con menos esfuerzo: API preentrenada → AutoML/BigQuery ML → entrenamiento personalizado.", "Pick the least-effort option: pre-trained API → AutoML/BigQuery ML → custom training."]
 scenarios:
   - q: ["Eventos de clics llegan a miles por segundo y hay que verlos en BigQuery casi al instante.", "Click events arrive by the thousands per second and must appear in BigQuery almost instantly."]
-    options: [["Pub/Sub → Dataflow → BigQuery", "Pub/Sub → Dataflow → BigQuery"], ["Cloud SQL y exportar cada noche", "Cloud SQL and export nightly"], ["Dataproc cada hora", "Dataproc hourly"]]
+    options: [["Pub/Sub → Dataflow → BigQuery", "Pub/Sub → Dataflow → BigQuery"], ["Pub/Sub → Cloud Functions → Cloud SQL → exportación a BigQuery", "Pub/Sub → Cloud Functions → Cloud SQL → export to BigQuery"], ["Cargas por lotes desde Cloud Storage cada hora", "Batch loads from Cloud Storage every hour"], ["Dataproc con Spark Streaming escribiendo en Bigtable", "Dataproc with Spark Streaming writing to Bigtable"]]
     answer: 0
     why: ["Es la arquitectura de streaming de referencia en Google Cloud.", "It is the reference streaming architecture on Google Cloud."]
   - q: ["Tienes 200 trabajos Spark on-premises y poco tiempo para migrar.", "You have 200 on-prem Spark jobs and little time to migrate."]
-    options: [["Dataproc", "Dataproc"], ["Reescribirlos en Dataflow", "Rewrite them in Dataflow"], ["Cloud Run", "Cloud Run"]]
+    options: [["Dataproc", "Dataproc"], ["Reescribirlos en Dataflow con Apache Beam", "Rewrite them in Dataflow with Apache Beam"], ["Convertirlos en consultas de BigQuery", "Convert them into BigQuery queries"], ["Cloud Data Fusion", "Cloud Data Fusion"]]
     answer: 0
     why: ["Dataproc ejecuta Spark tal cual, sin reescritura.", "Dataproc runs Spark as is, without rewriting."]
   - q: ["Quieres extraer texto de facturas escaneadas sin experiencia en ML.", "You want to extract text from scanned invoices without ML expertise."]
-    options: [["Una API preentrenada (Document AI / Vision)", "A pre-trained API (Document AI / Vision)"], ["Entrenar un modelo desde cero", "Train a model from scratch"], ["BigQuery", "BigQuery"]]
+    options: [["Una API preentrenada (Document AI / Vision)", "A pre-trained API (Document AI / Vision)"], ["AutoML entrenado con facturas etiquetadas", "AutoML trained on labelled invoices"], ["Un modelo personalizado en Vertex AI", "A custom model in Vertex AI"], ["Natural Language API", "Natural Language API"]]
     answer: 0
     why: ["Si una API ya resuelve el problema, es lo más rápido y barato.", "If an API already solves it, that's fastest and cheapest."]
   - q: ["Las consultas diarias de BigQuery leen toda la tabla de 5 años aunque filtran por la última semana.", "Daily BigQuery queries scan the whole 5-year table though they filter by last week."]
-    options: [["Particionar la tabla por fecha", "Partition the table by date"], ["Comprar más slots", "Buy more slots"], ["Mover los datos a Cloud SQL", "Move the data to Cloud SQL"]]
+    options: [["Particionar la tabla por fecha", "Partition the table by date"], ["Agrupar (clustering) la tabla por cliente", "Cluster the table by customer"], ["Usar LIMIT 1000 en las consultas", "Use LIMIT 1000 in the queries"], ["Comprar una reserva de slots", "Buy a slot reservation"]]
     answer: 0
     why: ["Con particiones el filtro de fecha solo lee esas particiones.", "With partitions the date filter reads only those partitions."]
 quiz:
   - q: ["¿Cómo se cobra BigQuery en modo bajo demanda?", "How is on-demand BigQuery billed?"]
-    options: [["Por bytes procesados por las consultas", "By bytes processed by queries"], ["Por hora de servidor", "Per server hour"], ["Por número de tablas", "Per number of tables"]]
+    options: [["Por bytes procesados por las consultas", "By bytes processed by queries"], ["Por slots reservados por hora", "By reserved slots per hour"], ["Por filas devueltas", "By rows returned"], ["Por número de consultas", "By number of queries"]]
     answer: 0
     why: ["Por eso importa leer menos columnas y particiones.", "That's why reading fewer columns and partitions matters."]
   - q: ["Pub/Sub entrega los mensajes…", "Pub/Sub delivers messages…"]
-    options: [["Al menos una vez", "At least once"], ["Exactamente una vez siempre", "Always exactly once"], ["Como máximo una vez", "At most once"]]
+    options: [["Al menos una vez", "At least once"], ["Exactamente una vez siempre", "Always exactly once"], ["Como máximo una vez", "At most once"], ["En orden global garantizado", "In guaranteed global order"]]
     answer: 0
     why: ["Puede haber duplicados: diseña consumidores idempotentes.", "Duplicates can occur: design idempotent consumers."]
   - q: ["¿Qué modelo de programación usa Dataflow?", "Which programming model does Dataflow use?"]
-    options: [["Apache Beam", "Apache Beam"], ["Apache Spark", "Apache Spark"], ["Airflow", "Airflow"]]
+    options: [["Apache Beam", "Apache Beam"], ["Apache Spark", "Apache Spark"], ["Apache Airflow", "Apache Airflow"], ["Apache Flink", "Apache Flink"]]
     answer: 0
     why: ["Dataflow ejecuta pipelines de Apache Beam; Composer es Airflow.", "Dataflow runs Apache Beam pipelines; Composer is Airflow."]
   - q: ["¿Qué hace un tema de mensajes fallidos (dead-letter)?", "What does a dead-letter topic do?"]
-    options: [["Aparta los mensajes que fallan demasiadas veces", "Sets aside messages that fail too many times"], ["Borra mensajes antiguos", "Deletes old messages"], ["Cifra los mensajes", "Encrypts messages"]]
+    options: [["Aparta los mensajes que fallan demasiadas veces", "Sets aside messages that fail too many times"], ["Reordena los mensajes que llegan tarde", "Reorders late messages"], ["Guarda una copia de todos los mensajes durante 7 días", "Keeps a copy of all messages for 7 days"], ["Reenvía los mensajes a otra región", "Forwards messages to another region"]]
     answer: 0
     why: ["Evita reintentos infinitos y permite revisarlos después.", "Avoids infinite retries and lets you review them later."]
   - q: ["Un analista que solo sabe SQL quiere un modelo de predicción de bajas.", "An analyst who only knows SQL wants a churn prediction model."]
-    options: [["BigQuery ML", "BigQuery ML"], ["Entrenamiento personalizado en Vertex AI", "Custom training in Vertex AI"], ["Dataproc", "Dataproc"]]
+    options: [["BigQuery ML", "BigQuery ML"], ["Vertex AI Workbench con TensorFlow", "Vertex AI Workbench with TensorFlow"], ["Entrenamiento personalizado con scikit-learn", "Custom training with scikit-learn"], ["Dataproc con Spark MLlib", "Dataproc with Spark MLlib"]]
     answer: 0
     why: ["BigQuery ML crea y usa modelos con sentencias SQL.", "BigQuery ML creates and uses models with SQL statements."]

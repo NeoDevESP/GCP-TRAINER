@@ -48,27 +48,27 @@ concepts:
     tip: ["¿Cuántas IPs utilizables tiene una subred /28? → 16 − 4 = 12.", "How many usable IPs in a /28 subnet? → 16 − 4 = 12."]
 scenarios:
   - q: ["Un clúster GKE privado necesita descargar imágenes de un registro público de internet.", "A private GKE cluster must pull images from a public internet registry."]
-    options: [["Cloud NAT en la región del clúster", "Cloud NAT in the cluster's region"], ["IP pública en cada nodo", "A public IP on every node"], ["Peering con el registro", "Peering with the registry"]]
+    options: [["Cloud NAT en la región del clúster", "Cloud NAT in the cluster's region"], ["Private Google Access en la subred de los nodos", "Private Google Access on the nodes' subnet"], ["Private Service Connect hacia el registro", "Private Service Connect to the registry"], ["Una ruta estática 0.0.0.0/0 hacia la pasarela de internet", "A static 0.0.0.0/0 route to the internet gateway"]]
     answer: 0
     why: ["Los nodos privados salen a internet a través de Cloud NAT.", "Private nodes reach the internet through Cloud NAT."]
   - q: ["Tras crear HA VPN con BGP, solo las VMs de us-central1 llegan a la oficina; las de europe-west1 no.", "After setting up HA VPN with BGP, only us-central1 VMs reach the office; europe-west1 VMs don't."]
-    options: [["Poner el enrutamiento dinámico de la VPC en modo global", "Set the VPC dynamic routing mode to global"], ["Crear otra VPN en Europa obligatoriamente", "A second VPN in Europe is mandatory"], ["Abrir el cortafuegos a 0.0.0.0/0", "Open the firewall to 0.0.0.0/0"]]
+    options: [["Poner el enrutamiento dinámico de la VPC en modo global", "Set the VPC dynamic routing mode to global"], ["Crear un segundo túnel HA VPN desde europe-west1", "Create a second HA VPN tunnel from europe-west1"], ["Añadir rutas estáticas en europe-west1 hacia la oficina", "Add static routes in europe-west1 to the office"], ["Anunciar la subred de Europa con una prioridad BGP más alta", "Advertise the Europe subnet with a higher BGP priority"]]
     answer: 0
     why: ["En modo regional, las rutas aprendidas solo valen en la región del Cloud Router.", "In regional mode learned routes only apply in the Cloud Router's region."]
   - q: ["Una app no conecta con Cloud SQL por IP privada y quieres saber exactamente dónde falla sin cambiar nada.", "An app can't reach Cloud SQL over private IP and you want to know exactly where it breaks without changing anything."]
-    options: [["Connectivity Tests", "Connectivity Tests"], ["Reiniciar la instancia", "Restart the instance"], ["Abrir todos los puertos", "Open every port"]]
+    options: [["Connectivity Tests", "Connectivity Tests"], ["Activar VPC Flow Logs y revisarlos", "Enable VPC Flow Logs and review them"], ["Firewall Rules Logging", "Firewall Rules Logging"], ["Performance Dashboard", "Performance Dashboard"]]
     answer: 0
     why: ["Analiza rutas, cortafuegos y peering y señala el punto de bloqueo.", "It analyses routes, firewalls and peering and pinpoints the block."]
   - q: ["El equipo de seguridad quiere impedir SSH desde internet en todos los proyectos, sin que los equipos puedan anularlo.", "Security wants to block SSH from the internet in every project without teams being able to override it."]
-    options: [["Política de cortafuegos jerárquica con deny en la organización", "Hierarchical firewall policy with deny at the organization"], ["Pedir a cada equipo que borre sus reglas", "Ask each team to delete their rules"], ["Una regla en cada VPC con prioridad 0", "A priority-0 rule in each VPC"]]
+    options: [["Política de cortafuegos jerárquica con deny en la organización", "Hierarchical firewall policy with deny at the organization"], ["Una regla deny de prioridad 0 en cada VPC", "A priority-0 deny rule in each VPC"], ["Política de organización compute.vmExternalIpAccess", "Organization policy compute.vmExternalIpAccess"], ["Cloud Armor con una regla que bloquee el puerto 22", "Cloud Armor with a rule blocking port 22"]]
     answer: 0
     why: ["Las políticas jerárquicas se evalúan antes y los proyectos no pueden cambiarlas.", "Hierarchical policies are evaluated first and projects cannot change them."]
   - q: ["Una empresa ofrece su API a clientes en otras VPC y organizaciones, con rangos de IP que se solapan.", "A company offers its API to customers in other VPCs and orgs whose IP ranges overlap."]
-    options: [["Publicarla con Private Service Connect", "Publish it with Private Service Connect"], ["Peering con cada cliente", "Peering with each customer"], ["IP pública sin cortafuegos", "Public IP without firewall"]]
+    options: [["Publicarla con Private Service Connect", "Publish it with Private Service Connect"], ["VPC Network Peering con cada cliente", "VPC Network Peering with each customer"], ["VPC compartida con los clientes como proyectos de servicio", "Shared VPC with customers as service projects"], ["HA VPN con cada cliente", "HA VPN with each customer"]]
     answer: 0
     why: ["PSC no requiere rangos únicos: cada consumidor usa una IP de su propia VPC.", "PSC needs no unique ranges: each consumer uses an IP from its own VPC."]
   - q: ["Tienes una VPN de 3 Gbps saturada y necesitas 20 Gbps estables hacia tu centro de datos, que está en la misma instalación de colocación que Google.", "Your 3 Gbps VPN is saturated and you need a stable 20 Gbps to your datacenter, which sits in the same colocation facility as Google."]
-    options: [["Dedicated Interconnect (2×10 Gbps)", "Dedicated Interconnect (2×10 Gbps)"], ["Más túneles VPN clásicos", "More Classic VPN tunnels"], ["Nivel de red Standard", "Standard network tier"]]
+    options: [["Dedicated Interconnect (2×10 Gbps)", "Dedicated Interconnect (2×10 Gbps)"], ["Subir cada túnel VPN a 10 Gbps", "Raise each VPN tunnel to 10 Gbps"], ["Varios túneles HA VPN con ECMP", "Several HA VPN tunnels with ECMP"], ["Cloud VPN clásica con enrutamiento estático", "Classic Cloud VPN with static routing"]]
     answer: 0
     why: ["Interconnect da ancho de banda alto y estable sin pasar por internet.", "Interconnect gives high, stable bandwidth without the internet."]
 quiz:
@@ -77,15 +77,15 @@ quiz:
     answer: 0
     why: ["Red, pasarela, penúltima (reservada) y difusión.", "Network, gateway, second-to-last (reserved) and broadcast."]
   - q: ["¿Qué nivel de red requiere el balanceador de aplicaciones externo global?", "Which network tier does the global external Application Load Balancer need?"]
-    options: [["Premium", "Premium"], ["Standard", "Standard"], ["Cualquiera", "Either"]]
+    options: [["Premium", "Premium"], ["Standard", "Standard"], ["Cualquiera de los dos", "Either one"], ["Premium solo para IPv6", "Premium only for IPv6"]]
     answer: 0
     why: ["Los recursos globales anycast solo existen en Premium.", "Global anycast resources only exist in Premium."]
   - q: ["¿Qué permite a una VM sin IP externa llamar a la API de Cloud Storage?", "What lets a VM without an external IP call the Cloud Storage API?"]
-    options: [["Private Google Access en la subred", "Private Google Access on the subnet"], ["Cloud Armor", "Cloud Armor"], ["Una ruta estática a 0.0.0.0/0 sin pasarela", "A static route to 0.0.0.0/0 without a gateway"]]
+    options: [["Private Google Access en la subred", "Private Google Access on the subnet"], ["Cloud Armor", "Cloud Armor"], ["Private Service Connect para servicios publicados de terceros", "Private Service Connect for third-party published services"], ["VPC Service Controls", "VPC Service Controls"]]
     answer: 0
     why: ["Se activa por subred y no requiere NAT para las APIs de Google.", "It is enabled per subnet and needs no NAT for Google APIs."]
   - q: ["¿Qué muestran los VPC Flow Logs?", "What do VPC Flow Logs show?"]
-    options: [["Muestras de flujos de red enviados y recibidos por las VMs", "Samples of network flows sent and received by VMs"], ["El contenido de los paquetes", "Packet contents"], ["Los cambios de IAM", "IAM changes"]]
+    options: [["Muestras de flujos de red enviados y recibidos por las VMs", "Samples of network flows sent and received by VMs"], ["El contenido completo de los paquetes", "The full packet contents"], ["Las reglas de cortafuegos que bloquearon cada conexión", "The firewall rules that blocked each connection"], ["La latencia de cada petición HTTP", "The latency of each HTTP request"]]
     answer: 0
     why: ["Registran metadatos del flujo (IPs, puertos, bytes), no el contenido.", "They record flow metadata (IPs, ports, bytes), not content."]
   - q: ["¿Qué dos elementos componen HA VPN con SLA 99,99 %? (Elige 2)", "Which two elements make up HA VPN with a 99.99% SLA? (Choose 2)"]
@@ -93,18 +93,18 @@ quiz:
     answers: [0, 1]
     why: ["HA VPN exige enrutamiento dinámico y dos túneles para el SLA.", "HA VPN requires dynamic routing and two tunnels for the SLA."]
   - q: ["¿Qué balanceador usarías para tráfico TCP interno entre la capa web y la de base de datos?", "Which load balancer would you use for internal TCP traffic between the web and database tiers?"]
-    options: [["Balanceador de red interno de paso directo", "Internal passthrough Network Load Balancer"], ["Balanceador de aplicaciones externo global", "Global external Application Load Balancer"], ["Cloud CDN", "Cloud CDN"]]
+    options: [["Balanceador de red interno de paso directo", "Internal passthrough Network Load Balancer"], ["Balanceador de aplicaciones interno", "Internal Application Load Balancer"], ["Balanceador de red externo de paso directo", "External passthrough Network Load Balancer"], ["Balanceador de proxy TCP externo", "External TCP proxy load balancer"]]
     answer: 0
     why: ["Tráfico privado de capa 4 dentro de la VPC.", "Private layer-4 traffic inside the VPC."]
   - q: ["¿Qué servicio cachea contenido en el borde de la red de Google para servirlo más rápido?", "Which service caches content at Google's edge to serve it faster?"]
-    options: [["Cloud CDN", "Cloud CDN"], ["Cloud NAT", "Cloud NAT"], ["Cloud DNS", "Cloud DNS"]]
+    options: [["Cloud CDN", "Cloud CDN"], ["Cloud Armor", "Cloud Armor"], ["Media CDN solo para vídeo en directo", "Media CDN only for live video"], ["Cloud Load Balancing sin caché", "Cloud Load Balancing without caching"]]
     answer: 0
     why: ["Cloud CDN funciona con el balanceador de aplicaciones externo.", "Cloud CDN works with the external Application Load Balancer."]
   - q: ["Una regla de cortafuegos permite el puerto 80 con target tag «web», pero la VM sigue sin recibir tráfico. ¿Qué falta?", "A firewall rule allows port 80 with target tag \"web\" but the VM still gets no traffic. What's missing?"]
-    options: [["Añadir la etiqueta de red «web» a la VM", "Add the \"web\" network tag to the VM"], ["Reiniciar la VPC", "Restart the VPC"], ["Cambiar al nivel Standard", "Switch to Standard tier"]]
+    options: [["Añadir la etiqueta de red «web» a la VM", "Add the \"web\" network tag to the VM"], ["Bajar la prioridad de la regla a 65534", "Lower the rule priority to 65534"], ["Añadir la etiqueta «web» a la subred", "Add the \"web\" tag to the subnet"], ["Crear una regla de salida para el puerto 80", "Create an egress rule for port 80"]]
     answer: 0
     why: ["La regla solo aplica a VMs con esa etiqueta.", "The rule only applies to VMs carrying that tag."]
   - q: ["¿Qué ofrece Partner Interconnect frente a Dedicated?", "What does Partner Interconnect offer compared to Dedicated?"]
-    options: [["Conexión a través de un proveedor, desde 50 Mbps, sin estar en una instalación de colocación de Google", "Connection through a provider, from 50 Mbps, without being in a Google colocation facility"], ["Más de 100 Gbps por enlace", "More than 100 Gbps per link"], ["Cifrado automático por IPsec", "Automatic IPsec encryption"]]
+    options: [["Conexión a través de un proveedor, desde 50 Mbps, sin estar en una instalación de colocación de Google", "Connection through a provider, from 50 Mbps, without being in a Google colocation facility"], ["Enlaces de 10 o 100 Gbps directos a Google", "Direct 10 or 100 Gbps links to Google"], ["Cifrado IPsec incluido por defecto", "IPsec encryption included by default"], ["Conexión por internet público con SLA", "Connection over the public internet with an SLA"]]
     answer: 0
     why: ["Dedicated exige llegar físicamente a un punto de Google; Partner usa un proveedor.", "Dedicated requires physically reaching a Google point; Partner uses a provider."]

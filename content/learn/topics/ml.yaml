@@ -97,31 +97,31 @@ scenarios:
     answer: 0
     why: ["Las etiquetas genéricas ya las reconoce la API preentrenada: cero entrenamiento.", "The pre-trained API already recognizes generic labels: zero training."]
   - q: ["Ahora la tienda necesita distinguir sus 300 modelos propios de zapatilla, con fotos etiquetadas y sin científicos de datos.", "Now the shop must tell apart its own 300 sneaker models, with labelled photos and no data scientists."]
-    options: [["AutoML Image", "AutoML Image"], ["Cloud Vision API", "Cloud Vision API"], ["Entrenamiento personalizado con PyTorch", "Custom training with PyTorch"]]
+    options: [["AutoML Image", "AutoML Image"], ["Cloud Vision API con detección de etiquetas", "Cloud Vision API label detection"], ["Entrenamiento personalizado con PyTorch en GPUs", "Custom PyTorch training on GPUs"], ["Vision API Product Search sin catálogo", "Vision API Product Search without a catalog"]]
     answer: 0
     why: ["Clases propias con datos etiquetados y sin programar el modelo: AutoML.", "Custom classes with labelled data and no model code: AutoML."]
   - q: ["Los analistas tienen los datos de clientes en BigQuery, saben SQL y quieren predecir bajas en una semana.", "Analysts have customer data in BigQuery, know SQL and want churn predictions within a week."]
-    options: [["BigQuery ML (logistic_reg o boosted_tree)", "BigQuery ML (logistic_reg or boosted_tree)"], ["Exportar a CSV y entrenar en Workbench", "Export to CSV and train in Workbench"], ["Dataproc con Spark MLlib", "Dataproc with Spark MLlib"]]
+    options: [["BigQuery ML (logistic_reg o boosted_tree)", "BigQuery ML (logistic_reg or boosted_tree)"], ["AutoML Tables con los datos exportados a Cloud Storage", "AutoML Tables with data exported to Cloud Storage"], ["Exportar a CSV y entrenar en Vertex AI Workbench", "Export to CSV and train in Vertex AI Workbench"], ["Dataproc con Spark MLlib", "Dataproc with Spark MLlib"]]
     answer: 0
     why: ["Sin mover datos y con SQL: el camino más corto.", "No data movement and plain SQL: the shortest path."]
   - q: ["Un banco debe puntuar 80 millones de transacciones cada noche y dejar el resultado en BigQuery.", "A bank must score 80 million transactions nightly and write results to BigQuery."]
-    options: [["Predicción por lotes de Vertex AI", "Vertex AI batch prediction"], ["Un endpoint online con 100 réplicas", "An online endpoint with 100 replicas"], ["Cloud Run llamando al modelo fila a fila", "Cloud Run calling the model row by row"]]
+    options: [["Predicción por lotes de Vertex AI", "Vertex AI batch prediction"], ["Un endpoint online con autoescalado hasta 100 réplicas", "An online endpoint autoscaling to 100 replicas"], ["Cloud Run llamando al endpoint fila a fila", "Cloud Run calling the endpoint row by row"], ["Dataflow llamando al endpoint online en streaming", "Dataflow calling the online endpoint in streaming"]]
     answer: 0
     why: ["Volúmenes grandes sin requisitos de latencia → lotes, sin endpoint encendido.", "Large volumes without latency needs → batch, no endpoint running."]
   - q: ["Un asistente interno debe responder con las políticas de RR. HH., que cambian cada semana, y citar la fuente.", "An internal assistant must answer with HR policies that change weekly and cite the source."]
-    options: [["RAG con Vertex AI Search o RAG Engine sobre los documentos", "RAG with Vertex AI Search or RAG Engine over the documents"], ["Ajustar Gemini cada semana con las políticas", "Tune Gemini weekly on the policies"], ["Entrenar un modelo de lenguaje propio", "Train your own language model"]]
+    options: [["RAG con Vertex AI Search o RAG Engine sobre los documentos", "RAG with Vertex AI Search or RAG Engine over the documents"], ["Ajuste supervisado de Gemini cada semana con las políticas", "Supervised Gemini tuning weekly on the policies"], ["Entrenar un modelo de lenguaje propio con las políticas", "Train your own language model on the policies"], ["Grounding con Google Search", "Grounding with Google Search"]]
     answer: 0
     why: ["RAG usa siempre la versión actual de los documentos y permite citar.", "RAG always uses the current documents and allows citations."]
   - q: ["El modelo de recomendación funcionaba bien, pero tras 6 meses sus métricas han caído poco a poco.", "The recommendation model worked well but its metrics slowly dropped over 6 months."]
-    options: [["Detectar deriva con Model Monitoring y reentrenar con datos recientes", "Detect drift with Model Monitoring and retrain on recent data"], ["Añadir más réplicas al endpoint", "Add more endpoint replicas"], ["Pasar a TPUs", "Move to TPUs"]]
+    options: [["Detectar deriva con Model Monitoring y reentrenar con datos recientes", "Detect drift with Model Monitoring and retrain on recent data"], ["Añadir más réplicas al endpoint", "Add more endpoint replicas"], ["Aumentar el tamaño de lote de predicción", "Increase the prediction batch size"], ["Pasar a TPUs para servir", "Move serving to TPUs"]]
     answer: 0
     why: ["Los datos del mundo cambian; el modelo debe seguirlos.", "Real-world data changes; the model must follow."]
   - q: ["El equipo quiere que cada modelo nuevo se entrene, evalúe y solo se despliegue si mejora al actual, de forma reproducible.", "The team wants each new model trained, evaluated and deployed only if it beats the current one, reproducibly."]
-    options: [["Vertex AI Pipelines con un paso de evaluación condicional", "Vertex AI Pipelines with a conditional evaluation step"], ["Un cuaderno que alguien ejecuta a mano", "A notebook someone runs by hand"], ["Un cron en una VM", "A cron job on a VM"]]
+    options: [["Vertex AI Pipelines con un paso de evaluación condicional", "Vertex AI Pipelines with a conditional evaluation step"], ["Cloud Composer que ejecuta un cuaderno programado", "Cloud Composer running a scheduled notebook"], ["Cloud Build que entrena y despliega en cada commit", "Cloud Build training and deploying on every commit"], ["Vertex AI Experiments con despliegue manual", "Vertex AI Experiments with manual deployment"]]
     answer: 0
     why: ["La pipeline registra linaje y automatiza la decisión.", "The pipeline records lineage and automates the decision."]
   - q: ["Detección de tumores en radiografías: no escapar ningún caso es lo más importante.", "Tumour detection in X-rays: missing no case is the top priority."]
-    options: [["Maximizar el recall", "Maximize recall"], ["Maximizar la precisión", "Maximize precision"], ["Minimizar el RMSE", "Minimize RMSE"]]
+    options: [["Maximizar el recall", "Maximize recall"], ["Maximizar la precisión (precision)", "Maximize precision"], ["Maximizar la exactitud (accuracy)", "Maximize accuracy"], ["Minimizar el log loss", "Minimize log loss"]]
     answer: 0
     why: ["Un falso negativo es lo más caro; el recall mide cuántos positivos encuentras.", "A false negative is most costly; recall measures how many positives you find."]
 quiz:
@@ -138,31 +138,31 @@ quiz:
     answers: [0, 1]
     why: ["Compartir las características o la misma lógica de transformación elimina el desfase.", "Sharing the features or the same transformation logic removes skew."]
   - q: ["¿Qué hardware conviene para entrenar una red muy grande en JAX con muchas multiplicaciones de matrices?", "Which hardware suits training a very large JAX network dominated by matrix multiplications?"]
-    options: [["TPU", "TPU"], ["CPU con muchos núcleos", "Many-core CPU"], ["Memorystore", "Memorystore"]]
+    options: [["TPU", "TPU"], ["GPU de un solo nodo", "Single-node GPU"], ["CPU con muchos núcleos", "Many-core CPU"], ["VMs con mucha memoria (M3)", "Memory-optimized VMs (M3)"]]
     answer: 0
     why: ["Las TPU están diseñadas para operaciones de matrices a gran escala.", "TPUs are designed for large-scale matrix operations."]
   - q: ["¿Qué servicio busca los mejores hiperparámetros con optimización bayesiana?", "Which service searches for the best hyperparameters with Bayesian optimization?"]
-    options: [["Vertex AI Vizier", "Vertex AI Vizier"], ["Cloud Scheduler", "Cloud Scheduler"], ["Dataflow", "Dataflow"]]
+    options: [["Vertex AI Vizier", "Vertex AI Vizier"], ["Vertex AI Experiments", "Vertex AI Experiments"], ["AutoML", "AutoML"], ["Vertex AI Model Monitoring", "Vertex AI Model Monitoring"]]
     answer: 0
     why: ["Vizier impulsa el ajuste de hiperparámetros de Vertex AI.", "Vizier powers Vertex AI hyperparameter tuning."]
   - q: ["Quieres probar un modelo nuevo con el 10 % del tráfico del endpoint actual.", "You want to test a new model with 10% of the current endpoint traffic."]
-    options: [["Desplegarlo en el mismo endpoint con reparto 90/10", "Deploy it to the same endpoint with a 90/10 split"], ["Crear otro proyecto", "Create another project"], ["Predicción por lotes", "Batch prediction"]]
+    options: [["Desplegarlo en el mismo endpoint con reparto 90/10", "Deploy it to the same endpoint with a 90/10 split"], ["Crear un segundo endpoint y repartir con DNS", "Create a second endpoint and split with DNS"], ["Predicción por lotes sobre el 10 % de las peticiones", "Batch prediction on 10% of requests"], ["Sustituir el modelo y vigilar las métricas", "Replace the model and watch metrics"]]
     answer: 0
     why: ["Un endpoint admite varios modelos con porcentaje de tráfico.", "An endpoint supports several models with traffic percentages."]
   - q: ["¿Qué técnica reduce alucinaciones anclando las respuestas en fuentes fiables?", "Which technique reduces hallucinations by anchoring answers in trusted sources?"]
-    options: [["Grounding", "Grounding"], ["Aumentar la temperatura", "Raising the temperature"], ["Quitar el system prompt", "Removing the system prompt"]]
+    options: [["Grounding", "Grounding"], ["Aumentar la temperatura", "Raising the temperature"], ["Ajuste supervisado", "Supervised tuning"], ["Aumentar max output tokens", "Raising max output tokens"]]
     answer: 0
     why: ["Grounding con Google Search o tus datos da respuestas verificables.", "Grounding with Google Search or your data gives verifiable answers."]
   - q: ["Una regresión de precios tiene algunos valores atípicos enormes que no quieres que dominen la métrica.", "A price regression has a few huge outliers you don't want to dominate the metric."]
-    options: [["MAE", "MAE"], ["RMSE", "RMSE"], ["AUC ROC", "ROC AUC"]]
+    options: [["MAE", "MAE"], ["RMSE", "RMSE"], ["MSE", "MSE"], ["R² ajustado", "Adjusted R²"]]
     answer: 0
     why: ["RMSE eleva al cuadrado los errores; MAE no.", "RMSE squares errors; MAE does not."]
   - q: ["Una variable del dataset es «fecha de cancelación», que solo existe cuando el cliente ya se ha ido. ¿Problema?", "A dataset feature is \"cancellation date\", which only exists once the customer has left. Problem?"]
-    options: [["Fuga de datos", "Data leakage"], ["Clases desequilibradas", "Class imbalance"], ["Deriva", "Drift"]]
+    options: [["Fuga de datos", "Data leakage"], ["Clases desequilibradas", "Class imbalance"], ["Deriva de datos", "Data drift"], ["Subajuste (underfitting)", "Underfitting"]]
     answer: 0
     why: ["Esa información no está disponible al predecir: el modelo hace trampa.", "That information is unavailable at prediction time: the model cheats."]
   - q: ["¿Qué registra qué dataset, código y parámetros generaron un modelo concreto?", "What records which dataset, code and parameters produced a given model?"]
-    options: [["Vertex ML Metadata (linaje)", "Vertex ML Metadata (lineage)"], ["Cloud Audit Logs", "Cloud Audit Logs"], ["Artifact Registry", "Artifact Registry"]]
+    options: [["Vertex ML Metadata (linaje)", "Vertex ML Metadata (lineage)"], ["Cloud Audit Logs", "Cloud Audit Logs"], ["Cloud Logging", "Cloud Logging"], ["Artifact Registry", "Artifact Registry"]]
     answer: 0
     why: ["El linaje de metadatos permite reproducir y auditar.", "Metadata lineage enables reproduction and audit."]
   - q: ["Solo el 1 % de los ejemplos son fraude. ¿Qué haces? (Elige 2)", "Only 1% of examples are fraud. What do you do? (Choose 2)"]
@@ -170,6 +170,6 @@ quiz:
     answers: [0, 1]
     why: ["Con clases desequilibradas la exactitud engaña (99 % prediciendo siempre «no fraude»).", "With imbalanced classes accuracy misleads (99% by always predicting \"not fraud\")."]
   - q: ["¿Cómo explicas qué variables influyeron en una predicción concreta?", "How do you explain which features drove a specific prediction?"]
-    options: [["Vertex Explainable AI (atribuciones de características)", "Vertex Explainable AI (feature attributions)"], ["Cloud Trace", "Cloud Trace"], ["Aumentar las réplicas", "Adding replicas"]]
+    options: [["Vertex Explainable AI (atribuciones de características)", "Vertex Explainable AI (feature attributions)"], ["Vertex AI Model Monitoring", "Vertex AI Model Monitoring"], ["Vertex AI Experiments", "Vertex AI Experiments"], ["TensorFlow Data Validation", "TensorFlow Data Validation"]]
     answer: 0
     why: ["Las atribuciones muestran la contribución de cada característica.", "Attributions show each feature's contribution."]

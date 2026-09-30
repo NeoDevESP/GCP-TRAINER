@@ -45,28 +45,28 @@ concepts:
     tip: ["Durante un incidente, lo primero es restaurar el servicio.", "During an incident, restoring service comes first."]
 scenarios:
   - q: ["Quieres un aviso cuando aparezcan más de 10 errores 500 por minuto en los registros.", "You want an alert when more than 10 HTTP 500 errors per minute appear in logs."]
-    options: [["Métrica basada en registros + política de alertas", "Log-based metric + alerting policy"], ["Un sink a BigQuery", "A sink to BigQuery"], ["Cloud Trace", "Cloud Trace"]]
+    options: [["Métrica basada en registros + política de alertas", "Log-based metric + alerting policy"], ["Un sink de los errores a Pub/Sub con una función que cuente", "A sink of errors to Pub/Sub with a counting function"], ["Un uptime check sobre la URL", "An uptime check on the URL"], ["Una alerta sobre el uso de CPU", "An alert on CPU usage"]]
     answer: 0
     why: ["La métrica cuenta las líneas y la alerta vigila la métrica.", "The metric counts lines and the alert watches the metric."]
   - q: ["Auditoría pide conservar registros 7 años al menor coste.", "Audit asks to keep logs 7 years at minimum cost."]
-    options: [["Sink a un bucket de Cloud Storage en Archive", "Sink to a Cloud Storage bucket in Archive"], ["Dejar la retención por defecto", "Keep default retention"], ["Exportar a mano cada mes", "Export by hand monthly"]]
+    options: [["Sink a un bucket de Cloud Storage en Archive", "Sink to a Cloud Storage bucket in Archive"], ["Bucket de registros con retención de 7 años", "Log bucket with 7-year retention"], ["Sink a BigQuery con caducidad de tabla de 7 años", "Sink to BigQuery with a 7-year table expiration"], ["Sink a un bucket de Cloud Storage en Standard", "Sink to a Cloud Storage bucket in Standard"]]
     answer: 0
     why: ["Archive es la clase más barata para datos que casi no se leen.", "Archive is the cheapest class for rarely read data."]
   - q: ["Una petición tarda 4 s y atraviesa 6 microservicios. ¿Cuál es el lento?", "A request takes 4 s across 6 microservices. Which one is slow?"]
-    options: [["Cloud Trace", "Cloud Trace"], ["Error Reporting", "Error Reporting"], ["Cloud Logging", "Cloud Logging"]]
+    options: [["Cloud Trace", "Cloud Trace"], ["Cloud Profiler", "Cloud Profiler"], ["Error Reporting", "Error Reporting"], ["Métricas de latencia del balanceador", "Load balancer latency metrics"]]
     answer: 0
     why: ["La traza distribuida muestra el tiempo de cada salto.", "Distributed tracing shows the time of each hop."]
   - q: ["La web cae tras un despliegue. ¿Primer paso?", "The website goes down after a deploy. First step?"]
-    options: [["Revertir a la versión anterior", "Roll back to the previous version"], ["Encontrar la línea culpable", "Find the guilty line"], ["Escribir el postmortem", "Write the postmortem"]]
+    options: [["Revertir a la versión anterior", "Roll back to the previous version"], ["Buscar la causa raíz en los registros", "Find the root cause in the logs"], ["Escalar el servicio al doble de instancias", "Scale the service to twice the instances"], ["Abrir un caso de soporte con Google", "Open a support case with Google"]]
     answer: 0
     why: ["Mitigar primero; la causa raíz después.", "Mitigate first; root cause later."]
 quiz:
   - q: ["¿Qué necesitas para ver la memoria usada dentro de una VM?", "What do you need to see memory used inside a VM?"]
-    options: [["El Agente de operaciones", "The Ops Agent"], ["Nada, sale por defecto", "Nothing, it's default"], ["Cloud Trace", "Cloud Trace"]]
+    options: [["El Agente de operaciones", "The Ops Agent"], ["Nada: la memoria aparece por defecto en Monitoring", "Nothing: memory shows in Monitoring by default"], ["Cloud Profiler", "Cloud Profiler"], ["VM Manager", "VM Manager"]]
     answer: 0
     why: ["Las métricas del hipervisor no ven la memoria del SO invitado.", "Hypervisor metrics cannot see guest OS memory."]
   - q: ["Un SLO del 99,9 % mensual permite aproximadamente…", "A 99.9% monthly SLO allows approximately…"]
-    options: [["43 minutos de fallo", "43 minutes of failure"], ["4 horas", "4 hours"], ["4 minutos", "4 minutes"]]
+    options: [["43 minutos de fallo", "43 minutes of failure"], ["4,3 minutos", "4.3 minutes"], ["7,2 horas", "7.2 hours"], ["8,7 horas", "8.7 hours"]]
     answer: 0
     why: ["0,1 % de 30 días ≈ 43,2 minutos.", "0.1% of 30 days ≈ 43.2 minutes."]
   - q: ["¿A dónde NO puede exportar un sink de registros?", "Where can a log sink NOT export to?"]
@@ -74,10 +74,10 @@ quiz:
     answer: 0
     why: ["Destinos: Cloud Storage, BigQuery, Pub/Sub, buckets de logs y otros proyectos.", "Destinations: Cloud Storage, BigQuery, Pub/Sub, log buckets and other projects."]
   - q: ["¿Qué caracteriza un postmortem bien hecho?", "What makes a good postmortem?"]
-    options: [["Sin culpas y con acciones concretas", "Blameless with concrete actions"], ["Identifica al culpable", "Identifies the culprit"], ["Solo lo lee el equipo afectado", "Only the affected team reads it"]]
+    options: [["Sin culpas y con acciones concretas", "Blameless with concrete actions"], ["Identifica quién provocó el fallo para evitar que se repita", "Identifies who caused the failure to prevent repeats"], ["Se escribe solo si el incidente afectó a clientes", "It is written only if customers were affected"], ["Se guarda en privado dentro del equipo afectado", "It is kept private within the affected team"]]
     answer: 0
     why: ["Se centra en mejorar el sistema.", "It focuses on improving the system."]
   - q: ["¿Qué herramienta agrupa excepciones iguales de la aplicación?", "Which tool groups identical application exceptions?"]
-    options: [["Error Reporting", "Error Reporting"], ["Cloud Profiler", "Cloud Profiler"], ["Uptime checks", "Uptime checks"]]
+    options: [["Error Reporting", "Error Reporting"], ["Cloud Profiler", "Cloud Profiler"], ["Cloud Trace", "Cloud Trace"], ["Log Analytics", "Log Analytics"]]
     answer: 0
     why: ["Error Reporting deduplica y avisa de errores nuevos.", "Error Reporting deduplicates and flags new errors."]

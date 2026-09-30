@@ -27,24 +27,24 @@ concepts:
     tip: ["Saber si la web responde desde fuera antes que los clientes → uptime check + alerta.", "Know whether the site responds from outside before customers do → uptime check + alert."]
 scenarios:
   - q: ["El coste de Cloud Logging se dispara por registros DEBUG de un servicio muy hablador.", "Cloud Logging cost is soaring due to DEBUG logs from a chatty service."]
-    options: [["Filtro de exclusión en el Log Router para esos registros", "Exclusion filter in the Log Router for those logs"], ["Borrar el proyecto", "Delete the project"], ["Desactivar los registros de auditoría", "Disable audit logs"]]
+    options: [["Filtro de exclusión en el Log Router para esos registros", "Exclusion filter in the Log Router for those logs"], ["Reducir la retención del bucket _Default a 1 día", "Reduce the _Default bucket retention to 1 day"], ["Crear un sink de esos registros a Cloud Storage", "Create a sink of those logs to Cloud Storage"], ["Desactivar los registros de auditoría de acceso a datos", "Disable Data Access audit logs"]]
     answer: 0
     why: ["Excluir lo que no aporta reduce el volumen ingerido.", "Excluding what adds nothing reduces ingested volume."]
   - q: ["El equipo de seguridad necesita todos los registros de auditoría de los 300 proyectos en BigQuery.", "Security needs audit logs from all 300 projects in BigQuery."]
-    options: [["Sink agregado en la organización con destino BigQuery", "Aggregated sink at the organization to BigQuery"], ["300 sinks creados a mano", "300 hand-made sinks"], ["Exportar a CSV cada día", "Export to CSV daily"]]
+    options: [["Sink agregado en la organización con destino BigQuery", "Aggregated sink at the organization to BigQuery"], ["Un sink en cada proyecto creado con un script", "A sink in each project created by a script"], ["Un ámbito de métricas que incluya los 300 proyectos", "A metrics scope including the 300 projects"], ["Log Analytics en cada proyecto", "Log Analytics in each project"]]
     answer: 0
     why: ["Un sink agregado cubre proyectos presentes y futuros.", "An aggregated sink covers current and future projects."]
   - q: ["Las métricas de la aplicación se exponen en formato Prometheus en GKE y el equipo quiere seguir usando PromQL.", "App metrics are exposed in Prometheus format on GKE and the team wants to keep using PromQL."]
-    options: [["Google Cloud Managed Service for Prometheus", "Google Cloud Managed Service for Prometheus"], ["Reescribirlas como logs", "Rewrite them as logs"], ["Cloud Trace", "Cloud Trace"]]
+    options: [["Google Cloud Managed Service for Prometheus", "Google Cloud Managed Service for Prometheus"], ["Agente de operaciones en los nodos", "Ops Agent on the nodes"], ["Métricas basadas en registros", "Log-based metrics"], ["Métricas personalizadas con la API de Monitoring", "Custom metrics via the Monitoring API"]]
     answer: 0
     why: ["Recoge métricas Prometheus sin gestionar el servidor.", "It collects Prometheus metrics without running the server."]
 quiz:
   - q: ["¿Cuánto conserva el bucket _Required los registros de auditoría?", "How long does the _Required bucket keep audit logs?"]
-    options: [["400 días", "400 days"], ["30 días", "30 days"], ["7 días", "7 days"]]
+    options: [["400 días", "400 days"], ["30 días", "30 days"], ["365 días", "365 days"], ["Configurable hasta 10 años", "Configurable up to 10 years"]]
     answer: 0
     why: ["No se puede cambiar ni borrar.", "It can't be changed or deleted."]
   - q: ["¿Qué permite consultar registros con SQL?", "What lets you query logs with SQL?"]
-    options: [["Log Analytics", "Log Analytics"], ["Error Reporting", "Error Reporting"], ["Cloud Profiler", "Cloud Profiler"]]
+    options: [["Log Analytics", "Log Analytics"], ["El Explorador de registros con consultas LQL", "Logs Explorer with LQL queries"], ["Error Reporting", "Error Reporting"], ["Cloud Trace", "Cloud Trace"]]
     answer: 0
     why: ["Log Analytics se apoya en BigQuery para consultas SQL.", "Log Analytics is backed by BigQuery for SQL queries."]
   - q: ["¿Qué dos destinos admite un sink? (Elige 2)", "Which two destinations does a sink support? (Choose 2)"]
@@ -52,6 +52,6 @@ quiz:
     answers: [0, 1]
     why: ["También BigQuery, buckets de logs y otros proyectos.", "Also BigQuery, log buckets and other projects."]
   - q: ["¿Qué estándar abierto recomienda Google para instrumentar trazas y métricas?", "Which open standard does Google recommend for instrumenting traces and metrics?"]
-    options: [["OpenTelemetry", "OpenTelemetry"], ["SNMP", "SNMP"], ["Syslog", "Syslog"]]
+    options: [["OpenTelemetry", "OpenTelemetry"], ["Prometheus exposition format", "Prometheus exposition format"], ["OpenCensus", "OpenCensus"], ["StatsD", "StatsD"]]
     answer: 0
     why: ["OpenTelemetry envía a Cloud Trace y Cloud Monitoring.", "OpenTelemetry exports to Cloud Trace and Cloud Monitoring."]

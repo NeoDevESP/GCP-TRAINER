@@ -36,32 +36,32 @@ concepts:
     tip: ["Probar código que usa Pub/Sub sin tocar la nube → emulador de Pub/Sub.", "Test code that uses Pub/Sub without touching the cloud → Pub/Sub emulator."]
 scenarios:
   - q: ["Hay 3 entornos con el mismo Terraform y un error en desarrollo borró recursos de producción.", "There are 3 environments on the same Terraform and a dev mistake deleted prod resources."]
-    options: [["Separar el estado por entorno y aplicar solo desde el pipeline con aprobación para prod", "Separate state per environment and apply only from the pipeline with prod approval"], ["Dejar de usar Terraform en producción", "Stop using Terraform in prod"], ["Hacer copias del .tfstate en el portátil", "Keep .tfstate copies on laptops"]]
+    options: [["Separar el estado por entorno y aplicar solo desde el pipeline con aprobación para prod", "Separate state per environment and apply only from the pipeline with prod approval"], ["Usar workspaces locales en cada portátil y aplicar a mano", "Use local workspaces on each laptop and apply by hand"], ["Añadir lifecycle { prevent_destroy } solo a los recursos de desarrollo", "Add lifecycle { prevent_destroy } only to dev resources"], ["Un único estado compartido con bloqueo para los tres entornos", "A single shared locked state for all three environments"]]
     answer: 0
     why: ["Aislar el estado limita el radio de impacto.", "Isolating state limits the blast radius."]
   - q: ["El equipo quiere que cada commit despliegue en staging automáticamente y en producción tras aprobación manual.", "The team wants each commit auto-deployed to staging and to prod after manual approval."]
-    options: [["Cloud Build para compilar + Cloud Deploy con requireApproval en producción", "Cloud Build to build + Cloud Deploy with requireApproval on prod"], ["Desplegar a mano con kubectl", "Deploy by hand with kubectl"], ["Un cron nocturno", "A nightly cron"]]
+    options: [["Cloud Build para compilar + Cloud Deploy con requireApproval en producción", "Cloud Build to build + Cloud Deploy with requireApproval on prod"], ["Cloud Build con un paso kubectl apply para cada entorno", "Cloud Build with a kubectl apply step per environment"], ["Dos activadores de Cloud Build que despliegan a la vez en ambos entornos", "Two Cloud Build triggers deploying to both environments at once"], ["Cloud Deploy sin aprobaciones y con promoción automática", "Cloud Deploy without approvals and with automatic promotion"]]
     answer: 0
     why: ["Cloud Deploy modela etapas y aprobaciones.", "Cloud Deploy models stages and approvals."]
   - q: ["Las compilaciones de Cloud Build necesitan la contraseña de un registro privado.", "Cloud Build builds need a private registry's password."]
-    options: [["Leerla de Secret Manager con availableSecrets", "Read it from Secret Manager via availableSecrets"], ["Escribirla en cloudbuild.yaml", "Write it in cloudbuild.yaml"], ["Guardarla en la imagen base", "Bake it into the base image"]]
+    options: [["Leerla de Secret Manager con availableSecrets", "Read it from Secret Manager via availableSecrets"], ["Pasarla como sustitución _PASSWORD en el activador", "Pass it as a _PASSWORD substitution on the trigger"], ["Guardarla cifrada en base64 en el repositorio", "Store it base64-encoded in the repository"], ["Guardarla en una variable de entorno de la imagen base", "Keep it in a base image environment variable"]]
     answer: 0
     why: ["Nunca secretos en el repositorio.", "Never secrets in the repository."]
   - q: ["Un clúster GKE fue modificado a mano y ya no coincide con Git.", "A GKE cluster was changed by hand and no longer matches Git."]
-    options: [["Config Sync lo revierte al estado de Git automáticamente", "Config Sync reverts it to Git's state automatically"], ["Reinstalar el clúster", "Reinstall the cluster"], ["Documentar el cambio", "Document the change"]]
+    options: [["Config Sync lo revierte al estado de Git automáticamente", "Config Sync reverts it to Git's state automatically"], ["Cloud Deploy lo detecta y lo revierte", "Cloud Deploy detects and reverts it"], ["Binary Authorization lo revierte", "Binary Authorization reverts it"], ["Terraform plan lo revierte automáticamente", "Terraform plan reverts it automatically"]]
     answer: 0
     why: ["GitOps corrige la deriva continuamente.", "GitOps continuously corrects drift."]
 quiz:
   - q: ["¿Qué sustitución de Cloud Build contiene el hash corto del commit?", "Which Cloud Build substitution holds the short commit hash?"]
-    options: [["$SHORT_SHA", "$SHORT_SHA"], ["$BUILD_ID", "$BUILD_ID"], ["$PROJECT_ID", "$PROJECT_ID"]]
+    options: [["$SHORT_SHA", "$SHORT_SHA"], ["$COMMIT_SHA", "$COMMIT_SHA"], ["$BUILD_ID", "$BUILD_ID"], ["$REVISION_ID", "$REVISION_ID"]]
     answer: 0
     why: ["Útil para etiquetar imágenes de forma trazable.", "Useful for traceable image tags."]
   - q: ["¿Qué comando incorpora a Terraform un recurso que ya existe?", "Which command brings an existing resource into Terraform?"]
-    options: [["terraform import", "terraform import"], ["terraform refresh", "terraform refresh"], ["terraform taint", "terraform taint"]]
+    options: [["terraform import", "terraform import"], ["terraform refresh", "terraform refresh"], ["terraform state pull", "terraform state pull"], ["terraform taint", "terraform taint"]]
     answer: 0
     why: ["import lo añade al estado para gestionarlo desde el código.", "import adds it to state so code can manage it."]
   - q: ["¿Qué gestiona recursos de Google Cloud como objetos de Kubernetes?", "What manages Google Cloud resources as Kubernetes objects?"]
-    options: [["Config Connector", "Config Connector"], ["Cloud Deploy", "Cloud Deploy"], ["Artifact Registry", "Artifact Registry"]]
+    options: [["Config Connector", "Config Connector"], ["Config Sync", "Config Sync"], ["Policy Controller", "Policy Controller"], ["Cloud Deploy", "Cloud Deploy"]]
     answer: 0
     why: ["Declaras un bucket o una base de datos en YAML de Kubernetes.", "You declare a bucket or database in Kubernetes YAML."]
   - q: ["¿Qué dos prácticas mejoran la seguridad de la cadena de suministro? (Elige 2)", "Which two practices improve supply-chain security? (Choose 2)"]
@@ -69,6 +69,6 @@ quiz:
     answers: [0, 1]
     why: ["Escanear detecta, Binary Authorization impide desplegar lo no aprobado.", "Scanning detects, Binary Authorization prevents unapproved deploys."]
   - q: ["¿Qué ejecuta Terraform de forma gestionada en Google Cloud?", "What runs Terraform as a managed service on Google Cloud?"]
-    options: [["Infrastructure Manager", "Infrastructure Manager"], ["Cloud Composer", "Cloud Composer"], ["Deployment Scheduler", "Deployment Scheduler"]]
+    options: [["Infrastructure Manager", "Infrastructure Manager"], ["Cloud Deployment Manager", "Cloud Deployment Manager"], ["Cloud Composer", "Cloud Composer"], ["Config Connector", "Config Connector"]]
     answer: 0
     why: ["Guarda el estado y ejecuta plan/apply por ti.", "It stores state and runs plan/apply for you."]

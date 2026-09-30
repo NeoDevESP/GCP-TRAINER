@@ -46,36 +46,36 @@ concepts:
     tip: ["Equipo sin programadores que necesita ETL gráfico → Cloud Data Fusion.", "Team without programmers needing graphical ETL → Cloud Data Fusion."]
 scenarios:
   - q: ["Llegan eventos tarde por la mala cobertura de los móviles y los totales por minuto salen incompletos.", "Events arrive late due to poor mobile coverage and per-minute totals come out incomplete."]
-    options: [["Configurar marca de agua y triggers para datos tardíos en Dataflow", "Configure watermark and late-data triggers in Dataflow"], ["Usar Cloud SQL", "Use Cloud SQL"], ["Aumentar las réplicas de Pub/Sub", "Add Pub/Sub replicas"]]
+    options: [["Configurar marca de agua y triggers para datos tardíos en Dataflow", "Configure watermark and late-data triggers in Dataflow"], ["Usar ventanas globales sin triggers", "Use global windows without triggers"], ["Activar el orden de mensajes en Pub/Sub", "Enable message ordering in Pub/Sub"], ["Aumentar el plazo de confirmación (ack deadline) de la suscripción", "Increase the subscription ack deadline"]]
     answer: 0
     why: ["Beam gestiona el tiempo del evento y permite actualizar resultados con datos tardíos.", "Beam handles event time and can update results with late data."]
   - q: ["El equipo de marketing debe ver solo las filas de su país en una tabla compartida de ventas.", "The marketing team must see only their country's rows in a shared sales table."]
-    options: [["Row access policies de BigQuery", "BigQuery row access policies"], ["Copiar la tabla por país cada noche", "Copy the table per country nightly"], ["Un bucket por país", "A bucket per country"]]
+    options: [["Row access policies de BigQuery", "BigQuery row access policies"], ["Enmascaramiento dinámico de datos en la columna de importe", "Dynamic data masking on the amount column"], ["Policy tags en la columna de país", "Policy tags on the country column"], ["Un dataset por país con IAM", "One dataset per country with IAM"]]
     answer: 0
     why: ["Seguridad a nivel de fila sin duplicar datos.", "Row-level security without duplicating data."]
   - q: ["Hay datos Parquet en Cloud Storage que otros sistemas también leen; quieres consultarlos en BigQuery con seguridad fina sin copiarlos.", "Parquet data in Cloud Storage is read by other systems too; you want to query it in BigQuery with fine-grained security without copying."]
-    options: [["Tablas BigLake", "BigLake tables"], ["Cargar una copia cada hora", "Load a copy hourly"], ["Dataproc", "Dataproc"]]
+    options: [["Tablas BigLake", "BigLake tables"], ["Tablas externas estándar de BigQuery", "Standard BigQuery external tables"], ["Cargar los datos en tablas nativas cada hora", "Load the data into native tables hourly"], ["Dataproc con Spark SQL sobre los archivos", "Dataproc with Spark SQL over the files"]]
     answer: 0
     why: ["BigLake consulta en su sitio con controles de fila y columna.", "BigLake queries in place with row and column controls."]
   - q: ["Un pipeline de Dataflow en streaming necesita una versión nueva del código sin perder mensajes.", "A streaming Dataflow pipeline needs new code without losing messages."]
-    options: [["Actualizar el trabajo (--update) o drenar y relanzar", "Update the job (--update) or drain and relaunch"], ["Cancelar y relanzar", "Cancel and relaunch"], ["Borrar la suscripción", "Delete the subscription"]]
+    options: [["Actualizar el trabajo (--update) o drenar y relanzar", "Update the job (--update) or drain and relaunch"], ["Cancelar el trabajo y relanzarlo con el código nuevo", "Cancel the job and relaunch with the new code"], ["Crear un segundo trabajo en paralelo sobre la misma suscripción", "Create a second job in parallel on the same subscription"], ["Hacer un snapshot de Pub/Sub y borrar la suscripción", "Take a Pub/Sub snapshot and delete the subscription"]]
     answer: 0
     why: ["Cancelar descarta los datos en curso; drain los procesa antes de parar.", "Cancel discards in-flight data; drain processes it before stopping."]
   - q: ["Los analistas quieren transformar tablas en BigQuery con SQL versionado en Git y dependencias entre pasos.", "Analysts want to transform BigQuery tables with Git-versioned SQL and step dependencies."]
-    options: [["Dataform", "Dataform"], ["Dataproc", "Dataproc"], ["Cloud Functions", "Cloud Functions"]]
+    options: [["Dataform", "Dataform"], ["Cloud Composer", "Cloud Composer"], ["Consultas programadas de BigQuery", "BigQuery scheduled queries"], ["Cloud Data Fusion", "Cloud Data Fusion"]]
     answer: 0
     why: ["Dataform gestiona ELT en SQL con control de versiones.", "Dataform manages SQL ELT with version control."]
   - q: ["Hay que ingerir mensajes de Pub/Sub en BigQuery tal cual, sin transformar, con el mínimo mantenimiento.", "Ingest Pub/Sub messages into BigQuery as is, without transforms, with minimal maintenance."]
-    options: [["Suscripción de BigQuery en Pub/Sub", "Pub/Sub BigQuery subscription"], ["Dataflow con plantilla personalizada", "Dataflow with a custom template"], ["Cloud Run que inserte fila a fila", "Cloud Run inserting row by row"]]
+    options: [["Suscripción de BigQuery en Pub/Sub", "Pub/Sub BigQuery subscription"], ["Dataflow con la plantilla Pub/Sub to BigQuery", "Dataflow with the Pub/Sub to BigQuery template"], ["Una función que inserte con la API de streaming heredada", "A function inserting with the legacy streaming API"], ["Suscripción de Cloud Storage y carga por lotes", "Cloud Storage subscription and batch load"]]
     answer: 0
     why: ["Sin pipeline que operar.", "No pipeline to operate."]
 quiz:
   - q: ["¿Durante cuánto tiempo permite time travel consultar una tabla en el pasado?", "How far back does time travel let you query a table?"]
-    options: [["Hasta 7 días (configurable de 2 a 7)", "Up to 7 days (configurable from 2 to 7)"], ["30 días", "30 days"], ["1 año", "1 year"]]
+    options: [["Hasta 7 días (configurable de 2 a 7)", "Up to 7 days (configurable from 2 to 7)"], ["Hasta 30 días", "Up to 30 days"], ["Hasta 90 días", "Up to 90 days"], ["Hasta 24 horas", "Up to 24 hours"]]
     answer: 0
     why: ["Para más tiempo, usa snapshots de tabla.", "For longer, use table snapshots."]
   - q: ["¿Qué ventana agrupa eventos por periodos de actividad de cada usuario?", "Which window groups events by each user's activity periods?"]
-    options: [["Ventana de sesión", "Session window"], ["Ventana fija", "Fixed window"], ["Ventana global", "Global window"]]
+    options: [["Ventana de sesión", "Session window"], ["Ventana fija", "Fixed window"], ["Ventana deslizante", "Sliding window"], ["Ventana global con trigger por recuento", "Global window with a count trigger"]]
     answer: 0
     why: ["Se cierra tras un hueco de inactividad.", "It closes after an inactivity gap."]
   - q: ["¿Qué formato de archivo conserva el esquema al cargarlo en BigQuery? (Elige 2)", "Which file formats keep the schema when loading into BigQuery? (Choose 2)"]
@@ -83,11 +83,11 @@ quiz:
     answers: [0, 1]
     why: ["Son autodescriptivos; CSV requiere esquema o autodetección.", "They are self-describing; CSV needs a schema or autodetect."]
   - q: ["¿Qué hace una vista materializada en BigQuery?", "What does a BigQuery materialized view do?"]
-    options: [["Precalcula y mantiene el resultado para consultas más rápidas y baratas", "Precomputes and maintains results for faster, cheaper queries"], ["Da acceso a otro proyecto", "Grants access to another project"], ["Cifra la tabla", "Encrypts the table"]]
+    options: [["Precalcula y mantiene el resultado para consultas más rápidas y baratas", "Precomputes and maintains results for faster, cheaper queries"], ["Guarda una copia estática de la tabla en un momento dado", "Stores a static copy of the table at a point in time"], ["Comparte columnas con otro proyecto sin dar acceso a la tabla", "Shares columns with another project without table access"], ["Replica la tabla en otra región", "Replicates the table to another region"]]
     answer: 0
     why: ["Se refresca automáticamente con los cambios de la tabla base.", "It refreshes automatically with base table changes."]
   - q: ["¿Qué servicio conviene para orquestar un flujo sencillo de 4 llamadas a APIs con reintentos?", "Which service suits orchestrating a simple 4-API-call flow with retries?"]
-    options: [["Workflows", "Workflows"], ["Cloud Composer", "Cloud Composer"], ["Dataproc", "Dataproc"]]
+    options: [["Workflows", "Workflows"], ["Cloud Composer", "Cloud Composer"], ["Cloud Scheduler", "Cloud Scheduler"], ["Dataflow", "Dataflow"]]
     answer: 0
     why: ["Composer (Airflow) es más pesado; Workflows es serverless y ligero.", "Composer (Airflow) is heavier; Workflows is serverless and light."]
   - q: ["Se paga mucho por consultas repetidas iguales de un panel. ¿Qué ayuda? (Elige 2)", "Repeated identical dashboard queries cost a lot. What helps? (Choose 2)"]
@@ -95,10 +95,10 @@ quiz:
     answers: [0, 1]
     why: ["Reutilizan resultados en lugar de volver a leer datos.", "They reuse results instead of rereading data."]
   - q: ["¿Qué servicio ofrece Spark sin gestionar clústeres?", "Which service offers Spark without managing clusters?"]
-    options: [["Dataproc Serverless (Google Cloud Serverless for Apache Spark)", "Dataproc Serverless (Google Cloud Serverless for Apache Spark)"], ["Dataflow", "Dataflow"], ["Bigtable", "Bigtable"]]
+    options: [["Dataproc Serverless (Google Cloud Serverless for Apache Spark)", "Dataproc Serverless (Google Cloud Serverless for Apache Spark)"], ["Dataflow con el SDK de Beam para Spark", "Dataflow with the Beam SDK for Spark"], ["Dataproc en GKE", "Dataproc on GKE"], ["Dataproc en Compute Engine con autoescalado", "Dataproc on Compute Engine with autoscaling"]]
     answer: 0
     why: ["Envía lotes de Spark y Google gestiona la infraestructura.", "Submit Spark batches and Google manages the infrastructure."]
   - q: ["¿Qué garantiza la Storage Write API de BigQuery en modo comprometido?", "What does BigQuery's Storage Write API guarantee in committed mode?"]
-    options: [["Entrega exactamente una vez", "Exactly-once delivery"], ["Latencia de 1 ns", "1 ns latency"], ["Cifrado con EKM", "EKM encryption"]]
+    options: [["Entrega exactamente una vez", "Exactly-once delivery"], ["Entrega al menos una vez", "At-least-once delivery"], ["Orden global de todas las filas", "Global ordering of all rows"], ["Deduplicación por ID de inserción durante 24 h", "Deduplication by insert ID for 24 h"]]
     answer: 0
     why: ["Usa offsets de flujo para evitar duplicados.", "It uses stream offsets to avoid duplicates."]

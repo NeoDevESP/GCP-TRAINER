@@ -32,28 +32,28 @@ concepts:
     tip: ["«La VM tiene demasiados permisos» → cuenta de servicio propia con el mínimo, no la predeterminada.", "\"The VM has too many permissions\" → its own minimal service account, not the default."]
 scenarios:
   - q: ["Hay que asegurar que nadie pueda borrar los buckets de auditoría, aunque tenga Storage Admin u Owner.", "Ensure nobody can delete audit buckets, even with Storage Admin or Owner."]
-    options: [["Política de denegación sobre storage.buckets.delete con excepción del grupo de seguridad", "Deny policy on storage.buckets.delete with an exception for the security group"], ["Quitar Owner a todos", "Remove Owner from everyone"], ["Una regla de ciclo de vida", "A lifecycle rule"]]
+    options: [["Política de denegación sobre storage.buckets.delete con excepción del grupo de seguridad", "Deny policy on storage.buckets.delete with an exception for the security group"], ["Quitar Storage Admin y Owner a todos salvo seguridad", "Remove Storage Admin and Owner from everyone except security"], ["Activar soft delete en los buckets", "Enable soft delete on the buckets"], ["Una condición IAM en el rol Storage Admin", "An IAM condition on the Storage Admin role"]]
     answer: 0
     why: ["La denegación prevalece sobre cualquier concesión.", "Deny overrides any grant."]
   - q: ["Una VM de informes usa la cuenta de servicio predeterminada, que tiene Editor en el proyecto.", "A reporting VM uses the default service account, which has Editor on the project."]
-    options: [["Crear una cuenta dedicada con los roles mínimos y asignarla a la VM", "Create a dedicated account with minimal roles and attach it to the VM"], ["Mantenerla y limitar los scopes", "Keep it and limit scopes"], ["Descargar una clave de la cuenta predeterminada", "Download a key for the default account"]]
+    options: [["Crear una cuenta dedicada con los roles mínimos y asignarla a la VM", "Create a dedicated account with minimal roles and attach it to the VM"], ["Mantener la cuenta predeterminada y limitar los scopes de acceso", "Keep the default account and limit access scopes"], ["Quitar Editor a la cuenta predeterminada y darle Owner a la VM", "Remove Editor from the default account and give the VM Owner"], ["Crear una clave para la cuenta predeterminada y rotarla", "Create a key for the default account and rotate it"]]
     answer: 0
     why: ["Los scopes son un control heredado; lo correcto es IAM con mínimo privilegio.", "Scopes are a legacy control; the right fix is least-privilege IAM."]
   - q: ["Un desarrollador necesita probar como la cuenta de servicio de la app, sin descargar claves.", "A developer needs to test as the app's service account without downloading keys."]
-    options: [["Suplantarla con Service Account Token Creator (--impersonate-service-account)", "Impersonate it with Service Account Token Creator (--impersonate-service-account)"], ["Crear una clave JSON y enviarla por correo", "Create a JSON key and email it"], ["Darle Owner al desarrollador", "Give the developer Owner"]]
+    options: [["Suplantarla con Service Account Token Creator (--impersonate-service-account)", "Impersonate it with Service Account Token Creator (--impersonate-service-account)"], ["Darle Service Account User sobre la cuenta", "Grant them Service Account User on the account"], ["Crear una clave JSON de corta duración", "Create a short-lived JSON key"], ["Darle los mismos roles que tiene la cuenta", "Grant them the same roles as the account"]]
     answer: 0
     why: ["La suplantación genera tokens de corta duración auditados.", "Impersonation issues short-lived, audited tokens."]
   - q: ["Auditoría pregunta qué usuarios pueden leer los datos de un dataset de BigQuery en toda la organización.", "Audit asks which users can read a BigQuery dataset's data across the organization."]
-    options: [["Policy Analyzer", "Policy Analyzer"], ["Cloud Trace", "Cloud Trace"], ["Leer uno a uno los proyectos", "Read projects one by one"]]
+    options: [["Policy Analyzer", "Policy Analyzer"], ["Policy Troubleshooter", "Policy Troubleshooter"], ["IAM Recommender", "IAM Recommender"], ["Registros de auditoría de actividad de administrador", "Admin Activity audit logs"]]
     answer: 0
     why: ["Analiza políticas heredadas y pertenencia a grupos.", "It analyses inherited policies and group membership."]
 quiz:
   - q: ["¿Qué se evalúa primero: una política de denegación o una de permitir?", "Which is evaluated first: a deny policy or an allow policy?"]
-    options: [["La de denegación", "The deny policy"], ["La de permitir", "The allow policy"], ["La más reciente", "The most recent"]]
+    options: [["La de denegación", "The deny policy"], ["La de permitir", "The allow policy"], ["La que esté más abajo en la jerarquía", "The one lowest in the hierarchy"], ["Se evalúan en paralelo y gana la más específica", "They run in parallel and the most specific wins"]]
     answer: 0
     why: ["Si una denegación aplica, el permiso se rechaza aunque exista una concesión.", "If a deny applies, the permission is refused even if granted."]
   - q: ["¿Qué rol necesita un usuario para suplantar una cuenta de servicio?", "Which role does a user need to impersonate a service account?"]
-    options: [["Service Account Token Creator", "Service Account Token Creator"], ["Service Account Admin", "Service Account Admin"], ["Viewer", "Viewer"]]
+    options: [["Service Account Token Creator", "Service Account Token Creator"], ["Service Account User", "Service Account User"], ["Service Account Admin", "Service Account Admin"], ["Service Account Key Admin", "Service Account Key Admin"]]
     answer: 0
     why: ["Token Creator permite generar tokens de acceso de la cuenta.", "Token Creator allows generating the account's access tokens."]
   - q: ["¿Dónde conviene conceder roles a un equipo de 40 personas? (Elige 2)", "Where should you grant roles to a 40-person team? (Choose 2)"]
@@ -61,14 +61,14 @@ quiz:
     answers: [0, 1]
     why: ["Grupos para gestionar personas y ámbito mínimo para limitar el alcance.", "Groups to manage people and minimal scope to limit reach."]
   - q: ["¿Qué política de organización impide crear claves de cuentas de servicio?", "Which organization policy prevents creating service account keys?"]
-    options: [["iam.disableServiceAccountKeyCreation", "iam.disableServiceAccountKeyCreation"], ["compute.vmExternalIpAccess", "compute.vmExternalIpAccess"], ["gcp.resourceLocations", "gcp.resourceLocations"]]
+    options: [["iam.disableServiceAccountKeyCreation", "iam.disableServiceAccountKeyCreation"], ["iam.disableServiceAccountCreation", "iam.disableServiceAccountCreation"], ["iam.allowedPolicyMemberDomains", "iam.allowedPolicyMemberDomains"], ["iam.automaticIamGrantsForDefaultServiceAccounts", "iam.automaticIamGrantsForDefaultServiceAccounts"]]
     answer: 0
     why: ["Es la restricción habitual para eliminar claves de larga duración.", "It's the usual constraint to eliminate long-lived keys."]
   - q: ["¿Qué registro de auditoría hay que habilitar para saber quién leyó objetos de un bucket?", "Which audit log must be enabled to know who read objects in a bucket?"]
-    options: [["Data Access (DATA_READ)", "Data Access (DATA_READ)"], ["Admin Activity", "Admin Activity"], ["System Event", "System Event"]]
+    options: [["Data Access (DATA_READ)", "Data Access (DATA_READ)"], ["Admin Activity", "Admin Activity"], ["Data Access (ADMIN_READ)", "Data Access (ADMIN_READ)"], ["System Event", "System Event"]]
     answer: 0
     why: ["Leer datos no es actividad de administración.", "Reading data is not admin activity."]
   - q: ["¿Qué rol predefinido permite ver recursos sin ver datos sensibles, apto para auditores de seguridad?", "Which predefined role lets you view resources without sensitive data, suited to security auditors?"]
-    options: [["Security Reviewer (iam.securityReviewer)", "Security Reviewer (iam.securityReviewer)"], ["Editor", "Editor"], ["Owner", "Owner"]]
+    options: [["Security Reviewer (iam.securityReviewer)", "Security Reviewer (iam.securityReviewer)"], ["Viewer", "Viewer"], ["Browser", "Browser"], ["Organization Viewer", "Organization Viewer"]]
     answer: 0
     why: ["Permite listar políticas IAM y configuraciones para revisión.", "It can list IAM policies and configurations for review."]

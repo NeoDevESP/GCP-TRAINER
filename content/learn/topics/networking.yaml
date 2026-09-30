@@ -64,28 +64,28 @@ scenarios:
     answer: 0
     why: ["Cloud NAT da salida sin permitir conexiones entrantes.", "Cloud NAT gives egress without allowing inbound connections."]
   - q: ["La oficina necesita conectarse hoy mismo a la VPC, de forma cifrada y con alta disponibilidad.", "The office needs an encrypted, highly available link to the VPC today."]
-    options: [["HA VPN", "HA VPN"], ["Dedicated Interconnect", "Dedicated Interconnect"], ["Peering", "Peering"]]
+    options: [["HA VPN", "HA VPN"], ["Dedicated Interconnect", "Dedicated Interconnect"], ["Cloud VPN clásica con un túnel", "Classic Cloud VPN with one tunnel"], ["Partner Interconnect", "Partner Interconnect"]]
     answer: 0
     why: ["HA VPN se monta en minutos sobre internet con SLA 99,99 %.", "HA VPN is set up in minutes over the internet with a 99.99% SLA."]
   - q: ["Una tienda global quiere una IP, HTTPS, caché y protección contra ataques web.", "A global shop wants one IP, HTTPS, caching and protection against web attacks."]
-    options: [["Balanceador de aplicaciones externo + Cloud CDN + Cloud Armor", "External Application LB + Cloud CDN + Cloud Armor"], ["Balanceador de red de paso directo", "Passthrough Network LB"], ["Balanceador interno", "Internal LB"]]
+    options: [["Balanceador de aplicaciones externo + Cloud CDN + Cloud Armor", "External Application LB + Cloud CDN + Cloud Armor"], ["Balanceador de red externo de paso directo con Cloud Armor", "External passthrough Network Load Balancer with Cloud Armor"], ["Balanceador de aplicaciones externo regional con Cloud NAT", "Regional external Application Load Balancer with Cloud NAT"], ["Balanceador de proxy SSL con Cloud DNS", "SSL proxy load balancer with Cloud DNS"]]
     answer: 0
     why: ["Es el único global de capa 7 que integra CDN y Armor.", "It is the only global layer-7 option integrating CDN and Armor."]
   - q: ["30 proyectos de distintos equipos deben usar una red común controlada por el equipo de redes.", "30 projects from different teams must use a common network controlled by the network team."]
-    options: [["VPC compartida", "Shared VPC"], ["30 peerings", "30 peerings"], ["Una VPN por proyecto", "One VPN per project"]]
+    options: [["VPC compartida", "Shared VPC"], ["Peering entre todos los proyectos", "Peering between every project"], ["Una VPN desde cada proyecto al proyecto de red", "A VPN from each project to the network project"], ["Private Service Connect en cada proyecto", "Private Service Connect in each project"]]
     answer: 0
     why: ["La VPC compartida centraliza la red y delega los recursos.", "Shared VPC centralizes the network and delegates resources."]
 quiz:
   - q: ["¿Cuál es el comportamiento por defecto del cortafuegos de una VPC?", "What is a VPC firewall's default behaviour?"]
-    options: [["Denegar entrada y permitir salida", "Deny ingress and allow egress"], ["Permitir todo", "Allow everything"], ["Denegar todo", "Deny everything"]]
+    options: [["Denegar entrada y permitir salida", "Deny ingress and allow egress"], ["Permitir entrada y denegar salida", "Allow ingress and deny egress"], ["Denegar todo el tráfico", "Deny all traffic"], ["Permitir el tráfico interno y SSH", "Allow internal traffic and SSH"]]
     answer: 0
     why: ["Reglas implícitas: deny ingress y allow egress con la prioridad más baja.", "Implied rules: deny ingress and allow egress at the lowest priority."]
   - q: ["Dos reglas chocan: una con prioridad 100 y otra con 1000. ¿Cuál gana?", "Two rules conflict: one with priority 100 and another with 1000. Which wins?"]
-    options: [["La de prioridad 100", "Priority 100"], ["La de 1000", "Priority 1000"], ["La más reciente", "The most recent"]]
+    options: [["La de prioridad 100", "Priority 100"], ["La de prioridad 1000", "Priority 1000"], ["La más reciente", "The most recent"], ["La deny, sea cual sea la prioridad", "The deny one, whatever its priority"]]
     answer: 0
     why: ["El número más bajo tiene más prioridad.", "The lower number has higher priority."]
   - q: ["Las VPC A y B tienen peering, y B y C también. ¿A llega a C?", "VPCs A and B are peered, and so are B and C. Can A reach C?"]
-    options: [["No, el peering no es transitivo", "No, peering is not transitive"], ["Sí, siempre", "Yes, always"], ["Solo por IPv6", "Only over IPv6"]]
+    options: [["No, el peering no es transitivo", "No, peering is not transitive"], ["Sí, el peering es transitivo", "Yes, peering is transitive"], ["Sí, si las tres están en la misma organización", "Yes, if all three are in the same organization"], ["Sí, exportando rutas personalizadas en B", "Yes, by exporting custom routes in B"]]
     answer: 0
     why: ["Hay que crear un peering directo A-C (u otra solución).", "You need a direct A-C peering (or another solution)."]
   - q: ["¿De qué rango llega el SSH por IAP?", "Which range does IAP SSH come from?"]
@@ -93,6 +93,6 @@ quiz:
     answer: 0
     why: ["IAP TCP forwarding usa 35.235.240.0/20.", "IAP TCP forwarding uses 35.235.240.0/20."]
   - q: ["Las VMs de un backend salen todas como no sanas en el balanceador. ¿Qué revisas primero?", "All backend VMs show unhealthy on the load balancer. What do you check first?"]
-    options: [["La regla que permite los rangos de las sondas de salud", "The rule allowing the health-check ranges"], ["La cuota de CPU", "CPU quota"], ["Cloud DNS", "Cloud DNS"]]
+    options: [["La regla que permite los rangos de las sondas de salud", "The rule allowing the health-check ranges"], ["La cuota de reglas de reenvío", "The forwarding rules quota"], ["El registro DNS del balanceador", "The load balancer's DNS record"], ["El certificado SSL del frontend", "The frontend SSL certificate"]]
     answer: 0
     why: ["Sin permitir 35.191.0.0/16 y 130.211.0.0/22 las sondas no llegan.", "Without allowing 35.191.0.0/16 and 130.211.0.0/22 probes cannot reach."]

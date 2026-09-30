@@ -54,15 +54,15 @@ scenarios:
     answer: 0
     why: ["Nearline está pensada para acceso aproximadamente mensual.", "Nearline is designed for roughly monthly access."]
   - q: ["Un proveedor externo sin cuenta de Google debe subir un archivo hoy.", "An external supplier without a Google account must upload a file today."]
-    options: [["URL firmada", "Signed URL"], ["Hacer el bucket público", "Make the bucket public"], ["Darle Storage Admin", "Grant them Storage Admin"]]
+    options: [["URL firmada", "Signed URL"], ["Hacer el bucket público durante una hora", "Make the bucket public for an hour"], ["Darle Storage Object Creator con una cuenta temporal", "Give them Storage Object Creator with a temporary account"], ["Compartir una clave HMAC", "Share an HMAC key"]]
     answer: 0
     why: ["La URL firmada caduca y no requiere cuenta ni exponer el bucket.", "A signed URL expires and requires no account nor exposing the bucket."]
   - q: ["Hay que migrar 300 TB desde un centro de datos con una línea de 100 Mbps.", "You must migrate 300 TB from a datacenter over a 100 Mbps line."]
-    options: [["Transfer Appliance", "Transfer Appliance"], ["gcloud storage cp", "gcloud storage cp"], ["Cloud VPN", "Cloud VPN"]]
+    options: [["Transfer Appliance", "Transfer Appliance"], ["Storage Transfer Service por la red", "Storage Transfer Service over the network"], ["gcloud storage cp en paralelo", "Parallel gcloud storage cp"], ["Cloud VPN de alta disponibilidad", "High availability Cloud VPN"]]
     answer: 0
     why: ["Por red tardaría meses; el dispositivo físico es mucho más rápido.", "Over the network it would take months; the physical device is far faster."]
   - q: ["Diez VMs necesitan leer y escribir en la misma carpeta compartida.", "Ten VMs need to read and write the same shared folder."]
-    options: [["Filestore", "Filestore"], ["Un disco persistente por VM", "One persistent disk per VM"], ["BigQuery", "BigQuery"]]
+    options: [["Filestore", "Filestore"], ["Un disco persistente en modo multiescritor para todas", "A persistent disk in multi-writer mode for all"], ["Un disco persistente regional conectado a cada VM", "A regional persistent disk attached to each VM"], ["Un disco persistente por VM sincronizado con rsync", "One persistent disk per VM synced with rsync"]]
     answer: 0
     why: ["Filestore ofrece NFS compartido y gestionado.", "Filestore offers shared, managed NFS."]
 quiz:
@@ -71,18 +71,18 @@ quiz:
     answer: 0
     why: ["Nearline 30, Coldline 90, Archive 365.", "Nearline 30, Coldline 90, Archive 365."]
   - q: ["¿Qué hace el acceso uniforme a nivel de bucket?", "What does uniform bucket-level access do?"]
-    options: [["Desactiva las ACL y deja solo IAM", "Disables ACLs, leaving only IAM"], ["Hace el bucket público", "Makes the bucket public"], ["Cifra con CMEK", "Encrypts with CMEK"]]
+    options: [["Desactiva las ACL y deja solo IAM", "Disables ACLs, leaving only IAM"], ["Impide hacer público el bucket", "Prevents making the bucket public"], ["Cifra los objetos con CMEK", "Encrypts objects with CMEK"], ["Replica el bucket a otra región", "Replicates the bucket to another region"]]
     answer: 0
     why: ["Con acceso uniforme los permisos se gestionan solo con IAM.", "With uniform access permissions are managed only with IAM."]
   - q: ["Alguien borró un objeto por error. ¿Qué habría permitido recuperarlo?", "Someone deleted an object by mistake. What would have allowed recovery?"]
-    options: [["El versionado de objetos", "Object versioning"], ["La clase Archive", "The Archive class"], ["Una URL firmada", "A signed URL"]]
+    options: [["El versionado de objetos", "Object versioning"], ["Una regla de ciclo de vida", "A lifecycle rule"], ["La clase Archive", "The Archive class"], ["El acceso uniforme a nivel de bucket", "Uniform bucket-level access"]]
     answer: 0
     why: ["Con versionado el objeto borrado queda como versión no actual.", "With versioning the deleted object remains as a noncurrent version."]
   - q: ["¿Se puede cambiar la ubicación de un bucket?", "Can a bucket's location be changed?"]
-    options: [["No, hay que crear otro y copiar los datos", "No, you create another and copy the data"], ["Sí, desde la consola", "Yes, from the console"], ["Solo de regional a multirregional", "Only from regional to multi-region"]]
+    options: [["No, hay que crear otro y copiar los datos", "No, you create another and copy the data"], ["Sí, editando la ubicación en la consola", "Yes, by editing the location in the console"], ["Solo de regional a multirregional", "Only from regional to multi-region"], ["Sí, con gcloud storage buckets update --location", "Yes, with gcloud storage buckets update --location"]]
     answer: 0
     why: ["La ubicación se fija al crear el bucket.", "The location is fixed at bucket creation."]
   - q: ["¿Qué impide que un objeto se borre antes de 7 años por normativa?", "What prevents an object being deleted before 7 years for compliance?"]
-    options: [["Una política de retención bloqueada", "A locked retention policy"], ["Una regla de ciclo de vida", "A lifecycle rule"], ["El versionado", "Versioning"]]
+    options: [["Una política de retención bloqueada", "A locked retention policy"], ["Una regla de ciclo de vida que borre a los 7 años", "A lifecycle rule deleting at 7 years"], ["El versionado de objetos", "Object versioning"], ["Soft delete con 7 años de retención", "Soft delete with 7-year retention"]]
     answer: 0
     why: ["La retención bloqueada no la puede quitar ni un administrador.", "A locked retention policy cannot be removed even by an admin."]

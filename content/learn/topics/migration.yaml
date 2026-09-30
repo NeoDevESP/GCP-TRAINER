@@ -60,23 +60,23 @@ concepts:
     tip: ["Muchas cargas y muchos equipos → primero la landing zone.", "Many workloads and teams → landing zone first."]
 scenarios:
   - q: ["El contrato del centro de datos termina en 8 semanas y hay 400 VMs VMware. La dirección no quiere cambiar las herramientas de operación.", "The datacenter contract ends in 8 weeks and there are 400 VMware VMs. Management won't change operations tooling."]
-    options: [["Google Cloud VMware Engine", "Google Cloud VMware Engine"], ["Reescribir en Cloud Run", "Rewrite on Cloud Run"], ["Migrate to Containers", "Migrate to Containers"]]
+    options: [["Google Cloud VMware Engine", "Google Cloud VMware Engine"], ["Migrate to Virtual Machines hacia Compute Engine", "Migrate to Virtual Machines into Compute Engine"], ["Migrate to Containers hacia GKE", "Migrate to Containers into GKE"], ["Bare Metal Solution", "Bare Metal Solution"]]
     answer: 0
     why: ["Ejecuta VMware tal cual en Google Cloud: rapidez y mismas herramientas.", "Runs VMware as is on Google Cloud: speed and the same tooling."]
   - q: ["Hay que migrar una base de datos MySQL de 2 TB a Cloud SQL con menos de 10 minutos de parada.", "A 2 TB MySQL database must move to Cloud SQL with under 10 minutes of downtime."]
-    options: [["Database Migration Service con replicación continua", "Database Migration Service with continuous replication"], ["mysqldump y restaurar el fin de semana", "mysqldump and restore over the weekend"], ["Transfer Appliance", "Transfer Appliance"]]
+    options: [["Database Migration Service con replicación continua", "Database Migration Service with continuous replication"], ["Exportar con mysqldump e importar en Cloud SQL", "Export with mysqldump and import into Cloud SQL"], ["Datastream hacia Cloud SQL", "Datastream into Cloud SQL"], ["Storage Transfer Service con los archivos de datos", "Storage Transfer Service with the data files"]]
     answer: 0
     why: ["DMS mantiene la réplica sincronizada y el corte es solo promover.", "DMS keeps the replica in sync and cutover is just a promotion."]
   - q: ["Una empresa con Oracle quiere dejar de pagar licencias y pasar a PostgreSQL gestionado.", "An Oracle shop wants to stop paying licences and move to managed PostgreSQL."]
-    options: [["DMS heterogéneo con conversión de esquema a AlloyDB o Cloud SQL", "Heterogeneous DMS with schema conversion to AlloyDB or Cloud SQL"], ["Rehost de Oracle en Compute Engine", "Rehost Oracle on Compute Engine"], ["Bigtable", "Bigtable"]]
+    options: [["DMS heterogéneo con conversión de esquema a AlloyDB o Cloud SQL", "Heterogeneous DMS with schema conversion to AlloyDB or Cloud SQL"], ["Rehost de Oracle en Compute Engine con licencias propias", "Rehost Oracle on Compute Engine with your own licences"], ["Bare Metal Solution para Oracle", "Bare Metal Solution for Oracle"], ["DMS homogéneo de Oracle a Cloud SQL para MySQL", "Homogeneous DMS from Oracle to Cloud SQL for MySQL"]]
     answer: 0
     why: ["Es una migración heterogénea: conversión de esquema y datos.", "It is a heterogeneous migration: schema and data conversion."]
   - q: ["Tienes que llevar 500 TB de archivos a Cloud Storage con una conexión de 200 Mbps y fecha límite en 1 mes.", "You must move 500 TB of files to Cloud Storage over 200 Mbps with a 1-month deadline."]
-    options: [["Transfer Appliance", "Transfer Appliance"], ["Storage Transfer Service por la red", "Storage Transfer Service over the network"], ["gcloud storage cp", "gcloud storage cp"]]
+    options: [["Transfer Appliance", "Transfer Appliance"], ["Storage Transfer Service con agentes on-premises", "Storage Transfer Service with on-premises agents"], ["gcloud storage cp en paralelo", "Parallel gcloud storage cp"], ["Partner Interconnect de 200 Mbps", "200 Mbps Partner Interconnect"]]
     answer: 0
     why: ["200 Mbps ≈ 2 TB/día: tardaría más de 8 meses por red.", "200 Mbps ≈ 2 TB/day: over 8 months across the network."]
   - q: ["Antes de migrar 30 aplicaciones de 6 departamentos, ¿qué debe existir?", "Before migrating 30 applications from 6 departments, what must exist?"]
-    options: [["Una landing zone con jerarquía, red, identidad y políticas", "A landing zone with hierarchy, network, identity and policies"], ["Un proyecto por persona", "A project per person"], ["Nada, se crea sobre la marcha", "Nothing, build as you go"]]
+    options: [["Una landing zone con jerarquía, red, identidad y políticas", "A landing zone with hierarchy, network, identity and policies"], ["Un proyecto por aplicación creado por cada equipo", "A project per application created by each team"], ["Una VPN desde cada departamento", "A VPN from each department"], ["Una cuenta de facturación por departamento", "A billing account per department"]]
     answer: 0
     why: ["Sin base común aparecen proyectos inseguros e inconsistentes.", "Without a common foundation you get insecure, inconsistent projects."]
 quiz:
@@ -85,22 +85,22 @@ quiz:
     answer: 0
     why: ["Move and improve: cambios pequeños para aprovechar servicios gestionados.", "Move and improve: small changes to use managed services."]
   - q: ["¿Qué herramienta hace inventario y calcula el coste total antes de migrar?", "Which tool inventories and estimates total cost before migrating?"]
-    options: [["Migration Center", "Migration Center"], ["Cloud Deploy", "Cloud Deploy"], ["Cloud Armor", "Cloud Armor"]]
+    options: [["Migration Center", "Migration Center"], ["Database Migration Service", "Database Migration Service"], ["Recommender", "Recommender"], ["Cloud Asset Inventory", "Cloud Asset Inventory"]]
     answer: 0
     why: ["Migration Center descubre activos y estima TCO.", "Migration Center discovers assets and estimates TCO."]
   - q: ["¿Qué servicio replica cambios de una base operativa a BigQuery casi en tiempo real?", "Which service replicates changes from an operational DB into BigQuery in near real time?"]
-    options: [["Datastream", "Datastream"], ["Transfer Appliance", "Transfer Appliance"], ["Cloud Scheduler", "Cloud Scheduler"]]
+    options: [["Datastream", "Datastream"], ["Database Migration Service", "Database Migration Service"], ["BigQuery Data Transfer Service", "BigQuery Data Transfer Service"], ["Pub/Sub", "Pub/Sub"]]
     answer: 0
     why: ["Datastream hace CDC sin servidor.", "Datastream does serverless CDC."]
   - q: ["¿Cuántos TB al día transfiere aproximadamente una línea de 1 Gbps a plena carga?", "Roughly how many TB per day does a fully used 1 Gbps link move?"]
-    options: [["~10 TB", "~10 TB"], ["~1 TB", "~1 TB"], ["~100 TB", "~100 TB"]]
+    options: [["~10 TB", "~10 TB"], ["~1 TB", "~1 TB"], ["~40 TB", "~40 TB"], ["~100 TB", "~100 TB"]]
     answer: 0
     why: ["1 Gbps ≈ 125 MB/s × 86.400 s ≈ 10,8 TB.", "1 Gbps ≈ 125 MB/s × 86,400 s ≈ 10.8 TB."]
   - q: ["Una aplicación antigua ya no la usa nadie. ¿Qué R aplicas?", "An old application is no longer used. Which R applies?"]
-    options: [["Retire", "Retire"], ["Rehost", "Rehost"], ["Retain", "Retain"]]
+    options: [["Retire", "Retire"], ["Retain", "Retain"], ["Rehost", "Rehost"], ["Replatform", "Replatform"]]
     answer: 0
     why: ["Apagarla ahorra y reduce el alcance de la migración.", "Switching it off saves money and shrinks the migration."]
   - q: ["¿Qué servicio programa cargas recurrentes desde Amazon S3 o Redshift a BigQuery?", "Which service schedules recurring loads from Amazon S3 or Redshift into BigQuery?"]
-    options: [["BigQuery Data Transfer Service", "BigQuery Data Transfer Service"], ["Cloud VPN", "Cloud VPN"], ["Dataproc", "Dataproc"]]
+    options: [["BigQuery Data Transfer Service", "BigQuery Data Transfer Service"], ["Storage Transfer Service", "Storage Transfer Service"], ["Datastream", "Datastream"], ["Database Migration Service", "Database Migration Service"]]
     answer: 0
     why: ["BigQuery DTS tiene conectores gestionados para esas fuentes.", "BigQuery DTS has managed connectors for those sources."]

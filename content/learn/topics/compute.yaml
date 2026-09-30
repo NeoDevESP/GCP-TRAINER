@@ -56,32 +56,32 @@ scenarios:
     answer: 0
     why: ["Solo Compute Engine da control total del sistema operativo.", "Only Compute Engine gives full control of the operating system."]
   - q: ["Una API en contenedor recibe tráfico a ratos y quieres pagar cero cuando no hay peticiones.", "A containerized API gets bursty traffic and you want to pay nothing when idle."]
-    options: [["Cloud Run", "Cloud Run"], ["GKE Standard", "GKE Standard"], ["Un MIG con 2 VMs", "A MIG with 2 VMs"]]
+    options: [["Cloud Run", "Cloud Run"], ["GKE Autopilot con un mínimo de 1 réplica", "GKE Autopilot with a minimum of 1 replica"], ["App Engine Flexible", "App Engine Flexible"], ["Un MIG con autoescalado de 1 a 10 VMs", "A MIG autoscaling from 1 to 10 VMs"]]
     answer: 0
     why: ["Cloud Run escala a cero y cobra por petición procesada.", "Cloud Run scales to zero and charges per request processed."]
   - q: ["Un proceso nocturno de renderizado de 4 horas puede reintentarse si se corta.", "A 4-hour nightly render job can be retried if interrupted."]
-    options: [["VMs Spot", "Spot VMs"], ["Compromiso de uso de 3 años", "3-year committed use"], ["VMs de nodo único", "Sole-tenant nodes"]]
+    options: [["VMs Spot", "Spot VMs"], ["Compromiso de uso de 1 año", "1-year committed use"], ["VMs estándar con descuento por uso sostenido", "Standard VMs with sustained use discount"], ["Nodos de único cliente", "Sole-tenant nodes"]]
     answer: 0
     why: ["Spot es la opción más barata para cargas tolerantes a interrupciones.", "Spot is the cheapest option for interruption-tolerant workloads."]
   - q: ["Una web en VMs debe sobrevivir a la caída de una zona y crecer en picos.", "A website on VMs must survive a zone outage and grow during peaks."]
-    options: [["MIG regional con autoescalado", "Regional MIG with autoscaling"], ["Una VM grande", "One large VM"], ["MIG zonal sin autoescalado", "Zonal MIG without autoscaling"]]
+    options: [["MIG regional con autoescalado", "Regional MIG with autoscaling"], ["MIG zonal con autoescalado", "Zonal MIG with autoscaling"], ["MIG regional sin autoescalado", "Regional MIG without autoscaling"], ["Dos VMs en zonas distintas con disco regional", "Two VMs in different zones with a regional disk"]]
     answer: 0
     why: ["El MIG regional reparte entre zonas y el autoescalado añade VMs en picos.", "A regional MIG spreads across zones and autoscaling adds VMs at peaks."]
 quiz:
   - q: ["¿Se puede reducir el tamaño de un disco persistente?", "Can a persistent disk be shrunk?"]
-    options: [["No, solo ampliar", "No, only grown"], ["Sí, en caliente", "Yes, online"], ["Sí, con la VM parada", "Yes, with the VM stopped"]]
+    options: [["No, solo ampliar", "No, only grown"], ["Sí, con la VM parada", "Yes, with the VM stopped"], ["Sí, creando un snapshot más pequeño", "Yes, by creating a smaller snapshot"], ["Solo en discos SSD", "Only on SSD disks"]]
     answer: 0
     why: ["Los discos se amplían en caliente pero nunca se reducen.", "Disks grow online but never shrink."]
   - q: ["¿Qué hace la autorreparación de un MIG?", "What does MIG autohealing do?"]
-    options: [["Recrea VMs que fallan la comprobación de estado", "Recreates VMs that fail the health check"], ["Aumenta la CPU", "Increases CPU"], ["Hace snapshots diarios", "Takes daily snapshots"]]
+    options: [["Recrea VMs que fallan la comprobación de estado", "Recreates VMs that fail the health check"], ["Añade VMs cuando sube la CPU", "Adds VMs when CPU rises"], ["Reparte las VMs entre zonas", "Spreads VMs across zones"], ["Actualiza las VMs a la nueva plantilla", "Updates VMs to the new template"]]
     answer: 0
     why: ["Usa una comprobación de estado para detectar VMs enfermas y sustituirlas.", "It uses a health check to detect sick VMs and replace them."]
   - q: ["Quieres enviar el 10 % del tráfico a la nueva versión de Cloud Run.", "You want to send 10% of traffic to the new Cloud Run version."]
-    options: [["Repartir tráfico entre revisiones", "Split traffic between revisions"], ["Crear otro proyecto", "Create another project"], ["Usar un MIG", "Use a MIG"]]
+    options: [["Repartir tráfico entre revisiones", "Split traffic between revisions"], ["Desplegar una revisión nueva con --no-traffic y nada más", "Deploy a new revision with --no-traffic and nothing else"], ["Crear un segundo servicio y usar DNS ponderado", "Create a second service and use weighted DNS"], ["Poner min-instances en la nueva revisión", "Set min-instances on the new revision"]]
     answer: 0
     why: ["gcloud run services update-traffic permite porcentajes por revisión.", "gcloud run services update-traffic allows percentages per revision."]
   - q: ["¿Cómo cambias la configuración de las VMs de un MIG?", "How do you change the configuration of a MIG's VMs?"]
-    options: [["Nueva plantilla y actualización progresiva", "New template and a rolling update"], ["Editar la plantilla actual", "Edit the current template"], ["SSH a cada VM", "SSH to each VM"]]
+    options: [["Nueva plantilla y actualización progresiva", "New template and a rolling update"], ["Editar la plantilla actual y reiniciar el grupo", "Edit the current template and restart the group"], ["Cambiar los metadatos de cada VM con gcloud", "Change each VM's metadata with gcloud"], ["Crear un MIG nuevo y borrar el anterior de golpe", "Create a new MIG and delete the old one at once"]]
     answer: 0
     why: ["Las plantillas son inmutables; se crea otra y se aplica poco a poco.", "Templates are immutable; you create another and roll it out."]
   - q: ["¿Cuánto aviso da Google antes de parar una VM Spot?", "How much notice does Google give before stopping a Spot VM?"]

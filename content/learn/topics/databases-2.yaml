@@ -50,19 +50,19 @@ scenarios:
     answer: 0
     why: ["Volumen masivo, acceso por clave y baja latencia: Bigtable.", "Massive volume, key access and low latency: Bigtable."]
   - q: ["Tras migrar a Spanner, las inserciones de pedidos van lentas; la clave primaria es order_timestamp.", "After moving to Spanner, order inserts are slow; the primary key is order_timestamp."]
-    options: [["Usar una clave distribuida (UUID v4 o hash) en lugar de la marca de tiempo", "Use a distributed key (UUID v4 or hash) instead of the timestamp"], ["Añadir índices secundarios", "Add secondary indexes"], ["Reducir nodos", "Reduce nodes"]]
+    options: [["Usar una clave distribuida (UUID v4 o hash) en lugar de la marca de tiempo", "Use a distributed key (UUID v4 or hash) instead of the timestamp"], ["Añadir un índice secundario sobre order_timestamp", "Add a secondary index on order_timestamp"], ["Duplicar el número de nodos de la instancia", "Double the instance's node count"], ["Intercalar la tabla de pedidos dentro de la de clientes", "Interleave the orders table inside customers"]]
     answer: 0
     why: ["Las claves crecientes concentran escrituras en una división.", "Increasing keys concentrate writes on one split."]
   - q: ["La base PostgreSQL de Cloud SQL debe seguir funcionando si cae toda la región europe-west1.", "The Cloud SQL PostgreSQL database must keep working if all of europe-west1 fails."]
-    options: [["Réplica entre regiones en europe-west4 lista para promoverse", "Cross-region replica in europe-west4 ready to be promoted"], ["Alta disponibilidad regional", "Regional high availability"], ["Copias diarias en la misma región", "Daily backups in the same region"]]
+    options: [["Réplica entre regiones en europe-west4 lista para promoverse", "Cross-region replica in europe-west4 ready to be promoted"], ["Configuración de alta disponibilidad regional con conmutación automática", "Regional high availability with automatic failover"], ["Copias automáticas diarias guardadas en la misma región", "Daily automated backups stored in the same region"], ["Réplica de lectura en otra zona de europe-west1", "Read replica in another zone of europe-west1"]]
     answer: 0
     why: ["La HA regional protege de zonas, no de regiones.", "Regional HA protects against zones, not regions."]
   - q: ["Los desarrolladores quieren encontrar qué consultas degradan Cloud SQL sin instalar nada.", "Developers want to find which queries degrade Cloud SQL without installing anything."]
-    options: [["Query Insights", "Query Insights"], ["VPC Flow Logs", "VPC Flow Logs"], ["Cloud Profiler", "Cloud Profiler"]]
+    options: [["Query Insights", "Query Insights"], ["Cloud Profiler", "Cloud Profiler"], ["Cloud Trace", "Cloud Trace"], ["Registros de auditoría de acceso a datos", "Data Access audit logs"]]
     answer: 0
     why: ["Query Insights muestra carga por consulta, usuario y cliente.", "Query Insights shows load per query, user and client."]
   - q: ["Hay que servir la cesta de la compra de millones de usuarios con latencia de submilisegundos, tolerando perder datos al reiniciar.", "Serve millions of users' shopping carts with sub-millisecond latency, tolerating data loss on restart."]
-    options: [["Memorystore for Redis", "Memorystore for Redis"], ["BigQuery", "BigQuery"], ["Spanner multirregional", "Multi-region Spanner"]]
+    options: [["Memorystore for Redis", "Memorystore for Redis"], ["Firestore en modo nativo", "Firestore in native mode"], ["Bigtable con un solo nodo", "Bigtable with a single node"], ["Cloud SQL con réplicas de lectura", "Cloud SQL with read replicas"]]
     answer: 0
     why: ["Caché en memoria para datos efímeros y muy leídos.", "In-memory cache for ephemeral, hot data."]
 quiz:
@@ -71,11 +71,11 @@ quiz:
     answer: 0
     why: ["BigQuery es el almacén de datos serverless.", "BigQuery is the serverless data warehouse."]
   - q: ["¿Qué SLA ofrece Spanner en configuración multirregional?", "What SLA does multi-region Spanner offer?"]
-    options: [["99,999 %", "99.999%"], ["99,9 %", "99.9%"], ["99,5 %", "99.5%"]]
+    options: [["99,999 %", "99.999%"], ["99,99 %", "99.99%"], ["99,95 %", "99.95%"], ["99,9 %", "99.9%"]]
     answer: 0
     why: ["Regional 99,99 %, multirregional 99,999 %.", "Regional 99.99%, multi-region 99.999%."]
   - q: ["¿Qué herramienta muestra puntos calientes en las claves de Bigtable?", "Which tool shows hotspots in Bigtable keys?"]
-    options: [["Key Visualizer", "Key Visualizer"], ["Query Insights", "Query Insights"], ["Cloud Trace", "Cloud Trace"]]
+    options: [["Key Visualizer", "Key Visualizer"], ["Query Insights", "Query Insights"], ["Cloud Profiler", "Cloud Profiler"], ["El panel de Monitoring de CPU por nodo", "The per-node CPU Monitoring dashboard"]]
     answer: 0
     why: ["Key Visualizer dibuja el acceso por rangos de clave.", "Key Visualizer maps access by key range."]
   - q: ["¿Qué dos formas seguras hay de conectar una app a Cloud SQL? (Elige 2)", "Which two secure ways connect an app to Cloud SQL? (Choose 2)"]
@@ -87,6 +87,6 @@ quiz:
     answer: 0
     why: ["Bigtable es NoSQL de columnas anchas.", "Bigtable is wide-column NoSQL."]
   - q: ["Una réplica de lectura de Cloud SQL empieza a ir con retraso. ¿Qué la causa normalmente?", "A Cloud SQL read replica starts lagging. What usually causes it?"]
-    options: [["La réplica no da abasto con las escrituras del primario (tamaño insuficiente o transacciones largas)", "The replica can't keep up with primary writes (undersized or long transactions)"], ["Demasiados usuarios IAM", "Too many IAM users"], ["El nivel de red", "The network tier"]]
+    options: [["La réplica no da abasto con las escrituras del primario (tamaño insuficiente o transacciones largas)", "The replica can't keep up with primary writes (undersized or long transactions)"], ["La réplica está en otra región y eso siempre causa retraso de horas", "The replica is in another region, which always causes hours of lag"], ["La alta disponibilidad del primario está desactivada", "The primary's high availability is disabled"], ["Las copias automáticas bloquean la replicación durante el día", "Automated backups block replication during the day"]]
     answer: 0
     why: ["Dimensiona la réplica como el primario y evita transacciones enormes.", "Size the replica like the primary and avoid huge transactions."]

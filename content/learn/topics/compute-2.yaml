@@ -41,32 +41,32 @@ concepts:
     tip: ["Miles de tareas de simulación independientes → Batch con VMs Spot.", "Thousands of independent simulation tasks → Batch with Spot VMs."]
 scenarios:
   - q: ["Un MIG tarda 8 minutos en tener VMs listas porque el script de arranque instala Java y la app.", "A MIG takes 8 minutes to get VMs ready because the startup script installs Java and the app."]
-    options: [["Crear una imagen personalizada con todo instalado y usarla en la plantilla", "Build a custom image with everything installed and use it in the template"], ["Aumentar la CPU de las VMs", "Increase VM CPU"], ["Quitar la comprobación de estado", "Remove the health check"]]
+    options: [["Crear una imagen personalizada con todo instalado y usarla en la plantilla", "Build a custom image with everything installed and use it in the template"], ["Aumentar el período de inicialización del autoescalador", "Increase the autoscaler initialization period"], ["Usar máquinas con más CPU para que el script termine antes", "Use machines with more CPU so the script finishes sooner"], ["Mover la instalación a un shutdown-script", "Move the installation into a shutdown-script"]]
     answer: 0
     why: ["Con la imagen horneada la VM arranca lista en segundos.", "With a baked image the VM boots ready in seconds."]
   - q: ["Seguridad exige que el acceso SSH se revoque al dar de baja a un empleado en el directorio.", "Security requires SSH access to be revoked when an employee is removed from the directory."]
-    options: [["OS Login", "OS Login"], ["Claves SSH en los metadatos del proyecto", "SSH keys in project metadata"], ["Una contraseña compartida", "A shared password"]]
+    options: [["OS Login", "OS Login"], ["Claves SSH en los metadatos del proyecto", "SSH keys in project metadata"], ["Claves SSH en los metadatos de cada instancia", "SSH keys in each instance's metadata"], ["Bloquear claves de todo el proyecto (block-project-ssh-keys)", "Block project-wide keys (block-project-ssh-keys)"]]
     answer: 0
     why: ["OS Login usa la identidad de Google: al borrarla se pierde el acceso.", "OS Login uses the Google identity: deleting it removes access."]
   - q: ["Un software se licencia por núcleo físico y el proveedor exige hardware dedicado.", "Software is licensed per physical core and the vendor requires dedicated hardware."]
-    options: [["Nodos de único cliente (sole-tenant)", "Sole-tenant nodes"], ["VMs Spot", "Spot VMs"], ["Cloud Run", "Cloud Run"]]
+    options: [["Nodos de único cliente (sole-tenant)", "Sole-tenant nodes"], ["VMs confidenciales (Confidential VM)", "Confidential VMs"], ["VMs blindadas (Shielded VM)", "Shielded VMs"], ["Compromiso de uso con tipos de máquina personalizados", "Committed use with custom machine types"]]
     answer: 0
     why: ["Los sole-tenant nodes dan servidores físicos exclusivos.", "Sole-tenant nodes provide exclusive physical servers."]
   - q: ["Una tienda tiene un pico todos los días a las 9:00 y el autoescalado reacciona tarde.", "A shop peaks every day at 09:00 and autoscaling reacts too late."]
-    options: [["Escalado por calendario antes de las 9:00", "Schedule-based scaling before 09:00"], ["Desactivar el autoescalado", "Disable autoscaling"], ["VMs más pequeñas", "Smaller VMs"]]
+    options: [["Escalado por calendario antes de las 9:00", "Schedule-based scaling before 09:00"], ["Reducir el objetivo de uso de CPU del autoescalador al 30 %", "Lower the autoscaler CPU target to 30%"], ["Aumentar el período de inicialización", "Increase the initialization period"], ["Cambiar a un MIG regional", "Switch to a regional MIG"]]
     answer: 0
     why: ["Los picos previsibles se preparan con antelación.", "Predictable peaks are prepared in advance."]
   - q: ["Cada noche hay que procesar 10.000 vídeos de forma independiente, al menor coste y sin gestionar servidores.", "Each night 10,000 videos must be processed independently, cheaply and without managing servers."]
-    options: [["Cloud Batch (o Cloud Run jobs) con VMs Spot", "Cloud Batch (or Cloud Run jobs) with Spot VMs"], ["Un endpoint de Cloud Run siempre activo", "An always-on Cloud Run service"], ["Una VM enorme con compromiso de 3 años", "A huge VM with a 3-year commitment"]]
+    options: [["Cloud Batch (o Cloud Run jobs) con VMs Spot", "Cloud Batch (or Cloud Run jobs) with Spot VMs"], ["Un MIG de VMs estándar con autoescalado por la cola de Pub/Sub", "A MIG of standard VMs autoscaled on the Pub/Sub backlog"], ["Un servicio de Cloud Run con concurrencia 1 y mínimo de 10 instancias", "A Cloud Run service with concurrency 1 and 10 minimum instances"], ["Dataproc con un clúster permanente", "Dataproc with a permanent cluster"]]
     answer: 0
     why: ["Tareas independientes, tolerantes a fallos y puntuales: lotes + Spot.", "Independent, fault-tolerant, one-off tasks: batch + Spot."]
 quiz:
   - q: ["¿Qué guarda una machine image que no guarda una imagen personalizada?", "What does a machine image store that a custom image does not?"]
-    options: [["La configuración de la VM y todos sus discos", "The VM configuration and all its disks"], ["Solo el disco de arranque", "Only the boot disk"], ["Nada, son iguales", "Nothing, they are the same"]]
+    options: [["La configuración de la VM y todos sus discos", "The VM configuration and all its disks"], ["Solo el disco de arranque y la familia de imágenes", "Only the boot disk and image family"], ["Las snapshots incrementales de los discos de datos", "The incremental snapshots of data disks"], ["La memoria en ejecución de la VM", "The VM's running memory"]]
     answer: 0
     why: ["La imagen personalizada solo contiene un disco.", "A custom image only contains one disk."]
   - q: ["¿Cómo te conectas por SSH a una VM sin IP externa?", "How do you SSH into a VM without an external IP?"]
-    options: [["gcloud compute ssh --tunnel-through-iap", "gcloud compute ssh --tunnel-through-iap"], ["Asignándole una IP pública temporal siempre", "Always assigning a temporary public IP"], ["No es posible", "It is not possible"]]
+    options: [["gcloud compute ssh --tunnel-through-iap", "gcloud compute ssh --tunnel-through-iap"], ["gcloud compute ssh --internal-ip desde Cloud Shell", "gcloud compute ssh --internal-ip from Cloud Shell"], ["Abriendo el puerto 22 a 0.0.0.0/0 en el cortafuegos", "Opening port 22 to 0.0.0.0/0 in the firewall"], ["Con la consola serie como único método", "Using the serial console as the only method"]]
     answer: 0
     why: ["IAP crea el túnel si el cortafuegos permite 35.235.240.0/20.", "IAP creates the tunnel if the firewall allows 35.235.240.0/20."]
   - q: ["¿Qué protege Shielded VM? (Elige 2)", "What does Shielded VM protect? (Choose 2)"]
@@ -74,18 +74,18 @@ quiz:
     answers: [0, 1]
     why: ["El cifrado de memoria es de Confidential VM; DDoS es Cloud Armor.", "Memory encryption is Confidential VM; DDoS is Cloud Armor."]
   - q: ["¿Qué metadato ejecuta un script cada vez que arranca una VM Linux?", "Which metadata key runs a script every time a Linux VM boots?"]
-    options: [["startup-script", "startup-script"], ["user-data", "user-data"], ["boot-cmd", "boot-cmd"]]
+    options: [["startup-script", "startup-script"], ["user-data", "user-data"], ["shutdown-script", "shutdown-script"], ["enable-oslogin", "enable-oslogin"]]
     answer: 0
     why: ["startup-script o startup-script-url (y shutdown-script al apagar).", "startup-script or startup-script-url (and shutdown-script on shutdown)."]
   - q: ["¿Qué descuento se aplica automáticamente a VMs que funcionan gran parte del mes (familias como N1/N2)?", "Which discount applies automatically to VMs running most of the month (families like N1/N2)?"]
-    options: [["Descuento por uso sostenido", "Sustained use discount"], ["Compromiso de uso", "Committed use discount"], ["Precio Spot", "Spot pricing"]]
+    options: [["Descuento por uso sostenido", "Sustained use discount"], ["Descuento por compromiso de uso", "Committed use discount"], ["Precio Spot", "Spot pricing"], ["Descuento por volumen de la cuenta de facturación", "Billing account volume discount"]]
     answer: 0
     why: ["El uso sostenido es automático; el compromiso hay que comprarlo.", "Sustained use is automatic; commitments must be purchased."]
   - q: ["¿Qué pasa con los datos de un SSD local al parar la VM?", "What happens to local SSD data when the VM is stopped?"]
-    options: [["Se pierden (salvo opciones de conservación en algunos casos)", "They are lost (except for preservation options in some cases)"], ["Se copian a un snapshot", "They are copied to a snapshot"], ["Se mueven a Cloud Storage", "They are moved to Cloud Storage"]]
+    options: [["Se pierden (salvo opciones de conservación en algunos casos)", "They are lost (except for preservation options in some cases)"], ["Se conservan como en un disco persistente", "They persist like a persistent disk"], ["Se copian automáticamente a un snapshot", "They are automatically copied to a snapshot"], ["Se replican en otra zona", "They are replicated to another zone"]]
     answer: 0
     why: ["El SSD local es efímero y muy rápido: úsalo para caché o datos temporales.", "Local SSD is ephemeral and very fast: use it for cache or scratch data."]
   - q: ["¿Qué tipo de MIG sobrevive a la caída de una zona?", "Which MIG type survives a zone outage?"]
-    options: [["MIG regional", "Regional MIG"], ["MIG zonal", "Zonal MIG"], ["Grupo no gestionado", "Unmanaged group"]]
+    options: [["MIG regional", "Regional MIG"], ["MIG zonal con autorreparación", "Zonal MIG with autohealing"], ["Grupo de instancias no gestionado en dos zonas", "Unmanaged instance group across two zones"], ["MIG zonal con disco persistente regional", "Zonal MIG with a regional persistent disk"]]
     answer: 0
     why: ["El regional reparte las VMs en varias zonas de la región.", "The regional one spreads VMs across the region's zones."]

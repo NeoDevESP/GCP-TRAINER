@@ -51,24 +51,24 @@ scenarios:
     answer: 0
     why: ["Spanner es el único relacional global con escala horizontal.", "Spanner is the only global relational DB with horizontal scale."]
   - q: ["Un WordPress con MySQL necesita alta disponibilidad en una región.", "A WordPress on MySQL needs high availability in one region."]
-    options: [["Cloud SQL con alta disponibilidad (regional)", "Cloud SQL with high availability (regional)"], ["Spanner multirregional", "Multi-region Spanner"], ["Bigtable", "Bigtable"]]
+    options: [["Cloud SQL con alta disponibilidad (regional)", "Cloud SQL with high availability (regional)"], ["Cloud SQL zonal con réplica de lectura en otra zona", "Zonal Cloud SQL with a read replica in another zone"], ["Spanner regional", "Regional Spanner"], ["MySQL en un MIG de Compute Engine", "MySQL on a Compute Engine MIG"]]
     answer: 0
     why: ["Cloud SQL HA da conmutación automática entre zonas a menor coste.", "Cloud SQL HA gives automatic cross-zone failover at lower cost."]
   - q: ["Guardas lecturas de 2 millones de sensores cada segundo.", "You store readings from 2 million sensors every second."]
-    options: [["Bigtable", "Bigtable"], ["Cloud SQL", "Cloud SQL"], ["Memorystore", "Memorystore"]]
+    options: [["Bigtable", "Bigtable"], ["Cloud SQL con muchas réplicas de lectura", "Cloud SQL with many read replicas"], ["Firestore", "Firestore"], ["BigQuery con inserciones en streaming como almacén principal", "BigQuery with streaming inserts as the primary store"]]
     answer: 0
     why: ["Bigtable está hecha para series temporales a gran escala.", "Bigtable is built for large-scale time series."]
   - q: ["La base de datos se satura con las mismas consultas de catálogo una y otra vez.", "The database is saturated by the same catalogue queries over and over."]
-    options: [["Memorystore como caché", "Memorystore as a cache"], ["Más discos", "More disks"], ["Firestore", "Firestore"]]
+    options: [["Memorystore como caché", "Memorystore as a cache"], ["Añadir réplicas de lectura y más CPU al primario", "Add read replicas and more CPU to the primary"], ["Mover el catálogo a BigQuery", "Move the catalogue to BigQuery"], ["Activar la alta disponibilidad regional", "Enable regional high availability"]]
     answer: 0
     why: ["Una caché en memoria evita repetir la misma consulta.", "An in-memory cache avoids repeating the same query."]
 quiz:
   - q: ["¿Qué ofrece la alta disponibilidad de Cloud SQL?", "What does Cloud SQL high availability provide?"]
-    options: [["Réplica en espera en otra zona con conmutación automática", "Standby in another zone with automatic failover"], ["Réplicas en varios continentes", "Replicas on several continents"], ["Más CPU", "More CPU"]]
+    options: [["Réplica en espera en otra zona con conmutación automática", "Standby in another zone with automatic failover"], ["Réplicas de lectura en varias regiones con promoción automática", "Read replicas in several regions with automatic promotion"], ["Escalado horizontal automático de escrituras", "Automatic horizontal write scaling"], ["Copias continuas a otra región", "Continuous backups to another region"]]
     answer: 0
     why: ["Es regional: protege de la caída de una zona.", "It is regional: protects against a zone failure."]
   - q: ["¿Para qué sirven las réplicas de lectura?", "What are read replicas for?"]
-    options: [["Escalar las lecturas", "Scaling reads"], ["Escalar las escrituras", "Scaling writes"], ["Hacer copias de seguridad", "Taking backups"]]
+    options: [["Escalar las lecturas", "Scaling reads"], ["Escalar las escrituras", "Scaling writes"], ["Dar alta disponibilidad automática", "Providing automatic high availability"], ["Hacer copias de seguridad", "Taking backups"]]
     answer: 0
     why: ["Descargan consultas de lectura del primario; no son alta disponibilidad por sí solas.", "They offload read queries from the primary; they are not HA by themselves."]
   - q: ["¿Qué base de datos es NoSQL de documentos?", "Which database is a NoSQL document store?"]
@@ -76,10 +76,10 @@ quiz:
     answer: 0
     why: ["Firestore guarda documentos en colecciones.", "Firestore stores documents in collections."]
   - q: ["¿Qué permite restaurar la base de datos al estado de hace 2 horas?", "What lets you restore a database to its state 2 hours ago?"]
-    options: [["Recuperación a un momento dado (PITR)", "Point-in-time recovery (PITR)"], ["Una réplica de lectura", "A read replica"], ["Memorystore", "Memorystore"]]
+    options: [["Recuperación a un momento dado (PITR)", "Point-in-time recovery (PITR)"], ["Una réplica de lectura", "A read replica"], ["La alta disponibilidad regional", "Regional high availability"], ["Un snapshot del disco de hace 24 horas", "A disk snapshot from 24 hours ago"]]
     answer: 0
     why: ["PITR usa los registros binarios/WAL para volver a cualquier instante.", "PITR uses binary logs/WAL to return to any moment."]
   - q: ["¿Qué decide el rendimiento en Bigtable?", "What determines performance in Bigtable?"]
-    options: [["El diseño de la clave de fila", "The row key design"], ["Los índices secundarios", "Secondary indexes"], ["El número de tablas", "The number of tables"]]
+    options: [["El diseño de la clave de fila", "The row key design"], ["Los índices secundarios de cada tabla", "Each table's secondary indexes"], ["El número de familias de columnas", "The number of column families"], ["El tipo de disco (SSD o HDD) únicamente", "Only the disk type (SSD or HDD)"]]
     answer: 0
     why: ["Claves mal diseñadas concentran la carga en un nodo (hotspot).", "Poor keys concentrate load on one node (hotspot)."]

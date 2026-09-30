@@ -52,28 +52,28 @@ concepts:
     tip: ["Prefiere siempre el servicio más gestionado que cumpla los requisitos.", "Always prefer the most managed service that meets the requirements."]
 scenarios:
   - q: ["El negocio acepta 4 horas de caída y perder 1 hora de datos, con presupuesto ajustado.", "The business accepts 4 hours of downtime and losing 1 hour of data, on a tight budget."]
-    options: [["Copias frecuentes y restauración en otra región", "Frequent backups and restore in another region"], ["Activo-activo multirregión", "Multi-region active-active"], ["Sin plan", "No plan"]]
+    options: [["Copias frecuentes y restauración en otra región", "Frequent backups and restore in another region"], ["Activo-activo en dos regiones con Spanner multirregional", "Active-active in two regions with multi-region Spanner"], ["Espera en caliente con réplica síncrona en otra región", "Hot standby with synchronous replica in another region"], ["Copias semanales en un bucket Archive de la misma región", "Weekly backups to an Archive bucket in the same region"]]
     answer: 0
     why: ["Cumple RTO/RPO a un coste mucho menor.", "Meets RTO/RPO at far lower cost."]
   - q: ["Un sistema de pagos no puede perder ninguna transacción ni caerse aunque falle una región.", "A payments system cannot lose any transaction nor go down even if a region fails."]
-    options: [["Spanner multirregional y servicios en varias regiones", "Multi-region Spanner and services in several regions"], ["Cloud SQL zonal", "Zonal Cloud SQL"], ["Copias diarias", "Daily backups"]]
+    options: [["Spanner multirregional y servicios en varias regiones", "Multi-region Spanner and services in several regions"], ["Cloud SQL con alta disponibilidad regional y copias cada hora", "Cloud SQL with regional high availability and hourly backups"], ["Cloud SQL con réplica de lectura entre regiones y promoción manual", "Cloud SQL with a cross-region read replica and manual promotion"], ["Bigtable replicado en dos regiones con perfiles de aplicación", "Bigtable replicated across two regions with app profiles"]]
     answer: 0
     why: ["RPO cero y RTO casi cero exigen activo-activo multirregión.", "Zero RPO and near-zero RTO require multi-region active-active."]
   - q: ["Hay que cerrar el centro de datos en 10 semanas con 300 VMs.", "The datacenter must close in 10 weeks with 300 VMs."]
-    options: [["Rehost con Migrate to Virtual Machines", "Rehost with Migrate to Virtual Machines"], ["Reescribir todo en microservicios", "Rewrite everything as microservices"], ["Esperar al año siguiente", "Wait until next year"]]
+    options: [["Rehost con Migrate to Virtual Machines", "Rehost with Migrate to Virtual Machines"], ["Replatform de todas las aplicaciones a GKE antes del cierre", "Replatform every application to GKE before the closure"], ["Refactorizar a Cloud Run las aplicaciones más críticas primero", "Refactor the most critical applications to Cloud Run first"], ["Retain: mantener las VMs en el centro de datos y conectar por VPN", "Retain: keep the VMs in the datacenter and connect via VPN"]]
     answer: 0
     why: ["Con prisa, mover tal cual y modernizar después.", "Under time pressure, move as is and modernize later."]
   - q: ["Los servidores de desarrollo están encendidos 24/7 y solo se usan en horario laboral.", "Dev servers run 24/7 but are only used during office hours."]
-    options: [["Programar su apagado fuera de horario", "Schedule them to stop out of hours"], ["Comprar un compromiso de 3 años", "Buy a 3-year commitment"], ["Pasarlos a máquinas más grandes", "Move them to larger machines"]]
+    options: [["Programar su apagado fuera de horario", "Schedule them to stop out of hours"], ["Comprar un compromiso de uso de 3 años para esas VMs", "Buy a 3-year committed use discount for those VMs"], ["Pasarlas a VMs Spot manteniéndolas encendidas 24/7", "Move them to Spot VMs keeping them on 24/7"], ["Cambiarlas a tipos de máquina con más memoria y menos CPU", "Switch them to machine types with more memory and fewer CPUs"]]
     answer: 0
     why: ["Apagarlos ahorra más de la mitad del coste.", "Turning them off saves more than half the cost."]
 quiz:
   - q: ["¿Qué mide el RPO?", "What does RPO measure?"]
-    options: [["Cuántos datos se pueden perder", "How much data can be lost"], ["Cuánto dura la caída", "How long the outage lasts"], ["El coste de la recuperación", "The recovery cost"]]
+    options: [["Cuántos datos se pueden perder", "How much data can be lost"], ["Cuánto tiempo puede durar la caída", "How long the outage can last"], ["Cada cuánto se prueban las copias", "How often backups are tested"], ["Cuántas regiones necesita la solución", "How many regions the solution needs"]]
     answer: 0
     why: ["RPO = punto de recuperación; RTO = tiempo de recuperación.", "RPO = recovery point; RTO = recovery time."]
   - q: ["¿Qué estrategia de migración mueve las VMs sin cambios?", "Which migration strategy moves VMs unchanged?"]
-    options: [["Rehost (lift and shift)", "Rehost (lift and shift)"], ["Refactor", "Refactor"], ["Replatform", "Replatform"]]
+    options: [["Rehost (lift and shift)", "Rehost (lift and shift)"], ["Refactor", "Refactor"], ["Replatform (move and improve)", "Replatform (move and improve)"], ["Reimagine", "Reimagine"]]
     answer: 0
     why: ["Rehost es el más rápido y con menos cambios.", "Rehost is fastest with fewest changes."]
   - q: ["¿Cuál NO es un pilar del Well-Architected Framework?", "Which is NOT a Well-Architected Framework pillar?"]
@@ -81,10 +81,10 @@ quiz:
     answer: 0
     why: ["Los pilares son operaciones, seguridad, fiabilidad, coste y rendimiento.", "The pillars are operations, security, reliability, cost and performance."]
   - q: ["¿Qué servicio prefieres para una API HTTP sin estado sin requisitos especiales?", "Which service do you prefer for a stateless HTTP API with no special requirements?"]
-    options: [["Cloud Run", "Cloud Run"], ["Compute Engine", "Compute Engine"], ["GKE Standard", "GKE Standard"]]
+    options: [["Cloud Run", "Cloud Run"], ["GKE Standard con autoescalado de clúster", "GKE Standard with cluster autoscaling"], ["Compute Engine en un MIG regional", "Compute Engine in a regional MIG"], ["App Engine Flexible", "App Engine Flexible"]]
     answer: 0
     why: ["El más gestionado que cumple: menos operación.", "The most managed one that fits: less operations."]
   - q: ["Una arquitectura tiene una sola VM con la base de datos. ¿Qué problema principal tiene?", "An architecture has one VM running the database. What is the main problem?"]
-    options: [["Punto único de fallo", "Single point of failure"], ["Demasiado cara", "Too expensive"], ["Demasiado segura", "Too secure"]]
+    options: [["Punto único de fallo", "Single point of failure"], ["Latencia alta por no usar Cloud CDN", "High latency from not using Cloud CDN"], ["Coste excesivo por no usar VMs Spot", "Excessive cost from not using Spot VMs"], ["Falta de escalado horizontal de las lecturas", "Lack of horizontal read scaling"]]
     answer: 0
     why: ["Si la VM o su zona cae, todo cae.", "If the VM or its zone fails, everything fails."]

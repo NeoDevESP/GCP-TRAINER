@@ -43,39 +43,39 @@ concepts:
     tip: ["«Probar con el 5 % de usuarios reales antes de todos» → canary.", "\"Try with 5% of real users before everyone\" → canary."]
 scenarios:
   - q: ["Cada push a main debe generar una imagen etiquetada con el commit.", "Each push to main must produce an image tagged with the commit."]
-    options: [["Activador de Cloud Build + Artifact Registry", "Cloud Build trigger + Artifact Registry"], ["Compilar en el portátil del desarrollador", "Build on the developer's laptop"], ["Cloud Scheduler", "Cloud Scheduler"]]
+    options: [["Activador de Cloud Build + Artifact Registry", "Cloud Build trigger + Artifact Registry"], ["Cloud Scheduler que lance Cloud Build cada hora", "Cloud Scheduler running Cloud Build hourly"], ["Cloud Deploy con un destino por rama", "Cloud Deploy with one target per branch"], ["Un webhook que ejecute docker build en una VM", "A webhook running docker build on a VM"]]
     answer: 0
     why: ["Es el CI nativo de Google Cloud.", "It is Google Cloud's native CI."]
   - q: ["Seguridad exige que en producción solo corran imágenes que pasaron el pipeline.", "Security requires that only images that passed the pipeline run in production."]
-    options: [["Binary Authorization", "Binary Authorization"], ["Cloud Armor", "Cloud Armor"], ["IAM Viewer", "IAM Viewer"]]
+    options: [["Binary Authorization", "Binary Authorization"], ["Artifact Analysis con escaneo automático", "Artifact Analysis with automatic scanning"], ["Una política de organización de ubicaciones", "A resource locations organization policy"], ["Workload Identity en el clúster", "Workload Identity on the cluster"]]
     answer: 0
     why: ["Verifica atestaciones antes de permitir el despliegue.", "It verifies attestations before allowing deployment."]
   - q: ["Varios equipos editan la misma infraestructura Terraform y se pisan el estado.", "Several teams edit the same Terraform infra and clobber state."]
-    options: [["Backend remoto en Cloud Storage con bloqueo", "Remote Cloud Storage backend with locking"], ["Cada uno su terraform.tfstate local", "Each their own local terraform.tfstate"], ["Dejar de usar Terraform", "Stop using Terraform"]]
+    options: [["Backend remoto en Cloud Storage con bloqueo", "Remote Cloud Storage backend with locking"], ["Guardar terraform.tfstate en el repositorio Git", "Keep terraform.tfstate in the Git repository"], ["Un workspace distinto por persona", "A different workspace per person"], ["Ejecutar terraform refresh antes de cada apply", "Run terraform refresh before every apply"]]
     answer: 0
     why: ["El estado compartido con bloqueo evita aplicaciones simultáneas.", "Shared, locked state prevents simultaneous applies."]
   - q: ["Quieres volver a la versión anterior al instante si la nueva falla.", "You want to return to the previous version instantly if the new one fails."]
-    options: [["Blue/green", "Blue/green"], ["Recrear todo desde cero", "Recreate everything"], ["Desplegar de noche", "Deploy at night"]]
+    options: [["Blue/green", "Blue/green"], ["Despliegue progresivo (rolling update)", "Rolling update"], ["Actualizar la imagen en caliente con kubectl set image", "Update the image in place with kubectl set image"], ["Recrear (recreate) con la versión nueva", "Recreate with the new version"]]
     answer: 0
     why: ["El entorno anterior sigue listo: basta con cambiar el tráfico.", "The old environment is still up: just switch traffic."]
 quiz:
   - q: ["¿Qué comando de Terraform muestra los cambios sin aplicarlos?", "Which Terraform command shows changes without applying them?"]
-    options: [["terraform plan", "terraform plan"], ["terraform apply", "terraform apply"], ["terraform init", "terraform init"]]
+    options: [["terraform plan", "terraform plan"], ["terraform validate", "terraform validate"], ["terraform apply -auto-approve", "terraform apply -auto-approve"], ["terraform show", "terraform show"]]
     answer: 0
     why: ["plan compara el código con el estado real.", "plan compares code with real state."]
   - q: ["¿Qué servicio sustituye a Container Registry?", "Which service replaces Container Registry?"]
-    options: [["Artifact Registry", "Artifact Registry"], ["Cloud Storage", "Cloud Storage"], ["Cloud Source Repositories", "Cloud Source Repositories"]]
+    options: [["Artifact Registry", "Artifact Registry"], ["Cloud Source Repositories", "Cloud Source Repositories"], ["Cloud Storage con acceso uniforme", "Cloud Storage with uniform access"], ["Container Analysis", "Container Analysis"]]
     answer: 0
     why: ["Artifact Registry guarda imágenes y paquetes.", "Artifact Registry stores images and packages."]
   - q: ["¿Qué archivo define los pasos de Cloud Build?", "Which file defines Cloud Build steps?"]
-    options: [["cloudbuild.yaml", "cloudbuild.yaml"], ["app.yaml", "app.yaml"], ["main.tf", "main.tf"]]
+    options: [["cloudbuild.yaml", "cloudbuild.yaml"], ["skaffold.yaml", "skaffold.yaml"], ["clouddeploy.yaml", "clouddeploy.yaml"], ["Dockerfile", "Dockerfile"]]
     answer: 0
-    why: ["app.yaml es de App Engine y main.tf de Terraform.", "app.yaml is App Engine's and main.tf Terraform's."]
+    why: ["El Dockerfile define la imagen; skaffold.yaml y clouddeploy.yaml los usa Cloud Deploy.", "The Dockerfile defines the image; skaffold.yaml and clouddeploy.yaml are used by Cloud Deploy."]
   - q: ["¿Qué es un despliegue canary?", "What is a canary deployment?"]
-    options: [["Enviar una parte pequeña del tráfico a la versión nueva", "Sending a small share of traffic to the new version"], ["Desplegar en todas las regiones a la vez", "Deploying to all regions at once"], ["Borrar la versión antigua", "Deleting the old version"]]
+    options: [["Enviar una parte pequeña del tráfico a la versión nueva", "Sending a small share of traffic to the new version"], ["Tener dos entornos completos y cambiar todo el tráfico a la vez", "Having two full environments and switching all traffic at once"], ["Sustituir las instancias una a una hasta completar", "Replacing instances one by one until complete"], ["Activar la función solo con un feature flag", "Enabling the feature only with a feature flag"]]
     answer: 0
     why: ["Si las métricas empeoran, se revierte con poco impacto.", "If metrics worsen, you revert with little impact."]
   - q: ["Alguien cambió una regla a mano en la consola. ¿Qué detecta terraform plan?", "Someone changed a rule by hand in the console. What does terraform plan detect?"]
-    options: [["Deriva (drift) respecto al código", "Drift from the code"], ["Nada", "Nothing"], ["Un error de sintaxis", "A syntax error"]]
+    options: [["Deriva (drift) respecto al código", "Drift from the code"], ["Un conflicto de bloqueo del estado", "A state lock conflict"], ["Nada: los cambios manuales se ignoran", "Nothing: manual changes are ignored"], ["Un error de versión del proveedor", "A provider version error"]]
     answer: 0
     why: ["plan propondrá devolverla al estado del código.", "plan will propose returning it to the coded state."]
