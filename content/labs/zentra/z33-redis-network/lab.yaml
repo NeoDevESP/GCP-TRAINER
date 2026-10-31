@@ -3,7 +3,7 @@ title: 'INC P2 · La app va lentísima: las sesiones no llegan a Memorystore'
 summary: Memorystore solo es accesible desde la red autorizada al crearlo, y eso no se cambia después. Créalo en la red correcta, comprueba desde la VM y retira el inservible.
 track: zentra
 day: 33
-level: intermediate
+level: advanced
 branch: databases
 type: incident
 mode: production

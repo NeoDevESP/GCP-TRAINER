@@ -3,7 +3,7 @@ title: INC P1 · Nada sale a internet desde zentra-vpc
 summary: Cloud NAT está bien, pero alguien borró la ruta por defecto. Sin ruta 0.0.0.0/0 no hay NAT que valga.
 track: zentra
 day: 43
-level: intermediate
+level: professional
 branch: networking
 type: incident
 mode: production

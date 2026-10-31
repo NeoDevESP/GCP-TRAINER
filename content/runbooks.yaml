@@ -47,6 +47,8 @@ runbooks:
   - zentra-z18-bq-denied
   - bank-b25-wrong-identity
   - ace-d11-app-403
+  - zentra-z57-sql-client
+  - zentra-z55-service-account
 - id: run-403
   area: access
   symptom:
@@ -87,6 +89,7 @@ runbooks:
   labs:
   - zentra-z05-private-run
   - bank-b05-run-403
+  - zentra-z64-invoker-removed
 - id: api-disabled
   area: access
   symptom:
@@ -121,6 +124,7 @@ runbooks:
   labs:
   - zentra-z13-enable-api
   - zentra-z40-api-disabled
+  - zentra-z69-week6-test
 - id: org-policy
   area: access
   symptom:
@@ -194,6 +198,7 @@ runbooks:
   labs:
   - zentra-z11-urgent-leaver
   - bank-b12-leaver-joiner
+  - zentra-z56-access-review
 - id: vm-no-internet
   area: network
   symptom:
@@ -266,6 +271,7 @@ runbooks:
   - ''
   labs:
   - zentra-z28-nat-ports
+  - zentra-z67-week5-test
 - id: private-google-access
   area: network
   symptom:
@@ -623,6 +629,7 @@ runbooks:
   labs:
   - zentra-z21-bad-release
   - ace-d27-deploy-rollback
+  - zentra-z59-week3-test
 - id: secret-access
   area: serverless
   symptom:
@@ -659,6 +666,7 @@ runbooks:
   - zentra-z26-secret-version
   - bank-b06-secret-access
   - bank-b14-secret-rotation
+  - zentra-z59-week3-test
 - id: sql-connections
   area: data
   symptom:
@@ -698,6 +706,8 @@ runbooks:
   - zentra-z35-sql-connections
   - bank-b10-sql-connections
   - ace-d20-sql-saturated
+  - zentra-z60-sql-flag
+  - zentra-z67-week5-test
 - id: pubsub-backlog
   area: data
   symptom:
@@ -760,6 +770,7 @@ runbooks:
   - Copying the data outside the EU.
   labs:
   - zentra-z31-bq-location
+  - zentra-z69-week6-test
 - id: gke-pods
   area: gke
   symptom:
@@ -803,6 +814,8 @@ runbooks:
   - bank-b09-gke-crashloop
   - bank-b19-gke-oomkilled
   - bank-b24-gke-imagepull
+  - zentra-z58-image-pull
+  - zentra-z63-scaled-to-zero
 - id: gke-not-ready
   area: gke
   symptom:
@@ -1145,3 +1158,152 @@ runbooks:
   - Locking without confirming the period.
   labs:
   - zentra-z50-retention-lock
+- id: vm-stopped
+  area: compute
+  symptom:
+  - Una VM de producción aparece parada (TERMINATED) y nadie la ha tocado
+  - A production VM shows as stopped (TERMINATED) and nobody touched it
+  errors: []
+  means:
+  - 'Una VM no se para sola: lo hace una persona, un proceso (apagados programados de ahorro), un fallo del host o una VM Spot desalojada. La auditoría dice quién.'
+  - 'A VM doesn''t stop by itself: a person, a process (scheduled saving shutdowns), a host failure or a preempted Spot VM does. The audit log says who.'
+  steps:
+  - text:
+    - Quién la paró
+    - Who stopped it
+    cmd: gcloud logging read 'protoPayload.methodName:"instances.stop"' --limit=3
+  - text:
+    - Sus etiquetas y si es Spot
+    - Its labels and whether it's Spot
+    cmd: gcloud compute instances describe VM --zone=ZONA --format='value(labels,scheduling.provisioningModel)'
+  causes:
+  - - Apagado nocturno de FinOps sobre VMs sin etiqueta de producción
+    - FinOps nightly shutdown on VMs without a production label
+  - - VM Spot desalojada
+    - Preempted Spot VM
+  fix:
+  - Arráncala primero; después corrige la causa (etiqueta `entorno=prod`, excluirla del proceso o no usar Spot en producción).
+  - Start it first; then fix the cause (`entorno=prod` label, exclude it from the job or don't use Spot in production).
+  avoid:
+  - 'Arrancarla sin más: mañana volverá a pasar.'
+  - 'Just starting it: it''ll happen again tomorrow.'
+  labs:
+  - zentra-z62-stopped-by-schedule
+- id: noisy-logs
+  area: compute
+  symptom:
+  - Los registros están llenos de errores y no sabes cuál importa
+  - The logs are full of errors and you don't know which matters
+  errors: []
+  means:
+  - Casi todo es ruido de otros sistemas. Filtra por el **recurso** que falla y por la **hora** en que empezó.
+  - Nearly all of it is noise from other systems. Filter by the failing **resource** and the **time** it started.
+  steps:
+  - text:
+    - Solo el servicio afectado
+    - Only the affected service
+    cmd: gcloud logging read 'resource.type=cloud_run_revision resource.labels.service_name="SERVICIO" severity>=ERROR' --limit=5
+  causes:
+  - - Errores habituales de VMs o del kernel que no tienen que ver
+    - Usual VM or kernel errors that are unrelated
+  fix:
+  - Quédate con los errores del recurso afectado desde la hora del fallo y descarta el resto en la nota del ticket.
+  - Keep the affected resource's errors since the failure time and rule out the rest in the ticket note.
+  avoid:
+  - Perseguir cada error rojo que aparece.
+  - Chasing every red error that shows up.
+  labs:
+  - zentra-z61-red-herring
+  - zentra-z54-week1-test
+- id: bq-cost
+  area: data
+  symptom:
+  - 'BigQuery: una consulta lee teras de datos y cuesta una fortuna'
+  - 'BigQuery: a query reads terabytes and costs a fortune'
+  errors: []
+  means:
+  - Pagas por bytes leídos. Sin particiones, un filtro por fecha lee la tabla entera.
+  - You pay per bytes read. Without partitions, a date filter reads the whole table.
+  steps:
+  - text:
+    - Mide sin coste
+    - Measure at no cost
+    cmd: bq query --dry_run --use_legacy_sql=false "SELECT …"
+  - text:
+    - Copia particionada y agrupada
+    - Partitioned, clustered copy
+    cmd: bq query --use_legacy_sql=false "CREATE TABLE ds.t_p PARTITION BY DATE(fecha) CLUSTER BY pais AS SELECT * FROM ds.t"
+  causes:
+  - - Tabla sin particionar
+    - Unpartitioned table
+  - - SELECT * innecesario
+    - Needless SELECT *
+  fix:
+  - Particiona por fecha, agrupa por las columnas de filtro y vuelve a medir con `--dry_run`.
+  - Partition by date, cluster by the filter columns and measure again with `--dry_run`.
+  avoid:
+  - 'Poner LIMIT: no reduce los bytes leídos.'
+  - 'Adding LIMIT: it doesn''t reduce bytes read.'
+  labs:
+  - zentra-z65-bigquery-cost
+  - ace-d21-bigquery-cost
+- id: dropped-database
+  area: data
+  symptom:
+  - Alguien ha borrado una base de datos de Cloud SQL
+  - Someone dropped a Cloud SQL database
+  errors: []
+  means:
+  - Restaurar una copia **sobre** la instancia sustituye todas sus bases de datos. Restaura en una instancia temporal y trae solo la que falta.
+  - Restoring a backup **over** the instance replaces all its databases. Restore to a temporary instance and bring back only the missing one.
+  steps:
+  - text:
+    - Quién y cuándo
+    - Who and when
+    cmd: gcloud logging read 'protoPayload.methodName:databases.delete' --limit=3
+  - text:
+    - Copias disponibles
+    - Available backups
+    cmd: gcloud sql backups list --instance=INSTANCIA
+  causes:
+  - - Migración o script con permisos de más
+    - A migration or script with too many permissions
+  fix:
+  - Instancia temporal → exportar esa base de datos → importarla → borrar la temporal → activar PITR.
+  - Temporary instance → export that database → import it → delete the temporary one → enable PITR.
+  avoid:
+  - Restaurar encima de la instancia de producción.
+  - Restoring over the production instance.
+  labs:
+  - zentra-z68-restore-database
+  - data-d01-sql-recovery
+- id: canary
+  area: serverless
+  symptom:
+  - 'Petición: sacar una versión nueva poco a poco (canario)'
+  - 'Request: release a new version gradually (canary)'
+  errors: []
+  means:
+  - Cloud Run reparte el tráfico entre revisiones. Se despliega sin tráfico con una etiqueta, se prueba y se le da un porcentaje.
+  - Cloud Run splits traffic between revisions. You deploy with no traffic and a tag, test it and give it a share.
+  steps:
+  - text:
+    - Desplegar sin tráfico
+    - Deploy with no traffic
+    cmd: gcloud run deploy SERVICIO --image=IMAGEN --region=REGION --no-traffic --tag=canary
+  - text:
+    - Darle un 10 %
+    - Give it 10%
+    cmd: gcloud run services update-traffic SERVICIO --region=REGION --to-tags=canary=10
+  causes:
+  - - Versión nueva con riesgo
+    - A risky new version
+  fix:
+  - Canario con etiqueta, vigilar errores y latencia, y promocionar (`--to-tags=canary=100`) o volver atrás.
+  - Tagged canary, watch errors and latency, then promote (`--to-tags=canary=100`) or roll back.
+  avoid:
+  - Desplegar directamente al 100 %.
+  - Deploying straight to 100%.
+  labs:
+  - zentra-z70-canary
+  - ace-d27-deploy-rollback

@@ -3,7 +3,7 @@ title: 'INC P1 · Las tarjetas no autorizan: «connection timed out» hacia pago
 summary: Una regla de denegación de Seguridad cambió de prioridad y ahora gana a la regla que permite el tráfico. Se arregla con la prioridad correcta, no borrando la regla.
 track: zentra
 day: 38
-level: intermediate
+level: advanced
 branch: networking
 type: incident
 mode: production

@@ -3,7 +3,7 @@ title: 'INC P1 · Cierre de mes: la app no muestra el saldo'
 summary: 'Cuentas devuelve errores porque la base de datos rechaza conexiones. La causa no está en la aplicación: el cierre de mes conecta más clientes de los que caben.'
 track: zentra
 day: 35
-level: intermediate
+level: advanced
 branch: databases
 type: incident
 mode: production

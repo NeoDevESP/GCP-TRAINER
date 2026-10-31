@@ -129,7 +129,7 @@ tutor:
 - match: --dry_run
   title: Medir
   why: Una ejecución de prueba dice los bytes que leería, sin coste.
-- match: PARTITION BY DATE(fecha)
+- match: CLUSTER BY pais
   title: Particionar
   why: Con el filtro por fecha solo se leen los días pedidos; el cluster por país afina aún más.
 en:

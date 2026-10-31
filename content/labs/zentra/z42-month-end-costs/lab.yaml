@@ -3,7 +3,7 @@ title: 'REQ P3 · FinOps: la factura del mes va un 70 % por encima'
 summary: Una VM con GPU olvidada, discos huérfanos y una máquina sin etiquetas. Confirma con cada dueño, ahorra sin romper nada y deja un presupuesto con avisos.
 track: zentra
 day: 42
-level: intermediate
+level: advanced
 branch: finops
 type: incident
 mode: production

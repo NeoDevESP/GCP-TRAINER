@@ -64,6 +64,16 @@ func (c *Catalog) ForLang(lang string) *Catalog {
 		if t.EN != nil {
 			t.Title, t.Description = pick(t.EN.Title, t.Title), pick(t.EN.Description, t.Description)
 		}
+		if len(t.Stages) > 0 {
+			st := make([]Stage, len(t.Stages))
+			for i, s := range t.Stages {
+				if s.EN != nil {
+					s.Title, s.Description = pick(s.EN.Title, s.Title), pick(s.EN.Description, s.Description)
+				}
+				st[i] = s
+			}
+			t.Stages = st
+		}
 		v.Tracks = append(v.Tracks, t)
 	}
 	for _, b := range src.Badges {

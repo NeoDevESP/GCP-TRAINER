@@ -3,7 +3,7 @@ title: SEC P2 · Una cuenta de Gmail dentro del grupo que da acceso a BigQuery
 summary: 'Contén sin destruir: saca al externo, cierra el grupo, averigua quién lo hizo con la auditoría de administración y escala a Seguridad.'
 track: zentra
 day: 15
-level: intermediate
+level: basic
 branch: security
 type: incident
 mode: production

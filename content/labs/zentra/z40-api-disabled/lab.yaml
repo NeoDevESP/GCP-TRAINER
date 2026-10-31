@@ -3,7 +3,7 @@ title: INC P2 · BigQuery dice «API has not been used… or it is disabled»
 summary: Un script de limpieza de FinOps desactivó la API de BigQuery «porque no se usaba». Encuéntralo en la auditoría, vuelve a activarla y evita que se repita.
 track: zentra
 day: 40
-level: intermediate
+level: advanced
 branch: foundations
 type: incident
 mode: production

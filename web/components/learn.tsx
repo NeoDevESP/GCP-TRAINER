@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { k, useI18n } from "@/lib/i18n";
 import { Icon } from "@/components/console/icons";
-import type { LabSummary } from "@/lib/types";
+import type { LabSummary, Stage } from "@/lib/types";
 
 export type LabState = "done" | "doing" | "new";
 
@@ -94,6 +94,52 @@ export function PathMap({ labs, state, running, compact }: { labs: LabSummary[];
               </span>
               {st === "current" && <span className="lp-go">{t("Empezar")} →</span>}
             </a>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+export const LEVELS: Record<string, string> = { basic: k("Nivel básico"), intermediate: k("Nivel intermedio"), advanced: k("Nivel avanzado"), professional: k("Nivel profesional") };
+
+/** StageList shows a route week by week: level, progress and its steps. The
+ * week with the next pending step starts open. */
+export function StageList({ stages, byId, state, running }: { stages: Stage[]; byId: Record<string, LabSummary>; state: Record<string, LabState>; running?: Record<string, string> }) {
+  const { t } = useI18n();
+  const all = stages.flatMap((s) => s.labs);
+  const next = nextLab(all, state);
+  return (
+    <ol className="st-list" aria-label={t("Semanas de la ruta")}>
+      {stages.map((s, i) => {
+        const labs = s.labs.map((id) => byId[id]).filter(Boolean);
+        const done = s.labs.filter((id) => state[id] === "done").length;
+        const complete = done === s.labs.length && s.labs.length > 0;
+        const final = labs[labs.length - 1];
+        return (
+          <li key={s.id}>
+            <details className={`card st-week${complete ? " done" : ""}`} open={!!next && s.labs.includes(next)}>
+              <summary>
+                <span className="st-num" aria-hidden="true">{complete ? <Icon name="check" size={18} /> : i + 1}</span>
+                <span className="st-head">
+                  <span className="st-title">{s.title}</span>
+                  <span className="st-meta">
+                    <span className={`st-level ${s.level}`}>{t(LEVELS[s.level] ?? s.level)}</span>
+                    <span className="muted small">{t("{done} de {total} superados", { done, total: s.labs.length })}</span>
+                  </span>
+                </span>
+                <span className="st-bar" aria-hidden="true"><span style={{ width: `${(100 * done) / Math.max(1, s.labs.length)}%` }} /></span>
+              </summary>
+              <div className="st-body">
+                <p className="muted">{s.description}</p>
+                <PathMap labs={labs} state={state} running={running} compact />
+                {final && (final.type === "boss" || final.type === "challenge") && (
+                  <p className="st-final small">
+                    <Icon name="shield" size={16} /> {t("Prueba de la semana: {title}", { title: final.title })}
+                  </p>
+                )}
+              </div>
+            </details>
           </li>
         );
       })}

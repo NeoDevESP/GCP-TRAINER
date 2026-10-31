@@ -3,7 +3,7 @@ title: 'REQ P3 · Auditoría: los registros de operaciones deben ser imborrables
 summary: 'Retención de 10 años bloqueada (WORM) en el bucket de registros. Bloquearla es irreversible: se confirma con Cumplimiento antes.'
 track: zentra
 day: 50
-level: intermediate
+level: professional
 branch: storage
 type: challenge
 mode: production

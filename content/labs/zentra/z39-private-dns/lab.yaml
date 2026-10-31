@@ -3,7 +3,7 @@ title: INC P2 · Antifraude «no responde» tras la migración a la v2
 summary: 'El nombre interno antifraude.zentra.internal apunta a la VM antigua, ya apagada. El fallo no es de la aplicación: es un registro de Cloud DNS privado.'
 track: zentra
 day: 39
-level: intermediate
+level: advanced
 branch: networking
 type: incident
 mode: production

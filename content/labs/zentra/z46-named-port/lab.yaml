@@ -3,7 +3,7 @@ title: 'INC P2 · Simulador de préstamos: 502 tras recrear el grupo de instanci
 summary: El backend service busca el puerto con nombre «http», y el grupo de instancias ya no lo tiene. Sin puerto con nombre, el balanceador no sabe a qué puerto ir.
 track: zentra
 day: 46
-level: intermediate
+level: professional
 branch: networking
 type: incident
 mode: production

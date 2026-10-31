@@ -3,7 +3,7 @@ title: INC P2 · El portal de empresas no arranca tras el endurecimiento
 summary: Un script de endurecimiento dejó la clave TLS solo para root y nginx, que corre como www-data, ya no puede leerla. Arréglalo sin dejarla legible para todos.
 track: zentra
 day: 48
-level: intermediate
+level: professional
 branch: compute
 type: incident
 mode: production

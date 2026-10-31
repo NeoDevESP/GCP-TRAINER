@@ -3,7 +3,7 @@ title: REQ P3 · Acceso de administrador de Cloud SQL solo para la ventana del s
 summary: Diego necesita administrar Cloud SQL durante una ventana de mantenimiento. Se da con una condición de IAM que caduca sola, no «acordándose de quitarlo».
 track: zentra
 day: 49
-level: intermediate
+level: basic
 branch: iam
 type: challenge
 mode: production

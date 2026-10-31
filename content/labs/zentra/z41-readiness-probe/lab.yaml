@@ -3,7 +3,7 @@ title: 'INC P2 · Notificaciones push caídas: los pods están «Running» pero 
 summary: La nueva versión cambió el puerto de la sonda de preparación y ningún pod pasa a Ready, así que el Service no tiene a quién enviar tráfico. Se vuelve a la versión anterior.
 track: zentra
 day: 41
-level: intermediate
+level: advanced
 branch: gke
 type: incident
 mode: production

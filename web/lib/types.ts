@@ -137,3 +137,12 @@ export interface SessionInfo {
   type?: string;
   status: string;
 }
+
+/** A block of a route (a week of the Zentra route) with its level. */
+export interface Stage {
+  id: string;
+  title: string;
+  description: string;
+  level: string;
+  labs: string[];
+}

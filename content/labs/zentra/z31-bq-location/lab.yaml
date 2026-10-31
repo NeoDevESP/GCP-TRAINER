@@ -3,7 +3,7 @@ title: 'INC P3 · «Not found: Dataset» aunque el dataset existe'
 summary: El dataset está en la UE, pero el worker lanza sus trabajos en US. En BigQuery un trabajo solo ve los datasets de su ubicación.
 track: zentra
 day: 31
-level: intermediate
+level: advanced
 branch: data
 type: incident
 mode: production

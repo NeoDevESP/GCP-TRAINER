@@ -43,6 +43,17 @@ type Track struct {
 	Reference   string   `yaml:"reference" json:"reference"` // official Google learning path used for curriculum sync
 	Phase       string   `yaml:"phase" json:"phase"`         // MVP, V1, V2
 	Labs        []string `yaml:"labs" json:"labs"`
+	Stages      []Stage  `yaml:"stages" json:"stages,omitempty"` // optional weeks; when set, Labs is their concatenation
+	EN          *TextEN  `yaml:"en,omitempty" json:"-"`
+}
+
+// Stage is a block of a track (a week of the Zentra route) with its level.
+type Stage struct {
+	ID          string   `yaml:"id" json:"id"`
+	Title       string   `yaml:"title" json:"title"`
+	Description string   `yaml:"description" json:"description"`
+	Level       string   `yaml:"level" json:"level"` // basic, intermediate, advanced, professional
+	Labs        []string `yaml:"labs" json:"labs"`
 	EN          *TextEN  `yaml:"en,omitempty" json:"-"`
 }
 
@@ -133,6 +144,14 @@ func LoadCatalog(root string) (*Catalog, error) {
 		return nil, err
 	}
 	c.Tracks = tr.Tracks
+	for i := range c.Tracks {
+		if t := &c.Tracks[i]; len(t.Stages) > 0 {
+			t.Labs = nil
+			for _, st := range t.Stages {
+				t.Labs = append(t.Labs, st.Labs...)
+			}
+		}
+	}
 	var bd struct {
 		Badges []BadgeDef `yaml:"badges"`
 	}
@@ -276,9 +295,24 @@ func (c *Catalog) Validate() []string {
 		}
 	}
 	for _, t := range c.Tracks {
+		seen := map[string]bool{}
 		for _, id := range t.Labs {
 			if c.Labs[id] == nil {
 				problems = append(problems, fmt.Sprintf("track %s: unknown lab %s", t.ID, id))
+			}
+			if seen[id] {
+				problems = append(problems, fmt.Sprintf("track %s: lab %s appears twice", t.ID, id))
+			}
+			seen[id] = true
+		}
+		for _, st := range t.Stages {
+			switch st.Level {
+			case "basic", "intermediate", "advanced", "professional":
+			default:
+				problems = append(problems, fmt.Sprintf("track %s stage %s: unknown level %q", t.ID, st.ID, st.Level))
+			}
+			if st.EN == nil || st.EN.Title == "" {
+				problems = append(problems, fmt.Sprintf("track %s stage %s: missing English title", t.ID, st.ID))
 			}
 		}
 	}

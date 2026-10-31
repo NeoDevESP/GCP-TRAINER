@@ -123,7 +123,7 @@ export default function Dashboard() {
   const next = nextId ? labs[nextId] : undefined;
   const plan = study && Object.keys(labs).length ? planStatus({ labs, state, ...study }) : null;
   const pday = plan?.days[plan.today];
-  const zIds = Object.values(labs).filter((l) => l.track === "zentra").sort((a, b) => a.day - b.day).map((l) => l.id);
+  const zIds = (tracks.find((x) => x.id === "zentra")?.labs ?? []).filter((id) => labs[id]);
   const zNext = nextLab(zIds, state);
   const zDone = zIds.filter((id) => state[id] === "done").length;
   return (

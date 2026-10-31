@@ -3,7 +3,7 @@ title: INC P2 · La web de tarifas da 502 tras «limpiar etiquetas»
 summary: Las reglas de cortafuegos se aplican por etiqueta de red. La VM perdió la suya y las sondas de salud ya no llegan.
 track: zentra
 day: 45
-level: intermediate
+level: professional
 branch: networking
 type: incident
 mode: production

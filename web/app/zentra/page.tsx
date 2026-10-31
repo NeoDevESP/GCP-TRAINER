@@ -10,10 +10,10 @@ import Nav from "@/components/Nav";
 import Mermaid from "@/components/Mermaid";
 import Markdown from "@/components/Markdown";
 import { useAuth } from "@/components/useAuth";
-import { labHref, nextLab, useProgress } from "@/components/learn";
+import { StageList, labHref, nextLab, useProgress } from "@/components/learn";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import type { LabSummary } from "@/lib/types";
+import type { LabSummary, Stage } from "@/lib/types";
 
 interface Card {
   title: string;
@@ -44,15 +44,23 @@ export default function ZentraPage() {
   const { t, lang } = useI18n();
   const [w, setW] = useState<World | null>(null);
   const [labs, setLabs] = useState<LabSummary[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
   const [err, setErr] = useState("");
   const { state, running } = useProgress();
 
   useEffect(() => {
     api<World>("/api/worlds/zentra").then(setW).catch((e) => setErr(e.message));
-    api<{ labs: LabSummary[] }>("/api/catalog").then((r) => setLabs(r.labs.filter((l) => l.track === "zentra"))).catch(() => {});
+    api<{ labs: LabSummary[]; tracks: { id: string; stages?: Stage[] }[] }>("/api/catalog")
+      .then((r) => {
+        setLabs(r.labs.filter((l) => l.track === "zentra"));
+        setStages(r.tracks.find((x) => x.id === "zentra")?.stages ?? []);
+      })
+      .catch(() => {});
   }, [lang]);
 
-  const ids = useMemo(() => [...labs].sort((a, b) => a.day - b.day).map((l) => l.id), [labs]);
+  // Route order: week by week when the track has stages.
+  const ids = useMemo(() => (stages.length ? stages.flatMap((s) => s.labs) : [...labs].sort((a, b) => a.day - b.day).map((l) => l.id)), [labs, stages]);
+  const byId = useMemo(() => Object.fromEntries(labs.map((l) => [l.id, l])), [labs]);
   const next = nextLab(ids, state);
   const done = ids.filter((id) => state[id] === "done").length;
 
@@ -87,6 +95,15 @@ export default function ZentraPage() {
             <div className="zt-intro card">
               <Markdown text={w.intro} />
             </div>
+            {stages.length > 0 && (
+              <section className="cm-section" aria-labelledby="zt-weeks">
+                <div className="cm-section-head">
+                  <h2 id="zt-weeks">{t("La ruta, semana a semana")}</h2>
+                  <span className="muted small">{t("Siete semanas de diez casos, de nivel básico a profesional. Cada semana termina con una prueba.")}</span>
+                </div>
+                <StageList stages={stages} byId={byId} state={state} running={running} />
+              </section>
+            )}
             <ul className="zt-facts" aria-label={t("Zentra en cifras")}>
               {w.facts.map((f) => (
                 <li key={f.label}>

@@ -3,7 +3,7 @@ title: INC P2 · Divisas falla «a ratos» desde que el cotizador cotiza 30 mone
 summary: 'Fallos intermitentes solo hacia internet: Cloud NAT se ha quedado sin puertos para esa VM. Demuéstralo con los registros y amplía los puertos.'
 track: zentra
 day: 28
-level: intermediate
+level: advanced
 branch: networking
 type: incident
 mode: production

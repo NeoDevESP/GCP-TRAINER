@@ -3,7 +3,7 @@ title: REQ · Un consultor externo necesita ver los registros durante la migraci
 summary: 'Acceso para un externo: grupo propio que admite externos, rol de solo lectura y una condición IAM que caduca sola.'
 track: zentra
 day: 12
-level: intermediate
+level: basic
 branch: iam
 type: incident
 mode: production

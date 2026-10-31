@@ -3,7 +3,7 @@ title: 'INC P2 · Preparando la nómina: las autorizaciones de tarjeta no escala
 summary: 'Un HPA que muestra <unknown> no puede escalar: sin requests de CPU no hay porcentaje que medir. Pon los requests y demuestra que escala y vuelve a bajar.'
 track: zentra
 day: 34
-level: intermediate
+level: advanced
 branch: gke
 type: incident
 mode: production

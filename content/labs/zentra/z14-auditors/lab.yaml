@@ -3,7 +3,7 @@ title: 'REQ · Auditoría interna: acceso de solo lectura para revisar permisos'
 summary: Los auditores necesitan ver políticas y registros, no datos ni configuración. Crea su grupo y dale los roles de revisión justos.
 track: zentra
 day: 14
-level: intermediate
+level: basic
 branch: security
 type: incident
 mode: production

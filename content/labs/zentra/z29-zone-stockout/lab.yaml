@@ -3,7 +3,7 @@ title: REQ P2 · «No hay sitio» para el cálculo del informe al regulador
 summary: 'ZONE_RESOURCE_POOL_EXHAUSTED no es una cuota: la zona no tiene máquinas libres. Se resuelve con otra zona de la UE, no pidiendo más cuota.'
 track: zentra
 day: 29
-level: intermediate
+level: advanced
 branch: compute
 type: incident
 mode: production

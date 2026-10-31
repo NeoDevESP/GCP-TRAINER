@@ -3,7 +3,7 @@ title: 'REQ P2 · Baja urgente: un SRE despedido esta mañana'
 summary: 'Corta todo el acceso de inmediato: cuenta suspendida, sesiones cerradas, fuera de los grupos y sin permisos directos olvidados. Sin borrar la cuenta.'
 track: zentra
 day: 11
-level: intermediate
+level: basic
 branch: security
 type: incident
 mode: production

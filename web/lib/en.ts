@@ -2171,4 +2171,13 @@ export const en: Record<string, string> = {
   "Vídeos del tema": "Topic videos",
   "Oficiales de Google Cloud, en inglés con subtítulos. Necesitan conexión a internet.": "Official Google Cloud videos, in English with subtitles. They need an internet connection.",
   "Vídeo: {title}": "Video: {title}",
+  "Nivel básico": "Basic level",
+  "Nivel intermedio": "Intermediate level",
+  "Nivel avanzado": "Advanced level",
+  "Nivel profesional": "Professional level",
+  "Semanas de la ruta": "Route weeks",
+  "Prueba de la semana: {title}": "Week test: {title}",
+  "La ruta, semana a semana": "The route, week by week",
+  "Siete semanas de diez casos, de nivel básico a profesional. Cada semana termina con una prueba.": "Seven weeks of ten cases, from basic to professional. Each week ends with a test.",
+  "{done} de {total} superados": "{done} of {total} passed",
 };

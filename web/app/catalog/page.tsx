@@ -6,9 +6,9 @@ import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { k, useI18n } from "@/lib/i18n";
 import { label, labLevel } from "@/lib/labels";
-import type { LabSummary } from "@/lib/types";
+import type { LabSummary, Stage } from "@/lib/types";
 import { Icon } from "@/components/console/icons";
-import { PathMap, TrackBadge, TypeLegend, TypeTag, labHref, nextLab, useProgress } from "@/components/learn";
+import { PathMap, StageList, TrackBadge, TypeLegend, TypeTag, labHref, nextLab, useProgress } from "@/components/learn";
 
 interface Track {
   id: string;
@@ -16,6 +16,7 @@ interface Track {
   description?: string;
   level?: string;
   labs: string[];
+  stages?: Stage[];
 }
 
 interface Catalog {
@@ -153,6 +154,14 @@ export default function CatalogPage() {
                 })()}
               </div>
             </section>
+            {cur.stages?.length ? (
+              <section className="cm-section" aria-labelledby="weeks-title">
+                <div className="cm-section-head">
+                  <h2 id="weeks-title">{t("La ruta, semana a semana")}</h2>
+                </div>
+                <StageList stages={cur.stages} byId={byId} state={state} running={running} />
+              </section>
+            ) : (
             <div className="grid two" style={{ marginTop: 20, alignItems: "start" }}>
               <div className="card">
                 <h3>{t("Pasos de la ruta")}</h3>
@@ -163,6 +172,7 @@ export default function CatalogPage() {
                 <TypeLegend />
               </div>
             </div>
+            )}
           </>
         ) : (
           <>

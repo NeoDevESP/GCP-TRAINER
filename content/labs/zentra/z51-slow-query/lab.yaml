@@ -3,7 +3,7 @@ title: INC P2 · Movimientos tarda 8 segundos y la CPU de la base de datos está
 summary: Una consulta nueva recorre la tabla entera. Encuéntrala en los registros y crea el índice desde una VM de la red, sin ampliar la base de datos.
 track: zentra
 day: 51
-level: intermediate
+level: professional
 branch: databases
 type: incident
 mode: production

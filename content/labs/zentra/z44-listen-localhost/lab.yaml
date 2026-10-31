@@ -3,7 +3,7 @@ title: 'INC P2 · Extractos: «connection refused» desde la app, pero en la VM 
 summary: 'El servicio está levantado y el cortafuegos bien: la aplicación escucha solo en 127.0.0.1 tras un cambio de configuración.'
 track: zentra
 day: 44
-level: intermediate
+level: professional
 branch: compute
 type: incident
 mode: production

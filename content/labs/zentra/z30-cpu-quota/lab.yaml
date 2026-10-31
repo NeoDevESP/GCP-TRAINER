@@ -3,7 +3,7 @@ title: 'INC P2 · La conciliación nocturna no arranca: «Quota CPUS exceeded»'
 summary: Esta vez sí es cuota, pero la llenan máquinas olvidadas de una prueba. Libera lo que sobra (confirmándolo), arranca el proceso y pide aumento solo si hace falta.
 track: zentra
 day: 30
-level: intermediate
+level: advanced
 branch: finops
 type: incident
 mode: production

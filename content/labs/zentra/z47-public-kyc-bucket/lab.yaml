@@ -3,7 +3,7 @@ title: SEC P1 · Documentos de identidad de clientes accesibles desde internet
 summary: Marketing hizo público un bucket para una campaña sin saber que también guardaba documentos KYC. Contener, recuperar los guardarraíles y escalar a Seguridad.
 track: zentra
 day: 47
-level: intermediate
+level: professional
 branch: security
 type: incident
 mode: production

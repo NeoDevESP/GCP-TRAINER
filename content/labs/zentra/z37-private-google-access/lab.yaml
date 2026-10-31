@@ -3,7 +3,7 @@ title: INC P2 · El extractor regulatorio no sube los ficheros a Cloud Storage
 summary: La subred de datos no tiene salida a internet a propósito; llega a Google por Private Google Access, y alguien lo desactivó. Se arregla sin abrir internet.
 track: zentra
 day: 37
-level: intermediate
+level: advanced
 branch: networking
 type: incident
 mode: production

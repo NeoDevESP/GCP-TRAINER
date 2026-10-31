@@ -3,7 +3,7 @@ title: INC P2 · El servidor de conciliación se ha quedado sin disco
 summary: Disco lleno, pero lo que ocupa son ficheros regulatorios que no se pueden borrar. La solución es ampliar el disco en caliente, también por dentro de la VM.
 track: zentra
 day: 36
-level: intermediate
+level: advanced
 branch: compute
 type: incident
 mode: production
