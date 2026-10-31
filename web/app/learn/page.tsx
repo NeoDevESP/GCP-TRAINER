@@ -122,7 +122,7 @@ export default function LearnPage() {
 
   const tp = byId[topic];
   // Topics tied to a practice route show its labs; the rest, labs of their branch.
-  const TOPIC_TRACK: Record<string, string> = { support: "support-bank" };
+  const TOPIC_TRACK: Record<string, string> = { support: "support-bank", "support-identity": "zentra" };
   const tpLabs = useMemo(() => {
     if (!tp) return [];
     const track = TOPIC_TRACK[tp.id] ?? (tp.id.startsWith("support-") ? "support-bank" : "");
@@ -233,6 +233,17 @@ export default function LearnPage() {
                 <button type="button" className="cm-pillbtn ink sm" onClick={() => go("gcp-console")}>{byId["gcp-console"].name}</button>
               </section>
             )}
+            <section className="zt-banner">
+              <div className="zt-logo sm" aria-hidden="true">Z</div>
+              <div className="ln-start-text">
+                <h2>{t("Practica en Zentra, un banco digital en Google Cloud")}</h2>
+                <p>{t("Tu primer mes en Soporte GCP: tutoriales guiados desde cero, peticiones e incidencias reales de cada equipo y la guardia del día de la nómina.")}</p>
+              </div>
+              <div className="row">
+                <a className="cm-pillbtn ink sm" href="/zentra">{t("Abrir el manual de Zentra")}</a>
+                <a className="btn secondary" href="/catalog?track=zentra">{t("Casos de Zentra")}</a>
+              </div>
+            </section>
             {byId.support && (
               <section className="cm-amber ln-support">
                 <div style={{ flex: 1, minWidth: 0 }}>

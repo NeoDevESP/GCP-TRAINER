@@ -51,6 +51,8 @@ const TRACK_ICON: Record<string, string> = {
   ml: "bulb",
   finops: "billing",
   career: "person",
+  zentra: "billing",
+  "support-bank": "shield",
 };
 
 /** TrackIcon is the round coloured icon of a route. */

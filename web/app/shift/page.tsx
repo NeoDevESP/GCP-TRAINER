@@ -19,6 +19,8 @@ const KEY = "cm-shift";
 // Compressed SLA per priority, in minutes from the start of the shift.
 const SLA_MIN: Record<string, number> = { P1: 30, P2: 60, P3: 120, P4: 180 };
 const rank = (p: string) => Number(p.replace("P", "")) || 5;
+// Which bank the tickets come from.
+const POOLS: Record<string, string[]> = { zentra: ["zentra"], atlas: ["support-bank"], all: ["zentra", "support-bank"] };
 
 interface Shift {
   started: number;
@@ -80,12 +82,13 @@ export default function ShiftPage() {
   const [atts, setAtts] = useState<Attempt[]>([]);
   const [doc, setDoc] = useState<ShiftDoc>({ history: [] });
   const [size, setSize] = useState(5);
+  const [pool, setPool] = useState("zentra");
   const [now, setNow] = useState(Date.now());
   const [err, setErr] = useState("");
 
   useEffect(() => {
     api<{ labs: LabSummary[] }>("/api/catalog")
-      .then((r) => setLabs(r.labs.filter((l) => l.track === "support-bank" && l.ticket)))
+      .then((r) => setLabs(r.labs.filter((l) => POOLS.all.includes(l.track) && l.ticket && l.type !== "guided")))
       .catch((e) => setErr(e.message));
     api<Attempt[]>("/api/me/attempts").then((a) => setAtts(a ?? [])).catch(() => {});
     syncStudy()
@@ -128,7 +131,7 @@ export default function ShiftPage() {
     return { at: Date.now(), cases: s.ids.length, solved: done.length, sla: Math.round(sla * 100), order: Math.round(order * 100), score: Math.round(0.6 * avg + 25 * sla + 15 * order) };
   };
 
-  const start = () => labs && save({ ...doc, current: { started: Date.now(), ids: pick(labs, size), opened: [] } });
+  const start = () => labs && save({ ...doc, current: { started: Date.now(), ids: pick(labs.filter((l) => POOLS[pool].includes(l.track)), size), opened: [] } });
   const open = async (id: string) => {
     if (cur && !cur.opened.includes(id)) await save({ ...doc, current: { ...cur, opened: [...cur.opened, id] } }, true);
     window.location.href = labHref(id, results[id]?.running);
@@ -161,6 +164,13 @@ export default function ShiftPage() {
           <section className="card sh-start">
             <h2>{t("Empezar un turno")}</h2>
             <p className="muted">{t("SLA del turno, contados desde que empieza: P1 30 min, P2 1 h, P3 2 h, P4 3 h.")}</p>
+            <div className="row" role="group" aria-label={t("Banco")}>
+              {[["zentra", t("Zentra")], ["atlas", t("Banco Atlas")], ["all", t("Los dos")]].map(([id, name]) => (
+                <button key={id} type="button" className={`btn ${pool === id ? "" : "secondary"}`} aria-pressed={pool === id} onClick={() => setPool(id)}>
+                  {name}
+                </button>
+              ))}
+            </div>
             <div className="row" role="group" aria-label={t("Número de tickets")}>
               {[4, 5, 6].map((n) => (
                 <button key={n} type="button" className={`btn ${size === n ? "" : "secondary"}`} aria-pressed={size === n} onClick={() => setSize(n)}>

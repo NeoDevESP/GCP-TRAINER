@@ -1136,4 +1136,50 @@ body.cm main#main { overflow-x: clip; }
 .pl-check input { width: 20px; height: 20px; flex: none; }
 .pl-box { flex: none; width: 20px; height: 20px; border: 2px solid var(--muted, #5F6368); border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
 .pl-items li.done .pl-box { background: #CEEAD6; border-color: #0D652D; color: #0D652D; }
+.pl-open { font-size: 13px; font-weight: 600; margin-left: 4px; }
+.pl-check label { cursor: pointer; }
 .pl-kind { font-size: 13px; color: var(--muted, #5F6368); }
+
+/* Zentra handbook */
+.zt-hero { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 28px; margin-bottom: 20px; border-radius: 28px; background: linear-gradient(135deg, #0B1F3A 0%, #12406B 60%, #1B6E8F 100%); color: #F4F8FF; }
+.zt-hero h1 { margin: 2px 0 4px; font-size: 40px; color: #FFFFFF; }
+.zt-kicker { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #9CC7EA; }
+.zt-tagline { margin: 0; font-size: 17px; line-height: 25px; color: #DCEAF8; max-width: 620px; }
+.zt-logo { flex: none; width: 72px; height: 72px; border-radius: 22px; display: inline-flex; align-items: center; justify-content: center; font: 800 40px var(--cm-sans, sans-serif); color: #0B1F3A; background: linear-gradient(135deg, #7CF0C5, #3CC3E6); }
+.zt-cta { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 220px; }
+.zt-cta .btn.secondary { text-align: center; }
+.zt-progress { color: #BFD6EE !important; font-size: 13px; text-align: center; }
+.zt-intro { margin-bottom: 16px; }
+.zt-facts { list-style: none; margin: 0 0 24px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.zt-facts li { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
+.zt-facts strong { font-size: 24px; }
+.zt-facts span { font-size: 13px; color: var(--muted, #5F6368); }
+.zt-layout { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; }
+@media (max-width: 860px) { .zt-layout { grid-template-columns: 1fr; } .zt-toc { position: static !important; } }
+.zt-toc { position: sticky; top: 16px; }
+.zt-toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.zt-toc a { display: block; padding: 6px 10px; border-radius: 10px; font-size: 14px; color: inherit; text-decoration: none; }
+.zt-toc a:hover, .zt-toc a:focus-visible { background: var(--border); }
+.zt-body { min-width: 0; }
+.zt-section { margin-bottom: 36px; scroll-margin-top: 16px; }
+.zt-section h2 { font-size: 24px; margin: 0 0 10px; }
+.zt-diagram { margin: 14px 0; overflow-x: auto; }
+.zt-cards { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.zt-cards h3 { margin: 0 0 6px; font-size: 16px; }
+.zt-cards p { margin: 0 0 8px; font-size: 14px; line-height: 21px; }
+.zt-meta { font-size: 12px; color: var(--muted, #5F6368); overflow-wrap: anywhere; }
+.zt-people { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.zt-people li { display: flex; gap: 12px; align-items: flex-start; }
+.zt-people p { margin: 6px 0; font-size: 14px; line-height: 20px; }
+.zt-avatar { flex: none; width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; background: #DDEBFA; color: #12406B; }
+.zt-role { font-size: 13px; }
+.zt-email { font-size: 12px; overflow-wrap: anywhere; }
+.zt-glossary { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin: 0; }
+.zt-glossary div { padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; }
+.zt-glossary dt { font-weight: 700; margin-bottom: 4px; }
+.zt-glossary dd { margin: 0; font-size: 14px; line-height: 20px; }
+.zt-banner { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 20px 24px; margin-bottom: 20px; border-radius: 28px; background: linear-gradient(135deg, #0B1F3A 0%, #12406B 60%, #1B6E8F 100%); color: #F4F8FF; }
+.zt-banner h2 { margin: 0 0 4px; font-size: 20px; color: #FFFFFF; }
+.zt-banner p { margin: 0; font-size: 14px; line-height: 21px; color: #DCEAF8; }
+.zt-banner .row { gap: 8px; flex-wrap: wrap; }
+.zt-logo.sm { width: 52px; height: 52px; border-radius: 16px; font-size: 28px; }

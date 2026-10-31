@@ -15,7 +15,7 @@ import { k, useI18n } from "@/lib/i18n";
 import { loadRun, saveRun, syncStudy, type ExamRecord, type Progress, type Topic } from "@/lib/study";
 import type { LabSummary } from "@/lib/types";
 
-type Item = { lab: string } | { topic: string } | { exam: string } | { shift: number } | { task: string; text: string };
+type Item = { lab: string } | { topic: string } | { exam: string } | { shift: number } | { task: string; text: string; href?: string };
 interface Day {
   title: string;
   goal: string;
@@ -24,30 +24,30 @@ interface Day {
 
 const L = (...ids: string[]) => ids.map((lab) => ({ lab }));
 
+const Z = (...n: string[]) => n.map((x) => ({ lab: "zentra-" + x }));
+
 const DAYS: Day[] = [
-  { title: k("Día 1 · Proyecto, IAM y almacenamiento"), goal: k("Orientarte en la consola y en el oficio: primer ticket de acceso."),
-    items: [{ topic: "gcp-console" }, { topic: "support" }, { topic: "support-method" }, ...L("ace-d01-context", "ace-d02-iam-storage-read", "ace-d03-secure-bucket", "bank-b01-access-request")] },
-  { title: k("Día 2 · VMs, subredes y salida a internet"), goal: k("Redes privadas y las políticas de organización del banco."),
-    items: [{ topic: "iam" }, ...L("ace-d04-web-vm", "ace-d05-subnet-isolation", "ace-d12-private-egress", "bank-b02-vm-policy", "bank-b03-no-egress", "bank-b12-leaver-joiner")] },
-  { title: k("Día 3 · Cloud Run, Cloud SQL y secretos"), goal: k("Permisos entre servicios: el 403 y sus tres causas."),
-    items: [{ topic: "security" }, ...L("ace-d06-cloud-run", "ace-d07-cloud-sql", "ace-d18-api-db-firewall", "bank-b05-run-403", "bank-b06-secret-access", "bank-b14-secret-rotation", "bank-b15-sa-key-request", "bank-b25-wrong-identity")] },
-  { title: k("Día 4 · Observabilidad, balanceo y conectividad"), goal: k("Del síntoma (502, timeout) a la causa."),
-    items: [{ topic: "support-network" }, ...L("ace-d08-logs-alert", "ace-d09-health-check", "ace-d11-app-403", "bank-b04-app-db", "bank-b21-lb-502-healthcheck", "bank-b27-run-sql-timeout")] },
-  { title: k("Día 5 · Automatización y repaso"), goal: k("Terraform y CI/CD, y repetir sin tutor los primeros casos."),
-    items: [{ topic: "support-google" }, ...L("ace-d13-lb-dns", "ace-d14-terraform", "ace-d15-cloud-build", "bank-b16-region-policy", "bank-b20-oslogin-ssh"),
-      { task: "d5-repeat", text: k("Repite b01, b02 y b03 sin tutor ni pistas") }] },
-  { title: k("Día 6 · GKE"), goal: k("Pods que no arrancan: CrashLoopBackOff, OOMKilled e ImagePullBackOff."),
-    items: [{ topic: "gke" }, { topic: "support-compute" }, ...L("ace-d16-gke-two-services", "ace-d17-gke-hpa", "bank-b09-gke-crashloop", "bank-b19-gke-oomkilled", "bank-b24-gke-imagepull"),
-      { task: "d6-repeat", text: k("Repite b04, b05 y b06 sin tutor") }] },
-  { title: k("Día 7 · Seguridad y auditoría"), goal: k("Incidentes de seguridad, registros de auditoría y exposición pública."),
-    items: [{ topic: "support-governance" }, ...L("ace-d19-secret-env", "ace-d24-cmek", "ace-d25-public-exposure", "bank-b07-public-bucket", "bank-b13-audit-sink", "bank-b22-sink-no-writer")] },
-  { title: k("Día 8 · Datos, costes y caídas del proveedor"), goal: k("Bases de datos saturadas, facturas, discos llenos y caídas de Google."),
-    items: [{ topic: "support-data" }, ...L("ace-d20-sql-saturated", "ace-d26-hybrid-design", "ace-d27-deploy-rollback", "bank-b08-region-outage", "bank-b10-sql-connections", "bank-b11-bill-spike", "bank-b17-disk-full", "bank-b26-provider-outage")] },
-  { title: k("Día 9 · Turnos de soporte"), goal: k("Trabajar varios tickets a la vez, priorizando por impacto."),
-    items: [...L("bank-b18-not-gcp", "bank-b23-priority-pressure"), { shift: 1 }, { shift: 2 },
-      { task: "d9-solo", text: k("Haz los casos de banca que tengas por debajo de 80 sin tutor") }] },
-  { title: k("Día 10 · Examen y repaso"), goal: k("Simulacro completo del ACE, repaso de fallos y un último turno."),
-    items: [{ exam: "ACE" }, { shift: 3 }, { task: "d10-review", text: k("Repasa los temas con las preguntas que fallaste en el simulacro") }] },
+  { title: k("Día 1 · Bienvenida a Zentra: la consola y el proyecto"), goal: k("Entender cómo se organiza Google Cloud y el banco en el que trabajas."),
+    items: [{ topic: "gcp-console" }, { task: "d1-handbook", text: k("Lee el manual de Zentra"), href: "/zentra" }, ...Z("z01-first-day", "z02-who-is-who"), ...L("ace-d01-context", "ace-d02-iam-storage-read", "ace-d03-secure-bucket")] },
+  { title: k("Día 2 · Registros, VMs privadas e IAP"), goal: k("Saber quién cambió qué y entrar a una VM sin exponerla."),
+    items: [{ topic: "support-method" }, ...Z("z03-log-detective", "z04-private-vm"), ...L("ace-d04-web-vm", "ace-d05-subnet-isolation", "ace-d12-private-egress", "bank-b03-no-egress")] },
+  { title: k("Día 3 · Cloud Run, secretos y alertas"), goal: k("Microservicios privados, claves bien guardadas y avisos al NOC."),
+    items: [{ topic: "security" }, ...Z("z05-private-run", "z06-secrets", "z07-noc-alert"), ...L("ace-d06-cloud-run", "ace-d07-cloud-sql", "ace-d08-logs-alert")] },
+  { title: k("Día 4 · Accesos: altas, cambios y bajas"), goal: k("Dar y quitar permisos como en un banco: siempre por grupos."),
+    items: [{ topic: "support-identity" }, { topic: "support" }, ...Z("z08-finops-basics", "z09-joiner", "z10-mover", "z11-urgent-leaver"), ...L("bank-b01-access-request", "bank-b12-leaver-joiner")] },
+  { title: k("Día 5 · Externos, APIs y auditoría"), goal: k("Peticiones delicadas: consultores, APIs nuevas, auditores y grupos abiertos."),
+    items: [{ topic: "support-google" }, ...Z("z12-external-consultant", "z13-enable-api", "z14-auditors", "z15-external-member"), ...L("ace-d13-lb-dns", "ace-d14-terraform", "bank-b15-sa-key-request"),
+      { task: "d5-repeat", text: k("Repite z01, z02 y z03 sin tutor ni pistas") }] },
+  { title: k("Día 6 · El flujo de pagos: Pub/Sub y BigQuery"), goal: k("Permisos entre servicios: publicar, entregar y escribir."),
+    items: [{ topic: "support-data" }, ...Z("z16-publish-denied", "z17-push-backlog", "z18-bq-denied"), ...L("ace-d18-api-db-firewall", "ace-d20-sql-saturated", "bank-b05-run-403", "bank-b25-wrong-identity")] },
+  { title: k("Día 7 · GKE y balanceo"), goal: k("Pods que no arrancan, identidades de cargas y el balanceador."),
+    items: [{ topic: "gke" }, { topic: "support-compute" }, { topic: "support-network" }, ...Z("z19-wi-namespace", "z20-armor-blocks-customers"), ...L("ace-d16-gke-two-services", "ace-d17-gke-hpa", "bank-b19-gke-oomkilled", "bank-b24-gke-imagepull")] },
+  { title: k("Día 8 · Seguridad e incidentes graves"), goal: k("Despliegues rotos, claves filtradas y respuesta a incidentes."),
+    items: [{ topic: "support-governance" }, ...Z("z21-bad-release", "z22-leaked-key"), ...L("ace-d19-secret-env", "ace-d25-public-exposure", "ace-d27-deploy-rollback", "bank-b07-public-bucket", "bank-b13-audit-sink")] },
+  { title: k("Día 9 · Guardia"), goal: k("Incidentes de producción con el reloj corriendo y varios tickets a la vez."),
+    items: [...Z("z23-push-endpoint", "z24-healthcheck-path", "z25-fx-no-egress", "z26-secret-version"), ...L("bank-b08-region-outage", "bank-b18-not-gcp"), { shift: 1 }, { shift: 2 }] },
+  { title: k("Día 10 · Día de la nómina y examen"), goal: k("El jefe final, el simulacro del ACE y un último turno."),
+    items: [...Z("z27-payday-boss"), { exam: "ACE" }, { shift: 3 }, { task: "d10-review", text: k("Repasa los temas con las preguntas que fallaste en el simulacro") }] },
 ];
 
 const key = (it: Item) => ("lab" in it ? "lab:" + it.lab : "topic" in it ? "topic:" + it.topic : "exam" in it ? "exam:" + it.exam : "shift" in it ? "shift:" + it.shift : "task:" + it.task);
@@ -103,11 +103,14 @@ export default function PlanPage() {
   const shown = open ?? today;
 
   const label = (it: Item) => {
-    if ("lab" in it) return { text: labs[it.lab]?.title ?? it.lab, kind: it.lab.startsWith("bank-") ? t("Caso de soporte") : t("Laboratorio ACE"), href: labHref(it.lab, running[it.lab]) };
+    if ("lab" in it) {
+      const kind = it.lab.startsWith("zentra-") ? (labs[it.lab]?.type === "guided" ? t("Tutorial Zentra") : t("Caso Zentra")) : it.lab.startsWith("bank-") ? t("Caso Banco Atlas") : t("Laboratorio ACE");
+      return { text: labs[it.lab]?.title ?? it.lab, kind, href: labHref(it.lab, running[it.lab]) };
+    }
     if ("topic" in it) return { text: topics[it.topic]?.name ?? it.topic, kind: t("Tema · test ≥ 70"), href: `/learn?topic=${it.topic}` };
     if ("exam" in it) return { text: t("Simulacro completo del {cert}", { cert: it.exam }), kind: t("Examen"), href: `/learn?cert=${it.exam}&exam=full` };
     if ("shift" in it) return { text: t("Turno de soporte n.º {n}", { n: it.shift }), kind: t("Turno"), href: "/shift" };
-    return { text: t(it.text), kind: t("Tarea"), href: "" };
+    return { text: t(it.text), kind: t("Tarea"), href: it.href ?? "" };
   };
 
   return (
@@ -151,10 +154,11 @@ export default function PlanPage() {
                   return (
                     <li key={key(it)} className={ok ? "done" : ""}>
                       {"task" in it ? (
-                        <label className="pl-check">
-                          <input type="checkbox" checked={ok} onChange={() => toggle(it.task)} />
-                          <span>{lb.text}</span>
-                        </label>
+                        <span className="pl-check">
+                          <input type="checkbox" id={"pl-" + it.task} checked={ok} onChange={() => toggle(it.task)} />
+                          <label htmlFor={"pl-" + it.task}>{lb.text}</label>
+                          {lb.href && <a href={lb.href} className="pl-open">{t("Abrir")}</a>}
+                        </span>
                       ) : (
                         <a href={lb.href} className="pl-check">
                           <span className="pl-box" aria-hidden="true">{ok ? "✓" : ""}</span>

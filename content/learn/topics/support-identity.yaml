@@ -1,0 +1,88 @@
+id: support-identity
+branch: iam
+name: ["Identidad en GCP: Cloud Identity, grupos y accesos", "Identity in GCP: Cloud Identity, groups and access"]
+intro: ["De dónde salen las identidades de Google Cloud, por qué en una empresa los permisos se dan a grupos y cómo se hacen bien las altas, los cambios de puesto, las bajas y los accesos de externos. Es lo que más piden los tickets de soporte.", "Where Google Cloud identities come from, why companies grant permissions to groups and how joiners, movers, leavers and external access are done right. It's what support tickets ask for most."]
+concepts:
+  - id: directory
+    term: ["Workspace y Cloud Identity", "Workspace and Cloud Identity"]
+    what: ["Las cuentas de empresa de Google Cloud viven en un directorio: Google Workspace (con correo y Drive) o Cloud Identity (solo identidad).", "Company Google Cloud accounts live in a directory: Google Workspace (with mail and Drive) or Cloud Identity (identity only)."]
+    points:
+      - ["El dominio (zentra.dev) es el cliente de Google; la organización de GCP cuelga de él.", "The domain (zentra.dev) is the Google customer; the GCP organization hangs from it."]
+      - ["Usuarios, grupos y unidades organizativas (OU) se gestionan en la consola de administración, con gcloud identity o con GAM.", "Users, groups and organizational units (OUs) are managed in the admin console, with gcloud identity or with GAM."]
+      - ["Muchas empresas sincronizan el directorio desde su Active Directory o su proveedor de identidad (SSO).", "Many companies sync the directory from their Active Directory or identity provider (SSO)."]
+      - ["Las cuentas de servicio no son del directorio: son identidades de GCP para aplicaciones.", "Service accounts aren't in the directory: they're GCP identities for applications."]
+    tip: ["Una cuenta suspendida en el directorio pierde al instante todo su acceso a GCP.", "An account suspended in the directory instantly loses all its GCP access."]
+  - id: groups
+    term: ["Permisos a grupos, no a personas", "Permissions to groups, not people"]
+    what: ["Un grupo de Google puede ser miembro de un binding IAM: group:EQUIPO@dominio.", "A Google group can be a member of an IAM binding: group:TEAM@domain."]
+    points:
+      - ["Dar acceso = meter a la persona en el grupo; quitarlo = sacarla. La política IAM no cambia.", "Granting access = adding the person to the group; removing it = taking them out. The IAM policy doesn't change."]
+      - ["Los grupos se pueden anidar: un grupo de equipo dentro de un grupo de área hereda sus permisos.", "Groups can be nested: a team group inside an area group inherits its permissions."]
+      - ["Grupos de seguridad (etiqueta groups.security): para accesos, sin miembros externos.", "Security groups (groups.security label): for access, no external members."]
+      - ["Comprobar si alguien hereda un grupo: gcloud identity groups memberships check-transitive-membership.", "Check whether someone inherits a group: gcloud identity groups memberships check-transitive-membership."]
+    tip: ["«Dale lo mismo que a fulano» se traduce en «mételo en el mismo grupo», nunca en copiar roles.", "\"Give them the same as so-and-so\" translates to \"add them to the same group\", never copying roles."]
+  - id: jml
+    term: ["Altas, cambios de puesto y bajas", "Joiners, movers and leavers"]
+    what: ["El ciclo de vida de una persona en la empresa, visto desde los accesos.", "A person's company lifecycle, seen through access."]
+    points:
+      - ["Alta (joiner): cuenta creada por RR. HH. y grupos del puesto pedidos por su responsable.", "Joiner: account created by HR and the role's groups requested by the manager."]
+      - ["Cambio (mover): se añaden los grupos nuevos y se quitan los antiguos. Olvidar lo segundo es el hallazgo de auditoría más típico.", "Mover: add the new groups and remove the old ones. Forgetting the latter is the most typical audit finding."]
+      - ["Baja (leaver): suspender (no borrar), cerrar sesiones, sacar de los grupos y buscar permisos directos olvidados.", "Leaver: suspend (don't delete), sign out sessions, remove from groups and look for forgotten direct grants."]
+      - ["Borrar una cuenta destruye sus datos y su rastro: en banca se suspende y se conserva.", "Deleting an account destroys its data and trail: in banking you suspend and keep it."]
+    tip: ["Una baja urgente se hace en minutos: la cuenta suspendida corta el acceso aunque queden grupos por limpiar.", "An urgent leaver takes minutes: the suspended account cuts access even if groups remain to clean up."]
+  - id: externals
+    term: ["Accesos de externos y temporales", "External and temporary access"]
+    what: ["Consultores y proveedores necesitan acceso acotado en alcance y en tiempo.", "Consultants and vendors need access scoped in reach and time."]
+    points:
+      - ["La política iam.allowedPolicyMemberDomains impide dar permisos directos a cuentas de otros dominios.", "The iam.allowedPolicyMemberDomains policy blocks direct grants to accounts from other domains."]
+      - ["Solución habitual: un grupo propio para externos que admita miembros externos, con el rol mínimo.", "Usual solution: a dedicated group for externals that allows external members, with the minimum role."]
+      - ["Condiciones IAM con fecha: request.time < timestamp(\"…\") hace que el permiso caduque solo.", "Dated IAM conditions: request.time < timestamp(\"…\") makes the permission expire by itself."]
+      - ["Nunca abrir a externos un grupo interno: un Gmail en un grupo con acceso a datos es un incidente de seguridad.", "Never open an internal group to externals: a Gmail in a group with data access is a security incident."]
+    tip: ["Si un acceso es temporal, ponle la fecha en la propia condición: nadie se acordará de quitarlo.", "If access is temporary, put the date in the condition itself: nobody will remember to remove it."]
+  - id: audit-identity
+    term: ["Quién cambió un acceso", "Who changed an access"]
+    what: ["Dos registros distintos según dónde se hizo el cambio.", "Two different logs depending on where the change happened."]
+    points:
+      - ["Cambios de IAM en GCP: registros de auditoría de actividad de administración (SetIamPolicy).", "IAM changes in GCP: Admin Activity audit logs (SetIamPolicy)."]
+      - ["Cambios de usuarios y grupos: auditoría de administración de Workspace (gam report admin o la consola de administración).", "User and group changes: Workspace admin audit (gam report admin or the admin console)."]
+      - ["Policy Troubleshooter explica si un principal tiene un permiso y por qué binding.", "Policy Troubleshooter explains whether a principal has a permission and through which binding."]
+      - ["Con eso se responde a «¿desde cuándo y quién le dio acceso?».", "With that you answer \"since when and who gave them access?\"."]
+    tip: ["En una revisión de accesos, el auditor querrá ambos registros.", "In an access review, the auditor will want both logs."]
+scenarios:
+  - q: ["Un responsable pide «dale a la nueva lo mismo que a Lucía». Lucía está en gcp-pagos-dev.", "A manager asks \"give the new hire the same as Lucía\". Lucía is in gcp-pagos-dev."]
+    options: [["Añadir a la nueva al grupo gcp-pagos-dev", "Add the new hire to the gcp-pagos-dev group"], ["Copiar a la nueva cada rol de Lucía en el proyecto", "Copy each of Lucía's project roles to the new hire"], ["Darle Editor y afinar después", "Give her Editor and fine-tune later"], ["Añadirla como miembro del grupo y además con roles directos", "Add her to the group and also with direct roles"]]
+    answer: 0
+    why: ["El grupo da exactamente el acceso del equipo y se quita igual de fácil.", "The group gives exactly the team's access and is removed just as easily."]
+  - q: ["RR. HH. avisa de un despido inmediato y Legal pide conservar la cuenta.", "HR reports an immediate dismissal and Legal asks to keep the account."]
+    options: [["Suspender la cuenta, cerrar sesiones, sacarla de grupos y revisar permisos directos", "Suspend the account, sign out sessions, remove from groups and review direct grants"], ["Borrar la cuenta", "Delete the account"], ["Cambiarle la contraseña", "Change the password"], ["Sacarla solo de los grupos", "Remove it only from the groups"]]
+    answer: 0
+    why: ["Suspender corta el acceso y conserva datos; lo demás limpia restos.", "Suspending cuts access and keeps data; the rest cleans up leftovers."]
+  - q: ["Un consultor de otra empresa necesita leer registros tres meses.", "A consultant from another company needs to read logs for three months."]
+    options: [["Grupo para externos con logging.viewer y una condición IAM que caduca", "A group for externals with logging.viewer and an expiring IAM condition"], ["Añadirlo al grupo interno de plataforma", "Add them to the internal platform group"], ["Darle Viewer directamente", "Give them Viewer directly"], ["Prestarle una cuenta interna", "Lend them an internal account"]]
+    answer: 0
+    why: ["Alcance mínimo, separado de lo interno y con fecha de fin automática.", "Minimum scope, kept apart from internal access and with an automatic end date."]
+quiz:
+  - q: ["¿Cómo se escribe un grupo en un binding IAM?", "How is a group written in an IAM binding?"]
+    options: [["group:equipo@dominio", "group:team@domain"], ["user:equipo@dominio", "user:team@domain"], ["domain:equipo", "domain:team"], ["serviceAccount:equipo@dominio", "serviceAccount:team@domain"]]
+    answer: 0
+    why: ["El prefijo group: identifica a los grupos de Google.", "The group: prefix identifies Google groups."]
+  - q: ["¿Qué pasa con los permisos de GCP de un usuario suspendido en Workspace?", "What happens to the GCP permissions of a user suspended in Workspace?"]
+    options: [["Deja de poder usarlos de inmediato", "They can no longer use them immediately"], ["Los conserva 30 días", "They keep them for 30 days"], ["Solo pierde los de la consola", "They only lose console ones"], ["Nada, hay que quitarlos uno a uno", "Nothing, they must be removed one by one"]]
+    answer: 0
+    why: ["Una cuenta suspendida no puede autenticarse.", "A suspended account can't authenticate."]
+  - q: ["¿Qué política impide dar roles a cuentas de otros dominios?", "Which policy blocks granting roles to accounts from other domains?"]
+    options: [["iam.allowedPolicyMemberDomains", "iam.allowedPolicyMemberDomains"], ["iam.disableServiceAccountKeyCreation", "iam.disableServiceAccountKeyCreation"], ["compute.vmExternalIpAccess", "compute.vmExternalIpAccess"], ["gcp.resourceLocations", "gcp.resourceLocations"]]
+    answer: 0
+    why: ["Restringe los miembros a los clientes permitidos.", "It restricts members to allowed customers."]
+  - q: ["¿Dónde ves quién añadió a alguien a un grupo?", "Where do you see who added someone to a group?"]
+    options: [["En la auditoría de administración de Workspace", "In the Workspace admin audit"], ["En la política IAM del proyecto", "In the project's IAM policy"], ["En Cloud Monitoring", "In Cloud Monitoring"], ["En la factura", "In the bill"]]
+    answer: 0
+    why: ["Los cambios de grupos son del directorio, no de GCP.", "Group changes belong to the directory, not GCP."]
+  - q: ["¿Cómo haces que un permiso caduque solo?", "How do you make a permission expire by itself?"]
+    options: [["Con una condición IAM sobre request.time", "With an IAM condition on request.time"], ["Con un presupuesto", "With a budget"], ["Con una etiqueta", "With a label"], ["No se puede", "It can't be done"]]
+    answer: 0
+    why: ["La condición deja de cumplirse en la fecha indicada.", "The condition stops holding on the given date."]
+  - q: ["En un cambio de puesto, ¿qué se olvida más a menudo?", "In a role change, what's most often forgotten?"]
+    options: [["Quitar los grupos del puesto anterior", "Removing the previous role's groups"], ["Dar los grupos nuevos", "Granting the new groups"], ["Cambiar la contraseña", "Changing the password"], ["Crear la cuenta", "Creating the account"]]
+    answer: 0
+    why: ["Acumular permisos antiguos es el hallazgo clásico de auditoría.", "Accumulating old permissions is the classic audit finding."]
