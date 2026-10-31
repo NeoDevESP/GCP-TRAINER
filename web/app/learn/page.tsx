@@ -15,7 +15,7 @@ import { useAuth } from "@/components/useAuth";
 import { k, useI18n } from "@/lib/i18n";
 import type { LabSummary } from "@/lib/types";
 import { TypeTag, labHref, useProgress } from "@/components/learn";
-import { fmtTime, isRight, loadHistory, loadProgress, mix, readiness, saveProgress, shuffle, syncStudy, topicWeights, type Cert, type Concept, type ExamInfo, type ExamRecord, type Progress, type Question, type Topic, type TopicProgress } from "@/lib/study";
+import { dueKeys, fmtTime, isRight, loadHistory, loadProgress, loadReview, mix, questionByKey, recordAnswers, withKeys, type Review, readiness, saveProgress, shuffle, syncStudy, topicWeights, type Cert, type Concept, type ExamInfo, type ExamRecord, type Progress, type Question, type Topic, type TopicProgress } from "@/lib/study";
 
 const TABS: [string, string][] = [
   ["concepts", k("Conceptos")],
@@ -55,6 +55,8 @@ export default function LearnPage() {
   const [hist, setHist] = useState<ExamRecord[]>([]);
   const [round, setRound] = useState(0);
   const [synced, setSynced] = useState(false);
+  const [rv, setRv] = useState<Review>({});
+  const [reviewing, setReviewing] = useState(false);
   const [err, setErr] = useState("");
   const { state, running } = useProgress();
 
@@ -67,16 +69,20 @@ export default function LearnPage() {
         setHist(r.history);
       })
       .catch(() => {})
-      .finally(() => setSynced(true));
+      .finally(() => {
+        setRv(loadReview());
+        setSynced(true);
+      });
     const skill = qs("skill");
     if (qs("topic")) setTopic(qs("topic"));
     else if (skill) setTopic("@" + skill.split(".")[0]);
     if (qs("cert")) setCert(qs("cert"));
     if (qs("tab")) setTab(qs("tab"));
     if (qs("exam")) setMode(qs("exam") === "quick" ? "quick" : "full");
+    if (qs("review")) setReviewing(true);
   }, []);
   useEffect(() => {
-    api<{ topics: Topic[]; exams: ExamInfo[] }>("/api/learn").then((r) => { setTopics(r.topics); setExams(r.exams); }).catch((e) => setErr(e.message));
+    api<{ topics: Topic[]; exams: ExamInfo[] }>("/api/learn").then((r) => { setTopics(withKeys(r.topics)); setExams(r.exams); }).catch((e) => setErr(e.message));
     api<{ certs: Cert[]; labs: LabSummary[] }>("/api/catalog").then((r) => {
       setCerts(r.certs);
       setLabs(r.labs);
@@ -99,6 +105,8 @@ export default function LearnPage() {
     setTab(tb);
     setMode(md);
     setCert(c);
+    setReviewing(false);
+    setRv(loadReview());
     setHist(loadHistory());
     setRound((r) => r + 1);
     const q = md ? `?cert=${c}&exam=${md}` : tp ? `?topic=${tp}&cert=${c}` : `?cert=${c}`;
@@ -121,6 +129,21 @@ export default function LearnPage() {
   const certHist = hist.filter((h) => h.cert === cert);
 
   const tp = byId[topic];
+  // Spaced repetition: questions failed before that are due again now.
+  const due = useMemo(() => (topics ? dueKeys(rv).filter((k) => questionByKey(byId, k)) : []), [rv, byId, topics]);
+  const queued = Object.keys(rv).filter((k) => questionByKey(byId, k)).length;
+  const [reviewSet, setReviewSet] = useState<Question[]>([]);
+  const startReview = () => {
+    setReviewSet(due.slice(0, 15).map((k) => questionByKey(byId, k)!));
+    setReviewing(true);
+    setRound((r) => r + 1);
+    window.history.replaceState(null, "", "/learn?review=1");
+    window.scrollTo(0, 0);
+  };
+  useEffect(() => {
+    if (reviewing && !reviewSet.length && synced && topics) setReviewSet(due.slice(0, 15).map((k) => questionByKey(byId, k)!));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewing, synced, topics]);
   // Topics tied to a practice route show its labs; the rest, labs of their branch.
   const TOPIC_TRACK: Record<string, string> = { support: "support-bank", "support-identity": "zentra" };
   const tpLabs = useMemo(() => {
@@ -140,6 +163,25 @@ export default function LearnPage() {
         {err && <p className="error">{err}</p>}
         {!topics || !synced ? (
           <p className="muted">{t("Cargando…")}</p>
+        ) : reviewing ? (
+          <>
+            <button type="button" className="btn secondary" onClick={() => go("")}>← {t("Volver a {cert}", { cert })}</button>
+            <header className="cm-head" style={{ marginTop: 16, marginBottom: 20 }}>
+              <div>
+                <div className="muted">{t("Repaso espaciado")}</div>
+                <h1>{t("Repaso de lo que fallaste")}</h1>
+                <p className="muted" style={{ margin: "6px 0 0", maxWidth: 680 }}>{t("Cada pregunta que aciertas vuelve más tarde: mañana, en 3 días, en una semana y en 3 semanas. Si la fallas, vuelve en 10 minutos.")}</p>
+              </div>
+            </header>
+            {reviewSet.length ? (
+              <Quiz key={"rv" + round} questions={reviewSet} short onDone={() => setRv(loadReview())} restart={() => go("")} restartLabel={t("Volver")} next={due.length ? () => { setReviewSet(due.slice(0, 15).map((k) => questionByKey(byId, k)!)); setRound((n) => n + 1); } : undefined} nextLabel={t("Seguir repasando")} />
+            ) : (
+              <section className="card">
+                <h2>{t("No tienes nada pendiente")}</h2>
+                <p className="muted">{t("Las preguntas que falles en cuestionarios y simulacros aparecerán aquí cuando toque repasarlas.")}</p>
+              </section>
+            )}
+          </>
         ) : mode && ex && cur ? (
           <>
             <button type="button" className="btn secondary" onClick={() => go("")}>← {t("Volver a {cert}", { cert: cur.id })}</button>
@@ -224,6 +266,15 @@ export default function LearnPage() {
                 <p className="muted" style={{ margin: "6px 0 0", maxWidth: 680 }}>{t("Todo lo que debes saber antes del examen, certificación a certificación: cómo es el examen, qué secciones tiene, los conceptos de cada tema, juegos para fijarlos y simulacros como el real.")}</p>
               </div>
             </header>
+            {queued > 0 && (
+              <section className="card ln-start ln-review-card">
+                <div className="ln-start-text">
+                  <h2>{due.length ? t("{n} preguntas para repasar hoy", { n: due.length }) : t("Repaso al día")}</h2>
+                  <p className="muted">{due.length ? t("Son preguntas que fallaste. Repasarlas a tiempo es lo que las fija en la memoria.") : t("{n} preguntas en la cola; volverán cuando toque.", { n: queued })}</p>
+                </div>
+                {due.length > 0 && <button type="button" className="cm-pillbtn ink sm" onClick={startReview}>{t("Repasar ahora")}</button>}
+              </section>
+            )}
             {byId["gcp-console"] && (
               <section className="card ln-start">
                 <div className="ln-start-text">
@@ -596,6 +647,7 @@ function Quiz({ questions, onDone, restart, restartLabel, next, nextLabel, short
   const check = () => {
     if (!sel.length) return;
     setChecked(true);
+    recordAnswers([{ key: q.key, right }]);
     const a = [...answers, right];
     setAnswers(a);
     if (i === qs0.length - 1) onDone(Math.round((a.filter(Boolean).length / qs0.length) * 100));

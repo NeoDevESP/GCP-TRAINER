@@ -69,3 +69,36 @@ func TestStudyProgress(t *testing.T) {
 		t.Fatalf("study leaked across users: %+v", other)
 	}
 }
+
+func TestStudyReview(t *testing.T) {
+	ts, _ := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+	var auth struct {
+		Token string `json:"token"`
+	}
+	c.do("POST", "/api/auth/register", map[string]string{"email": "rv@example.com", "name": "Rv", "password": "correct horse battery"}, &auth)
+	c.token = auth.Token
+
+	if code := c.do("POST", "/api/me/study/review", map[string]any{"iam:q3": map[string]any{"box": 1, "due": 1000, "misses": 1, "at": 2000}}, nil); code != 200 {
+		t.Fatalf("save review: %d", code)
+	}
+	// an older update must not overwrite a newer one
+	c.do("POST", "/api/me/study/review", map[string]any{"iam:q3": map[string]any{"box": 4, "due": 9000, "misses": 0, "at": 1000}}, nil)
+	var st Study
+	c.do("GET", "/api/me/study", nil, &st)
+	if it := st.Review["iam:q3"]; it.Box != 1 || it.Misses != 1 {
+		t.Fatalf("older update overwrote newer: %+v", it)
+	}
+	for _, bad := range []map[string]any{{"nope:q1": map[string]any{"box": 1}}, {"iam:x1": map[string]any{"box": 1}}, {"iam:q1": map[string]any{"box": 9}}} {
+		if code := c.do("POST", "/api/me/study/review", bad, nil); code != 400 {
+			t.Fatalf("invalid review accepted: %v -> %d", bad, code)
+		}
+	}
+	// null drops a mastered question
+	c.do("POST", "/api/me/study/review", map[string]any{"iam:q3": nil}, nil)
+	var after Study
+	c.do("GET", "/api/me/study", nil, &after)
+	if _, ok := after.Review["iam:q3"]; ok {
+		t.Fatal("mastered question should be removed")
+	}
+}

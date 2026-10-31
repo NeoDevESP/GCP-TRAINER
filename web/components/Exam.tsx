@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
-import { addHistory, buildExam, fmtTime, isRight, loadRun, saveRun, type ExamInfo, type ExamQuestion, type Topic } from "@/lib/study";
+import { addHistory, buildExam, recordAnswers, fmtTime, isRight, loadRun, saveRun, type ExamInfo, type ExamQuestion, type Topic } from "@/lib/study";
 
 // Choices renders the options of a question as radio buttons, or as
 // checkboxes limited to N picks for a "choose N" question.
@@ -78,6 +78,7 @@ export default function Exam({ ex, certName, byId, full, onExit, topicLink }: { 
       const done = Date.now();
       const doms = ex.domains.map((d, i) => ({ name: d.name, ok: r.qs.filter((q, j) => q.domain === i && isRight(q, r.ans[j])).length, total: r.qs.filter((q) => q.domain === i).length }));
       addHistory({ cert: ex.cert, at: done, score: r.qs.filter((q, j) => isRight(q, r.ans[j])).length, total: r.qs.length, full, seconds: Math.round((done - r.started) / 1000), domains: doms });
+      recordAnswers(r.qs.map((q, j) => ({ key: q.key, right: isRight(q, r.ans[j]) })));
       return { ...r, done };
     });
     window.scrollTo(0, 0);

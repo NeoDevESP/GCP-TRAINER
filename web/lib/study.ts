@@ -20,6 +20,7 @@ export interface Question {
   options: string[];
   answers: number[];
   why: string;
+  key?: string; // "topic:q3" (quiz) or "topic:s1" (scenario), for spaced repetition
 }
 export interface Topic {
   id: string;
@@ -128,11 +129,86 @@ export function saveRun(key: string, run: unknown | null, now = false): Promise<
   return Promise.resolve();
 }
 
+// ---- Spaced repetition (Leitner boxes) ---------------------------------
+// A wrong answer puts the question in box 1 (due again in 10 minutes); each
+// right answer during review moves it up a box: 1 day, 3, 7, 21; after box 5
+// it counts as mastered and leaves the queue.
+export interface ReviewItem {
+  box: number;
+  due: number;
+  misses: number;
+  at: number;
+}
+export type Review = Record<string, ReviewItem>;
+const DAY = 86400000;
+const INTERVAL = [0, 10 * 60000, DAY, 3 * DAY, 7 * DAY, 21 * DAY];
+
+export const loadReview = () => read<Review>("cm-review", {});
+
+function pushReview(changed: Record<string, ReviewItem | null>) {
+  const keys = Object.keys(changed);
+  for (let i = 0; i < keys.length; i += 200) {
+    const body = Object.fromEntries(keys.slice(i, i + 200).map((k) => [k, changed[k]]));
+    api("/api/me/study/review", { body }).catch(() => {});
+  }
+}
+
+// recordAnswers updates the review queue with the results of answered questions.
+export function recordAnswers(results: { key?: string; right: boolean }[]) {
+  const rv = loadReview();
+  const now = Date.now();
+  const changed: Record<string, ReviewItem | null> = {};
+  for (const { key, right } of results) {
+    if (!key) continue;
+    const cur = rv[key];
+    if (!right) {
+      rv[key] = changed[key] = { box: 1, due: now + INTERVAL[1], misses: (cur?.misses ?? 0) + 1, at: now };
+    } else if (cur) {
+      const box = cur.box + 1;
+      if (box > 5) {
+        delete rv[key];
+        changed[key] = null;
+      } else {
+        rv[key] = changed[key] = { ...cur, box, due: now + INTERVAL[box], at: now };
+      }
+    }
+  }
+  if (Object.keys(changed).length) {
+    write("cm-review", rv);
+    pushReview(changed);
+  }
+}
+
+// dueKeys lists the questions to review now, the most overdue first.
+export const dueKeys = (rv: Review, now = Date.now()) =>
+  Object.entries(rv)
+    .filter(([, it]) => it.due <= now)
+    .sort((a, b) => a[1].due - b[1].due)
+    .map(([k]) => k);
+
+// withKeys tags every question of the topics with its review key.
+export function withKeys(topics: Topic[]): Topic[] {
+  return topics.map((t) => ({
+    ...t,
+    quiz: t.quiz.map((q, i) => ({ ...q, key: `${t.id}:q${i}` })),
+    scenarios: t.scenarios.map((q, i) => ({ ...q, key: `${t.id}:s${i}` })),
+  }));
+}
+
+// questionByKey finds a question from its review key.
+export function questionByKey(byId: Record<string, Topic>, key: string): Question | undefined {
+  const m = /^(.+):([qs])(\d+)$/.exec(key);
+  const t = m && byId[m[1]];
+  if (!t) return undefined;
+  return (m[2] === "q" ? t.quiz : t.scenarios)[Number(m[3])];
+}
+
 interface StudyDoc {
   user: string;
   progress: Progress;
   exams: ExamRecord[];
   runs: Record<string, unknown>;
+  review?: Review;
 }
 
 // syncStudy loads the account's progress into the local cache. The first
@@ -185,6 +261,17 @@ export async function syncStudy(): Promise<{ progress: Progress; history: ExamRe
     }
   }
   serverRuns = { ...runs };
+  // Review queue: the newest state of each question wins; local answers not
+  // yet on the server are uploaded (only this learner's).
+  const review: Review = { ...(doc.review ?? {}) };
+  if (!owner || owner === doc.user) {
+    const up: Record<string, ReviewItem> = {};
+    for (const [k, it] of Object.entries(loadReview())) {
+      if (!review[k] || review[k].at < it.at) review[k] = up[k] = it;
+    }
+    if (Object.keys(up).length) pushReview(up);
+  }
+  write("cm-review", review);
   write("cm-learn-owner", doc.user);
   write("cm-learn", progress);
   write("cm-learn-exams", history.slice(0, 50));

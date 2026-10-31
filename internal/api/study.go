@@ -49,14 +49,29 @@ type StudyExam struct {
 	Domains []StudyDomain `json:"domains"`
 }
 
+// ReviewItem is a question in the spaced-repetition queue (Leitner boxes):
+// a wrong answer puts it in box 1; each right answer moves it up a box and
+// pushes its next review further away.
+type ReviewItem struct {
+	Box    int   `json:"box"`
+	Due    int64 `json:"due"` // unix ms
+	Misses int   `json:"misses"`
+	At     int64 `json:"at"` // last update, unix ms (newest wins across devices)
+}
+
 // Study is the per-user document of the "study" collection.
 type Study struct {
 	User     string                     `json:"user"`
 	Progress map[string]StudyTopic      `json:"progress"`
 	Exams    []StudyExam                `json:"exams"`
-	Runs     map[string]json.RawMessage `json:"runs"` // practice exams in progress, by client key
+	Runs     map[string]json.RawMessage `json:"runs"`   // practice exams in progress, by client key
+	Review   map[string]ReviewItem      `json:"review"` // spaced repetition, by "topic:q3" / "topic:s1"
 	Updated  time.Time                  `json:"updated"`
 }
+
+const maxReviewItems = 3000
+
+var reviewKey = regexp.MustCompile(`^([a-z0-9-]+):[qs]\d{1,3}$`)
 
 // Practice exams in progress, the support shift and the 10-day plan checklist.
 var runKey = regexp.MustCompile(`^(cm-exam-run-[A-Z]{2,6}-(full|quick)|cm-shift|cm-plan)$`)
@@ -74,6 +89,9 @@ func (s *Server) loadStudy(user string) (*Study, error) {
 	}
 	if st.Exams == nil {
 		st.Exams = []StudyExam{}
+	}
+	if st.Review == nil {
+		st.Review = map[string]ReviewItem{}
 	}
 	return st, nil
 }
@@ -206,6 +224,38 @@ func (s *Server) studyRoutes(h func(string, func(http.ResponseWriter, *http.Requ
 			return nil, err
 		}
 		return map[string]any{"exams": st.Exams}, nil
+	})
+
+	// Update the spaced-repetition queue: each key maps to its new state, or
+	// to null to drop it (mastered). The newest update of an item wins.
+	h("POST /api/me/study/review", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		var req map[string]*ReviewItem
+		if err := decodeBody(r, &req); err != nil || len(req) == 0 || len(req) > 200 {
+			return nil, bad(r, "repaso no válido", "invalid review")
+		}
+		for k, it := range req {
+			m := reviewKey.FindStringSubmatch(k)
+			if m == nil || !s.validTopic(m[1]) || (it != nil && (it.Box < 1 || it.Box > 6 || it.Misses < 0)) {
+				return nil, bad(r, "pregunta de repaso no válida: "+k, "invalid review question: "+k)
+			}
+		}
+		st, err := s.updateStudy(userOf(r).ID, func(st *Study) error {
+			for k, it := range req {
+				if old, ok := st.Review[k]; ok && it != nil && old.At > it.At {
+					continue // an older device must not overwrite a newer answer
+				}
+				if it == nil {
+					delete(st.Review, k)
+				} else if _, ok := st.Review[k]; ok || len(st.Review) < maxReviewItems {
+					st.Review[k] = *it
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"review": st.Review}, nil
 	})
 
 	// Save or discard a practice exam in progress so it can be resumed elsewhere.
