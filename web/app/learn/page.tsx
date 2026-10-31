@@ -224,6 +224,15 @@ export default function LearnPage() {
                 <p className="muted" style={{ margin: "6px 0 0", maxWidth: 680 }}>{t("Todo lo que debes saber antes del examen, certificación a certificación: cómo es el examen, qué secciones tiene, los conceptos de cada tema, juegos para fijarlos y simulacros como el real.")}</p>
               </div>
             </header>
+            {byId["gcp-console"] && (
+              <section className="card ln-start">
+                <div className="ln-start-text">
+                  <h2>{t("¿Empiezas de cero?")}</h2>
+                  <p className="muted">{t("Antes que nada: cómo se organiza Google Cloud, qué hay en cada parte de la consola y qué producto sirve para qué.")}</p>
+                </div>
+                <button type="button" className="cm-pillbtn ink sm" onClick={() => go("gcp-console")}>{byId["gcp-console"].name}</button>
+              </section>
+            )}
             {byId.support && (
               <section className="cm-amber ln-support">
                 <div style={{ flex: 1, minWidth: 0 }}>

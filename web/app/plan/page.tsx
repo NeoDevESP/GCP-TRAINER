@@ -26,7 +26,7 @@ const L = (...ids: string[]) => ids.map((lab) => ({ lab }));
 
 const DAYS: Day[] = [
   { title: k("Día 1 · Proyecto, IAM y almacenamiento"), goal: k("Orientarte en la consola y en el oficio: primer ticket de acceso."),
-    items: [{ topic: "support" }, { topic: "support-method" }, ...L("ace-d01-context", "ace-d02-iam-storage-read", "ace-d03-secure-bucket", "bank-b01-access-request")] },
+    items: [{ topic: "gcp-console" }, { topic: "support" }, { topic: "support-method" }, ...L("ace-d01-context", "ace-d02-iam-storage-read", "ace-d03-secure-bucket", "bank-b01-access-request")] },
   { title: k("Día 2 · VMs, subredes y salida a internet"), goal: k("Redes privadas y las políticas de organización del banco."),
     items: [{ topic: "iam" }, ...L("ace-d04-web-vm", "ace-d05-subnet-isolation", "ace-d12-private-egress", "bank-b02-vm-policy", "bank-b03-no-egress", "bank-b12-leaver-joiner")] },
   { title: k("Día 3 · Cloud Run, Cloud SQL y secretos"), goal: k("Permisos entre servicios: el 403 y sus tres causas."),

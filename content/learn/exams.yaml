@@ -13,7 +13,7 @@ exams:
     domains:
       - name: [Configurar el entorno de una solución en la nube, Setting up a cloud solution environment]
         weight: 23
-        topics: [foundations, iam]
+        topics: [gcp-console, foundations, iam]
         objectives:
           - ["Crear la jerarquía de recursos: organización, carpetas y proyectos", "Create the resource hierarchy: organization, folders and projects"]
           - ["Gestionar usuarios y grupos en Cloud Identity y conceder roles IAM", "Manage users and groups in Cloud Identity and grant IAM roles"]

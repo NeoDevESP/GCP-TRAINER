@@ -1,0 +1,223 @@
+id: gcp-console
+branch: foundations
+name: ["Google Cloud y su consola, de cero", "Google Cloud and its console, from scratch"]
+intro: ["El mapa completo para no perderte: cómo se organiza Google Cloud (organización, carpetas, proyectos, regiones), qué hay en cada parte de la consola, qué productos existen y cuándo se usa cada uno, y dónde mirar cuando algo pasa. Es el tema que conviene leer antes que ningún otro.", "The complete map so you don't get lost: how Google Cloud is organized (organization, folders, projects, regions), what's in each part of the console, which products exist and when each is used, and where to look when something happens. It's the topic worth reading before any other."]
+concepts:
+  - id: big-picture
+    term: ["Google Cloud en una imagen", "Google Cloud in one picture"]
+    what: ["Todo recurso vive en un proyecto, se crea llamando a una API, IAM decide quién puede tocarlo y una cuenta de facturación lo paga.", "Every resource lives in a project, is created by calling an API, IAM decides who can touch it and a billing account pays for it."]
+    points:
+      - ["Recurso: cualquier cosa que creas (una VM, un bucket, una base de datos, una regla de cortafuegos).", "Resource: anything you create (a VM, a bucket, a database, a firewall rule)."]
+      - ["API: cada producto es una API (compute.googleapis.com, storage.googleapis.com…). La consola, gcloud y Terraform son tres formas de llamarla.", "API: each product is an API (compute.googleapis.com, storage.googleapis.com…). The console, gcloud and Terraform are three ways to call it."]
+      - ["IAM: quién (principal) puede hacer qué (rol con permisos) sobre qué recurso.", "IAM: who (principal) can do what (role with permissions) on which resource."]
+      - ["Facturación: el proyecto está vinculado a una cuenta de facturación; sin ella casi nada se puede crear.", "Billing: the project is linked to a billing account; without it almost nothing can be created."]
+    tip: ["Ante cualquier error pregúntate: ¿qué proyecto?, ¿qué API?, ¿qué identidad?, ¿hay facturación?", "For any error ask yourself: which project? which API? which identity? is there billing?"]
+  - id: hierarchy-ids
+    term: ["Organización, carpetas y proyectos", "Organization, folders and projects"]
+    what: ["La jerarquía de recursos agrupa proyectos y hace que permisos y políticas se hereden hacia abajo.", "The resource hierarchy groups projects and makes permissions and policies inherit downwards."]
+    points:
+      - ["Organización (el dominio de la empresa) → carpetas (áreas, entornos) → proyectos → recursos.", "Organization (the company domain) → folders (areas, environments) → projects → resources."]
+      - ["Un rol concedido en una carpeta vale para todos sus proyectos; una política de organización también.", "A role granted on a folder applies to all its projects; so does an organization policy."]
+      - ["Cada proyecto tiene nombre (editable, solo para personas), ID (único y fijo, el que usan los comandos) y número (lo usa Google, aparece en cuentas de servicio).", "Each project has a name (editable, for humans), an ID (unique and fixed, used by commands) and a number (used by Google, appears in service accounts)."]
+      - ["En la consola los tres aparecen en la tarjeta «Información del proyecto» del panel.", "In the console all three appear in the \"Project info\" card on the dashboard."]
+    tip: ["En un banco suele haber carpetas por entorno (prod, preprod, dev) y un proyecto por aplicación y entorno.", "A bank usually has folders per environment (prod, preprod, dev) and one project per application and environment."]
+  - id: locations
+    term: ["Regiones, zonas y alcance de los recursos", "Regions, zones and resource scope"]
+    what: ["Dónde vive un recurso decide su latencia, su resiliencia y si cumple la residencia de datos.", "Where a resource lives decides its latency, resilience and whether it meets data residency."]
+    points:
+      - ["Región: una zona geográfica (europe-west1, Bélgica). Zona: un centro aislado dentro de ella (europe-west1-b).", "Region: a geographic area (europe-west1, Belgium). Zone: an isolated site within it (europe-west1-b)."]
+      - ["Zonales: VMs y discos. Regionales: subredes, Cloud Run, Cloud SQL, buckets regionales. Globales: redes VPC, reglas de cortafuegos, imágenes, balanceador HTTP(S) externo.", "Zonal: VMs and disks. Regional: subnets, Cloud Run, Cloud SQL, regional buckets. Global: VPC networks, firewall rules, images, external HTTP(S) load balancer."]
+      - ["Multirregión (EU, US): datos repartidos en varias regiones, p. ej. buckets y datasets de BigQuery.", "Multi-region (EU, US): data spread over several regions, e.g. buckets and BigQuery datasets."]
+      - ["Alta disponibilidad: repartir en varias zonas; recuperación ante desastres: en varias regiones.", "High availability: spread across zones; disaster recovery: across regions."]
+    tip: ["Si no encuentras un recurso en la consola, revisa el selector de región o zona de esa página.", "If you can't find a resource in the console, check that page's region or zone selector."]
+  - id: console-map
+    term: ["El mapa de la consola", "The console map"]
+    what: ["La consola (console.cloud.google.com) tiene siempre la misma estructura.", "The console (console.cloud.google.com) always has the same structure."]
+    points:
+      - ["Barra superior: menú de navegación (☰), selector de proyecto, barra de búsqueda, botón de Cloud Shell, notificaciones, ayuda y tu cuenta.", "Top bar: navigation menu (☰), project selector, search bar, Cloud Shell button, notifications, help and your account."]
+      - ["Menú de navegación: productos agrupados por categoría (Compute, Storage, Networking, Operations…); puedes fijar los que más uses arriba.", "Navigation menu: products grouped by category (Compute, Storage, Networking, Operations…); you can pin the ones you use most to the top."]
+      - ["Selector de proyecto: TODO lo que ves está filtrado por el proyecto elegido. Es la causa nº 1 de «no veo mi recurso».", "Project selector: EVERYTHING you see is filtered by the chosen project. It's the no. 1 cause of \"I can't see my resource\"."]
+      - ["Notificaciones (campana): el progreso de operaciones largas y sus errores.", "Notifications (bell): the progress of long operations and their errors."]
+    tip: ["Antes de crear o borrar nada, mira el nombre del proyecto en la barra superior.", "Before creating or deleting anything, check the project name in the top bar."]
+  - id: dashboard
+    term: ["Panel, bienvenida y actividad", "Dashboard, welcome and activity"]
+    what: ["La página de inicio del proyecto resume su estado.", "The project's home page summarizes its state."]
+    points:
+      - ["Panel: tarjetas configurables con información del proyecto, recursos, tráfico de APIs, facturación, errores y estado de Google.", "Dashboard: configurable cards with project info, resources, API traffic, billing, errors and Google status."]
+      - ["Actividad: quién cambió qué y cuándo (a partir de los registros de auditoría de administración).", "Activity: who changed what and when (from the admin audit logs)."]
+      - ["Recomendaciones: avisos de Active Assist (VMs ociosas, permisos sobrantes, ahorro).", "Recommendations: Active Assist notices (idle VMs, excess permissions, savings)."]
+      - ["Es buen sitio para empezar a investigar un incidente: ¿qué ha cambiado hoy?", "It's a good place to start investigating an incident: what changed today?"]
+    tip: ["La pestaña Actividad responde en segundos a «¿alguien ha tocado algo?».", "The Activity tab answers \"has anyone touched anything?\" in seconds."]
+  - id: search-shell
+    term: ["Búsqueda, Cloud Shell y «código equivalente»", "Search, Cloud Shell and \"equivalent code\""]
+    what: ["Tres atajos que te ahorran horas.", "Three shortcuts that save you hours."]
+    points:
+      - ["La búsqueda encuentra productos, recursos por nombre y documentación.", "Search finds products, resources by name and documentation."]
+      - ["Cloud Shell: un terminal en el navegador con gcloud, kubectl, terraform y git ya instalados, autenticado como tú; 5 GB persistentes en tu $HOME y un editor.", "Cloud Shell: a browser terminal with gcloud, kubectl, terraform and git preinstalled, signed in as you; 5 GB persistent in your $HOME and an editor."]
+      - ["Los formularios de creación tienen «Código equivalente»: te muestra el comando gcloud, la llamada REST o el Terraform de lo que estás configurando.", "Creation forms have \"Equivalent code\": it shows the gcloud command, the REST call or the Terraform for what you're configuring."]
+      - ["gcloud config set project ID fija el proyecto de tus comandos; gcloud config list te dice dónde estás.", "gcloud config set project ID sets the project for your commands; gcloud config list tells you where you are."]
+    tip: ["Aprende a la vez la consola y gcloud: usa «Código equivalente» y repítelo en Cloud Shell.", "Learn the console and gcloud together: use \"Equivalent code\" and repeat it in Cloud Shell."]
+  - id: apis-quotas
+    term: ["APIs y servicios, cuotas", "APIs and services, quotas"]
+    what: ["Antes de usar un producto en un proyecto hay que habilitar su API.", "Before using a product in a project you must enable its API."]
+    points:
+      - ["«APIs y servicios» → Biblioteca para habilitar; Panel para ver tráfico y errores por API.", "\"APIs & Services\" → Library to enable; Dashboard to see traffic and errors per API."]
+      - ["Error típico: «API has not been used in project … or it is disabled».", "Typical error: \"API has not been used in project … or it is disabled\"."]
+      - ["Cuotas y límites del sistema (en IAM y administración): cuánto puedes usar por región o por minuto; se piden aumentos desde ahí.", "Quotas & system limits (under IAM & Admin): how much you can use per region or per minute; increases are requested there."]
+      - ["gcloud services enable / list hace lo mismo desde la línea de comandos.", "gcloud services enable / list does the same from the command line."]
+    tip: ["Un error de cuota no se arregla con permisos, ni uno de permisos con cuota: lee el mensaje entero.", "A quota error isn't fixed with permissions, nor a permission error with quota: read the whole message."]
+  - id: iam-admin
+    term: ["IAM y administración", "IAM & Admin"]
+    what: ["La sección donde se gestiona quién puede hacer qué.", "The section where you manage who can do what."]
+    points:
+      - ["IAM: la política del proyecto; vista por principales o por roles, y botón «Conceder acceso».", "IAM: the project's policy; view by principals or by roles, and the \"Grant access\" button."]
+      - ["Cuentas de servicio: identidades de las aplicaciones (no de personas).", "Service accounts: identities for applications (not people)."]
+      - ["Roles: básicos (Owner, Editor, Viewer: demasiado amplios), predefinidos (por producto) y personalizados.", "Roles: basic (Owner, Editor, Viewer: too broad), predefined (per product) and custom."]
+      - ["También aquí: Policy Troubleshooter, Políticas de organización, Registros de auditoría, Etiquetas, Cuotas y Gestionar recursos (crear y mover proyectos y carpetas).", "Also here: Policy Troubleshooter, Organization policies, Audit logs, Labels, Quotas and Manage resources (create and move projects and folders)."]
+    tip: ["Una casilla «heredado» en IAM significa que el permiso viene de una carpeta o de la organización, no del proyecto.", "An \"inherited\" marker in IAM means the permission comes from a folder or the organization, not the project."]
+  - id: billing-console
+    term: ["Facturación en la consola", "Billing in the console"]
+    what: ["Saber cuánto cuesta y quién lo paga es parte del trabajo.", "Knowing what it costs and who pays is part of the job."]
+    points:
+      - ["Cuenta de facturación: paga uno o varios proyectos; la gestionan los roles de facturación, no los del proyecto.", "Billing account: pays for one or more projects; managed with billing roles, not project roles."]
+      - ["Informes: coste por proyecto, servicio, SKU o etiqueta, con previsión.", "Reports: cost by project, service, SKU or label, with a forecast."]
+      - ["Presupuestos y alertas: avisan al 50 %, 90 %, 100 %… pero no paran el gasto por sí solos.", "Budgets & alerts: notify at 50%, 90%, 100%… but don't stop spending by themselves."]
+      - ["Exportación a BigQuery: el detalle de coste para analizarlo con SQL.", "Export to BigQuery: cost detail to analyse with SQL."]
+    tip: ["Etiqueta los recursos (equipo, entorno, aplicación) para poder repartir la factura.", "Label resources (team, environment, application) so the bill can be split."]
+  - id: compute-map
+    term: ["Mapa de productos: dónde ejecutar código", "Product map: where to run code"]
+    what: ["De más control a menos gestión.", "From more control to less management."]
+    points:
+      - ["Compute Engine: VMs; control total del sistema operativo. Grupos de instancias (MIG) para escalar y autorreparar.", "Compute Engine: VMs; full OS control. Instance groups (MIGs) to scale and self-heal."]
+      - ["GKE: Kubernetes gestionado para muchos contenedores (Standard o Autopilot).", "GKE: managed Kubernetes for many containers (Standard or Autopilot)."]
+      - ["Cloud Run: contenedores sin servidor que escalan a cero; servicios HTTP y jobs.", "Cloud Run: serverless containers that scale to zero; HTTP services and jobs."]
+      - ["Cloud Run functions (antes Cloud Functions): una función que responde a eventos; App Engine: plataforma de aplicaciones clásica.", "Cloud Run functions (formerly Cloud Functions): a function that responds to events; App Engine: the classic application platform."]
+    tip: ["Si no necesitas tocar el sistema operativo ni Kubernetes, empieza por Cloud Run.", "If you don't need to touch the OS or Kubernetes, start with Cloud Run."]
+  - id: data-map
+    term: ["Mapa de productos: guardar datos", "Product map: storing data"]
+    what: ["Cada tipo de dato tiene su producto.", "Each type of data has its product."]
+    points:
+      - ["Cloud Storage: ficheros y objetos (clases Standard, Nearline, Coldline, Archive). Persistent Disk / Hyperdisk: discos de VM. Filestore: NFS.", "Cloud Storage: files and objects (Standard, Nearline, Coldline, Archive classes). Persistent Disk / Hyperdisk: VM disks. Filestore: NFS."]
+      - ["Relacional: Cloud SQL (MySQL, PostgreSQL, SQL Server), AlloyDB (PostgreSQL de alto rendimiento), Spanner (global y escalable).", "Relational: Cloud SQL (MySQL, PostgreSQL, SQL Server), AlloyDB (high-performance PostgreSQL), Spanner (global and scalable)."]
+      - ["NoSQL: Firestore (documentos), Bigtable (gran volumen, baja latencia), Memorystore (Redis/Valkey en memoria).", "NoSQL: Firestore (documents), Bigtable (huge volume, low latency), Memorystore (in-memory Redis/Valkey)."]
+      - ["Analítica: BigQuery (almacén de datos SQL sin servidor), Pub/Sub (mensajería), Dataflow (procesado), Dataproc (Spark/Hadoop).", "Analytics: BigQuery (serverless SQL data warehouse), Pub/Sub (messaging), Dataflow (processing), Dataproc (Spark/Hadoop)."]
+    tip: ["Pregunta clave: ¿transacciones (Cloud SQL/Spanner) o análisis de grandes volúmenes (BigQuery)?", "Key question: transactions (Cloud SQL/Spanner) or large-volume analysis (BigQuery)?"]
+  - id: net-map
+    term: ["Mapa de productos: redes y seguridad", "Product map: networking and security"]
+    what: ["Cómo se conecta y se protege todo.", "How everything is connected and protected."]
+    points:
+      - ["VPC (global) con subredes (regionales), reglas de cortafuegos, rutas, Cloud NAT (salida sin IP pública) y Cloud DNS.", "VPC (global) with subnets (regional), firewall rules, routes, Cloud NAT (egress without public IP) and Cloud DNS."]
+      - ["Balanceo de carga, Cloud CDN y Cloud Armor (WAF y anti-DDoS) delante de las aplicaciones.", "Load balancing, Cloud CDN and Cloud Armor (WAF and anti-DDoS) in front of applications."]
+      - ["Conexión con el CPD: Cloud VPN e Interconnect; entre VPC: peering o VPC compartida.", "Connection to the data centre: Cloud VPN and Interconnect; between VPCs: peering or Shared VPC."]
+      - ["Seguridad: IAP (acceso sin IP pública), Secret Manager, Cloud KMS, Security Command Center, VPC Service Controls.", "Security: IAP (access without public IP), Secret Manager, Cloud KMS, Security Command Center, VPC Service Controls."]
+    tip: ["En el banco, casi nada tiene IP pública: se entra por IAP y se sale por Cloud NAT.", "At the bank, almost nothing has a public IP: you get in through IAP and out through Cloud NAT."]
+  - id: ops-console
+    term: ["Observabilidad: Logs Explorer y Monitoring", "Observability: Logs Explorer and Monitoring"]
+    what: ["Donde se mira cuando algo falla.", "Where you look when something fails."]
+    points:
+      - ["Logs Explorer: consulta (LQL), rango de tiempo, histograma y campos; filtra por recurso y gravedad.", "Logs Explorer: query (LQL), time range, histogram and fields; filter by resource and severity."]
+      - ["Metrics Explorer y paneles: CPU, latencia, errores; políticas de alerta que avisan por correo, chat o PagerDuty.", "Metrics Explorer and dashboards: CPU, latency, errors; alerting policies that notify by email, chat or PagerDuty."]
+      - ["Error Reporting agrupa excepciones; Cloud Trace muestra la latencia petición a petición.", "Error Reporting groups exceptions; Cloud Trace shows latency request by request."]
+      - ["Registros de auditoría: Actividad de administración (siempre activos), Acceso a datos (desactivados por defecto salvo BigQuery), Eventos del sistema y Política denegada.", "Audit logs: Admin Activity (always on), Data Access (off by default except BigQuery), System Event and Policy Denied."]
+    tip: ["Empieza siempre por el rango de tiempo correcto y la zona horaria: muchos «no hay logs» son eso.", "Always start with the right time range and time zone: many \"there are no logs\" are just that."]
+  - id: help-console
+    term: ["Seguridad, recomendaciones, estado y soporte", "Security, recommendations, status and support"]
+    what: ["Las páginas que te avisan antes de que llegue el ticket.", "The pages that warn you before the ticket arrives."]
+    points:
+      - ["Security Command Center: hallazgos de seguridad (buckets públicos, claves expuestas, configuraciones débiles).", "Security Command Center: security findings (public buckets, exposed keys, weak configurations)."]
+      - ["Recomendaciones (Active Assist): ahorro, rendimiento y permisos sobrantes, con el cambio sugerido.", "Recommendations (Active Assist): savings, performance and excess permissions, with the suggested change."]
+      - ["Service Health / Personalized Service Health: incidencias de Google que te afectan.", "Service Health / Personalized Service Health: Google incidents that affect you."]
+      - ["Soporte: abrir y seguir casos con Google; Gemini Cloud Assist responde preguntas sobre tus recursos desde la consola.", "Support: open and follow cases with Google; Gemini Cloud Assist answers questions about your resources from the console."]
+    tip: ["Revisar estas páginas cada mañana es parte de un buen turno de soporte.", "Checking these pages every morning is part of a good support shift."]
+  - id: pricing
+    term: ["Cómo se paga Google Cloud", "How Google Cloud is paid for"]
+    what: ["Pagas por uso, con descuentos según cómo te comprometas.", "You pay for usage, with discounts depending on how you commit."]
+    points:
+      - ["Pago por uso: segundos de VM, GB almacenados, GB transferidos, consultas…", "Pay as you go: VM seconds, GB stored, GB transferred, queries…"]
+      - ["Descuentos por uso continuado (automáticos en algunas VMs) y por compromiso de 1 o 3 años.", "Sustained use discounts (automatic on some VMs) and 1- or 3-year committed use discounts."]
+      - ["VMs Spot: hasta un 60–91 % más baratas, pero Google puede reclamarlas.", "Spot VMs: 60–91% cheaper, but Google can reclaim them."]
+      - ["La calculadora de precios estima el coste antes de construir; la salida de datos a internet también se paga.", "The pricing calculator estimates cost before you build; data egress to the internet is also charged."]
+    tip: ["Lo que más sorprende en la factura: recursos olvidados, discos sin VM y transferencia de datos.", "The biggest bill surprises: forgotten resources, disks without VMs and data transfer."]
+  - id: shared
+    term: ["Responsabilidad compartida", "Shared responsibility"]
+    what: ["Google protege la nube; tú proteges lo que pones en ella.", "Google secures the cloud; you secure what you put in it."]
+    points:
+      - ["Google: centros de datos, hardware, red global, y la plataforma de los servicios gestionados.", "Google: data centres, hardware, global network, and the platform of managed services."]
+      - ["Tú: identidades y permisos, configuración de red, datos, sistema operativo de tus VMs y tu código.", "You: identities and permissions, network configuration, data, your VMs' operating system and your code."]
+      - ["Cuanto más gestionado el servicio (Cloud Run, BigQuery), menos te toca a ti.", "The more managed the service (Cloud Run, BigQuery), the less is on you."]
+      - ["Un bucket público o un rol Owner de más son fallos del cliente, no de Google.", "A public bucket or an extra Owner role are customer mistakes, not Google's."]
+    tip: ["En una auditoría bancaria te preguntarán qué parte controláis vosotros y cómo lo demostráis.", "In a bank audit you'll be asked which part you control and how you prove it."]
+scenarios:
+  - q: ["Un compañero dice que su VM «ha desaparecido» de la consola, pero gcloud la lista.", "A colleague says his VM has \"disappeared\" from the console, but gcloud lists it."]
+    options: [["Comprobar el proyecto elegido en el selector de la barra superior", "Check the project chosen in the top-bar selector"], ["Abrir un caso con Google", "Open a case with Google"], ["Recrear la VM", "Recreate the VM"], ["Borrar la caché del navegador", "Clear the browser cache"]]
+    answer: 0
+    why: ["La consola solo muestra el proyecto seleccionado; gcloud puede estar apuntando a otro.", "The console only shows the selected project; gcloud may be pointing at another."]
+  - q: ["Al crear un clúster te sale «Kubernetes Engine API has not been used in project … or it is disabled».", "When creating a cluster you get \"Kubernetes Engine API has not been used in project … or it is disabled\"."]
+    options: [["Habilitar la API en APIs y servicios (o gcloud services enable container.googleapis.com)", "Enable the API in APIs & Services (or gcloud services enable container.googleapis.com)"], ["Pedirte el rol Owner", "Ask for the Owner role"], ["Pedir más cuota de CPU", "Request more CPU quota"], ["Cambiar de región", "Change region"]]
+    answer: 0
+    why: ["El mensaje dice exactamente qué falta: la API.", "The message says exactly what's missing: the API."]
+  - q: ["Quieres saber qué comando gcloud equivale a la VM que estás configurando en la consola.", "You want the gcloud command equivalent to the VM you're configuring in the console."]
+    options: [["Pulsar «Código equivalente» en el formulario de creación", "Click \"Equivalent code\" in the creation form"], ["Buscarlo en un foro", "Look it up on a forum"], ["Crear la VM y exportarla", "Create the VM and export it"], ["No existe tal cosa", "There's no such thing"]]
+    answer: 0
+    why: ["Muestra gcloud, REST o Terraform de lo configurado.", "It shows gcloud, REST or Terraform for what you configured."]
+  - q: ["A las 9:00 la web de un proyecto falla. ¿Dónde miras primero para saber si alguien ha cambiado algo?", "At 9:00 a project's website fails. Where do you look first to see if anyone changed something?"]
+    options: [["La pestaña Actividad del proyecto (o los registros de auditoría de administración)", "The project's Activity tab (or the Admin Activity audit logs)"], ["La factura del mes", "The month's bill"], ["La biblioteca de APIs", "The API library"], ["La página de cuotas", "The quotas page"]]
+    answer: 0
+    why: ["Actividad muestra quién cambió qué y cuándo.", "Activity shows who changed what and when."]
+  - q: ["Finanzas pregunta por qué el coste de un proyecto se ha duplicado este mes.", "Finance asks why a project's cost doubled this month."]
+    options: [["Facturación → Informes, agrupando por servicio y SKU y filtrando por el proyecto", "Billing → Reports, grouping by service and SKU and filtering by the project"], ["Logs Explorer", "Logs Explorer"], ["IAM", "IAM"], ["Security Command Center", "Security Command Center"]]
+    answer: 0
+    why: ["Los informes de facturación muestran qué servicio y qué concepto ha subido.", "Billing reports show which service and which item went up."]
+  - q: ["En IAM ves que una persona tiene Editor con la marca «heredado».", "In IAM you see a person has Editor marked \"inherited\"."]
+    options: [["El rol viene de una carpeta o de la organización: hay que quitarlo allí", "The role comes from a folder or the organization: it must be removed there"], ["Quitarlo en el proyecto basta", "Removing it on the project is enough"], ["Es un error de la consola", "It's a console bug"], ["Significa que caduca pronto", "It means it expires soon"]]
+    answer: 0
+    why: ["Lo heredado se gestiona en el nivel donde se concedió.", "Inherited access is managed at the level where it was granted."]
+quiz:
+  - q: ["¿Qué identificador de proyecto usan los comandos gcloud?", "Which project identifier do gcloud commands use?"]
+    options: [["El ID del proyecto", "The project ID"], ["El nombre del proyecto", "The project name"], ["El número del proyecto", "The project number"], ["El nombre de la organización", "The organization name"]]
+    answer: 0
+    why: ["El ID es único y no cambia; el nombre es solo para personas.", "The ID is unique and fixed; the name is just for humans."]
+  - q: ["¿Cuál de estos recursos es zonal?", "Which of these resources is zonal?"]
+    options: [["Una VM de Compute Engine", "A Compute Engine VM"], ["Una red VPC", "A VPC network"], ["Una regla de cortafuegos", "A firewall rule"], ["Un servicio de Cloud Run", "A Cloud Run service"]]
+    answer: 0
+    why: ["VMs y discos son zonales; la VPC y el cortafuegos son globales; Cloud Run es regional.", "VMs and disks are zonal; VPC and firewall are global; Cloud Run is regional."]
+  - q: ["¿Qué trae Cloud Shell?", "What does Cloud Shell include?"]
+    options: [["Un terminal con gcloud, kubectl y terraform y 5 GB persistentes en $HOME", "A terminal with gcloud, kubectl and terraform and 5 GB persistent in $HOME"], ["Una VM de producción para tus aplicaciones", "A production VM for your apps"], ["Una base de datos gratuita", "A free database"], ["Acceso root a los servidores de Google", "Root access to Google's servers"]]
+    answer: 0
+    why: ["Es un entorno de administración, no un sitio donde ejecutar producción.", "It's an admin environment, not a place to run production."]
+  - q: ["¿Qué registros de auditoría están siempre activos y no se pueden desactivar?", "Which audit logs are always on and can't be disabled?"]
+    options: [["Actividad de administración", "Admin Activity"], ["Acceso a datos", "Data Access"], ["Registros de flujo de VPC", "VPC Flow Logs"], ["Registros del balanceador", "Load balancer logs"]]
+    answer: 0
+    why: ["Acceso a datos viene desactivado por defecto (salvo BigQuery).", "Data Access is off by default (except BigQuery)."]
+  - q: ["¿Qué hace un presupuesto de facturación cuando se supera?", "What does a billing budget do when exceeded?"]
+    options: [["Envía alertas; no para el gasto por sí solo", "Sends alerts; doesn't stop spending by itself"], ["Apaga todos los recursos", "Shuts down every resource"], ["Borra el proyecto", "Deletes the project"], ["Bloquea la cuenta de facturación", "Blocks the billing account"]]
+    answer: 0
+    why: ["Para cortar el gasto hay que automatizarlo (p. ej. con Pub/Sub y una función).", "To cut spending you must automate it (e.g. with Pub/Sub and a function)."]
+  - q: ["Necesitas ejecutar un contenedor HTTP sin gestionar servidores y que escale a cero.", "You need to run an HTTP container without managing servers and scaling to zero."]
+    options: [["Cloud Run", "Cloud Run"], ["Compute Engine", "Compute Engine"], ["GKE Standard", "GKE Standard"], ["Dataproc", "Dataproc"]]
+    answer: 0
+    why: ["Cloud Run es el servicio de contenedores sin servidor.", "Cloud Run is the serverless container service."]
+  - q: ["¿Qué producto es un almacén de datos SQL sin servidor para análisis?", "Which product is a serverless SQL data warehouse for analysis?"]
+    options: [["BigQuery", "BigQuery"], ["Cloud SQL", "Cloud SQL"], ["Firestore", "Firestore"], ["Memorystore", "Memorystore"]]
+    answer: 0
+    why: ["Cloud SQL es transaccional; BigQuery es para análisis.", "Cloud SQL is transactional; BigQuery is for analysis."]
+  - q: ["¿Dónde se piden aumentos de cuota?", "Where are quota increases requested?"]
+    options: [["IAM y administración → Cuotas y límites del sistema", "IAM & Admin → Quotas & system limits"], ["Facturación → Presupuestos", "Billing → Budgets"], ["Security Command Center", "Security Command Center"], ["Cloud Shell", "Cloud Shell"]]
+    answer: 0
+    why: ["Desde la página de cuotas se filtra y se solicita el aumento.", "You filter and request the increase from the quotas page."]
+  - q: ["Un rol concedido en una carpeta…", "A role granted on a folder…"]
+    options: [["Se hereda en todos los proyectos de la carpeta", "Is inherited by every project in the folder"], ["Solo vale para la carpeta", "Only applies to the folder"], ["Necesita repetirse en cada proyecto", "Must be repeated on each project"], ["Caduca a los 30 días", "Expires after 30 days"]]
+    answer: 0
+    why: ["Los permisos fluyen hacia abajo en la jerarquía.", "Permissions flow down the hierarchy."]
+  - q: ["¿Qué producto da acceso SSH a VMs sin IP pública?", "Which product gives SSH access to VMs without a public IP?"]
+    options: [["Identity-Aware Proxy (IAP)", "Identity-Aware Proxy (IAP)"], ["Cloud NAT", "Cloud NAT"], ["Cloud CDN", "Cloud CDN"], ["Cloud DNS", "Cloud DNS"]]
+    answer: 0
+    why: ["Cloud NAT es para salir a internet, no para entrar.", "Cloud NAT is for going out to the internet, not coming in."]
+  - q: ["¿Qué es responsabilidad del cliente en Google Cloud?", "What is the customer's responsibility on Google Cloud?"]
+    options: [["Los permisos IAM y la configuración de sus recursos", "IAM permissions and the configuration of its resources"], ["La seguridad física de los centros de datos", "Physical security of the data centres"], ["El hardware de los servidores", "Server hardware"], ["La red troncal de Google", "Google's backbone network"]]
+    answer: 0
+    why: ["Google protege la infraestructura; tú, lo que configuras.", "Google secures the infrastructure; you secure what you configure."]
+  - q: ["La consola muestra los recursos de…", "The console shows the resources of…"]
+    options: [["El proyecto seleccionado en la barra superior", "The project selected in the top bar"], ["Todos los proyectos a la vez", "All projects at once"], ["El último proyecto creado", "The most recently created project"], ["El proyecto configurado en gcloud", "The project configured in gcloud"]]
+    answer: 0
+    why: ["Consola y gcloud pueden estar en proyectos distintos.", "The console and gcloud can be on different projects."]

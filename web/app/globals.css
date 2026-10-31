@@ -1087,6 +1087,11 @@ body.cm main#main { overflow-x: clip; }
 .ln-support { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 20px 24px; margin-bottom: 20px; }
 .ln-support h2 { margin: 0 0 4px; font-size: 20px; }
 .ln-support p { margin: 0; font-size: 14px; line-height: 21px; }
+.ln-start { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+.ln-start-text { flex: 1 1 280px; min-width: 0; }
+.ln-start h2 { margin: 0 0 4px; font-size: 20px; }
+.ln-start p { margin: 0; font-size: 14px; line-height: 21px; }
+.ln-start .cm-pillbtn { white-space: normal; height: auto; min-height: 52px; padding: 10px 24px; text-align: center; }
 .ln-support-topics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .ln-support-topics button { border: 0; cursor: pointer; font: inherit; font-size: 13px; }
 

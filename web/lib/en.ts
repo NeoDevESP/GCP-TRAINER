@@ -2104,4 +2104,6 @@ export const en: Record<string, string> = {
   "SLA": "SLA",
   "Orden": "Order",
   "Plan": "Plan",
+  "¿Empiezas de cero?": "Starting from scratch?",
+  "Antes que nada: cómo se organiza Google Cloud, qué hay en cada parte de la consola y qué producto sirve para qué.": "First things first: how Google Cloud is organized, what's in each part of the console and which product is for what.",
 };
