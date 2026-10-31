@@ -89,6 +89,7 @@ export default function ZentraPage() {
                 <a className="btn secondary" href={`/catalog?track=${w.track}`}>{t("Ver los {n} casos", { n: ids.length })}</a>
                 <a className="btn secondary" href="/shift">{t("Turno de soporte")}</a>
                 <a className="btn secondary" href="/guide">{t("Guía de diagnóstico")}</a>
+                <a className="btn secondary" href="/final">{t("Examen final")}</a>
                 {ids.length > 0 && <span className="muted zt-progress">{t("{done} de {total} casos superados", { done, total: ids.length })}</span>}
               </div>
             </header>

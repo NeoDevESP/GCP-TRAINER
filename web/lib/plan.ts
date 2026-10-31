@@ -37,7 +37,7 @@ export const DAYS: Day[] = [
   { title: k("Día 9 · Guardia"), goal: k("Incidentes de producción con el reloj corriendo y varios tickets a la vez."),
     items: [...Z("z23-push-endpoint", "z24-healthcheck-path", "z25-fx-no-egress", "z26-secret-version", "z28-nat-ports", "z29-zone-stockout", "z30-cpu-quota", "z38-firewall-priority", "z39-private-dns", "z43-default-route", "z45-lost-tag", "z46-named-port", "z67-week5-test"), ...L("bank-b08-region-outage", "bank-b18-not-gcp"), { shift: 1 }, { shift: 2 }] },
   { title: k("Día 10 · Día de la nómina y examen"), goal: k("El jefe final, el simulacro del ACE y un último turno."),
-    items: [...Z("z27-payday-boss", "z42-month-end-costs", "z69-week6-test", "z70-canary", "z52-zone-outage"), { exam: "ACE" }, { shift: 3 }, { task: "d10-review", text: k("Repasa los temas con las preguntas que fallaste en el simulacro") }] },
+    items: [...Z("z27-payday-boss", "z42-month-end-costs", "z69-week6-test", "z70-canary", "z52-zone-outage"), { exam: "ACE" }, { shift: 3 }, { task: "d10-review", text: k("Repasa los temas con las preguntas que fallaste en el simulacro") }, { task: "d10-final", text: k("Examen final de Zentra: la certificación interna de Soporte N2"), href: "/final" }] },
 ];
 
 export const key = (it: Item) => ("lab" in it ? "lab:" + it.lab : "topic" in it ? "topic:" + it.topic : "exam" in it ? "exam:" + it.exam : "shift" in it ? "shift:" + it.shift : "task:" + it.task);

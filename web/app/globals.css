@@ -745,6 +745,9 @@ body.cm {
 }
 body.cm a { color: var(--cm-accent-2); }
 @media (prefers-color-scheme: dark) { body.cm a { color: var(--cm-accent); } }
+/* links styled as buttons keep the button colours */
+body.cm a.btn:not(.secondary) { color: var(--on-accent); }
+body.cm a.btn.secondary { color: var(--accent-2); }
 body.cm h1, body.cm h2 { font-family: var(--cm-display); font-weight: 700; letter-spacing: -0.3px; }
 body.cm h1 { font-size: 36px; line-height: 42px; }
 body.cm h2 { font-size: 22px; line-height: 28px; }
@@ -1264,3 +1267,31 @@ body.cm main#main { overflow-x: clip; }
 .st-final { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; font-weight: 600; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .st-level.advanced { background: #4a1f18; color: #ffcdc4; } }
 :root[data-theme="dark"] .st-level.advanced { background: #4a1f18; color: #ffcdc4; }
+
+/* Zentra final exam */
+.fx-rules ul { margin: 8px 0 16px; padding-left: 22px; line-height: 24px; }
+.fx-quiz { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.fx-score { display: flex; align-items: center; gap: 20px; border-left: 6px solid var(--cm-amber); }
+.fx-score.ok { border-left-color: var(--cm-ok); }
+.fx-total { font-size: 44px; line-height: 1; }
+.fx-verdict { font-weight: 600; font-size: 18px; }
+.fx-areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 24px; margin: 16px 0; }
+.fx-area { display: grid; grid-template-columns: 1fr 120px 48px; align-items: center; gap: 10px; font-size: 14px; }
+.fx-meter { display: block; height: 8px; border-radius: 4px; background: var(--cm-sunk); overflow: hidden; }
+.fx-meter span { display: block; height: 100%; background: var(--cm-amber); }
+.fx-meter span.ok { background: var(--cm-ok); }
+.fx-meter span.ko { background: var(--cm-bad); }
+.fx-cases { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fx-cases li { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; font-size: 14px; }
+.fx-cases li .muted { grid-column: 1; }
+.fx-cases li strong { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.fx-cert { margin-top: 20px; padding: 32px; border: 3px double var(--cm-ink); border-radius: 12px; text-align: center; background: var(--cm-surface); }
+.fx-cert-kick { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--cm-muted); }
+.fx-cert-title { font-size: 26px; font-weight: 700; margin: 8px 0; }
+.fx-cert-name { font-size: 22px; margin: 8px 0 12px; }
+@media (max-width: 560px) { .fx-area { grid-template-columns: 1fr 80px 44px; } .fx-score { flex-direction: column; align-items: flex-start; } }
+@media print {
+  body * { visibility: hidden; }
+  .fx-cert, .fx-cert * { visibility: visible; }
+  .fx-cert { position: absolute; left: 0; top: 0; right: 0; border-color: #000; }
+}

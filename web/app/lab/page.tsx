@@ -85,8 +85,18 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
           </table>
         </details>
       ) : null}
+      {qs("exam") === "1" && (
+        <p className="lp-note" style={{ marginTop: 16 }}>
+          <Icon name="shield" size={18} />
+          <span>{t("Modo examen: este caso forma parte de tu examen final. Sin profesor ni pistas; trabaja como en una guardia real.")}</span>
+        </p>
+      )}
       <div className="row" style={{ marginTop: 20 }}>
-        {qs("tutor") === "1" && lab.type !== "boss" ? (
+        {qs("exam") === "1" ? (
+          <button className="btn" onClick={() => start()} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
+            {busy ? t("Preparando el entorno…") : t("Empezar el caso del examen")}
+          </button>
+        ) : qs("tutor") === "1" && lab.type !== "boss" ? (
           <>
             <button className="btn" onClick={() => start(true)} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
               <Icon name="school" size={18} /> {busy ? t("Preparando el entorno…") : t("Empezar con el profesor")}
@@ -508,7 +518,8 @@ function Result({ out, session }: { out: any; session: SessionInfo }) {
 function Workspace({ session }: { session: SessionInfo }) {
   const { t: tr } = useI18n();
   const [tick, setTick] = useState(0);
-  const tutorAuto = qs("tutor") === "1";
+  const exam = qs("exam") === "1";
+  const tutorAuto = qs("tutor") === "1" && !exam;
   const [panel, setPanel] = useState<"guide" | "desk" | "submit" | "tutor">(tutorAuto ? "tutor" : "guide");
   const [hints, setHints] = useState<any[]>([]);
   const [check, setCheck] = useState<any>(null);
@@ -613,7 +624,7 @@ function Workspace({ session }: { session: SessionInfo }) {
 
   const tabs: ["guide" | "desk" | "submit" | "tutor", string][] = [
     ...(hasDesk ? ([["desk", tr("Ticket")]] as ["desk", string][]) : []),
-    ...(session.type !== "boss" ? ([["tutor", tr("Profesor")]] as ["tutor", string][]) : []),
+    ...(session.type !== "boss" && !exam ? ([["tutor", tr("Profesor")]] as ["tutor", string][]) : []),
     ["guide", tr("Instrucciones")],
     ["submit", tr("Entrega")],
   ];
@@ -700,9 +711,11 @@ function Workspace({ session }: { session: SessionInfo }) {
               </div>
             ))}
             <div className="lp-actions">
-              <button className="cc-btn" onClick={hint} disabled={session.hintCount === 0 || (hints.length > 0 && hints[hints.length - 1].remaining <= 0)}>
-                <Icon name="bulb" size={18} /> {tr("Pista (quedan {n})", { n: Math.max(0, session.hintCount - hints.length) })}
-              </button>
+              {!exam && (
+                <button className="cc-btn" onClick={hint} disabled={session.hintCount === 0 || (hints.length > 0 && hints[hints.length - 1].remaining <= 0)}>
+                  <Icon name="bulb" size={18} /> {tr("Pista (quedan {n})", { n: Math.max(0, session.hintCount - hints.length) })}
+                </button>
+              )}
               <button className="cc-btn" onClick={doCheck} disabled={busy}>
                 <Icon name="check" size={18} /> {tr("Comprobar")}
               </button>
@@ -829,7 +842,7 @@ function LabPage() {
     }
   }, []);
   const started = (s: SessionInfo, tutor?: boolean) => {
-    window.history.replaceState(null, "", `/lab?session=${s.id}&id=${encodeURIComponent(s.labId)}${tutor ? "&tutor=1" : ""}`);
+    window.history.replaceState(null, "", `/lab?session=${s.id}&id=${encodeURIComponent(s.labId)}${tutor ? "&tutor=1" : ""}${qs("exam") === "1" ? "&exam=1" : ""}`);
     setSession(s);
   };
   if (session) return <Workspace session={session} />;
