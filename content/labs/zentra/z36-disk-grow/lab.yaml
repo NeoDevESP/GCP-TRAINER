@@ -1,0 +1,266 @@
+id: zentra-z36-disk-grow
+title: INC P2 · El servidor de conciliación se ha quedado sin disco
+summary: Disco lleno, pero lo que ocupa son ficheros regulatorios que no se pueden borrar. La solución es ampliar el disco en caliente, también por dentro de la VM.
+track: zentra
+day: 36
+level: intermediate
+branch: compute
+type: incident
+mode: production
+skills:
+- compute.vm
+- compute.troubleshooting
+- security.audit
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create conciliacion --zone={{.zone}} --machine-type=e2-small --subnet=datos --no-address --tags=conciliacion --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-conciliacion --network=zentra-vpc --allow=tcp:80 --source-tags=ops --target-tags=conciliacion
+faults:
+- type: os_disk
+  vm: conciliacion
+  sizeGB: 20
+  baseUsedGB: '3.2'
+- type: os_service
+  vm: conciliacion
+  service: nginx
+  user: www-data
+  writes: /var/log/nginx
+- type: os_file
+  vm: conciliacion
+  path: /var/log/nginx/access.log
+  sizeMB: '300'
+  owner: www-data
+  group: adm
+  mode: '640'
+- type: os_file
+  vm: conciliacion
+  path: /srv/regulatorio/cierre-2026-07.zip
+  sizeMB: '5600'
+  owner: root
+  group: root
+  mode: '440'
+- type: os_file
+  vm: conciliacion
+  path: /srv/regulatorio/cierre-2026-08.zip
+  sizeMB: '5700'
+  owner: root
+  group: root
+  mode: '440'
+- type: os_file
+  vm: conciliacion
+  path: /srv/regulatorio/cierre-2026-09.zip
+  sizeMB: '5700'
+  owner: root
+  group: root
+  mode: '440'
+ticket:
+  id: INC-31036
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Operaciones · Conciliación
+  summary: El portal interno de conciliación no carga y el proceso de esta noche falla con «No space left on device». ¿Podéis liberar espacio? Ojo, los ficheros de cierre los pide el regulador.
+actors:
+- role: compliance
+  name: Irene Soler (Cumplimiento)
+  persona: Cumplimiento normativo.
+  fallback: Los ficheros de cierre se guardan 10 años. No se borran ni se mueven sin un procedimiento aprobado.
+  facts:
+  - keywords:
+    - - borrar
+      - delete
+      - cierre
+      - close
+      - zip
+      - regulatorio
+      - regulatory
+      - mover
+      - move
+    answer: 'No. Los cierre-*.zip son evidencia regulatoria: ni se borran ni se tocan. Si falta sitio, ampliad el disco.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Cualquier cambio en producción necesita un registro de cambio. Si es urgente, dime el riesgo y lo apruebo como cambio de emergencia.
+  facts:
+  - keywords:
+    - - tier
+      - tamaño
+      - size
+      - ampliar
+      - upgrade
+      - cambio
+      - change
+      - emergencia
+      - emergency
+      - disco
+      - disk
+    answer: Aprobado como cambio de emergencia (CHG-7741). Déjalo anotado en el ticket con el motivo.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-operaciones-prod*).
+
+  > **INC-31036 · P2** · *«El portal interno de conciliación no carga y el proceso de esta noche falla con «No space left on device». ¿Podéis liberar espacio? Ojo, los ficheros de cierre los pide el regulador.»*
+
+  Entra en `conciliacion` por IAP y mide antes de tocar nada (`df -h`, `du`, `find / -size +500M`). En un banco **no se borra evidencia regulatoria** para hacer sitio: pregunta a Cumplimiento. Ampliar un disco de Compute Engine se hace en caliente, en dos pasos: **en la nube** (`gcloud compute disks resize`) y **dentro de la VM** (`growpart` + `resize2fs`), porque el sistema de archivos no crece solo hasta que reinicias.
+objectives:
+- Mide qué ocupa el disco
+- Confirma qué se puede borrar
+- Amplía el disco en la nube y dentro de la VM
+- Recupera el portal y documenta
+hints:
+- text: '`gcloud compute disks resize conciliacion --zone={{.zone}} --size=50`'
+- text: 'Dentro: `sudo growpart /dev/sda 1` y `sudo resize2fs /dev/sda1`; después reinicia nginx.'
+solution: |
+  ticket
+  gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='df -h'
+  gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='sudo du -sh /srv/*'
+  gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='sudo find / -size +500M'
+  ask compliance "¿se pueden borrar o mover los cierre-*.zip para hacer sitio?"
+  ask change "¿apruebas ampliar el disco de conciliacion a 50 GB?"
+  gcloud compute disks resize conciliacion --zone={{.zone}} --size=50 --quiet
+  gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='sudo growpart /dev/sda 1'
+  gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='sudo resize2fs /dev/sda1'
+  gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
+  gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='df -h'
+  ticket comment "Causa: los cierres regulatorios de julio a septiembre (17 GB) llenaron el disco de 20 GB. Cumplimiento no permite borrarlos. Ampliado el disco a 50 GB en caliente (resize + growpart + resize2fs) con CHG-7741 y reiniciado nginx. Propuesta: archivar los cierres en un bucket con retención bloqueada."
+  ticket update "Resuelto: el portal de conciliación vuelve a funcionar y hay espacio para el proceso de esta noche. No se ha borrado ningún fichero de cierre."
+  ticket resolve "Disco de conciliacion ampliado a 50 GB sin borrar evidencia regulatoria; nginx en marcha."
+shortcuts:
+- name: delete the oldest close
+  run: |
+    gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='sudo rm /srv/regulatorio/cierre-2026-07.zip'
+    gcloud compute ssh conciliacion --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
+    ticket resolve "Borrado el cierre más antiguo para liberar espacio."
+rubric:
+- name: Portal recuperado
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:conciliacion:80
+    path: /
+    status: 200
+    desc: El portal responde
+  - type: vm_disk
+    vm: conciliacion
+    maxPct: 80
+    desc: Disco por debajo del 80 %
+- name: Evidencia regulatoria intacta
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: vm_file
+    vm: conciliacion
+    path: /srv/regulatorio/cierre-2026-07.zip
+    desc: Cierre de julio conservado
+  - type: vm_file
+    vm: conciliacion
+    path: /srv/regulatorio/cierre-2026-08.zip
+    desc: Cierre de agosto conservado
+  - type: vm_file
+    vm: conciliacion
+    path: /srv/regulatorio/cierre-2026-09.zip
+    desc: Cierre de septiembre conservado
+- name: Medir y preguntar
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: df -h|du -sh|find / -size
+    min: 2
+    desc: Espacio medido
+  - type: asked
+    actor: compliance
+    min: 1
+    desc: Preguntado a Cumplimiento
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - ampli
+      - resize
+      - grow
+    - - regulat
+      - cumplimiento
+      - compliance
+      - cierre
+    desc: Nota con la causa y la acción
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: du -sh
+  title: Qué ocupa
+  why: '17 GB de cierres regulatorios: no son basura.'
+- match: disks resize
+  title: 'Paso 1: el disco'
+  why: Compute Engine amplía el disco en caliente, pero el sistema de archivos aún no lo ve.
+- match: resize2fs
+  title: 'Paso 2: dentro de la VM'
+  why: growpart amplía la partición y resize2fs el sistema de archivos, sin reiniciar.
+en:
+  title: INC P2 · The reconciliation server ran out of disk
+  summary: Full disk, but what takes the space are regulatory files that can't be deleted. The fix is to grow the disk online, inside the VM too.
+  story: |-
+    **Project `{{.project}}`** (*zentra-operaciones-prod*).
+
+    > **INC-31036 · P2** · *"The internal reconciliation portal won't load and tonight's job fails with "No space left on device". Can you free some space? Careful, the close files are required by the regulator."*
+
+    SSH into `conciliacion` through IAP and measure before touching anything (`df -h`, `du`, `find / -size +500M`). In a bank you **don't delete regulatory evidence** to make room: ask Compliance. Growing a Compute Engine disk is done online, in two steps: **in the cloud** (`gcloud compute disks resize`) and **inside the VM** (`growpart` + `resize2fs`), because the file system doesn't grow by itself until you reboot.
+  objectives:
+  - Measure what fills the disk
+  - Confirm what can be deleted
+  - Grow the disk in the cloud and inside the VM
+  - Bring the portal back and document
+  hints:
+  - '`gcloud compute disks resize conciliacion --zone={{.zone}} --size=50`'
+  - 'Inside: `sudo growpart /dev/sda 1` and `sudo resize2fs /dev/sda1`; then restart nginx.'
+  ticket:
+    summary: The internal reconciliation portal won't load and tonight's job fails with "No space left on device". Can you free some space? Careful, the close files are required by the regulator.
+  text:
+    Operaciones · Conciliación: Operations · Reconciliation
+    Irene Soler (Cumplimiento): Irene Soler (Compliance)
+    Cumplimiento normativo.: Regulatory compliance.
+    Los ficheros de cierre se guardan 10 años. No se borran ni se mueven sin un procedimiento aprobado.: Close files are kept for 10 years. They aren't deleted or moved without an approved procedure.
+    'No. Los cierre-*.zip son evidencia regulatoria: ni se borran ni se tocan. Si falta sitio, ampliad el disco.': 'No. The cierre-*.zip files are regulatory evidence: not deleted, not touched. If space is short, grow the disk.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    ? Cualquier cambio en producción necesita un registro de cambio. Si es urgente, dime el riesgo y lo apruebo como cambio de emergencia.
+    : Any production change needs a change record. If it's urgent, tell me the risk and I'll approve it as an emergency change.
+    Aprobado como cambio de emergencia (CHG-7741). Déjalo anotado en el ticket con el motivo.: Approved as an emergency change (CHG-7741). Note it in the ticket with the reason.
+    Portal recuperado: Portal back
+    El portal responde: The portal responds
+    Disco por debajo del 80 %: Disk under 80%
+    Evidencia regulatoria intacta: Regulatory evidence intact
+    Cierre de julio conservado: July close kept
+    Cierre de agosto conservado: August close kept
+    Cierre de septiembre conservado: September close kept
+    Medir y preguntar: Measure and ask
+    Espacio medido: Space measured
+    Preguntado a Cumplimiento: Asked Compliance
+    Documentado: Documented
+    Nota con la causa y la acción: Note with the cause and the action
+    Ticket cerrado: Ticket closed
+    Qué ocupa: What takes the space
+    '17 GB de cierres regulatorios: no son basura.': '17 GB of regulatory closes: they aren''t junk.'
+    'Paso 1: el disco': 'Step 1: the disk'
+    Compute Engine amplía el disco en caliente, pero el sistema de archivos aún no lo ve.: Compute Engine grows the disk online, but the file system can't see it yet.
+    'Paso 2: dentro de la VM': 'Step 2: inside the VM'
+    growpart amplía la partición y resize2fs el sistema de archivos, sin reiniciar.: growpart grows the partition and resize2fs the file system, with no reboot.

@@ -154,6 +154,28 @@ func (s *Session) vmOSCommand(vm *sim.Instance, toks []string) (string, error) {
 			}
 		}
 		return "", nil
+	case "growpart":
+		// growpart /dev/sda 1
+		if user != "root" {
+			return "", fail(1, "FAILED: must be root")
+		}
+		if o.PendingGB <= o.DiskGB {
+			return "", fail(1, "NOCHANGE: partition 1 is size %d. it cannot be grown", o.DiskGB*2097152)
+		}
+		o.Grown = true
+		return fmt.Sprintf("CHANGED: partition=1 start=2048 old: size=%d end=%d new: size=%d end=%d\n", o.DiskGB*2097152, o.DiskGB*2097152+2048, o.PendingGB*2097152, o.PendingGB*2097152+2048), nil
+	case "resize2fs", "xfs_growfs":
+		if user != "root" {
+			return "", fail(1, "%s: Permission denied to resize filesystem", toks[0])
+		}
+		if o.PendingGB <= o.DiskGB {
+			return "The filesystem is already " + strconv.Itoa(o.DiskGB*262144) + " (4k) blocks long.  Nothing to do!\n", nil
+		}
+		if !o.Grown {
+			return "", fail(1, "The filesystem is already %d (4k) blocks long.  Nothing to do!\n(the partition hasn't grown yet: run growpart first)", o.DiskGB*262144)
+		}
+		o.DiskGB, o.PendingGB, o.Grown = o.PendingGB, 0, false
+		return fmt.Sprintf("Filesystem at /dev/sda1 is mounted on /; on-line resizing required\nThe filesystem on /dev/sda1 is now %d (4k) blocks long.\n", o.DiskGB*262144), nil
 	case "df":
 		used := o.UsedGB()
 		pct := int(100 * used / float64(max(1, o.DiskGB)))

@@ -1,0 +1,240 @@
+id: zentra-z42-month-end-costs
+title: 'REQ P3 · FinOps: la factura del mes va un 70 % por encima'
+summary: Una VM con GPU olvidada, discos huérfanos y una máquina sin etiquetas. Confirma con cada dueño, ahorra sin romper nada y deja un presupuesto con avisos.
+track: zentra
+day: 42
+level: intermediate
+branch: finops
+type: incident
+mode: production
+skills:
+- finops.optimization
+- foundations.billing
+- compute.vm
+wellArchitected:
+- cost
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+faults:
+- type: bill_snapshot
+- type: command
+  run: gcloud compute instances create ia-fraude-entreno --zone={{.zone}} --machine-type=g2-standard-8 --accelerator=type=nvidia-l4,count=1 --subnet=datos --no-address --labels=equipo=datos,uso=experimento,sim-cpu=idle --image-family=debian-12 --image-project=debian-cloud
+- type: command
+  run: gcloud compute disks create copia-migracion-1 copia-migracion-2 --zone={{.zone}} --size=1000 --type=pd-ssd --labels=equipo=plataforma,uso=migracion
+- type: command
+  run: gcloud compute instances create vm-temporal-7 --zone={{.zone}} --machine-type=n2-standard-8 --subnet=apps --no-address --labels=sim-cpu=low --image-family=debian-12 --image-project=debian-cloud
+ticket:
+  id: REQ-21042
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Elena Ríos (FinOps)
+  summary: La previsión de este mes va un 70 % por encima del anterior. Necesito saber qué ha subido y de quién es, y que apaguéis lo que sobre sin romper producción. Y que nos avise un presupuesto antes la próxima vez.
+actors:
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: FinOps.
+  fallback: Necesito saber qué ha subido, de quién es y qué se puede apagar.
+  facts: []
+- role: data
+  name: Omar Haddad (Datos)
+  persona: Científico de datos.
+  fallback: Entrenamos modelos de fraude de vez en cuando.
+  facts:
+  - keywords:
+    - - gpu
+      - ia-fraude
+      - entreno
+      - training
+      - borrar
+      - delete
+    answer: ¡Uy, ia-fraude-entreno! El experimento terminó hace dos semanas y el modelo está guardado. Bórrala.
+- role: platform
+  name: Marta Ibáñez (Plataforma)
+  persona: Responsable de Plataforma Cloud.
+  fallback: Las copias de la migración eran temporales.
+  facts:
+  - keywords:
+    - - copia
+      - migracion
+      - migration
+      - disco
+      - disk
+    answer: Las copia-migracion ya no hacen falta, pero Auditoría quiere una instantánea antes de borrar nada.
+  - keywords:
+    - - vm-temporal
+      - etiqueta
+      - label
+      - sin dueño
+      - owner
+    answer: 'Ni idea de quién es vm-temporal-7. Nuestra norma: lo que no tiene dueño se para (no se borra) y se avisa en el canal.'
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-analitica-prod*).
+
+  > **REQ-21042 · P3** · *«La previsión de este mes va un 70 % por encima del anterior. Necesito saber qué ha subido y de quién es, y que apaguéis lo que sobre sin romper producción. Y que nos avise un presupuesto antes la próxima vez.»*
+
+  Mira el informe de costes por recurso y las **recomendaciones** de Google (recursos ociosos). Las **etiquetas** (`equipo`, `uso`) dicen de quién es cada cosa: pregunta a su dueño **antes** de borrar. Lo que no tiene dueño **se para, no se borra**. Los discos se borran después de guardar una **instantánea**. Termina con un presupuesto mensual de 500 EUR con avisos al 50, 90 y 100 %.
+objectives:
+- Encuentra qué ha subido y de quién es
+- Confirma con cada dueño
+- Ahorra sin perder nada
+- Crea el presupuesto con avisos
+hints:
+- text: '`gcloud billing report --group-by=resource` y `gcloud compute instances list --format=''table(name,machineType,labels)''`'
+- text: '`gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=mensual --budget-amount=500EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0`'
+solution: |
+  ticket
+  gcloud billing report --group-by=resource
+  gcloud compute instances list --format='table(name,machineType,labels)'
+  gcloud compute disks list
+  gcloud recommender recommendations list --recommender=google.compute.instance.IdleResourceRecommender --location={{.zone}}
+  ask data "¿se puede borrar ia-fraude-entreno?"
+  ask platform "¿qué hacemos con los discos copia-migracion y con vm-temporal-7?"
+  gcloud compute instances delete ia-fraude-entreno --zone={{.zone}} --quiet
+  gcloud compute disks snapshot copia-migracion-1 --zone={{.zone}} --snapshot-names=copia-migracion-1-auditoria
+  gcloud compute disks snapshot copia-migracion-2 --zone={{.zone}} --snapshot-names=copia-migracion-2-auditoria
+  gcloud compute disks delete copia-migracion-1 copia-migracion-2 --zone={{.zone}} --quiet
+  gcloud compute instances stop vm-temporal-7 --zone={{.zone}}
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=mensual --budget-amount=500EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+  gcloud billing report
+  ticket update "Hola Elena: la subida venía de una VM con GPU de un experimento de Datos ya terminado (borrada con el OK de Omar), de dos discos SSD de 1 TB de la migración (borrados tras guardar una instantánea para Auditoría) y de vm-temporal-7, sin etiquetas ni dueño (parada, no borrada; avisado en el canal). Creado un presupuesto mensual de 500 EUR con avisos al 50, 90 y 100 %."
+  ticket resolve "Borrada la GPU ociosa, discos de migración borrados con instantánea, VM sin dueño parada y presupuesto con avisos creado."
+shortcuts:
+- name: delete everything that looks idle
+  run: |
+    gcloud compute instances delete ia-fraude-entreno vm-temporal-7 --zone={{.zone}} --quiet
+    gcloud compute disks delete copia-migracion-1 copia-migracion-2 --zone={{.zone}} --quiet
+    ticket resolve "Borrado todo lo que estaba ocioso."
+rubric:
+- name: Ahorro
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: absent
+    path: instances["ia-fraude-entreno"]
+    desc: GPU ociosa borrada
+  - type: count
+    collection: disks
+    where:
+      name:
+        regex: ^copia-migracion
+    max: 0
+    desc: Discos huérfanos borrados
+  - type: exists
+    path: instances["vm-temporal-7"]
+    expect:
+      status: TERMINATED
+    desc: VM sin dueño parada
+- name: Sin perder nada
+  validator: security
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: count
+    collection: snapshots
+    min: 2
+    desc: Instantáneas de los discos para Auditoría
+  - type: exists
+    path: instances["vm-temporal-7"]
+    desc: La VM sin dueño no se ha borrado
+- name: Preguntar antes de borrar
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: billing report|recommender recommendations list
+    min: 2
+    desc: Costes y recomendaciones revisados
+  - type: asked
+    min: 2
+    desc: Confirmado con los dueños
+- name: Presupuesto y respuesta
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: exists
+    path: budgets.mensual
+    expect:
+      amount: 500
+      thresholds:
+        minLen: 3
+    desc: Presupuesto de 500 EUR con 3 avisos
+  - type: ticket_update
+    keywords:
+    - - gpu
+    - - disco
+      - disk
+      - instantánea
+      - snapshot
+    - - presupuesto
+      - budget
+    desc: Respuesta a FinOps
+tutor:
+- match: billing report --group-by=resource
+  title: Qué ha subido
+  why: La GPU y los dos SSD de 1 TB se llevan casi toda la subida.
+- match: instances stop vm-temporal-7
+  title: 'Sin dueño: parar'
+  why: Parada deja de cobrar CPU y se puede volver a arrancar si alguien la reclama.
+- match: budgets create
+  title: ''
+  why: 'Avisos al 50, 90 y 100 %: la próxima subida se ve a mitad de mes.'
+en:
+  title: 'REQ P3 · FinOps: this month''s bill is 70% above'
+  summary: A forgotten GPU VM, orphan disks and an unlabelled machine. Confirm with each owner, save without breaking anything and leave a budget with alerts.
+  story: |-
+    **Project `{{.project}}`** (*zentra-analitica-prod*).
+
+    > **REQ-21042 · P3** · *"This month's forecast is 70% above last month. I need to know what went up and whose it is, and you to switch off what's left over without breaking production. And a budget that warns us earlier next time."*
+
+    Check the cost report by resource and Google's **recommendations** (idle resources). **Labels** (`equipo`, `uso`) say whose each thing is: ask its owner **before** deleting. Anything without an owner **is stopped, not deleted**. Disks are deleted after taking a **snapshot**. Finish with a 500 EUR monthly budget with alerts at 50, 90 and 100%.
+  objectives:
+  - Find what went up and whose it is
+  - Confirm with each owner
+  - Save without losing anything
+  - Create the budget with alerts
+  hints:
+  - '`gcloud billing report --group-by=resource` and `gcloud compute instances list --format=''table(name,machineType,labels)''`'
+  - '`gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=mensual --budget-amount=500EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0`'
+  ticket:
+    summary: This month's forecast is 70% above last month. I need to know what went up and whose it is, and you to switch off what's left over without breaking production. And a budget that warns us earlier next time.
+  text:
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    FinOps.: FinOps.
+    Necesito saber qué ha subido, de quién es y qué se puede apagar.: I need to know what went up, whose it is and what can be switched off.
+    Omar Haddad (Datos): Omar Haddad (Data)
+    Científico de datos.: Data scientist.
+    Entrenamos modelos de fraude de vez en cuando.: We train fraud models now and then.
+    ¡Uy, ia-fraude-entreno! El experimento terminó hace dos semanas y el modelo está guardado. Bórrala.: Oops, ia-fraude-entreno! The experiment ended two weeks ago and the model is saved. Delete it.
+    Marta Ibáñez (Plataforma): Marta Ibáñez (Platform)
+    Responsable de Plataforma Cloud.: Cloud Platform lead.
+    Las copias de la migración eran temporales.: The migration copies were temporary.
+    Las copia-migracion ya no hacen falta, pero Auditoría quiere una instantánea antes de borrar nada.: The copia-migracion disks aren't needed, but Audit wants a snapshot before deleting anything.
+    'Ni idea de quién es vm-temporal-7. Nuestra norma: lo que no tiene dueño se para (no se borra) y se avisa en el canal.': 'No idea whose vm-temporal-7 is. Our rule: anything without an owner is stopped (not deleted) and announced in the channel.'
+    Ahorro: Savings
+    GPU ociosa borrada: Idle GPU deleted
+    Discos huérfanos borrados: Orphan disks deleted
+    VM sin dueño parada: Ownerless VM stopped
+    Sin perder nada: Nothing lost
+    Instantáneas de los discos para Auditoría: Disk snapshots for Audit
+    La VM sin dueño no se ha borrado: The ownerless VM wasn't deleted
+    Preguntar antes de borrar: Ask before deleting
+    Costes y recomendaciones revisados: Costs and recommendations checked
+    Confirmado con los dueños: Confirmed with the owners
+    Presupuesto y respuesta: Budget and reply
+    Presupuesto de 500 EUR con 3 avisos: 500 EUR budget with 3 alerts
+    Respuesta a FinOps: Reply to FinOps
+    Qué ha subido: What went up
+    La GPU y los dos SSD de 1 TB se llevan casi toda la subida.: The GPU and the two 1 TB SSDs account for nearly all of the increase.
+    'Sin dueño: parar': 'No owner: stop'
+    Parada deja de cobrar CPU y se puede volver a arrancar si alguien la reclama.: Stopped, it stops billing CPU and can be restarted if someone claims it.
+    'Avisos al 50, 90 y 100 %: la próxima subida se ve a mitad de mes.': 'Alerts at 50, 90 and 100%: the next increase shows mid-month.'

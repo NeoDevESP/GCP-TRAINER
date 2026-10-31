@@ -1,0 +1,210 @@
+id: zentra-z41-readiness-probe
+title: 'INC P2 · Notificaciones push caídas: los pods están «Running» pero 0/1 Ready'
+summary: La nueva versión cambió el puerto de la sonda de preparación y ningún pod pasa a Ready, así que el Service no tiene a quién enviar tráfico. Se vuelve a la versión anterior.
+track: zentra
+day: 41
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.workloads
+- gke.troubleshooting
+- devops.delivery
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud container clusters create apps-gke --zone={{.zone}} --num-nodes=2 --machine-type=e2-standard-2 --network=zentra-vpc --subnetwork=gke --enable-private-nodes
+  cat > notificaciones.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: notificaciones}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: notificaciones}}
+    template:
+      metadata: {labels: {app: notificaciones}}
+      spec:
+        containers:
+        - name: notificaciones
+          image: europe-docker.pkg.dev/gcplab-public/apps/hello:1.0
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /, port: 8080}
+            periodSeconds: 5
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: notificaciones
+    annotations: {networking.gke.io/load-balancer-type: "Internal"}
+  spec:
+    type: LoadBalancer
+    selector: {app: notificaciones}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl apply -f notificaciones.yaml
+faults:
+- type: k8s_probe_port
+  cluster: apps-gke
+  deployment: notificaciones
+  port: 8081
+ticket:
+  id: INC-31041
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Carla Méndez (producto)
+  summary: Desde el despliegue de las 11:00 no llegan las notificaciones push de pagos. kubectl dice que los pods están Running, pero el servicio no responde.
+actors:
+- role: dev
+  name: Equipo de Notificaciones
+  persona: Mantienen el servicio de notificaciones.
+  fallback: La aplicación escucha en el 8080, como siempre.
+  facts:
+  - keywords:
+    - - puerto
+      - port
+      - '8081'
+      - sonda
+      - probe
+      - readiness
+      - despliegue
+      - deploy
+      - version
+    answer: 'En el despliegue de las 11:00 tocamos la sonda: pensábamos mover la salud al 8081, pero no llegamos a cambiar la app. Volved a la versión anterior.'
+- role: product
+  name: Carla Méndez (producto)
+  persona: Product owner.
+  fallback: Necesito saber cuándo vuelven las notificaciones.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-apps-prod*).
+
+  > **INC-31041 · P2** · *«Desde el despliegue de las 11:00 no llegan las notificaciones push de pagos. kubectl dice que los pods están Running, pero el servicio no responde.»*
+
+  En Kubernetes, **Running** solo significa que el contenedor arrancó. Un Service solo envía tráfico a pods **Ready**, y Ready lo decide la **sonda de preparación** (*readinessProbe*). Mira la columna READY, los eventos del pod (`kubectl describe pod`) y el historial del despliegue. Si la última versión es la culpable, lo rápido y seguro es **volver a la anterior**.
+objectives:
+- Mira READY y los eventos del pod
+- Relaciona el fallo con el despliegue
+- Vuelve a la versión anterior
+- Valida y documenta
+hints:
+- text: '`kubectl get pods` y `kubectl describe pod -l app=notificaciones`'
+- text: '`kubectl rollout undo deployment/notificaciones`'
+solution: |
+  ticket
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl get pods
+  kubectl describe pod -l app=notificaciones
+  kubectl rollout history deployment/notificaciones
+  ask dev "¿qué cambió en el despliegue de las 11:00?"
+  kubectl rollout undo deployment/notificaciones
+  kubectl get pods
+  ticket comment "Causa: el despliegue de las 11:00 movió la readinessProbe al puerto 8081, pero la aplicación sigue escuchando en el 8080; ningún pod pasaba a Ready y el Service se quedó sin endpoints. Hecho rollout undo a la revisión anterior. Pedido al equipo que no cambie la sonda sin cambiar la app."
+  ticket update "Resuelto: las notificaciones push vuelven a enviarse. La última versión tenía mal configurada una comprobación de salud y hemos vuelto a la anterior."
+  ticket resolve "rollout undo de notificaciones; pods Ready y servicio respondiendo."
+shortcuts:
+- name: restart the pods
+  run: |
+    gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+    kubectl rollout restart deployment/notificaciones
+    ticket resolve "Reiniciados los pods de notificaciones."
+rubric:
+- name: Notificaciones en marcha
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: k8s:apps-gke/notificaciones
+    path: /
+    status: 200
+    desc: El Service responde
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: kubectl (describe pod|get pods|get events)
+    min: 2
+    desc: Pods y eventos revisados
+  - type: command
+    regex: rollout history
+    min: 1
+    desc: Historial del despliegue revisado
+- name: Documentado
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - readiness
+      - sonda
+      - probe
+    - - '8081'
+      - puerto
+      - port
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: describe pod
+  title: Los eventos
+  why: '«Readiness probe failed … port 8081»: la app escucha en el 8080.'
+- match: rollout undo
+  title: ''
+  why: 'Vuelve a la plantilla anterior: sonda en el 8080 y pods Ready.'
+en:
+  title: 'INC P2 · Push notifications down: pods "Running" but 0/1 Ready'
+  summary: The new release changed the readiness probe port and no pod becomes Ready, so the Service has nowhere to send traffic. Roll back to the previous version.
+  story: |-
+    **Project `{{.project}}`** (*zentra-apps-prod*).
+
+    > **INC-31041 · P2** · *"Since the 11:00 deployment, payment push notifications aren't arriving. kubectl says the pods are Running, but the service doesn't respond."*
+
+    In Kubernetes, **Running** only means the container started. A Service only sends traffic to **Ready** pods, and Ready is decided by the **readiness probe**. Look at the READY column, the pod events (`kubectl describe pod`) and the deployment history. If the latest release is the culprit, the fast and safe move is **rolling back**.
+  objectives:
+  - Check READY and the pod events
+  - Link the failure to the deployment
+  - Roll back to the previous version
+  - Validate and document
+  hints:
+  - '`kubectl get pods` and `kubectl describe pod -l app=notificaciones`'
+  - '`kubectl rollout undo deployment/notificaciones`'
+  ticket:
+    summary: Since the 11:00 deployment, payment push notifications aren't arriving. kubectl says the pods are Running, but the service doesn't respond.
+  text:
+    Carla Méndez (producto): Carla Méndez (product)
+    Equipo de Notificaciones: Notifications team
+    Mantienen el servicio de notificaciones.: They maintain the notifications service.
+    La aplicación escucha en el 8080, como siempre.: The app listens on 8080, as always.
+    ? 'En el despliegue de las 11:00 tocamos la sonda: pensábamos mover la salud al 8081, pero no llegamos a cambiar la app. Volved a la versión anterior.'
+    : 'In the 11:00 deployment we changed the probe: we planned to move health to 8081, but never changed the app. Roll back to the previous version.'
+    Product owner.: Product owner.
+    Necesito saber cuándo vuelven las notificaciones.: I need to know when notifications are back.
+    Notificaciones en marcha: Notifications running
+    El Service responde: The Service responds
+    Diagnóstico: Diagnosis
+    Pods y eventos revisados: Pods and events checked
+    Historial del despliegue revisado: Deployment history checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Los eventos: The events
+    '«Readiness probe failed … port 8081»: la app escucha en el 8080.': '"Readiness probe failed … port 8081": the app listens on 8080.'
+    'Vuelve a la plantilla anterior: sonda en el 8080 y pods Ready.': 'Back to the previous template: probe on 8080 and pods Ready.'

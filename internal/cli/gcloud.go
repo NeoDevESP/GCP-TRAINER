@@ -700,6 +700,7 @@ func init() {
 		}
 		for _, s := range c.Args {
 			p.Services[s] = false
+			c.Audit("serviceusage.googleapis.com", "google.api.serviceusage.v1.ServiceUsage.DisableService", "projects/"+p.Number+"/services/"+s)
 		}
 		return "Operation finished successfully.\n", nil
 	})

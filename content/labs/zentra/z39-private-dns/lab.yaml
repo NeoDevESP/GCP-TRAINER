@@ -1,0 +1,180 @@
+id: zentra-z39-private-dns
+title: INC P2 · Antifraude «no responde» tras la migración a la v2
+summary: 'El nombre interno antifraude.zentra.internal apunta a la VM antigua, ya apagada. El fallo no es de la aplicación: es un registro de Cloud DNS privado.'
+track: zentra
+day: 39
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.dns
+- networking.vpc
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create antifraude-v2 --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=antifraude --metadata=sim-preinstalled=docker-images,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/hello:1.0'
+  gcloud dns managed-zones create zentra-interno --dns-name=zentra.internal. --visibility=private --networks=zentra-vpc --description="Nombres internos de Zentra"
+  gcloud dns record-sets create antifraude.zentra.internal. --zone=zentra-interno --type=A --ttl=60 --rrdatas=$(gcloud compute instances describe antifraude-v2 --zone={{.zone}} --format='value(networkInterfaces[0].networkIP)')
+  gcloud compute instances create tarjetas-front --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=tarjetas-front --metadata=sim-preinstalled=docker-images,startup-script='docker run -d -p 8080:8080 -e BACKEND_URL=http://antifraude.zentra.internal:8080/ europe-docker.pkg.dev/gcplab-public/apps/web-frontend:1.0'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-front-a-antifraude --network=zentra-vpc --allow=tcp:8080 --source-tags=tarjetas-front --target-tags=antifraude
+  gcloud compute firewall-rules create allow-ops-a-front --network=zentra-vpc --allow=tcp:8080 --source-tags=ops --target-tags=tarjetas-front
+faults:
+- type: dns_record
+  zone: zentra-interno
+  name: antifraude.zentra.internal.
+  data:
+  - 10.40.1.250
+ticket:
+  id: INC-31039
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo de Tarjetas
+  summary: 'Ayer migramos antifraude a la VM nueva (antifraude-v2) y hoy tarjetas-front devuelve 502 en /shop: «upstream request failed». La v2 está levantada y responde si la llamamos por IP.'
+actors:
+- role: dev
+  name: Hugo Martín (Tarjetas)
+  persona: Desarrollador de Tarjetas.
+  fallback: tarjetas-front llama a http://antifraude.zentra.internal:8080/.
+  facts:
+  - keywords:
+    - - ip
+      - antigua
+      - old
+      - v1
+      - 10.40.1.250
+      - migra
+    answer: La v1 tenía la 10.40.1.250 y se apagó ayer. Anoche alguien relanzó el Terraform viejo de DNS…
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-tarjetas-prod*).
+
+  > **INC-31039 · P2** · *«Ayer migramos antifraude a la VM nueva (antifraude-v2) y hoy tarjetas-front devuelve 502 en /shop: «upstream request failed». La v2 está levantada y responde si la llamamos por IP.»*
+
+  «Por IP funciona, por nombre no» es la pista clásica de **DNS**. Zentra resuelve sus nombres internos con una zona **privada de Cloud DNS** (`zentra-interno`, visible solo desde `zentra-vpc`). Compara a qué IP resuelve `antifraude.zentra.internal` con la IP real de `antifraude-v2` y corrige el registro.
+objectives:
+- Reproduce el fallo por nombre
+- Compara el registro DNS con la IP real
+- Corrige el registro en la zona privada
+- Valida /shop y documenta
+hints:
+- text: '`gcloud dns record-sets list --zone=zentra-interno` y `gcloud compute instances describe antifraude-v2 --zone={{.zone}} --format=''value(networkInterfaces[0].networkIP)''`'
+- text: '`gcloud dns record-sets update antifraude.zentra.internal. --zone=zentra-interno --type=A --ttl=60 --rrdatas=IP`'
+solution: |
+  ticket
+  gcloud dns record-sets list --zone=zentra-interno
+  gcloud compute instances describe antifraude-v2 --zone={{.zone}} --format='value(networkInterfaces[0].networkIP)'
+  ask dev "¿qué IP tenía la versión antigua de antifraude?"
+  gcloud dns record-sets update antifraude.zentra.internal. --zone=zentra-interno --type=A --ttl=60 --rrdatas=$(gcloud compute instances describe antifraude-v2 --zone={{.zone}} --format='value(networkInterfaces[0].networkIP)')
+  gcloud dns record-sets list --zone=zentra-interno
+  ticket comment "Causa: el registro A antifraude.zentra.internal de la zona privada zentra-interno volvió a la IP de la v1 (10.40.1.250, ya apagada), probablemente por un Terraform antiguo relanzado. Actualizado a la IP de antifraude-v2. Pedido a Tarjetas que actualice el Terraform de DNS."
+  ticket update "Resuelto: tarjetas-front vuelve a consultar antifraude y /shop responde. El nombre interno apuntaba a la máquina antigua; lo hemos corregido."
+  ticket resolve "Registro DNS privado de antifraude actualizado a la IP de la v2; /shop responde 200."
+shortcuts:
+- name: reboot the frontend
+  run: |
+    gcloud compute instances reset tarjetas-front --zone={{.zone}}
+    ticket resolve "Reiniciado tarjetas-front para refrescar la conexión con antifraude."
+rubric:
+- name: Compras con antifraude
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:tarjetas-front:8080
+    path: /shop
+    status: 200
+    desc: /shop responde a través de antifraude
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: record-sets list|dig |nslookup
+    min: 1
+    desc: Registro DNS revisado
+  - type: command
+    regex: instances describe antifraude-v2|instances list
+    min: 1
+    desc: IP real comprobada
+- name: Documentado
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - dns
+      - registro
+      - record
+    - - 10.40.1.250
+      - v1
+      - antigua
+      - old
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: record-sets list
+  title: Qué dice el DNS
+  why: antifraude.zentra.internal → 10.40.1.250, la IP de la v1 apagada.
+- match: record-sets update
+  title: ''
+  why: El registro apunta a la v2; con TTL 60 s el cambio se nota en un minuto.
+en:
+  title: INC P2 · Anti-fraud "not responding" after the v2 migration
+  summary: 'The internal name antifraude.zentra.internal points to the old, decommissioned VM. The failure isn''t the app: it''s a private Cloud DNS record.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-tarjetas-prod*).
+
+    > **INC-31039 · P2** · *"Yesterday we migrated anti-fraud to the new VM (antifraude-v2) and today tarjetas-front returns 502 on /shop: "upstream request failed". v2 is up and responds if we call it by IP."*
+
+    "By IP it works, by name it doesn't" is the classic **DNS** clue. Zentra resolves its internal names with a **private Cloud DNS zone** (`zentra-interno`, visible only from `zentra-vpc`). Compare the IP `antifraude.zentra.internal` resolves to with `antifraude-v2`'s real IP and fix the record.
+  objectives:
+  - Reproduce the failure by name
+  - Compare the DNS record with the real IP
+  - Fix the record in the private zone
+  - Validate /shop and document
+  hints:
+  - '`gcloud dns record-sets list --zone=zentra-interno` and `gcloud compute instances describe antifraude-v2 --zone={{.zone}} --format=''value(networkInterfaces[0].networkIP)''`'
+  - '`gcloud dns record-sets update antifraude.zentra.internal. --zone=zentra-interno --type=A --ttl=60 --rrdatas=IP`'
+  ticket:
+    summary: 'Yesterday we migrated anti-fraud to the new VM (antifraude-v2) and today tarjetas-front returns 502 on /shop: "upstream request failed". v2 is up and responds if we call it by IP.'
+  text:
+    Equipo de Tarjetas: Cards team
+    Hugo Martín (Tarjetas): Hugo Martín (Cards)
+    Desarrollador de Tarjetas.: Cards developer.
+    tarjetas-front llama a http://antifraude.zentra.internal:8080/.: tarjetas-front calls http://antifraude.zentra.internal:8080/.
+    La v1 tenía la 10.40.1.250 y se apagó ayer. Anoche alguien relanzó el Terraform viejo de DNS…: v1 had 10.40.1.250 and was shut down yesterday. Last night someone re-ran the old DNS Terraform…
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Compras con antifraude: Purchases with anti-fraud
+    /shop responde a través de antifraude: /shop responds through anti-fraud
+    Diagnóstico: Diagnosis
+    Registro DNS revisado: DNS record checked
+    IP real comprobada: Real IP checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Qué dice el DNS: What DNS says
+    antifraude.zentra.internal → 10.40.1.250, la IP de la v1 apagada.: antifraude.zentra.internal → 10.40.1.250, the decommissioned v1's IP.
+    El registro apunta a la v2; con TTL 60 s el cambio se nota en un minuto.: The record points to v2; with a 60 s TTL the change shows within a minute.

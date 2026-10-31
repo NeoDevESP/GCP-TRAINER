@@ -675,6 +675,15 @@ sections:
     meta:
     - Nivel avanzado
     - Advanced level
+  - title:
+    - Semana 6 · Cierre de mes
+    - Week 6 · Month-end close
+    text:
+    - Conexiones de Cloud SQL agotadas, discos llenos de evidencia regulatoria, Private Google Access, prioridades de cortafuegos, DNS privado, APIs desactivadas, sondas de GKE y la factura de fin de mes.
+    - Exhausted Cloud SQL connections, disks full of regulatory evidence, Private Google Access, firewall priorities, private DNS, disabled APIs, GKE probes and the month-end bill.
+    meta:
+    - Nivel avanzado
+    - Advanced level
 people:
 - name: Marta Ibáñez
   email: marta.ibanez@zentra.dev

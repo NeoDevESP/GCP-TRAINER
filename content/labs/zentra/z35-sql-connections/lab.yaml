@@ -1,0 +1,228 @@
+id: zentra-z35-sql-connections
+title: 'INC P1 · Cierre de mes: la app no muestra el saldo'
+summary: 'Cuentas devuelve errores porque la base de datos rechaza conexiones. La causa no está en la aplicación: el cierre de mes conecta más clientes de los que caben.'
+track: zentra
+day: 35
+level: intermediate
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.cloudsql
+- observability.logging
+- observability.incident
+wellArchitected:
+- reliability
+- performance
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:cuentas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create cuentas-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create cuentas --instance=cuentas-db
+  gcloud sql users create app --instance=cuentas-db --password=pw-cuentas-1
+  gcloud run deploy cuentas-api --image=europe-docker.pkg.dev/gcplab-public/apps/inventory-api:1.0 --region={{.region}} --service-account=cuentas-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:cuentas-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:cuentas-db,DB_USER=app,DB_PASSWORD=pw-cuentas-1,DB_NAME=cuentas,DB_POOL_SIZE=5 --max-instances=4 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding cuentas-api --region={{.region}} --member=user:carla.mendez@zentra.dev --role=roles/run.invoker
+faults:
+- type: sql_extra_connections
+  instance: cuentas-db
+  count: '40'
+traffic:
+- name: saldos
+  target: run:cuentas-api
+  path: /stock
+  rps: 60
+  principal: user:carla.mendez@zentra.dev
+ticket:
+  id: INC-31035
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: NOC 24x7
+  summary: Desde las 18:00 (arranque del cierre de mes) la app muestra «No podemos cargar tu saldo» a muchos clientes. cuentas-api devuelve 503. No ha habido despliegues hoy.
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Para el cierre de mes lanzamos los informes contra producción.
+  facts:
+  - keywords:
+    - - conex
+      - connect
+      - cierre
+      - close
+      - informe
+      - report
+      - cuentas-db
+      - base de datos
+      - database
+    answer: 'Sí: la herramienta de informes del cierre abre unas 40 conexiones directas a cuentas-db durante dos días. Lo hacemos cada mes, pero este mes hay más informes.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Cualquier cambio en producción necesita un registro de cambio. Si es urgente, dime el riesgo y lo apruebo como cambio de emergencia.
+  facts:
+  - keywords:
+    - - tier
+      - tamaño
+      - size
+      - ampliar
+      - upgrade
+      - cambio
+      - change
+      - emergencia
+      - emergency
+      - disco
+      - disk
+    answer: Aprobado como cambio de emergencia (CHG-7741). Déjalo anotado en el ticket con el motivo.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **INC-31035 · P1** · *«Desde las 18:00 (arranque del cierre de mes) la app muestra «No podemos cargar tu saldo» a muchos clientes. cuentas-api devuelve 503. No ha habido despliegues hoy.»*
+
+  `cuentas-api` (Cloud Run, hasta 4 instancias con 5 conexiones cada una) usa la base de datos **`cuentas-db`** (Cloud SQL, PostgreSQL, tier `db-g1-small`: **50 conexiones como máximo**). Empieza por los registros de la base de datos y averigua **quién más** está conectado. Es un P1: primero el servicio, después la mejora. Un cambio de tamaño en producción necesita el visto bueno de **Gestión de cambios** (`ask change`).
+objectives:
+- Encuentra el error en los registros de Cloud SQL
+- Averigua quién más se conecta
+- Amplía la base de datos con un cambio aprobado
+- Propón separar los informes (réplica de lectura)
+hints:
+- text: '`gcloud logging read ''resource.type="cloudsql_database" severity>=ERROR'' --limit=3`'
+- text: 'Con `db-custom-2-7680` caben 200 conexiones: `gcloud sql instances patch cuentas-db --tier=db-custom-2-7680`.'
+solution: |
+  ticket
+  ticket update "Estamos revisando los errores al cargar el saldo. Próxima actualización en 30 minutos."
+  gcloud logging read 'resource.type="cloudsql_database" severity>=ERROR' --limit=3 --format='value(textPayload)'
+  gcloud sql instances describe cuentas-db
+  gcloud run services describe cuentas-api --region={{.region}}
+  ask data "¿quién más se conecta a cuentas-db durante el cierre?"
+  ask change "¿apruebas ampliar el tier de cuentas-db como cambio de emergencia?"
+  gcloud sql instances patch cuentas-db --tier=db-custom-2-7680 --quiet
+  sleep 120
+  gcloud sql instances describe cuentas-db
+  ticket comment "Causa: el cierre de mes abre ~40 conexiones de informes directamente contra cuentas-db; con las 20 de cuentas-api se pasaba del max_connections de 50 de db-g1-small. Ampliado a db-custom-2-7680 (200 conexiones) con el cambio de emergencia CHG-7741. Propuesta: una réplica de lectura para los informes de Datos."
+  ticket update "Resuelto: los clientes ya ven su saldo. La base de datos se quedaba sin conexiones por los informes del cierre de mes; la hemos ampliado y propondremos separar los informes para que no vuelva a pasar."
+  ticket resolve "Ampliado cuentas-db a db-custom-2-7680 (CHG-7741); conexiones por debajo del máximo y saldos visibles."
+shortcuts:
+- name: restart the database
+  run: |
+    gcloud sql instances restart cuentas-db --quiet
+    ticket resolve "Reiniciada la base de datos de cuentas."
+rubric:
+- name: Saldos visibles
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: sql_healthy
+    instance: cuentas-db
+    settle: 2
+    desc: Conexiones por debajo del máximo
+  - type: http
+    target: run:cuentas-api
+    path: /stock
+    principal: user:carla.mendez@zentra.dev
+    status: 200
+    desc: cuentas-api responde
+- name: Cambio aprobado
+  validator: security
+  points: 20
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Pedido el visto bueno de Gestión de cambios
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: logging read|sql instances describe
+    min: 2
+    desc: Registros e instancia revisados
+  - type: asked
+    actor: data
+    min: 1
+    desc: Preguntado quién más se conecta
+- name: Causa y propuesta
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - max_connections
+      - conexiones
+      - connections
+    - - réplica
+      - replica
+      - informes
+      - reports
+    desc: Nota con la causa y la propuesta
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: cloudsql_database
+  title: Los registros de la base de datos
+  why: '«remaining connection slots are reserved»: la base de datos no acepta más conexiones.'
+- match: ask data
+  title: ''
+  why: 40 conexiones de informes + 20 de la app = 60, y el máximo es 50.
+- match: patch cuentas-db --tier
+  title: Más tamaño, más conexiones
+  why: db-custom-2-7680 admite 200. A medio plazo, los informes deberían ir contra una réplica de lectura.
+en:
+  title: 'INC P1 · Month-end close: the app won''t show balances'
+  summary: 'Accounts returns errors because the database refuses connections. The cause isn''t in the app: the month-end close connects more clients than fit.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **INC-31035 · P1** · *"Since 18:00 (month-end close start) the app shows "We can't load your balance" to many customers. cuentas-api returns 503. There have been no deployments today."*
+
+    `cuentas-api` (Cloud Run, up to 4 instances with 5 connections each) uses the **`cuentas-db`** database (Cloud SQL, PostgreSQL, tier `db-g1-small`: **at most 50 connections**). Start with the database logs and find out **who else** is connected. It's a P1: service first, improvement later. A production size change needs **Change management**'s OK (`ask change`).
+  objectives:
+  - Find the error in the Cloud SQL logs
+  - Find out who else connects
+  - Scale the database with an approved change
+  - Propose separating reports (read replica)
+  hints:
+  - '`gcloud logging read ''resource.type="cloudsql_database" severity>=ERROR'' --limit=3`'
+  - '`db-custom-2-7680` allows 200 connections: `gcloud sql instances patch cuentas-db --tier=db-custom-2-7680`.'
+  ticket:
+    summary: Since 18:00 (month-end close start) the app shows "We can't load your balance" to many customers. cuentas-api returns 503. There have been no deployments today.
+  text:
+    NOC 24x7: NOC 24x7
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Para el cierre de mes lanzamos los informes contra producción.: For month-end close we run the reports against production.
+    ? 'Sí: la herramienta de informes del cierre abre unas 40 conexiones directas a cuentas-db durante dos días. Lo hacemos cada mes, pero este mes hay más informes.'
+    : 'Yes: the close reporting tool opens about 40 direct connections to cuentas-db for two days. We do it every month, but there are more reports this month.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    ? Cualquier cambio en producción necesita un registro de cambio. Si es urgente, dime el riesgo y lo apruebo como cambio de emergencia.
+    : Any production change needs a change record. If it's urgent, tell me the risk and I'll approve it as an emergency change.
+    Aprobado como cambio de emergencia (CHG-7741). Déjalo anotado en el ticket con el motivo.: Approved as an emergency change (CHG-7741). Note it in the ticket with the reason.
+    Saldos visibles: Balances visible
+    Conexiones por debajo del máximo: Connections under the maximum
+    cuentas-api responde: cuentas-api responds
+    Cambio aprobado: Approved change
+    Pedido el visto bueno de Gestión de cambios: Change management's OK requested
+    Diagnóstico: Diagnosis
+    Registros e instancia revisados: Logs and instance checked
+    Preguntado quién más se conecta: Asked who else connects
+    Causa y propuesta: Cause and proposal
+    Nota con la causa y la propuesta: Note with the cause and the proposal
+    Ticket cerrado: Ticket closed
+    Los registros de la base de datos: The database logs
+    '«remaining connection slots are reserved»: la base de datos no acepta más conexiones.': '"remaining connection slots are reserved": the database accepts no more connections.'
+    40 conexiones de informes + 20 de la app = 60, y el máximo es 50.: 40 report connections + 20 from the app = 60, and the maximum is 50.
+    Más tamaño, más conexiones: Bigger size, more connections
+    db-custom-2-7680 admite 200. A medio plazo, los informes deberían ir contra una réplica de lectura.: db-custom-2-7680 allows 200. In the medium term, reports should go to a read replica.

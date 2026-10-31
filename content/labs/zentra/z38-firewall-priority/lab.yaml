@@ -1,0 +1,203 @@
+id: zentra-z38-firewall-priority
+title: 'INC P1 · Las tarjetas no autorizan: «connection timed out» hacia pagos'
+summary: Una regla de denegación de Seguridad cambió de prioridad y ahora gana a la regla que permite el tráfico. Se arregla con la prioridad correcta, no borrando la regla.
+track: zentra
+day: 38
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.firewall
+- security.audit
+- observability.incident
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create pagos-core --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=pagos --metadata=sim-preinstalled=docker-images,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/hello:1.0'
+  gcloud compute instances create tarjetas-autorizador --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=tarjetas
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-tarjetas-a-pagos --network=zentra-vpc --allow=tcp:8080 --source-tags=tarjetas --target-tags=pagos --priority=1000
+  gcloud compute firewall-rules create seg-deny-resto-a-pagos --network=zentra-vpc --action=DENY --rules=tcp:8080 --source-ranges=10.40.0.0/16 --target-tags=pagos --priority=65000 --description="Seguridad: solo los servicios autorizados hablan con pagos"
+faults:
+- type: firewall_priority
+  rule: seg-deny-resto-a-pagos
+  priority: 900
+  actor: seg-endurecimiento@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31038
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: Equipo de Tarjetas
+  summary: 'Desde hace 20 minutos las compras con tarjeta se rechazan: el autorizador no llega a pagos-core (connection timed out en el 8080). Nosotros no hemos desplegado nada.'
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: 'Las reglas seg-* son nuestras: no se borran. Si algo bloquea de más, dímelo y lo vemos.'
+  facts:
+  - keywords:
+    - - prioridad
+      - priority
+      - seg-deny
+      - regla
+      - rule
+      - '900'
+      - '65000'
+    answer: ¡Uy! El script de endurecimiento le puso prioridad 900. Esa regla es la red de seguridad y debe ir en 65000, por debajo de las allow. Devuélvela a 65000, no la borres.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31038 · P1** · *«Desde hace 20 minutos las compras con tarjeta se rechazan: el autorizador no llega a pagos-core (connection timed out en el 8080). Nosotros no hemos desplegado nada.»*
+
+  En una VPC, cuando varias reglas de cortafuegos coinciden, **gana la de número de prioridad más bajo** (0 es la más fuerte, 65535 la más débil). Pagos tiene una regla que permite a tarjetas (`allow-tarjetas-a-pagos`) y una «red de seguridad» de Seguridad que deniega al resto (`seg-deny-resto-a-pagos`). Comprueba qué regla está ganando, busca quién la cambió y arréglalo **sin borrar** las reglas de Seguridad.
+objectives:
+- Compara las reglas y sus prioridades
+- Encuentra el cambio en la auditoría
+- Restaura la prioridad con el OK de Seguridad
+- Valida que el resto sigue bloqueado
+hints:
+- text: '`gcloud compute firewall-rules list --filter=''network:zentra-vpc'' --format=''table(name,priority,direction,sourceTags.list(),targetTags.list(),allowed[].map().firewall_rule().list(),denied[].map().firewall_rule().list())''`'
+- text: '`gcloud compute firewall-rules update seg-deny-resto-a-pagos --priority=65000`'
+solution: |
+  ticket
+  ticket update "Estamos revisando el rechazo de compras con tarjeta. Próxima actualización en 15 minutos."
+  gcloud compute firewall-rules list --filter='network:zentra-vpc'
+  gcloud compute firewall-rules describe seg-deny-resto-a-pagos
+  gcloud logging read 'protoPayload.methodName:"firewalls.patch"' --limit=3
+  ask security "¿la regla seg-deny-resto-a-pagos debe estar en prioridad 900?"
+  gcloud compute firewall-rules update seg-deny-resto-a-pagos --priority=65000
+  gcloud compute firewall-rules describe seg-deny-resto-a-pagos --format='value(priority)'
+  ticket comment "Causa: el script de endurecimiento de Seguridad (seg-endurecimiento) cambió seg-deny-resto-a-pagos de prioridad 65000 a 900; al tener número más bajo que allow-tarjetas-a-pagos (1000), la denegación ganaba. Devuelta a 65000 con el OK de Nadia. La regla sigue bloqueando al resto de orígenes."
+  ticket update "Resuelto: las compras con tarjeta vuelven a autorizarse. Un cambio automático en el cortafuegos bloqueaba la comunicación con pagos; está corregido y seguridad lo revisa."
+  ticket resolve "Prioridad de seg-deny-resto-a-pagos devuelta a 65000; tarjetas llega a pagos y el resto sigue bloqueado."
+shortcuts:
+- name: delete the security rule
+  run: |
+    gcloud compute firewall-rules delete seg-deny-resto-a-pagos --quiet
+    ticket resolve "Borrada la regla que bloqueaba el tráfico a pagos."
+rubric:
+- name: Tarjetas autoriza
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    from: vm:tarjetas-autorizador
+    target: vm:pagos-core:8080
+    path: /
+    status: 200
+    desc: El autorizador llega a pagos
+- name: Red de seguridad intacta
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: firewalls["seg-deny-resto-a-pagos"]
+    expect:
+      action: DENY
+    desc: La regla de Seguridad sigue existiendo
+  - type: tcp
+    from: vm:ops-consola
+    to: vm:pagos-core
+    port: 8080
+    expect: false
+    desc: Otros orígenes siguen bloqueados
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: firewall-rules (list|describe)|logging read
+    min: 2
+    desc: Reglas y auditoría revisadas
+  - type: asked
+    actor: security
+    min: 1
+    desc: Consultado con Seguridad
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - prioridad
+      - priority
+    - - '900'
+      - '65000'
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: firewall-rules list
+  title: Todas las reglas
+  why: 'allow 1000 frente a deny 900: gana el número más bajo, la denegación.'
+- match: firewalls.patch
+  title: Quién lo cambió
+  why: La auditoría muestra la cuenta del script de endurecimiento.
+- match: --priority=65000
+  title: ''
+  why: La denegación vuelve a ser la red de seguridad, por debajo de las allow.
+en:
+  title: 'INC P1 · Cards won''t authorize: "connection timed out" to payments'
+  summary: A Security deny rule changed priority and now beats the rule that allows the traffic. It's fixed with the right priority, not by deleting the rule.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31038 · P1** · *"For 20 minutes card purchases have been declined: the authorizer can't reach pagos-core (connection timed out on 8080). We haven't deployed anything."*
+
+    In a VPC, when several firewall rules match, **the one with the lowest priority number wins** (0 is the strongest, 65535 the weakest). Payments has a rule allowing cards (`allow-tarjetas-a-pagos`) and a Security "safety net" denying everyone else (`seg-deny-resto-a-pagos`). Check which rule is winning, find who changed it and fix it **without deleting** Security's rules.
+  objectives:
+  - Compare the rules and their priorities
+  - Find the change in the audit log
+  - Restore the priority with Security's OK
+  - Check everyone else is still blocked
+  hints:
+  - '`gcloud compute firewall-rules list --filter=''network:zentra-vpc'' --format=''table(name,priority,direction,sourceTags.list(),targetTags.list(),allowed[].map().firewall_rule().list(),denied[].map().firewall_rule().list())''`'
+  - '`gcloud compute firewall-rules update seg-deny-resto-a-pagos --priority=65000`'
+  ticket:
+    summary: 'For 20 minutes card purchases have been declined: the authorizer can''t reach pagos-core (connection timed out on 8080). We haven''t deployed anything.'
+  text:
+    Equipo de Tarjetas: Cards team
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    'Las reglas seg-* son nuestras: no se borran. Si algo bloquea de más, dímelo y lo vemos.': 'The seg-* rules are ours: they don''t get deleted. If something blocks too much, tell me and we''ll look at it.'
+    ? ¡Uy! El script de endurecimiento le puso prioridad 900. Esa regla es la red de seguridad y debe ir en 65000, por debajo de las allow. Devuélvela a 65000, no la borres.
+    : Oops! The hardening script set it to priority 900. That rule is the safety net and must be at 65000, below the allow rules. Put it back to 65000, don't delete it.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Tarjetas autoriza: Cards authorize
+    El autorizador llega a pagos: The authorizer reaches payments
+    Red de seguridad intacta: Safety net intact
+    La regla de Seguridad sigue existiendo: The Security rule still exists
+    Otros orígenes siguen bloqueados: Other sources still blocked
+    Diagnóstico: Diagnosis
+    Reglas y auditoría revisadas: Rules and audit checked
+    Consultado con Seguridad: Checked with Security
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Todas las reglas: All the rules
+    'allow 1000 frente a deny 900: gana el número más bajo, la denegación.': 'allow 1000 vs deny 900: the lowest number wins, the deny.'
+    Quién lo cambió: Who changed it
+    La auditoría muestra la cuenta del script de endurecimiento.: The audit log shows the hardening script's account.
+    La denegación vuelve a ser la red de seguridad, por debajo de las allow.: The deny is the safety net again, below the allow rules.

@@ -1,0 +1,193 @@
+id: zentra-z40-api-disabled
+title: INC P2 · BigQuery dice «API has not been used… or it is disabled»
+summary: Un script de limpieza de FinOps desactivó la API de BigQuery «porque no se usaba». Encuéntralo en la auditoría, vuelve a activarla y evita que se repita.
+track: zentra
+day: 40
+level: intermediate
+branch: foundations
+type: incident
+mode: production
+skills:
+- foundations.apis
+- security.audit
+- observability.logging
+wellArchitected:
+- operations
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 2
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud services enable bigquery.googleapis.com
+  bq mk --location=EU zentra_riesgo
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.user
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.dataViewer
+faults:
+- type: command
+  actor: finops-limpieza@{{.project}}.iam.gserviceaccount.com
+  run: gcloud services disable bigquery.googleapis.com --force
+ticket:
+  id: INC-31040
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Sara Benítez (Datos)
+  summary: 'Las consultas del informe de riesgo fallan: «BigQuery API has not been used in project … before or it is disabled». ¿Habéis tocado algo? Los datos siguen ahí, ¿no?'
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Nosotros no hemos tocado nada esta semana.
+  facts: []
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: FinOps.
+  fallback: Necesito saber qué ha subido, de quién es y qué se puede apagar.
+  facts:
+  - keywords:
+    - - script
+      - limpieza
+      - clean
+      - api
+      - desactiv
+      - disable
+      - bigquery
+    answer: Sí, el script finops-limpieza desactiva APIs sin llamadas en 30 días. BigQuery solo se usa a fin de mes… Añadimos una lista de excepciones; actívala.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **INC-31040 · P2** · *«Las consultas del informe de riesgo fallan: «BigQuery API has not been used in project … before or it is disabled». ¿Habéis tocado algo? Los datos siguen ahí, ¿no?»*
+
+  En Google Cloud cada servicio se usa a través de su **API**, que se activa o desactiva por proyecto. Desactivar una API **no borra los datos**, pero todo lo que la usa deja de funcionar. Quién la desactivó queda en los **registros de auditoría** (`DisableService`). Actívala, encuentra el origen y que no se repita.
+objectives:
+- Comprueba qué APIs están activas
+- Encuentra quién la desactivó
+- Vuelve a activar BigQuery
+- Pide la excepción y tranquiliza a Datos
+hints:
+- text: '`gcloud services list --enabled` y `gcloud logging read ''protoPayload.methodName:DisableService'' --limit=3`'
+- text: '`gcloud services enable bigquery.googleapis.com`'
+solution: |
+  ticket
+  gcloud services list --enabled
+  gcloud logging read 'protoPayload.methodName:DisableService' --limit=3
+  ask finops "¿el script de limpieza ha desactivado la API de BigQuery?"
+  gcloud services enable bigquery.googleapis.com
+  bq ls
+  ticket comment "Causa: el script finops-limpieza desactivó bigquery.googleapis.com por no tener llamadas en 30 días (BigQuery solo se usa a fin de mes). Reactivada. FinOps añade una lista de excepciones para las APIs de cierre de mes. Los datasets no se han perdido."
+  ticket update "Hola Sara: ya podéis lanzar las consultas. Un proceso automático de ahorro desactivó la API de BigQuery; la hemos vuelto a activar y vuestros datos están intactos (desactivar una API no borra datos)."
+  ticket resolve "Reactivada la API de BigQuery desactivada por finops-limpieza; datasets intactos y excepción pedida."
+shortcuts:
+- name: make Sara admin
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:sara.benitez@zentra.dev --role=roles/bigquery.admin
+    ticket resolve "Dado BigQuery Admin a Sara para que pueda consultar."
+rubric:
+- name: BigQuery disponible
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: services
+    expect:
+      '["bigquery.googleapis.com"]': true
+    desc: bigquery.googleapis.com activa
+  - type: iam
+    principal: user:sara.benitez@zentra.dev
+    permission: bigquery.jobs.create
+    resource: project
+    desc: Sara puede lanzar consultas (por su grupo)
+- name: Sin permisos de más
+  validator: security
+  points: 20
+  checks:
+  - type: iam
+    principal: user:sara.benitez@zentra.dev
+    permission: bigquery.datasets.delete
+    resource: project
+    expect: false
+    desc: Sara no es administradora
+- name: Origen encontrado
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: logging read.*DisableService|services list
+    min: 1
+    desc: Auditoría o APIs revisadas
+  - type: asked
+    actor: finops
+    min: 1
+    desc: Hablado con FinOps
+- name: Documentado
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - finops
+      - script
+      - limpieza
+    - - excepci
+      - exception
+    desc: Nota con la causa y la prevención
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: DisableService
+  title: La auditoría
+  why: finops-limpieza llamó a DisableService sobre bigquery.googleapis.com.
+- match: services enable
+  title: ''
+  why: La API vuelve; los datasets nunca se fueron.
+en:
+  title: INC P2 · BigQuery says "API has not been used… or it is disabled"
+  summary: A FinOps clean-up script disabled the BigQuery API "because it wasn't used". Find it in the audit log, turn it back on and stop it from happening again.
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **INC-31040 · P2** · *"The risk report queries fail: "BigQuery API has not been used in project … before or it is disabled". Did you change something? The data is still there, right?"*
+
+    In Google Cloud each service is used through its **API**, enabled or disabled per project. Disabling an API **doesn't delete the data**, but everything that uses it stops working. Who disabled it is in the **audit logs** (`DisableService`). Turn it on, find the source and stop it from happening again.
+  objectives:
+  - Check which APIs are enabled
+  - Find who disabled it
+  - Turn BigQuery back on
+  - Request the exception and reassure Data
+  hints:
+  - '`gcloud services list --enabled` and `gcloud logging read ''protoPayload.methodName:DisableService'' --limit=3`'
+  - '`gcloud services enable bigquery.googleapis.com`'
+  ticket:
+    summary: 'The risk report queries fail: "BigQuery API has not been used in project … before or it is disabled". Did you change something? The data is still there, right?'
+  text:
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Nosotros no hemos tocado nada esta semana.: We haven't touched anything this week.
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    FinOps.: FinOps.
+    Necesito saber qué ha subido, de quién es y qué se puede apagar.: I need to know what went up, whose it is and what can be switched off.
+    ? Sí, el script finops-limpieza desactiva APIs sin llamadas en 30 días. BigQuery solo se usa a fin de mes… Añadimos una lista de excepciones; actívala.
+    : Yes, the finops-limpieza script disables APIs with no calls in 30 days. BigQuery is only used at month end… We'll add an exception list; turn it on.
+    BigQuery disponible: BigQuery available
+    bigquery.googleapis.com activa: bigquery.googleapis.com enabled
+    Sara puede lanzar consultas (por su grupo): Sara can run queries (through her group)
+    Sin permisos de más: No extra permissions
+    Sara no es administradora: Sara isn't an admin
+    Origen encontrado: Source found
+    Auditoría o APIs revisadas: Audit or APIs checked
+    Hablado con FinOps: Talked to FinOps
+    Documentado: Documented
+    Nota con la causa y la prevención: Note with the cause and the prevention
+    Ticket cerrado: Ticket closed
+    La auditoría: The audit log
+    finops-limpieza llamó a DisableService sobre bigquery.googleapis.com.: finops-limpieza called DisableService on bigquery.googleapis.com.
+    La API vuelve; los datasets nunca se fueron.: The API is back; the datasets never left.

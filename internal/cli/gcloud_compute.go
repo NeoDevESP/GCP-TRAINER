@@ -384,6 +384,10 @@ func init() {
 					return out, err
 				}
 				vm.Status = status
+				if os := vm.OS; os != nil && (verb == "reset" || verb == "start") && os.PendingGB > os.DiskGB {
+					// the guest grows the root partition at boot
+					os.DiskGB, os.PendingGB, os.Grown = os.PendingGB, 0, false
+				}
 				if verb == "reset" {
 					for k := range c.S.State.Extra {
 						if strings.HasPrefix(k, "svc:"+p.ID+"/"+vm.Name+"/") && c.S.State.Extra[k] == "stopped" {
@@ -1216,6 +1220,15 @@ func init() {
 			return nil, fmt.Errorf("Disk size cannot be decreased (%d < %d GB)", sz, d.SizeGB)
 		}
 		d.SizeGB = sz
+		c.Audit("compute.googleapis.com", "v1.compute.disks.resize", "projects/"+p.ID+"/zones/"+d.Zone+"/disks/"+n)
+		// A grown boot disk: the guest still sees the old size until the
+		// partition and file system are extended.
+		for _, vm := range p.Instances {
+			if (vm.Name == n || contains(vm.Disks, n)) && vm.OS != nil && sz > vm.OS.DiskGB {
+				vm.OS.PendingGB = sz
+				return fmt.Sprintf("Updated [https://www.googleapis.com/compute/v1/projects/%s/zones/%s/disks/%s].\nWARNING: You must resize the partition and file system inside the VM (growpart + resize2fs) or reboot it to use the new space.\n", p.ID, d.Zone, n), nil
+			}
+		}
 		return "Updated.\n", nil
 	})
 	reg("compute instances attach-disk", func(c *Cmd) (any, error) {

@@ -36,6 +36,10 @@ type VMOS struct {
 	DiskGB     int                     `json:"diskGb"`
 	BaseUsedGB float64                 `json:"baseUsedGb"` // OS + packages
 	Services   map[string]*ServiceSpec `json:"services"`
+	// PendingGB is a boot disk grown in Compute Engine whose partition and
+	// file system haven't been extended yet (growpart + resize2fs, or a reboot).
+	PendingGB int  `json:"pendingGb,omitempty"`
+	Grown     bool `json:"partitionGrown,omitempty"`
 }
 
 // OS returns (creating) the guest OS of a VM.

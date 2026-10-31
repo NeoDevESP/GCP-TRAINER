@@ -1,0 +1,207 @@
+id: zentra-z37-private-google-access
+title: INC P2 · El extractor regulatorio no sube los ficheros a Cloud Storage
+summary: La subred de datos no tiene salida a internet a propósito; llega a Google por Private Google Access, y alguien lo desactivó. Se arregla sin abrir internet.
+track: zentra
+day: 37
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.vpc
+- networking.nat
+- observability.logging
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --nat-custom-subnet-ip-ranges=apps,gke
+  gcloud iam service-accounts create extractor-sa --display-name="extractor regulatorio"
+  gcloud storage buckets create gs://zentra-regulatorio-{{.project}} --location=EU --uniform-bucket-level-access
+  gcloud storage buckets add-iam-policy-binding gs://zentra-regulatorio-{{.project}} --member=serviceAccount:extractor-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectCreator
+  gcloud compute instances create extractor-regulatorio --zone={{.zone}} --machine-type=e2-small --subnet=datos --no-address --tags=extractor --service-account=extractor-sa@{{.project}}.iam.gserviceaccount.com --scopes=cloud-platform --metadata=sim-preinstalled=docker-images,startup-script='docker run -d -p 8080:8080 -e BUCKET=zentra-regulatorio-{{.project}} europe-docker.pkg.dev/gcplab-public/apps/uploader:1.0'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-extractor --network=zentra-vpc --allow=tcp:8080 --source-tags=ops --target-tags=extractor
+faults:
+- type: subnet_pga_off
+  subnet: datos
+  actor: terraform-red@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31037
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Riesgos · Reporting regulatorio
+  summary: 'El extractor-regulatorio no consigue subir el fichero diario al bucket: «dial tcp storage.googleapis.com:443: i/o timeout». Ayer funcionaba. Hay que entregarlo antes de las 10:00.'
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red.
+  fallback: 'La subred datos no sale a internet por diseño: ni NAT ni IP pública.'
+  facts:
+  - keywords:
+    - - private google access
+      - acceso privado
+      - pga
+      - terraform
+      - subred
+      - subnet
+      - datos
+    answer: Ayer aplicamos un Terraform de la red y puede que la subred datos perdiera el Private Google Access. Vuelve a activarlo; nada de NAT ni IP pública en datos.
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: 'Las reglas seg-* son nuestras: no se borran. Si algo bloquea de más, dímelo y lo vemos.'
+  facts:
+  - keywords:
+    - - prioridad
+      - priority
+      - seg-deny
+      - regla
+      - rule
+      - '900'
+      - '65000'
+    answer: ¡Uy! El script de endurecimiento le puso prioridad 900. Esa regla es la red de seguridad y debe ir en 65000, por debajo de las allow. Devuélvela a 65000, no la borres.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-riesgos-prod*).
+
+  > **INC-31037 · P2** · *«El extractor-regulatorio no consigue subir el fichero diario al bucket: «dial tcp storage.googleapis.com:443: i/o timeout». Ayer funcionaba. Hay que entregarlo antes de las 10:00.»*
+
+  La VM vive en la subred **`datos`**, que por norma **no sale a internet** (Cloud NAT solo cubre `apps` y `gke`). Para hablar con las APIs de Google (Cloud Storage, BigQuery…) sin internet existe **Private Google Access**, que se activa por subred. Revisa la subred, busca en la auditoría quién la cambió y arréglalo **sin** dar salida a internet a los datos.
+objectives:
+- Comprueba la ruta de la VM a las APIs de Google
+- Encuentra el cambio en la auditoría
+- Vuelve a activar Private Google Access
+- Valida que datos sigue sin internet
+hints:
+- text: '`gcloud compute networks subnets describe datos --region={{.region}} --format=''value(privateIpGoogleAccess)''`'
+- text: '`gcloud compute networks subnets update datos --region={{.region}} --enable-private-ip-google-access`'
+solution: |
+  ticket
+  gcloud compute networks subnets describe datos --region={{.region}}
+  gcloud compute routers nats describe zentra-nat --router=zentra-router --region={{.region}}
+  gcloud logging read 'protoPayload.methodName:"setPrivateIpGoogleAccess"' --limit=3
+  ask network "¿qué cambió ayer en la subred datos?"
+  gcloud compute networks subnets update datos --region={{.region}} --enable-private-ip-google-access
+  gcloud compute networks subnets describe datos --region={{.region}} --format='value(privateIpGoogleAccess)'
+  ticket comment "Causa: el Terraform de red de ayer (terraform-red) desactivó Private Google Access en la subred datos; sin NAT ni IP pública, la VM no llegaba a storage.googleapis.com. Reactivado PGA; la subred sigue sin salida a internet. Pedido a Red que fije privateIpGoogleAccess=true en su Terraform."
+  ticket update "Resuelto: el extractor vuelve a subir el fichero diario al bucket. Un cambio de red de ayer le quitó el acceso privado a Google; está restaurado sin abrir internet."
+  ticket resolve "Reactivado Private Google Access en la subred datos; el extractor sube a Cloud Storage y datos sigue sin internet."
+shortcuts:
+- name: give datos internet through NAT
+  run: |
+    gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --nat-all-subnet-ip-ranges
+    ticket resolve "Añadida la subred datos al NAT para que salga a Google."
+rubric:
+- name: Fichero entregado
+  validator: functional
+  points: 35
+  all: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:extractor-regulatorio:8080
+    path: /upload
+    status: 200
+    desc: El extractor sube a Cloud Storage
+  - type: google_api
+    from: vm:extractor-regulatorio
+    expect: true
+    desc: Llega a las APIs de Google
+- name: Datos sin internet
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: egress
+    from: vm:extractor-regulatorio
+    expect: false
+    desc: La subred datos sigue sin salida a internet
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: subnets describe|logging read
+    min: 2
+    desc: Subred y auditoría revisadas
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - private google access
+      - pga
+      - acceso privado
+    - - terraform
+      - subred
+      - subnet
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: subnets describe datos
+  title: La subred
+  why: 'privateIpGoogleAccess: false. Sin NAT ni IP pública, no hay camino a storage.googleapis.com.'
+- match: setPrivateIpGoogleAccess
+  title: Quién lo cambió
+  why: La auditoría muestra la cuenta del Terraform de red.
+- match: enable-private-ip-google-access
+  title: ''
+  why: Acceso a las APIs de Google por la red interna de Google, sin internet.
+en:
+  title: INC P2 · The regulatory extractor can't upload files to Cloud Storage
+  summary: The data subnet has no internet egress on purpose; it reaches Google through Private Google Access, and someone turned it off. Fix it without opening the internet.
+  story: |-
+    **Project `{{.project}}`** (*zentra-riesgos-prod*).
+
+    > **INC-31037 · P2** · *"extractor-regulatorio can't upload the daily file to the bucket: "dial tcp storage.googleapis.com:443: i/o timeout". It worked yesterday. It must be delivered before 10:00."*
+
+    The VM lives in the **`datos`** subnet, which by rule **has no internet egress** (Cloud NAT only covers `apps` and `gke`). To talk to Google APIs (Cloud Storage, BigQuery…) without internet there is **Private Google Access**, enabled per subnet. Check the subnet, find who changed it in the audit log and fix it **without** giving the data internet egress.
+  objectives:
+  - Check the VM's path to Google APIs
+  - Find the change in the audit log
+  - Turn Private Google Access back on
+  - Check datos still has no internet
+  hints:
+  - '`gcloud compute networks subnets describe datos --region={{.region}} --format=''value(privateIpGoogleAccess)''`'
+  - '`gcloud compute networks subnets update datos --region={{.region}} --enable-private-ip-google-access`'
+  ticket:
+    summary: 'extractor-regulatorio can''t upload the daily file to the bucket: "dial tcp storage.googleapis.com:443: i/o timeout". It worked yesterday. It must be delivered before 10:00.'
+  text:
+    Riesgos · Reporting regulatorio: Risk · Regulatory reporting
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red.: Network architect.
+    'La subred datos no sale a internet por diseño: ni NAT ni IP pública.': 'The datos subnet has no internet egress by design: no NAT, no public IP.'
+    ? Ayer aplicamos un Terraform de la red y puede que la subred datos perdiera el Private Google Access. Vuelve a activarlo; nada de NAT ni IP pública en datos.
+    : Yesterday we applied a network Terraform and the datos subnet may have lost Private Google Access. Turn it back on; no NAT or public IP in datos.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    'Las reglas seg-* son nuestras: no se borran. Si algo bloquea de más, dímelo y lo vemos.': 'The seg-* rules are ours: they don''t get deleted. If something blocks too much, tell me and we''ll look at it.'
+    ? ¡Uy! El script de endurecimiento le puso prioridad 900. Esa regla es la red de seguridad y debe ir en 65000, por debajo de las allow. Devuélvela a 65000, no la borres.
+    : Oops! The hardening script set it to priority 900. That rule is the safety net and must be at 65000, below the allow rules. Put it back to 65000, don't delete it.
+    Fichero entregado: File delivered
+    El extractor sube a Cloud Storage: The extractor uploads to Cloud Storage
+    Llega a las APIs de Google: Reaches Google APIs
+    Datos sin internet: Data without internet
+    La subred datos sigue sin salida a internet: The datos subnet still has no internet egress
+    Diagnóstico: Diagnosis
+    Subred y auditoría revisadas: Subnet and audit checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    La subred: The subnet
+    'privateIpGoogleAccess: false. Sin NAT ni IP pública, no hay camino a storage.googleapis.com.': 'privateIpGoogleAccess: false. With no NAT or public IP, there''s no path to storage.googleapis.com.'
+    Quién lo cambió: Who changed it
+    La auditoría muestra la cuenta del Terraform de red.: The audit log shows the network Terraform account.
+    Acceso a las APIs de Google por la red interna de Google, sin internet.: Access to Google APIs over Google's internal network, without internet.

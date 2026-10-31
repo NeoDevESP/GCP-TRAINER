@@ -513,7 +513,7 @@ func (s *Session) vmCommand(p *sim.Project, vm *sim.Instance, from sim.Endpoint,
 	case "journalctl":
 		_, console := s.State.VMListeners(p.ID, vm)
 		return strings.Join(console, "\n") + "\n", nil
-	case "ls", "chmod", "chown", "chgrp", "df", "du", "rm", "truncate", "find", "stat", "id", "usermod", "groups", "logrotate":
+	case "ls", "chmod", "chown", "chgrp", "df", "du", "rm", "truncate", "find", "stat", "id", "usermod", "groups", "logrotate", "growpart", "resize2fs", "xfs_growfs":
 		return s.vmOSCommand(vm, toks)
 	case "cat", "grep", "head", "tail", "wc", "awk", "echo":
 		if toks[0] == "cat" && len(toks) > 1 && vm.OS != nil {

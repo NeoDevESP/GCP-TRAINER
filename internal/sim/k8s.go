@@ -172,6 +172,28 @@ type K8sService struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
+// Internal reports whether a LoadBalancer Service asks GKE for an internal
+// load balancer (reachable only from the VPC).
+func (svc *K8sService) Internal() bool {
+	return strings.EqualFold(svc.Annotations["networking.gke.io/load-balancer-type"], "Internal") ||
+		strings.EqualFold(svc.Annotations["cloud.google.com/load-balancer-type"], "Internal")
+}
+
+// clusterSubnetIP allocates an address in the cluster's node subnet.
+func (s *State) clusterSubnetIP(c *Cluster) string {
+	for _, pid := range SortedKeys(s.Projects) {
+		p := s.Projects[pid]
+		for _, cl := range p.Clusters {
+			if cl == c {
+				if sn := p.Subnets[c.Subnet]; sn != nil {
+					return s.AllocIP(sn.Range)
+				}
+			}
+		}
+	}
+	return ""
+}
+
 type SvcPort struct {
 	Name       string `json:"name,omitempty"`
 	Port       int    `json:"port"`
@@ -545,6 +567,9 @@ func (s *State) k8sExternalCall(project, ip string, port int, path string, req H
 			for _, sn := range SortedKeys(ns.Services) {
 				svc := ns.Services[sn]
 				if svc.ExternalIP == ip && svc.Type == "LoadBalancer" {
+					if svc.Internal() && (req.From.Kind == "internet" || req.From.Kind == "" || req.From.Network != c.Network) {
+						return HTTPResponse{Target: "k8s:" + svc.Name, Error: fmt.Sprintf("Failed to connect to %s port %d: Connection timed out (internal load balancer, only reachable from %s)", ip, port, c.Network)}, true
+					}
 					return s.k8sServiceCall(project, c, nsName, svc, port, path, req.From), true
 				}
 			}
@@ -848,6 +873,12 @@ func (s *State) applyObject(c *Cluster, defaultNS string, m map[string]any) (str
 		}
 		if svc.Type == "LoadBalancer" && svc.ExternalIP == "" {
 			svc.ExternalIP = s.ExternalIP()
+			if svc.Internal() {
+				// internal passthrough load balancer: an IP of the cluster's subnet
+				if ip := s.clusterSubnetIP(c); ip != "" {
+					svc.ExternalIP = ip
+				}
+			}
 		}
 		ns.Services[name] = svc
 		return "service/" + name + " " + createdOr(old == nil), nil
