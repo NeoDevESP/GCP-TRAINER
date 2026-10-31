@@ -1,0 +1,72 @@
+CLOUD MASTERY · versión portátil
+================================
+
+Simulador de Google Cloud para aprender y practicar. Funciona sin instalar
+nada, sin permisos de administrador y sin conexión a la nube: todo se ejecuta
+en tu ordenador y se usa desde el navegador.
+
+
+CÓMO ABRIRLO
+------------
+
+1. Descomprime el ZIP entero en una carpeta donde puedas escribir
+   (Escritorio, Documentos o un USB). No lo abras desde dentro del ZIP.
+
+2. Abre el programa:
+
+   WINDOWS  → doble clic en «CloudMastery.exe».
+   MAC      → clic derecho en «Abrir en Mac.command» › Abrir › Abrir.
+   LINUX    → en una terminal, dentro de la carpeta:  ./"Abrir en Linux.sh"
+
+3. Se abre una ventana negra y, a los pocos segundos, el navegador en
+   http://127.0.0.1:8765/ . Crea tu cuenta (se queda en tu ordenador).
+
+4. Para cerrarlo, cierra la ventana negra (o Ctrl+C en Linux).
+
+
+AVISOS DEL SISTEMA LA PRIMERA VEZ
+---------------------------------
+
+El programa no está firmado por una empresa de certificados, así que el
+sistema avisa la primera vez. Es normal:
+
+   WINDOWS  «Windows protegió su PC» → «Más información» → «Ejecutar de todas
+            formas». Para evitar avisos en cada archivo: antes de
+            descomprimir, clic derecho en el ZIP › Propiedades › marca
+            «Desbloquear» › Aceptar.
+
+   MAC      «No se puede abrir porque es de un desarrollador no
+            identificado» → usa clic derecho › Abrir (no doble clic) y
+            confirma «Abrir». Si aun así no deja: Ajustes del Sistema ›
+            Privacidad y seguridad › «Abrir igualmente».
+
+   ANTIVIRUS  Algunos antivirus desconfían de programas nuevos sin firmar.
+            Si lo bloquea, añade la carpeta a las exclusiones.
+
+
+TUS DATOS
+---------
+
+Tu cuenta y tu progreso se guardan en la carpeta «datos», al lado del
+programa. Si copias la carpeta completa a otro ordenador (o la llevas en un
+USB), sigues donde lo dejaste. Haz copia de «datos» si quieres conservarlo.
+
+Para actualizar a una versión nueva: descomprímela en otra carpeta y copia
+dentro tu carpeta «datos» de la versión anterior.
+
+
+SI ALGO FALLA
+-------------
+
+- «Los puertos están ocupados»: cierra otra copia de Cloud Mastery que tengas
+  abierta, o reinicia el ordenador.
+- El navegador no se abre solo: abre tú http://127.0.0.1:8765/
+- Registro técnico: datos/gcplab.log
+
+
+REQUISITOS
+----------
+
+Windows 10/11 (64 bits) · macOS 11 o posterior (Apple Silicon o Intel) ·
+Linux de 64 bits (x64 o ARM). Un navegador actual (Chrome, Edge, Firefox o
+Safari). Unos 200 MB de disco.

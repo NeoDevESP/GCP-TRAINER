@@ -5,6 +5,8 @@ los 54 laboratorios, incidentes generados, la empresa Nebula, la web en
 español e inglés y tu progreso. No necesitas instalar Go, Node ni ninguna base
 de datos.
 
+Versión sin instalador: [version-portatil.md](version-portatil.md).
+
 ## Descargar
 
 - **Última versión publicada**: pestaña *Releases* del repositorio

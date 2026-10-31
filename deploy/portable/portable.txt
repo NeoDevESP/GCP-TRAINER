@@ -1,0 +1,6 @@
+Este archivo activa el modo portátil de Cloud Mastery: tu progreso se guarda
+en la carpeta «datos» de aquí al lado, así que puedes copiar la carpeta entera
+(por ejemplo a un USB) y seguir en otro ordenador donde lo dejaste.
+
+Si lo borras, los datos se guardan en tu perfil de usuario, como con el
+instalador (Windows: %LOCALAPPDATA%\CloudMastery).

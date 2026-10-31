@@ -64,6 +64,41 @@ func desktopDataDir() (string, error) {
 	return d, os.MkdirAll(d, 0o700)
 }
 
+// appRoot is the folder holding content/ and web/: the executable's own folder
+// (installer, Windows in the portable ZIP) or two levels up for the macOS and
+// Linux binaries of the portable ZIP, which live in bin/<platform>/.
+func appRoot(exeDir string) string {
+	up := filepath.Clean(filepath.Join(exeDir, "..", ".."))
+	if _, err := os.Stat(filepath.Join(exeDir, "content")); err != nil {
+		if _, err := os.Stat(filepath.Join(up, "content")); err == nil {
+			return up
+		}
+	}
+	return exeDir
+}
+
+// setPortableDataDir keeps the data next to the program in the portable ZIP
+// (marked by a "portable.txt" file in its root folder), so it travels with
+// the folder. If that folder is not writable the profile directory is used.
+func setPortableDataDir(root string) {
+	if os.Getenv("DESKTOP_DATA_DIR") != "" {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(root, "portable.txt")); err != nil {
+		return
+	}
+	data := filepath.Join(root, "datos")
+	if os.MkdirAll(data, 0o700) != nil {
+		return
+	}
+	probe := filepath.Join(data, ".write-test")
+	if os.WriteFile(probe, nil, 0o600) != nil {
+		return
+	}
+	os.Remove(probe)
+	os.Setenv("DESKTOP_DATA_DIR", data)
+}
+
 // runningInstance reports whether Cloud Mastery already answers on the port.
 func runningInstance(port int) bool {
 	c := http.Client{Timeout: 2 * time.Second}
@@ -84,9 +119,10 @@ func setupDesktop() (d *desktop, exit bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	dir := filepath.Dir(exe)
+	dir := appRoot(filepath.Dir(exe))
 	setDefault("CONTENT_DIR", filepath.Join(dir, "content"))
 	setDefault("WEB_DIR", filepath.Join(dir, "web"))
+	setPortableDataDir(dir)
 	d = &desktop{}
 	if d.dataDir, err = desktopDataDir(); err != nil {
 		return nil, false, err

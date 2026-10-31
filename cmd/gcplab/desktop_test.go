@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -57,5 +58,33 @@ func TestSetupDesktopKeepsSecretAndSkipsBusyPort(t *testing.T) {
 	defer d2.logFile.Close()
 	if os.Getenv("JWT_SECRET") != secret {
 		t.Fatal("the signing key must be stable across launches")
+	}
+}
+
+func TestPortableLayout(t *testing.T) {
+	root := t.TempDir()
+	bin := filepath.Join(root, "bin", "linux-x64")
+	for _, d := range []string{bin, filepath.Join(root, "content")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := appRoot(bin); got != root {
+		t.Fatalf("binary in bin/<platform>: root %q, want %q", got, root)
+	}
+	if got := appRoot(root); got != root {
+		t.Fatalf("binary next to content: root %q, want %q", got, root)
+	}
+	t.Setenv("DESKTOP_DATA_DIR", "")
+	setPortableDataDir(root)
+	if got := os.Getenv("DESKTOP_DATA_DIR"); got != "" {
+		t.Fatalf("no marker, got %q", got)
+	}
+	if err := os.WriteFile(filepath.Join(root, "portable.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	setPortableDataDir(root)
+	if got, want := os.Getenv("DESKTOP_DATA_DIR"), filepath.Join(root, "datos"); got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }
