@@ -1,0 +1,221 @@
+id: bank-b21-lb-502-healthcheck
+title: INC · La web de simulación de préstamos da 502 Bad Gateway
+summary: Un 502 del balanceador casi siempre es un backend «no sano». Si nginx funciona, mira si las sondas de salud de Google pueden llegar a él.
+track: support-bank
+day: 21
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.firewall
+- networking.lb
+- observability.incident
+wellArchitected:
+- reliability
+- security
+certs:
+- ACE
+- PCNE
+difficulty: 3
+minutes: 30
+baseline:
+- bank-atlas
+setup: |
+  gcloud compute instances create prestamos-web --zone={{.zone}} --machine-type=e2-small --subnet=app-subnet --no-address --tags=prestamos-web --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute firewall-rules create allow-health-checks --network=atlas-vpc --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=prestamos-web
+  gcloud compute instance-groups unmanaged create prestamos-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances prestamos-ig --instances=prestamos-web --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports prestamos-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute health-checks create http prestamos-hc --port=80 --request-path=/
+  gcloud compute backend-services create prestamos-be --protocol=HTTP --port-name=http --health-checks=prestamos-hc --global
+  gcloud compute backend-services add-backend prestamos-be --instance-group=prestamos-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create prestamos-map --default-service=prestamos-be
+  gcloud compute target-http-proxies create prestamos-proxy --url-map=prestamos-map
+  gcloud compute forwarding-rules create prestamos-lb --global --target-http-proxy=prestamos-proxy --ports=80
+faults:
+- type: firewall_source
+  rule: allow-health-checks
+  sourceRanges:
+  - 10.20.0.0/16
+  targetTags:
+  - prestamos-web
+  actor: netops-script@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: prestamos
+  target: lb:prestamos-lb
+  path: /
+  rps: 20
+ticket:
+  id: INC-23377
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Canal digital
+  summary: La web pública del simulador de préstamos devuelve «502 Bad Gateway» desde las 9:40. El equipo de la web dice que el servidor está arriba y nginx funciona.
+actors:
+- role: network
+  name: Equipo de Redes
+  persona: Mantienen las reglas de cortafuegos de la VPC.
+  fallback: Esta mañana un script de limpieza ha «endurecido» varias reglas para que solo acepten tráfico interno 10.20.0.0/16.
+  facts:
+  - keywords:
+    - - health
+      - salud
+      - sonda
+      - probe
+      - '130.211'
+      - '35.191'
+      - google
+    answer: Las sondas de salud de Google salen de 35.191.0.0/16 y 130.211.0.0/22; la regla allow-health-checks es justo para eso.
+  - keywords:
+    - - 0.0.0.0
+      - abrir
+      - open
+      - internet
+      - todo
+    answer: 'Ni se os ocurra abrir el 80 a 0.0.0.0/0: la VM no debe ser accesible directamente desde internet.'
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23377** · *«La web pública del simulador de préstamos devuelve «502 Bad Gateway» desde las 9:40. El equipo de la web dice
+  > que el servidor está arriba y nginx funciona.»*
+
+  Balanceador HTTP global `prestamos-lb` → servicio de backend `prestamos-be` → VM privada `prestamos-web`. El balanceador solo
+  envía tráfico a backends que pasan la comprobación de estado, y esas sondas llegan **desde rangos de Google**, no desde tu VPC.
+objectives:
+- Mira qué estado de salud ve el balanceador
+- Encuentra qué ha cambiado en el cortafuegos y quién lo cambió
+- Permite solo los rangos de las sondas de Google, sin abrir la VM a internet
+- Comprueba la web y documenta la causa
+hints:
+- text: '`gcloud compute backend-services get-health prestamos-be --global`.'
+- text: '`gcloud compute firewall-rules update allow-health-checks --source-ranges=35.191.0.0/16,130.211.0.0/22`.'
+solution: |
+  ticket
+  gcloud compute backend-services get-health prestamos-be --global
+  gcloud compute firewall-rules describe allow-health-checks
+  gcloud logging read 'protoPayload.methodName:"firewalls"' --limit=5
+  ask network "¿qué ha cambiado esta mañana en las reglas de cortafuegos?"
+  gcloud compute firewall-rules update allow-health-checks --source-ranges=35.191.0.0/16,130.211.0.0/22
+  gcloud compute backend-services get-health prestamos-be --global
+  curl -s http://$(gcloud compute forwarding-rules describe prestamos-lb --global --format='value(IPAddress)')/
+  ticket comment "Causa: un script de limpieza de Redes (netops-script) cambió el origen de allow-health-checks a 10.20.0.0/16. Las sondas de salud de Google (35.191.0.0/16 y 130.211.0.0/22) no llegaban, el backend quedó UNHEALTHY y el balanceador devolvía 502. Restaurados los rangos de las sondas; la VM sigue sin estar expuesta a internet. Pedido a Redes que excluya esta regla del script."
+  ticket update "Resuelto: la web del simulador de préstamos vuelve a funcionar. Un cambio automático en el cortafuegos impedía que el balanceador comprobara el estado del servidor; está corregido."
+  ticket resolve "Restaurados los rangos de health check de Google en allow-health-checks; backend HEALTHY y web respondiendo 200."
+shortcuts:
+- name: open port 80 to the internet
+  run: |
+    gcloud compute firewall-rules create allow-web-all --network=atlas-vpc --allow=tcp:80 --source-ranges=0.0.0.0/0 --target-tags=prestamos-web
+    ticket resolve "Abierto el puerto 80 para que el balanceador llegue."
+- name: restart the VM
+  run: |
+    gcloud compute instances reset prestamos-web --zone={{.zone}}
+    ticket resolve "Reiniciada la VM de la web."
+rubric:
+- name: Web recuperada
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    target: lb:prestamos-lb
+    path: /
+    status: 200
+    desc: La web responde 200 por el balanceador
+- name: Sin exponer la VM
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+      rules:
+        regex: '"80"'
+    max: 0
+    desc: El puerto 80 no está abierto a 0.0.0.0/0
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: get-health
+    min: 1
+    desc: Estado del backend comprobado
+  - type: command
+    regex: firewall-rules (describe|list)|logging read
+    min: 1
+    desc: Revisado el cambio en el cortafuegos
+- name: Causa documentada
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - health
+      - salud
+      - sonda
+      - probe
+    - - '35.191'
+      - '130.211'
+    desc: Nota interna con la causa y los rangos
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: '«502 y el servidor está bien» es un clásico: el balanceador no envía tráfico a un backend que no supera la comprobación de estado.'
+- match: get-health
+  title: Mira lo que ve el balanceador
+  why: 'UNHEALTHY con nginx funcionando: las sondas no llegan. Revisa el cortafuegos.'
+- match: firewall-rules update allow-health-checks
+  title: ''
+  why: '35.191.0.0/16 y 130.211.0.0/22 son los rangos de las sondas de Google: abres solo eso, no internet entero.'
+en:
+  title: INC · The loan simulation website returns 502 Bad Gateway
+  summary: A 502 from the load balancer is almost always an "unhealthy" backend. If nginx works, check whether Google's health probes can reach it.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23377** · *"The public loan simulator website has returned "502 Bad Gateway" since 9:40. The web team says the server is
+    > up and nginx works."*
+
+    Global HTTP load balancer `prestamos-lb` → backend service `prestamos-be` → private VM `prestamos-web`. The load balancer only
+    sends traffic to backends that pass the health check, and those probes come **from Google ranges**, not from your VPC.
+  objectives:
+  - See what health status the load balancer sees
+  - Find what changed in the firewall and who changed it
+  - Allow only Google's probe ranges, without opening the VM to the internet
+  - Check the website and document the cause
+  hints:
+  - '`gcloud compute backend-services get-health prestamos-be --global`.'
+  - '`gcloud compute firewall-rules update allow-health-checks --source-ranges=35.191.0.0/16,130.211.0.0/22`.'
+  ticket:
+    summary: The public loan simulator website has returned "502 Bad Gateway" since 9:40. The web team says the server is up and nginx works.
+  text:
+    Canal digital: Digital channel
+    Equipo de Redes: Network team
+    Mantienen las reglas de cortafuegos de la VPC.: They maintain the VPC firewall rules.
+    Esta mañana un script de limpieza ha «endurecido» varias reglas para que solo acepten tráfico interno 10.20.0.0/16.: This morning a clean-up script "hardened" several rules to only accept internal 10.20.0.0/16 traffic.
+    Las sondas de salud de Google salen de 35.191.0.0/16 y 130.211.0.0/22; la regla allow-health-checks es justo para eso.: Google's health probes come from 35.191.0.0/16 and 130.211.0.0/22; the allow-health-checks rule is for exactly that.
+    'Ni se os ocurra abrir el 80 a 0.0.0.0/0: la VM no debe ser accesible directamente desde internet.': 'Don''t even think of opening port 80 to 0.0.0.0/0: the VM must not be directly reachable from the internet.'
+    Web recuperada: Website restored
+    La web responde 200 por el balanceador: The website returns 200 through the load balancer
+    Sin exponer la VM: VM not exposed
+    El puerto 80 no está abierto a 0.0.0.0/0: Port 80 isn't open to 0.0.0.0/0
+    Diagnóstico: Diagnosis
+    Estado del backend comprobado: Backend health checked
+    Revisado el cambio en el cortafuegos: Firewall change reviewed
+    Causa documentada: Cause documented
+    Nota interna con la causa y los rangos: Internal note with the cause and ranges
+    Ticket cerrado: Ticket closed
+    ? '«502 y el servidor está bien» es un clásico: el balanceador no envía tráfico a un backend que no supera la comprobación de estado.'
+    : '"502 and the server is fine" is a classic: the load balancer won''t send traffic to a backend that fails its health check.'
+    Mira lo que ve el balanceador: See what the load balancer sees
+    'UNHEALTHY con nginx funcionando: las sondas no llegan. Revisa el cortafuegos.': 'UNHEALTHY with nginx working: the probes aren''t arriving. Check the firewall.'
+    '35.191.0.0/16 y 130.211.0.0/22 son los rangos de las sondas de Google: abres solo eso, no internet entero.': '35.191.0.0/16 and 130.211.0.0/22 are Google''s probe ranges: you open only that, not the whole internet.'

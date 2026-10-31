@@ -1,0 +1,194 @@
+id: bank-b25-wrong-identity
+title: INC · 403 en extractos «aunque la cuenta tiene permiso»
+summary: 'Un 403 se resuelve con tres datos: quién llama de verdad, qué permiso falta y sobre qué recurso. Aquí el servicio no usa la cuenta que creen.'
+track: support-bank
+day: 25
+level: intermediate
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.serviceaccounts
+- iam.leastprivilege
+- compute.serverless
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 25
+baseline:
+- bank-atlas
+setup: |
+  gcloud iam service-accounts create extractos-sa --display-name="API de extractos"
+  gcloud storage buckets create gs://extractos-pdf-{{.project}} --location=EU --uniform-bucket-level-access
+  gcloud storage buckets add-iam-policy-binding gs://extractos-pdf-{{.project}} --member=serviceAccount:extractos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud run deploy extractos-api --image=europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0 --region={{.region}} --set-env-vars=BUCKET=extractos-pdf-{{.project}} --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding extractos-api --region={{.region}} --member=user:gestor@gcplab.dev --role=roles/run.invoker
+traffic:
+- name: extractos
+  target: run:extractos-api
+  path: /reports
+  rps: 5
+  principal: user:gestor@gcplab.dev
+ticket:
+  id: INC-23490
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Desarrollo · Extractos
+  summary: La nueva API de extractos devuelve 403 al leer los PDF del bucket extractos-pdf. La cuenta extractos-sa tiene objectViewer en el bucket, lo hemos comprobado tres veces. ¿Le dais Storage Admin para salir del paso?
+actors:
+- role: dev
+  name: Inés Navarro (Desarrollo · Extractos)
+  persona: Mantiene la API de extractos.
+  fallback: Desplegamos con el mismo comando que en el entorno de pruebas.
+  facts:
+  - keywords:
+    - - service-account
+      - cuenta
+      - identidad
+      - identity
+      - despleg
+      - deploy
+      - comando
+    answer: En pruebas el pipeline añade --service-account; aquí lo lanzamos a mano y… no sé si lo pusimos.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23490** · *«La nueva API de extractos devuelve 403 al leer los PDF del bucket extractos-pdf. La cuenta extractos-sa tiene
+  > objectViewer en el bucket, lo hemos comprobado tres veces. ¿Le dais Storage Admin para salir del paso?»*
+
+  Ante un 403, antes de dar ningún permiso, identifica **quién ejecuta realmente la operación**, **qué permiso** se deniega y
+  **sobre qué recurso**. Un servicio de Cloud Run desplegado sin `--service-account` se ejecuta con la cuenta de Compute por defecto.
+objectives:
+- Identifica con qué cuenta se ejecuta realmente extractos-api
+- Comprueba qué permisos tiene cada cuenta sobre el bucket
+- Haz que el servicio use extractos-sa, sin dar permisos a la cuenta por defecto
+- Explica la causa y cierra
+hints:
+- text: '`gcloud run services describe extractos-api --region={{.region}} --format=''value(spec.template.spec.serviceAccountName)''` o la salida completa de describe.'
+- text: '`gcloud run services update extractos-api --region={{.region}} --service-account=extractos-sa@{{.project}}.iam.gserviceaccount.com`.'
+solution: |
+  ticket
+  gcloud run services describe extractos-api --region={{.region}}
+  gcloud storage buckets get-iam-policy gs://extractos-pdf-{{.project}}
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  ask dev "¿con qué comando desplegasteis, incluía --service-account?"
+  gcloud run services update extractos-api --region={{.region}} --service-account=extractos-sa@{{.project}}.iam.gserviceaccount.com
+  ticket comment "Causa: extractos-api se desplegó a mano sin --service-account y se ejecutaba con la cuenta de Compute por defecto, que no tiene acceso al bucket. extractos-sa sí tenía objectViewer. Actualizado el servicio para usar extractos-sa; no se ha dado ningún permiso nuevo. Recomendado desplegar siempre por pipeline."
+  ticket update "Resuelto: la API de extractos ya lee los PDF. El servicio no estaba usando la cuenta extractos-sa sino la cuenta por defecto; lo hemos corregido sin ampliar permisos, así que no hace falta Storage Admin."
+  ticket resolve "extractos-api actualizado para ejecutarse como extractos-sa; 403 resuelto sin permisos adicionales."
+shortcuts:
+- name: grant the default compute account
+  run: |
+    gcloud storage buckets add-iam-policy-binding gs://extractos-pdf-{{.project}} --member=serviceAccount:$(gcloud projects describe {{.project}} --format='value(projectNumber)')-compute@developer.gserviceaccount.com --role=roles/storage.objectViewer
+    ticket resolve "Dado acceso de lectura al bucket."
+- name: storage admin as asked
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:extractos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.admin
+    ticket resolve "Dado Storage Admin a extractos-sa."
+rubric:
+- name: Servicio funcionando
+  validator: functional
+  points: 30
+  checks:
+  - type: http
+    target: run:extractos-api
+    path: /reports
+    principal: user:gestor@gcplab.dev
+    status: 200
+    desc: La API lee los extractos
+- name: Identidad correcta
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: runServices["extractos-api"]
+    expect:
+      serviceAccount:
+        regex: ^extractos-sa@
+    desc: El servicio se ejecuta como extractos-sa
+  - type: command
+    regex: compute@developer|roles/storage.admin
+    max: 0
+    desc: Sin permisos a la cuenta por defecto ni Storage Admin
+- name: Diagnóstico
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: command
+    regex: run services describe
+    min: 1
+    desc: Comprobada la identidad del servicio
+- name: Explicación
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - cuenta
+      - account
+      - identidad
+      - identity
+    - - defecto
+      - default
+      - extractos-sa
+    desc: Explica qué identidad se usaba
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: '«La cuenta tiene permiso» y aun así 403: la pregunta es si esa cuenta es la que llama de verdad.'
+- match: run services describe extractos-api
+  title: Mira la cuenta del servicio
+  why: Sin --service-account, Cloud Run usa NÚMERO-compute@developer.gserviceaccount.com.
+- match: --service-account=
+  title: ''
+  why: 'Corregir la identidad cierra el 403 sin ampliar permisos: el más pequeño de los arreglos.'
+en:
+  title: INC · 403 on statements "even though the account has permission"
+  summary: 'A 403 is solved with three facts: who really calls, which permission is missing and on which resource. Here the service doesn''t use the account they think.'
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23490** · *"The new statements API returns 403 when reading the PDFs in the extractos-pdf bucket. The extractos-sa account
+    > has objectViewer on the bucket, we checked three times. Can you give it Storage Admin to get by?"*
+
+    For a 403, before granting anything, identify **who really runs the operation**, **which permission** is denied and **on which
+    resource**. A Cloud Run service deployed without `--service-account` runs as the default Compute account.
+  objectives:
+  - Identify which account extractos-api really runs as
+  - Check what permissions each account has on the bucket
+  - Make the service use extractos-sa, without granting the default account anything
+  - Explain the cause and close
+  hints:
+  - '`gcloud run services describe extractos-api --region={{.region}} --format=''value(spec.template.spec.serviceAccountName)''` or the full describe output.'
+  - '`gcloud run services update extractos-api --region={{.region}} --service-account=extractos-sa@{{.project}}.iam.gserviceaccount.com`.'
+  ticket:
+    summary: The new statements API returns 403 when reading the PDFs in the extractos-pdf bucket. The extractos-sa account has objectViewer on the bucket, we checked three times. Can you give it Storage Admin to get by?
+  text:
+    Desarrollo · Extractos: Development · Statements
+    Inés Navarro (Desarrollo · Extractos): Inés Navarro (Development · Statements)
+    Mantiene la API de extractos.: Maintains the statements API.
+    Desplegamos con el mismo comando que en el entorno de pruebas.: We deployed with the same command as in the test environment.
+    En pruebas el pipeline añade --service-account; aquí lo lanzamos a mano y… no sé si lo pusimos.: In test the pipeline adds --service-account; here we ran it by hand and… I'm not sure we included it.
+    Servicio funcionando: Service working
+    La API lee los extractos: The API reads the statements
+    Identidad correcta: Correct identity
+    El servicio se ejecuta como extractos-sa: The service runs as extractos-sa
+    Sin permisos a la cuenta por defecto ni Storage Admin: No permissions for the default account and no Storage Admin
+    Diagnóstico: Diagnosis
+    Comprobada la identidad del servicio: Service identity checked
+    Explicación: Explanation
+    Explica qué identidad se usaba: Explains which identity was in use
+    Ticket cerrado: Ticket closed
+    '«La cuenta tiene permiso» y aun así 403: la pregunta es si esa cuenta es la que llama de verdad.': '"The account has permission" and still 403: the question is whether that account is the one actually calling.'
+    Mira la cuenta del servicio: Look at the service account
+    Sin --service-account, Cloud Run usa NÚMERO-compute@developer.gserviceaccount.com.: Without --service-account, Cloud Run uses NUMBER-compute@developer.gserviceaccount.com.
+    'Corregir la identidad cierra el 403 sin ampliar permisos: el más pequeño de los arreglos.': 'Fixing the identity closes the 403 without widening permissions: the smallest possible fix.'

@@ -82,18 +82,6 @@ func (c *Cmd) sqlPatch(p *sim.Project, in *sim.SQLInstance) error {
 	if c.Bool("no-deletion-protection") {
 		in.DeletionProtection = false
 	}
-	if c.Bool("no-assign-ip") {
-		if in.PrivateIP == "" {
-			return fmt.Errorf("Cannot remove the public IP of an instance without a private IP.")
-		}
-		in.PublicIP, in.AuthorizedNets = "", nil
-	}
-	if c.Bool("assign-ip") && in.PublicIP == "" {
-		if c.S.State.OrgPolicyEnforced(p.ID, "sql.restrictPublicIp") {
-			return fmt.Errorf("Constraint constraints/sql.restrictPublicIp violated.")
-		}
-		in.PublicIP = c.S.State.ExternalIP()
-	}
 	if v := c.Str("network", ""); v != "" {
 		v = v[strings.LastIndex(v, "/")+1:]
 		nw := p.Networks[v]
@@ -107,6 +95,18 @@ func (c *Cmd) sqlPatch(p *sim.Project, in *sim.SQLInstance) error {
 		if in.PrivateIP == "" {
 			in.PrivateIP = c.S.State.AllocIP(psaRange(p, nw))
 		}
+	}
+	if c.Bool("no-assign-ip") {
+		if in.PrivateIP == "" {
+			return fmt.Errorf("Cannot remove the public IP of an instance without a private IP.")
+		}
+		in.PublicIP, in.AuthorizedNets = "", nil
+	}
+	if c.Bool("assign-ip") && in.PublicIP == "" {
+		if c.S.State.OrgPolicyEnforced(p.ID, "sql.restrictPublicIp") {
+			return fmt.Errorf("Constraint constraints/sql.restrictPublicIp violated.")
+		}
+		in.PublicIP = c.S.State.ExternalIP()
 	}
 	if v := c.Str("activation-policy", ""); v != "" {
 		if strings.ToUpper(v) == "NEVER" {

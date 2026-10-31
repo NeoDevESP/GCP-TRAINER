@@ -1,0 +1,92 @@
+id: support-network
+branch: networking
+name: ["Casos de soporte: redes, balanceo y perímetros", "Support cases: networking, load balancing and perimeters"]
+intro: ["Sesiones BGP que se caen, 502 en el balanceador, la IP del cliente que no llega a la aplicación, certificados atascados en PROVISIONING y bloqueos de VPC Service Controls: el síntoma, la causa habitual y cómo demostrarla.", "Flapping BGP sessions, 502 on the load balancer, the client IP not reaching the app, certificates stuck in PROVISIONING and VPC Service Controls blocks: the symptom, the usual cause and how to prove it."]
+concepts:
+  - id: bgp
+    term: ["BGP que se cae y se levanta (flapping)", "BGP flapping"]
+    what: ["En Interconnect y Cloud VPN, Cloud Router intercambia rutas por BGP; si la sesión se reinicia en bucle, hay cortes.", "On Interconnect and Cloud VPN, Cloud Router exchanges routes over BGP; if the session restarts in a loop, there are outages."]
+    points:
+      - ["Causa banal y frecuente: IP o máscara link-local (169.254.x.x) distinta en cada extremo.", "Common, banal cause: different link-local IP or mask (169.254.x.x) on each end."]
+      - ["Otras: ASN equivocado, clave MD5 distinta, temporizadores o BFD incompatibles.", "Others: wrong ASN, different MD5 key, incompatible timers or BFD."]
+      - ["Cambiar, añadir o quitar la clave MD5 reinicia la sesión BGP: un corte breve es esperado.", "Changing, adding or removing the MD5 key restarts the BGP session: a brief drop is expected."]
+      - ["Revisa el estado con gcloud compute routers get-status y los registros de Cloud Router.", "Check status with gcloud compute routers get-status and the Cloud Router logs."]
+    tip: ["Planifica el cambio de clave MD5 en una ventana: es un corte previsto, no una avería.", "Schedule MD5 key changes in a window: it's an expected drop, not a fault."]
+  - id: lb502
+    term: ["502/503 en el balanceador", "502/503 on the load balancer"]
+    what: ["El proxy de Google no consigue pasar la petición a un backend sano.", "Google's proxy can't pass the request to a healthy backend."]
+    points:
+      - ["Lo más común: el cortafuegos no deja entrar las sondas de salud de 35.191.0.0/16 y 130.211.0.0/22.", "Most common: the firewall doesn't let in health probes from 35.191.0.0/16 and 130.211.0.0/22."]
+      - ["La sonda pide una ruta o puerto que no devuelve 200.", "The probe requests a path or port that doesn't return 200."]
+      - ["Keepalive del servidor más corto que el del balanceador: el backend cierra conexiones que el proxy reutiliza.", "Server keepalive shorter than the load balancer's: the backend closes connections the proxy reuses."]
+      - ["Diagnóstico: backend-services get-health y los registros del balanceador (statusDetails).", "Diagnosis: backend-services get-health and the load balancer logs (statusDetails)."]
+    tip: ["Abre solo los rangos de las sondas, nunca 0.0.0.0/0, para que el balanceador vea el backend.", "Open only the probe ranges, never 0.0.0.0/0, so the load balancer sees the backend."]
+  - id: xff
+    term: ["La IP real del cliente", "The real client IP"]
+    what: ["Un balanceador proxy termina la conexión y abre otra: el backend ve la IP del proxy.", "A proxy load balancer terminates the connection and opens another: the backend sees the proxy's IP."]
+    points:
+      - ["En HTTP(S), la IP del cliente va en la cabecera X-Forwarded-For.", "In HTTP(S), the client IP is in the X-Forwarded-For header."]
+      - ["Configura nginx o Apache para confiar en esa cabecera solo cuando viene del balanceador.", "Configure nginx or Apache to trust that header only when it comes from the load balancer."]
+      - ["Se pueden añadir cabeceras personalizadas con la IP o la geolocalización del cliente.", "Custom headers with the client IP or geolocation can be added."]
+      - ["Los balanceadores de paso (passthrough) conservan la IP de origen; los proxy TCP/SSL usan PROXY protocol.", "Passthrough load balancers keep the source IP; TCP/SSL proxies use PROXY protocol."]
+    tip: ["Para fraude o geolocalización, no uses la IP del socket detrás de un proxy.", "For fraud or geolocation, don't use the socket IP behind a proxy."]
+  - id: cert
+    term: ["Certificado gestionado atascado en PROVISIONING", "Managed certificate stuck in PROVISIONING"]
+    what: ["Google emite el certificado con una autoridad pública, y esta tiene que poder validar el dominio.", "Google issues the certificate through a public CA, which must be able to validate the domain."]
+    points:
+      - ["El certificado tiene que estar asociado al proxy HTTPS de destino de un balanceador.", "The certificate must be attached to a load balancer's target HTTPS proxy."]
+      - ["El DNS público del dominio (A/AAAA) debe apuntar a la IP del balanceador.", "The domain's public DNS (A/AAAA) must point to the load balancer's IP."]
+      - ["Con ambas cosas, puede tardar un rato tras propagarse el DNS.", "With both in place, it can take a while after DNS propagates."]
+      - ["Estados como FAILED_NOT_VISIBLE indican que el dominio no resuelve al balanceador.", "States like FAILED_NOT_VISIBLE mean the domain doesn't resolve to the load balancer."]
+    tip: ["Antes de abrir un caso, comprueba con dig que el dominio resuelve a la IP del balanceador.", "Before opening a case, check with dig that the domain resolves to the load balancer's IP."]
+  - id: vpcsc
+    term: ["VPC Service Controls: 403 y modo de prueba", "VPC Service Controls: 403 and dry-run mode"]
+    what: ["Un perímetro impide que los datos de servicios gestionados salgan hacia redes o identidades no autorizadas.", "A perimeter stops managed-service data from leaving to unauthorized networks or identities."]
+    points:
+      - ["El bloqueo devuelve 403 «Request is prohibited by organization's policy» con un identificador único de la denegación.", "The block returns 403 \"Request is prohibited by organization's policy\" with a unique denial identifier."]
+      - ["En Cloud Audit Logs: filtro protoPayload.metadata.@type con VpcServiceControlAuditMetadata o el identificador del error.", "In Cloud Audit Logs: filter on VpcServiceControlAuditMetadata or the error's identifier."]
+      - ["El analizador de infracciones explica el motivo: recurso fuera del perímetro (RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER), nivel de acceso no cumplido (NO_MATCHING_ACCESS_LEVEL)…", "The violation analyzer explains the reason: resource outside the perimeter (RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER), access level not met (NO_MATCHING_ACCESS_LEVEL)…"]
+      - ["Modo de prueba (dry run): evalúa sin bloquear y registra solo lo que la configuración nueva denegaría de más.", "Dry-run mode: evaluates without blocking and logs only what the new configuration would additionally deny."]
+    tip: ["Prueba cualquier cambio de perímetro en dry run antes de aplicarlo: un perímetro mal hecho para producción entera.", "Test any perimeter change in dry run before enforcing it: a bad perimeter stops all of production."]
+scenarios:
+  - q: ["Redes cambió hoy la clave MD5 del BGP con el CPD y hubo un corte de 20 segundos. Piden un caso P1 a Google.", "Networking changed the BGP MD5 key with the data centre today and there was a 20-second drop. They want a P1 case with Google."]
+    options: [["Explicar que cambiar la clave MD5 reinicia la sesión y es un corte esperado; verificar que la sesión está estable", "Explain that changing the MD5 key restarts the session and the drop is expected; verify the session is stable"], ["Abrir un P1 a Google", "Open a P1 with Google"], ["Quitar la autenticación MD5", "Remove MD5 authentication"], ["Recrear el Cloud Router", "Recreate the Cloud Router"]]
+    answer: 0
+    why: ["La rotación de MD5 exige reiniciar la sesión TCP de BGP.", "MD5 rotation requires restarting the BGP TCP session."]
+  - q: ["La app antifraude detrás del balanceador ve siempre la misma IP de origen para todos los clientes.", "The anti-fraud app behind the load balancer always sees the same source IP for every customer."]
+    options: [["Leer la IP del cliente de X-Forwarded-For, confiando solo en la que añade el balanceador", "Read the client IP from X-Forwarded-For, trusting only the one the load balancer adds"], ["Quitar el balanceador y exponer las VMs", "Remove the load balancer and expose the VMs"], ["Abrir un caso porque el balanceador falla", "Open a case because the load balancer is broken"], ["Usar la IP del socket", "Use the socket IP"]]
+    answer: 0
+    why: ["Un proxy abre una conexión nueva: la IP original viaja en la cabecera.", "A proxy opens a new connection: the original IP travels in the header."]
+  - q: ["Un analista recibe 403 «Request is prohibited by organization's policy» al copiar de BigQuery a un bucket de otro proyecto.", "An analyst gets 403 \"Request is prohibited by organization's policy\" when copying from BigQuery to a bucket in another project."]
+    options: [["Buscar la denegación en los registros de auditoría y analizar el motivo con su identificador", "Find the denial in the audit logs and analyse the reason with its identifier"], ["Darle roles/owner en ambos proyectos", "Give him roles/owner on both projects"], ["Desactivar el perímetro de VPC Service Controls", "Disable the VPC Service Controls perimeter"], ["Hacer público el bucket", "Make the bucket public"]]
+    answer: 0
+    why: ["Es un perímetro, no IAM: el registro dice qué regla y qué recurso.", "It's a perimeter, not IAM: the log says which rule and which resource."]
+  - q: ["El certificado gestionado de banca-online lleva 6 horas en PROVISIONING.", "The managed certificate for banca-online has been in PROVISIONING for 6 hours."]
+    options: [["Comprobar que está en el proxy HTTPS del balanceador y que el DNS del dominio apunta a su IP", "Check it's on the load balancer's HTTPS proxy and that the domain's DNS points to its IP"], ["Borrarlo y crearlo cada hora", "Delete and recreate it every hour"], ["Subir un certificado autofirmado", "Upload a self-signed certificate"], ["Abrir el puerto 443 de las VMs a internet", "Open port 443 on the VMs to the internet"]]
+    answer: 0
+    why: ["Sin las dos condiciones, la autoridad no puede validar el dominio.", "Without both conditions, the CA can't validate the domain."]
+quiz:
+  - q: ["¿Desde qué rangos llegan las sondas de salud de los balanceadores de Google?", "Which ranges do Google load balancer health probes come from?"]
+    options: [["35.191.0.0/16 y 130.211.0.0/22", "35.191.0.0/16 and 130.211.0.0/22"], ["35.235.240.0/20", "35.235.240.0/20"], ["10.0.0.0/8", "10.0.0.0/8"], ["169.254.169.254/32", "169.254.169.254/32"]]
+    answer: 0
+    why: ["35.235.240.0/20 es IAP; los de salud son 35.191.0.0/16 y 130.211.0.0/22.", "35.235.240.0/20 is IAP; health checks use 35.191.0.0/16 and 130.211.0.0/22."]
+  - q: ["¿Qué hace el modo dry run de VPC Service Controls?", "What does VPC Service Controls dry-run mode do?"]
+    options: [["Registra lo que se denegaría sin bloquearlo", "Logs what would be denied without blocking it"], ["Bloquea todo el tráfico durante una hora", "Blocks all traffic for an hour"], ["Desactiva el perímetro", "Disables the perimeter"], ["Duplica el perímetro en otra región", "Duplicates the perimeter in another region"]]
+    answer: 0
+    why: ["Sirve para probar cambios antes de aplicarlos.", "It's for testing changes before enforcing them."]
+  - q: ["¿Qué cabecera lleva la IP original del cliente en un balanceador HTTP(S)?", "Which header carries the original client IP on an HTTP(S) load balancer?"]
+    options: [["X-Forwarded-For", "X-Forwarded-For"], ["Host", "Host"], ["Via", "Via"], ["X-Cloud-Trace-Context", "X-Cloud-Trace-Context"]]
+    answer: 0
+    why: ["El balanceador añade la IP del cliente a X-Forwarded-For.", "The load balancer appends the client IP to X-Forwarded-For."]
+  - q: ["¿Qué dos condiciones necesita un certificado gestionado para pasar a ACTIVE?", "Which two conditions does a managed certificate need to become ACTIVE?"]
+    options: [["Estar en el proxy de destino del balanceador y que el DNS apunte a su IP", "Being on the load balancer's target proxy and DNS pointing to its IP"], ["Una VM con nginx y el puerto 80 abierto", "A VM with nginx and port 80 open"], ["Una clave privada subida y un CSR", "An uploaded private key and a CSR"], ["Cloud Armor y CDN activados", "Cloud Armor and CDN enabled"]]
+    answer: 0
+    why: ["Sin ambas, la validación del dominio no puede completarse.", "Without both, domain validation can't complete."]
+  - q: ["¿Qué ocurre al cambiar la clave MD5 de una sesión BGP?", "What happens when you change a BGP session's MD5 key?"]
+    options: [["La sesión se reinicia y hay un corte breve", "The session restarts and there's a brief drop"], ["No pasa nada, es transparente", "Nothing, it's transparent"], ["Se borra el Cloud Router", "The Cloud Router is deleted"], ["Se pierden todas las rutas para siempre", "All routes are lost for good"]]
+    answer: 0
+    why: ["Es un comportamiento esperado: planifícalo.", "It's expected behaviour: schedule it."]
+  - q: ["Un backend sano para nginx pero UNHEALTHY para el balanceador suele indicar…", "A backend healthy for nginx but UNHEALTHY for the load balancer usually means…"]
+    options: [["Que el cortafuegos bloquea las sondas de salud", "The firewall is blocking the health probes"], ["Que la VM está apagada", "The VM is off"], ["Que falta una IP pública en la VM", "The VM is missing a public IP"], ["Que hay una incidencia de Google", "There's a Google incident"]]
+    answer: 0
+    why: ["Si las sondas no llegan, el backend se marca no sano aunque funcione.", "If the probes don't arrive, the backend is marked unhealthy even though it works."]

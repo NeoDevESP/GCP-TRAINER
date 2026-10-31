@@ -1,0 +1,75 @@
+id: support-governance
+branch: security
+name: ["Casos de soporte: registros, proyectos y facturación", "Support cases: logs, projects and billing"]
+intro: ["Consultas de Logging que no devuelven nada, sinks que no entregan, proyectos que no se dejan borrar (liens) y cuentas de facturación suspendidas: los casos de gobierno que más paran a un equipo.", "Logging queries that return nothing, sinks that don't deliver, projects that won't delete (liens) and suspended billing accounts: the governance cases that stall teams the most."]
+concepts:
+  - id: lql
+    term: ["Logging Query Language sin trampas", "Logging Query Language without traps"]
+    what: ["Muchas consultas «vacías» son errores de sintaxis que no avisan.", "Many \"empty\" queries are syntax mistakes that don't warn you."]
+    points:
+      - ["insertId = (\"A\" OR \"B\"): los paréntesis agrupan los valores. Sin ellos, \"B\" se busca como texto en todos los campos.", "insertId = (\"A\" OR \"B\"): parentheses group the values. Without them, \"B\" is searched as text in every field."]
+      - ["Entrecomilla los valores con caracteres especiales (dos puntos, barras, guiones).", "Quote values with special characters (colons, slashes, hyphens)."]
+      - ["Usa la ruta de campo directa (p. ej. protoPayload.status.details.conditionNotMet) y filtra por timestamp y resource.type para ir rápido.", "Use the direct field path (e.g. protoPayload.status.details.conditionNotMet) and filter on timestamp and resource.type to go fast."]
+      - ["NOT y los operadores tienen precedencia: en caso de duda, paréntesis.", "NOT and operators have precedence: when in doubt, parentheses."]
+    tip: ["Si una consulta no devuelve nada, quita filtros uno a uno hasta que aparezca algo.", "If a query returns nothing, remove filters one by one until something shows up."]
+  - id: sinks
+    term: ["Sinks del Log Router", "Log Router sinks"]
+    what: ["Copian los registros que cumplen un filtro a Cloud Storage, BigQuery, Pub/Sub u otro bucket de registros.", "They copy the logs matching a filter to Cloud Storage, BigQuery, Pub/Sub or another log bucket."]
+    points:
+      - ["Cada sink escribe con su identidad (writerIdentity).", "Each sink writes with its own identity (writerIdentity)."]
+      - ["Esa identidad necesita permiso en el destino: objectCreator en un bucket, dataEditor en BigQuery, publisher en Pub/Sub.", "That identity needs permission on the destination: objectCreator on a bucket, dataEditor on BigQuery, publisher on Pub/Sub."]
+      - ["Sin permiso, los registros no llegan y no ves un error en tu consola.", "Without permission, logs don't arrive and you see no error in your console."]
+      - ["Para retención normativa: bucket en la UE con retención (y bloqueo solo con aprobación, porque es irreversible).", "For regulatory retention: an EU bucket with retention (and locking only with approval, since it's irreversible)."]
+    tip: ["Después de crear un sink, comprueba que llegan datos al destino.", "After creating a sink, check that data reaches the destination."]
+  - id: liens
+    term: ["Liens: proyectos que no se dejan borrar", "Liens: projects that won't delete"]
+    what: ["Un lien es una marca sobre el proyecto que impide borrarlo hasta que se retire.", "A lien is a marker on the project that blocks its deletion until removed."]
+    points:
+      - ["Algunos servicios los crean solos (p. ej. si otro proyecto usa este como host).", "Some services create them automatically (e.g. when another project uses this one as a host)."]
+      - ["Listar: gcloud alpha resource-manager liens list --project=PROYECTO.", "List: gcloud alpha resource-manager liens list --project=PROJECT."]
+      - ["Retirar necesita resourcemanager.projects.updateLiens (rol roles/resourcemanager.lienModifier).", "Removing needs resourcemanager.projects.updateLiens (role roles/resourcemanager.lienModifier)."]
+      - ["Antes de retirar un lien, averigua por qué está: protege algo.", "Before removing a lien, find out why it's there: it protects something."]
+    tip: ["Un proyecto borrado se puede recuperar durante 30 días con gcloud projects undelete.", "A deleted project can be recovered for 30 days with gcloud projects undelete."]
+  - id: billing
+    term: ["Cuenta de facturación suspendida", "Suspended billing account"]
+    what: ["Sin una cuenta de facturación activa, los recursos de todos sus proyectos se paran.", "Without an active billing account, resources in all its projects stop."]
+    points:
+      - ["Causas: método de pago rechazado o caducado, incumplimiento de las condiciones de uso o sospecha de fraude (p. ej. minería).", "Causes: declined or expired payment method, terms-of-service violations or suspected fraud (e.g. mining)."]
+      - ["Es crítico para el negocio aunque no sea un fallo técnico: se gestiona con la máxima urgencia.", "It's business-critical even though it isn't a technical fault: handle it with top urgency."]
+      - ["Lo resuelve el administrador del perfil de pagos (o Google, si es un bloqueo por política).", "The payments profile administrator resolves it (or Google, for a policy block)."]
+      - ["Al reactivarla, muchos recursos (VMs, por ejemplo) hay que volver a arrancarlos a mano.", "Once reactivated, many resources (VMs, for example) must be started again by hand."]
+    tip: ["Prevención: método de pago de respaldo, alertas de presupuesto y quién es el administrador de facturación.", "Prevention: a backup payment method, budget alerts and knowing who the billing administrator is."]
+scenarios:
+  - q: ["gcloud logging read 'insertId = \"A1\" OR \"A2\"' devuelve miles de entradas que no tienen nada que ver.", "gcloud logging read 'insertId = \"A1\" OR \"A2\"' returns thousands of unrelated entries."]
+    options: [["Agrupar los valores: insertId = (\"A1\" OR \"A2\")", "Group the values: insertId = (\"A1\" OR \"A2\")"], ["Abrir un caso porque Logging falla", "Open a case because Logging is broken"], ["Exportar todo a BigQuery para buscar", "Export everything to BigQuery to search"], ["Añadir --limit=1", "Add --limit=1"]]
+    answer: 0
+    why: ["Sin paréntesis, \"A2\" se busca como texto libre en todos los campos.", "Without parentheses, \"A2\" is searched as free text in every field."]
+  - q: ["FinOps no puede borrar un proyecto experimental: «cannot be deleted because it has a lien».", "FinOps can't delete an experimental project: \"cannot be deleted because it has a lien\"."]
+    options: [["Listar los liens, averiguar quién y por qué lo puso y retirarlo con el rol adecuado si procede", "List the liens, find out who placed it and why, and remove it with the right role if appropriate"], ["Dar roles/owner a FinOps", "Give roles/owner to FinOps"], ["Quitar la cuenta de facturación al proyecto", "Unlink the billing account from the project"], ["Abrir un P1 a Google", "Open a P1 with Google"]]
+    answer: 0
+    why: ["Ni owner basta: hace falta updateLiens, y el lien suele proteger algo.", "Not even owner is enough: updateLiens is needed, and the lien usually protects something."]
+  - q: ["A las 3:00 todos los proyectos de una cuenta de facturación se paran: la tarjeta ha caducado.", "At 3:00 every project on a billing account stops: the card has expired."]
+    options: [["Avisar al administrador del perfil de pagos para actualizarlo, y después arrancar los recursos parados", "Alert the payments profile administrator to update it, then start the stopped resources"], ["Crear proyectos nuevos y migrar todo", "Create new projects and migrate everything"], ["Esperar a que Google lo reactive solo", "Wait for Google to reactivate it on its own"], ["Borrar los proyectos y restaurarlos", "Delete the projects and restore them"]]
+    answer: 0
+    why: ["Primero pagos; después hay que volver a levantar lo que se paró.", "Payments first; then bring back up what stopped."]
+quiz:
+  - q: ["¿Qué identidad escribe los registros de un sink en su destino?", "Which identity writes a sink's logs to its destination?"]
+    options: [["La writerIdentity del sink", "The sink's writerIdentity"], ["Quien creó el sink", "Whoever created the sink"], ["La cuenta de servicio de Compute por defecto", "The default Compute service account"], ["El propietario del proyecto", "The project owner"]]
+    answer: 0
+    why: ["Cada sink tiene su propia identidad de escritura.", "Each sink has its own writer identity."]
+  - q: ["¿Qué permiso hace falta para retirar un lien?", "Which permission is needed to remove a lien?"]
+    options: [["resourcemanager.projects.updateLiens", "resourcemanager.projects.updateLiens"], ["resourcemanager.projects.delete", "resourcemanager.projects.delete"], ["billing.accounts.update", "billing.accounts.update"], ["iam.roles.update", "iam.roles.update"]]
+    answer: 0
+    why: ["Está en roles/resourcemanager.lienModifier.", "It's in roles/resourcemanager.lienModifier."]
+  - q: ["¿Cuánto tiempo se puede recuperar un proyecto borrado?", "How long can a deleted project be recovered?"]
+    options: [["30 días", "30 days"], ["7 días", "7 days"], ["90 días", "90 days"], ["No se puede", "It can't"]]
+    answer: 0
+    why: ["Durante 30 días con gcloud projects undelete.", "For 30 days with gcloud projects undelete."]
+  - q: ["¿Qué pasa tras reactivar una cuenta de facturación suspendida?", "What happens after a suspended billing account is reactivated?"]
+    options: [["Muchos recursos hay que arrancarlos de nuevo a mano", "Many resources must be started again by hand"], ["Todo vuelve exactamente como estaba sin hacer nada", "Everything returns exactly as it was with no action"], ["Los proyectos se borran", "The projects are deleted"], ["Hay que crear una cuenta nueva", "A new account must be created"]]
+    answer: 0
+    why: ["El estado parado se mantiene: hay que levantarlos.", "The stopped state persists: they must be brought up."]
+  - q: ["Un valor de LQL con dos puntos sin comillas puede…", "An LQL value with a colon and no quotes can…"]
+    options: [["Interpretarse como otro operador y dar resultados equivocados", "Be parsed as another operator and give wrong results"], ["Funcionar siempre igual", "Always work the same"], ["Borrar registros", "Delete logs"], ["Exportar registros", "Export logs"]]
+    answer: 0
+    why: ["Entrecomilla los valores con caracteres especiales.", "Quote values with special characters."]

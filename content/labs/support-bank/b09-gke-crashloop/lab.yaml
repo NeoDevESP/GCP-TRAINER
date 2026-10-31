@@ -1,0 +1,241 @@
+id: bank-b09-gke-crashloop
+title: INC P2 · Las ofertas de tarjetas no cargan tras el despliegue de las 11:00
+summary: Pods en CrashLoopBackOff justo después de un despliegue. Lee los registros del contenedor que se cae, vuelve a la versión anterior y deja al equipo lo que necesita para arreglar la nueva.
+track: support-bank
+day: 9
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.troubleshooting
+- gke.workloads
+- observability.incident
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+- PCDE
+difficulty: 3
+minutes: 35
+baseline:
+- bank-atlas
+setup: |
+  gcloud container clusters create tarjetas-gke --zone={{.zone}} --num-nodes=2 --machine-type=e2-standard-2 --network=atlas-vpc --subnetwork=app-subnet --enable-private-nodes
+  gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+  cat > ofertas.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: ofertas-api}
+  spec:
+    replicas: 3
+    selector: {matchLabels: {app: ofertas-api}}
+    template:
+      metadata: {labels: {app: ofertas-api}}
+      spec:
+        containers:
+        - name: ofertas-api
+          image: europe-docker.pkg.dev/gcplab-public/apps/catalog-api:2.3
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: ofertas-api}
+  spec:
+    selector: {app: ofertas-api}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  kubectl apply -f ofertas.yaml
+faults:
+- type: k8s_image
+  cluster: tarjetas-gke
+  deployment: ofertas-api
+  image: europe-docker.pkg.dev/gcplab-public/apps/catalog-api:2.4
+  actor: deploy-pipeline@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-22710
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Canal digital · Tarjetas
+  summary: Desde las 11:00 la sección de ofertas de tarjetas de la app no carga. Coincide con el despliegue de la versión 2.4 de ofertas-api en el clúster tarjetas-gke.
+actors:
+- role: dev
+  name: Álvaro Prieto (Desarrollo · Tarjetas)
+  persona: Desarrollador de ofertas-api.
+  fallback: La 2.4 añade la configuración de ofertas personalizadas. En preproducción funcionaba.
+  facts:
+  - keywords:
+    - - flag
+      - variable
+      - feature
+      - config
+      - falta
+      - missing
+    answer: ¡Vaya! La 2.4 necesita la variable FEATURE_FLAGS_URL y en producción no la hemos definido. Volved a la 2.3 y lo arreglamos en el siguiente despliegue.
+  - keywords:
+    - - volver
+      - rollback
+      - anterior
+      - deshacer
+      - undo
+      - revert
+    answer: 'Sí, volved a la versión anterior sin problema: la 2.3 es estable.'
+- role: manager
+  name: Lucía Ferrer (responsable de guardia)
+  persona: Coordina los incidentes de producción.
+  fallback: En un P2 primero recuperamos el servicio; el arreglo de fondo, después y por cambio.
+  facts: []
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`). **P2: plazo de 4 horas.**
+
+  > **INC-22710** · *«Desde las 11:00 la sección de ofertas de tarjetas de la app no carga. Coincide con el despliegue de la
+  > versión 2.4 de ofertas-api en el clúster tarjetas-gke.»*
+
+  Conecta `kubectl` al clúster con `gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}`. Un pod en **CrashLoopBackOff** arranca, se cae y Kubernetes lo reinicia una y otra vez: la causa
+  está en **los registros del contenedor**, no en el clúster. Reiniciar o añadir réplicas no sirve de nada.
+objectives:
+- Publica una primera actualización y mira el estado de los pods
+- Encuentra en los registros del contenedor por qué se cae
+- Vuelve a la versión anterior y comprueba que los pods están listos
+- Deja la causa en una nota interna para Desarrollo y cierra
+hints:
+- text: '`kubectl get pods` y `kubectl logs deployment/ofertas-api` muestran el estado y el error del contenedor.'
+- text: '`kubectl rollout history deployment/ofertas-api` y `kubectl rollout undo deployment/ofertas-api` vuelven a la versión anterior.'
+solution: |
+  ticket
+  ticket update "Estamos revisando el fallo de la sección de ofertas tras el despliegue de las 11:00. Próxima actualización en 30 minutos."
+  gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+  kubectl get pods
+  kubectl describe deployment ofertas-api
+  kubectl logs deployment/ofertas-api
+  ask dev "¿qué cambia la 2.4 y falta alguna configuración?"
+  kubectl rollout history deployment/ofertas-api
+  kubectl rollout undo deployment/ofertas-api
+  kubectl rollout status deployment/ofertas-api
+  kubectl get pods
+  ticket comment "Causa: la versión 2.4 (catalog-api:2.4) se cae al arrancar porque falta la variable FEATURE_FLAGS_URL en producción. Hecho rollout undo a la 2.3. Desarrollo debe añadir la variable antes de volver a desplegar la 2.4."
+  ticket update "Resuelto: hemos vuelto a la versión anterior de ofertas-api y la sección de ofertas funciona. La versión 2.4 se volverá a desplegar cuando Desarrollo corrija su configuración."
+  ticket resolve "Rollout undo de ofertas-api a la versión 2.3; la 2.4 fallaba al arrancar por falta de configuración. Pods listos comprobados."
+shortcuts:
+- name: restart pods and add replicas
+  run: |
+    gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+    kubectl delete pods -l app=ofertas-api
+    kubectl scale deployment ofertas-api --replicas=6
+    ticket update "Hemos reiniciado los pods y añadido réplicas."
+    ticket resolve "Reiniciados los pods y escalado ofertas-api a 6 réplicas."
+rubric:
+- name: Servicio recuperado
+  validator: functional
+  points: 30
+  checks:
+  - type: k8s_ready
+    cluster: tarjetas-gke
+    deployment: ofertas-api
+    min: 3
+    desc: 3 pods de ofertas-api listos
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: kubectl (logs|describe)
+    min: 1
+    desc: Registros del contenedor revisados
+  - type: command
+    regex: rollout undo
+    min: 1
+    desc: Vuelta atrás con rollout undo
+- name: Gestión del incidente
+  validator: evidence
+  points: 45
+  all: true
+  checks:
+  - type: ticket_update
+    min: 2
+    desc: Actualización inicial y otra al resolver
+  - type: ticket_update
+    public: false
+    keywords:
+    - - feature_flags_url
+      - variable
+      - configuracion
+      - config
+    - - '2.4'
+    desc: Nota interna con la causa para Desarrollo
+  - type: ticket_resolved
+    keywords:
+    - - undo
+      - anterior
+      - rollback
+      - '2.3'
+      - previous
+    desc: Cerrado con la vuelta atrás
+tutor:
+- match: get-credentials
+  title: Conecta kubectl al clúster
+  why: get-credentials guarda en tu kubeconfig cómo llegar al clúster; sin eso kubectl no sabe a qué clúster hablar.
+- match: '@intro'
+  title: ''
+  why: CrashLoopBackOff significa que el contenedor arranca y se muere. Los registros del contenedor dicen por qué; reiniciarlo solo repite el fallo.
+- match: kubectl logs
+  title: Lee el error del contenedor
+  why: 'El último mensaje antes de morir suele ser la causa: aquí, una variable de configuración que falta.'
+- match: rollout undo
+  title: ''
+  why: Volver a la versión anterior recupera el servicio en segundos. El arreglo de la 2.4 lo hace Desarrollo y entra por un despliegue nuevo.
+en:
+  title: INC P2 · Card offers won't load after the 11:00 deployment
+  summary: Pods in CrashLoopBackOff right after a deployment. Read the logs of the crashing container, roll back to the previous version and give the team what it needs to fix the new one.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`). **P2: 4-hour target.**
+
+    > **INC-22710** · *"Since 11:00 the card offers section of the app won't load. It matches the deployment of version 2.4 of
+    > ofertas-api on the tarjetas-gke cluster."*
+
+    Connect `kubectl` to the cluster with `gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}`. A pod in **CrashLoopBackOff** starts, crashes and Kubernetes restarts it again and again:
+    the cause is in **the container's logs**, not in the cluster. Restarting or adding replicas won't help.
+  objectives:
+  - Post a first update and check the pods' status
+  - Find in the container logs why it crashes
+  - Roll back to the previous version and check the pods are ready
+  - Leave the cause in an internal note for Development and close
+  hints:
+  - '`kubectl get pods` and `kubectl logs deployment/ofertas-api` show the status and the container''s error.'
+  - '`kubectl rollout history deployment/ofertas-api` and `kubectl rollout undo deployment/ofertas-api` go back to the previous version.'
+  ticket:
+    summary: Since 11:00 the card offers section of the app won't load. It matches the deployment of version 2.4 of ofertas-api on the tarjetas-gke cluster.
+  text:
+    Canal digital · Tarjetas: Digital channel · Cards
+    Álvaro Prieto (Desarrollo · Tarjetas): Álvaro Prieto (Development · Cards)
+    Desarrollador de ofertas-api.: Developer of ofertas-api.
+    La 2.4 añade la configuración de ofertas personalizadas. En preproducción funcionaba.: 2.4 adds the personalised offers configuration. It worked in pre-production.
+    ? ¡Vaya! La 2.4 necesita la variable FEATURE_FLAGS_URL y en producción no la hemos definido. Volved a la 2.3 y lo arreglamos en el siguiente despliegue.
+    : Oops! 2.4 needs the FEATURE_FLAGS_URL variable and we haven't set it in production. Go back to 2.3 and we'll fix it in the next deployment.
+    'Sí, volved a la versión anterior sin problema: la 2.3 es estable.': 'Yes, go back to the previous version, no problem: 2.3 is stable.'
+    Lucía Ferrer (responsable de guardia): Lucía Ferrer (on-call lead)
+    Coordina los incidentes de producción.: Coordinates production incidents.
+    En un P2 primero recuperamos el servicio; el arreglo de fondo, después y por cambio.: In a P2 we restore the service first; the real fix comes later, through a change.
+    Servicio recuperado: Service restored
+    3 pods de ofertas-api listos: 3 ofertas-api pods ready
+    Diagnóstico: Diagnosis
+    Registros del contenedor revisados: Container logs checked
+    Vuelta atrás con rollout undo: Rolled back with rollout undo
+    Gestión del incidente: Incident handling
+    Actualización inicial y otra al resolver: An initial update and another on resolution
+    Nota interna con la causa para Desarrollo: Internal note with the cause for Development
+    Cerrado con la vuelta atrás: Closed with the rollback
+    Conecta kubectl al clúster: Connect kubectl to the cluster
+    get-credentials guarda en tu kubeconfig cómo llegar al clúster; sin eso kubectl no sabe a qué clúster hablar.: get-credentials stores in your kubeconfig how to reach the cluster; without it kubectl doesn't know which cluster to talk to.
+    ? CrashLoopBackOff significa que el contenedor arranca y se muere. Los registros del contenedor dicen por qué; reiniciarlo solo repite el fallo.
+    : CrashLoopBackOff means the container starts and dies. Its logs say why; restarting it just repeats the failure.
+    Lee el error del contenedor: Read the container's error
+    'El último mensaje antes de morir suele ser la causa: aquí, una variable de configuración que falta.': 'The last message before dying is usually the cause: here, a missing configuration variable.'
+    ? Volver a la versión anterior recupera el servicio en segundos. El arreglo de la 2.4 lo hace Desarrollo y entra por un despliegue nuevo.
+    : Rolling back restores the service in seconds. Development fixes 2.4 and it comes in through a new deployment.

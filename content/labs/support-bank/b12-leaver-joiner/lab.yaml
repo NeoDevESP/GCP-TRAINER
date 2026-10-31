@@ -1,0 +1,247 @@
+id: bank-b12-leaver-joiner
+title: 'REQ · Baja de un empleado y alta de otro: «dadle los mismos permisos»'
+summary: 'Quita todos los accesos de quien se va, no solo los del proyecto, y no copies sus permisos a quien entra: en el banco los accesos van por grupos.'
+track: support-bank
+day: 12
+level: basic
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.leastprivilege
+- iam.roles
+- storage.access
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 30
+baseline:
+- bank-atlas
+setup: |
+  gcloud storage buckets create gs://ops-scripts-{{.project}} --location=EU --uniform-bucket-level-access
+  echo -n "ops-pass-1" | gcloud secrets create ops-db-password --data-file=-
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:ops-plataforma@gcplab.dev --role=roles/compute.instanceAdmin.v1
+  gcloud storage buckets add-iam-policy-binding gs://ops-scripts-{{.project}} --member=group:ops-plataforma@gcplab.dev --role=roles/storage.objectViewer
+  gcloud projects add-iam-policy-binding {{.project}} --member=user:pedro.saez@gcplab.dev --role=roles/compute.instanceAdmin.v1
+  gcloud storage buckets add-iam-policy-binding gs://ops-scripts-{{.project}} --member=user:pedro.saez@gcplab.dev --role=roles/storage.objectAdmin
+  gcloud secrets add-iam-policy-binding ops-db-password --member=user:pedro.saez@gcplab.dev --role=roles/secretmanager.secretAccessor
+  gcloud iam service-accounts add-iam-policy-binding movimientos-sa@{{.project}}.iam.gserviceaccount.com --member=user:pedro.saez@gcplab.dev --role=roles/iam.serviceAccountUser
+ticket:
+  id: REQ-10988
+  kind: REQ
+  priority: P3
+  sla: 2d
+  reporter: Marcos Gil (responsable de Operaciones)
+  summary: 'Pedro Sáez deja el banco el viernes. El lunes entra Irene Díaz en su puesto: quitadle los accesos a Pedro y dadle a Irene los mismos que tenía él, por favor.'
+actors:
+- role: requester
+  name: Marcos Gil (responsable de Operaciones)
+  persona: Jefe del equipo de operaciones.
+  fallback: Irene hará lo mismo que el resto del equipo de operaciones.
+  facts:
+  - keywords:
+    - - grupo
+      - equipo
+      - group
+      - team
+      - resto
+    answer: Todo el equipo está en el grupo ops-plataforma. Pedro tenía además algunos permisos sueltos de cuando montó los scripts.
+- role: identity
+  name: Equipo de Identidad
+  persona: Gestionan las cuentas y los grupos de Cloud Identity.
+  fallback: Las altas en grupos las hacemos nosotros con la solicitud del responsable.
+  facts:
+  - keywords:
+    - - irene
+      - alta
+      - grupo
+      - group
+      - joiner
+    answer: Irene entra el lunes en el grupo ops-plataforma; con eso tendrá los permisos del equipo. Nada de permisos directos a personas.
+  - keywords:
+    - - pedro
+      - baja
+      - cuenta
+      - leaver
+      - desactiv
+    answer: Su cuenta se desactiva el viernes, pero los permisos directos que tenga en Google Cloud los tenéis que quitar vosotros.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **REQ-10988** · *«Pedro Sáez deja el banco el viernes. El lunes entra Irene Díaz en su puesto: quitadle los accesos a Pedro y
+  > dadle a Irene los mismos que tenía él, por favor.»*
+
+  Los permisos se pueden conceder en **muchos sitios**: el proyecto, cada bucket, cada secreto, cada cuenta de servicio… Una baja
+  solo está bien hecha cuando no queda ninguno. Y en el banco los accesos se dan **a grupos**, no copiando los de otra persona.
+objectives:
+- Localiza todos los permisos directos de Pedro, no solo los del proyecto
+- Quítalos todos sin tocar los del grupo del equipo
+- Averigua cómo se da de alta a Irene y no le concedas permisos directos
+- Contesta al responsable y cierra
+hints:
+- text: Revisa las políticas del proyecto, del bucket `ops-scripts-{{.project}}`, del secreto `ops-db-password` y de la cuenta `movimientos-sa` con `get-iam-policy`.
+- text: 'Pregunta al equipo de Identidad cómo entra Irene: `ask identity "..."`.'
+solution: |
+  ticket
+  gcloud projects get-iam-policy {{.project}}
+  gcloud storage buckets get-iam-policy gs://ops-scripts-{{.project}}
+  gcloud secrets get-iam-policy ops-db-password
+  gcloud iam service-accounts get-iam-policy movimientos-sa@{{.project}}.iam.gserviceaccount.com
+  ask requester "¿qué permisos necesita Irene, los del equipo?"
+  ask identity "¿cómo damos de alta a Irene en el grupo del equipo?"
+  gcloud projects remove-iam-policy-binding {{.project}} --member=user:pedro.saez@gcplab.dev --role=roles/compute.instanceAdmin.v1
+  gcloud storage buckets remove-iam-policy-binding gs://ops-scripts-{{.project}} --member=user:pedro.saez@gcplab.dev --role=roles/storage.objectAdmin
+  gcloud secrets remove-iam-policy-binding ops-db-password --member=user:pedro.saez@gcplab.dev --role=roles/secretmanager.secretAccessor
+  gcloud iam service-accounts remove-iam-policy-binding movimientos-sa@{{.project}}.iam.gserviceaccount.com --member=user:pedro.saez@gcplab.dev --role=roles/iam.serviceAccountUser
+  ticket comment "Pedro tenía permisos directos en el proyecto (compute.instanceAdmin), en el bucket ops-scripts (objectAdmin), en el secreto ops-db-password y sobre movimientos-sa (serviceAccountUser). Retirados todos. Irene entra el lunes en el grupo ops-plataforma, gestionado por Identidad."
+  ticket update "Hola Marcos: hemos retirado todos los accesos de Pedro, también los que tenía sueltos en un bucket, un secreto y una cuenta de servicio. Irene no necesita permisos propios: tendrá los del equipo al entrar en el grupo ops-plataforma, que Identidad le da el lunes."
+  ticket resolve "Retirados los cuatro permisos directos de Pedro Sáez; Irene recibe acceso por el grupo ops-plataforma, sin permisos directos."
+shortcuts:
+- name: copy project role to the newcomer, remove only the project role of the leaver
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:irene.diaz@gcplab.dev --role=roles/compute.instanceAdmin.v1
+    gcloud projects remove-iam-policy-binding {{.project}} --member=user:pedro.saez@gcplab.dev --role=roles/compute.instanceAdmin.v1
+    ticket update "Hecho: Pedro ya no tiene acceso y Irene tiene sus mismos permisos."
+    ticket resolve "Quitado compute.instanceAdmin a Pedro y dado a Irene."
+rubric:
+- name: Baja completa
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:pedro.saez@gcplab.dev
+    permission: compute.instances.start
+    resource: project
+    expect: false
+    desc: Sin permisos en el proyecto
+  - type: iam
+    principal: user:pedro.saez@gcplab.dev
+    permission: storage.objects.delete
+    resource: bucket:ops-scripts-{{.project}}
+    expect: false
+    desc: Sin permisos en el bucket
+  - type: iam
+    principal: user:pedro.saez@gcplab.dev
+    permission: secretmanager.versions.access
+    resource: secret:ops-db-password
+    expect: false
+    desc: Sin acceso al secreto
+  - type: iam
+    principal: user:pedro.saez@gcplab.dev
+    permission: iam.serviceAccounts.actAs
+    resource: sa:movimientos-sa@{{.project}}.iam.gserviceaccount.com
+    expect: false
+    desc: No puede usar la cuenta de servicio
+- name: Accesos por grupo
+  validator: security
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:irene.diaz@gcplab.dev
+    permission: compute.instances.start
+    resource: project
+    expect: false
+    desc: Ningún permiso directo a Irene
+  - type: iam
+    principal: group:ops-plataforma@gcplab.dev
+    permission: compute.instances.start
+    resource: project
+    desc: El grupo del equipo conserva sus permisos
+- name: Revisión y consulta
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: get-iam-policy
+    min: 3
+    desc: Revisados proyecto, bucket, secreto y cuenta de servicio
+  - type: asked
+    actor: identity
+    min: 1
+    desc: Consultado con Identidad
+- name: Comunicación
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - grupo
+      - group
+      - ops-plataforma
+    - - irene
+    desc: Explica que Irene accede por el grupo
+  - type: ticket_resolved
+    keywords:
+    - - pedro
+    desc: Cerrado con lo retirado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Una baja mal hecha deja puertas abiertas: un permiso olvidado en un bucket o un secreto sigue funcionando aunque la persona ya no esté.'
+- match: buckets get-iam-policy
+  title: Revisa también los recursos
+  why: 'Los permisos del proyecto no lo son todo: buckets, secretos y cuentas de servicio tienen su propia política.'
+- match: ^ask identity
+  title: ''
+  why: '«Dale los mismos permisos que a otra persona» es una mala práctica: se arrastran excepciones. El acceso del puesto lo da el grupo.'
+en:
+  title: 'REQ · One employee leaves, another joins: "give her the same permissions"'
+  summary: 'Remove every access of the leaver, not just the project ones, and don''t copy their permissions to the newcomer: at the bank, access goes through groups.'
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **REQ-10988** · *"Pedro Sáez leaves the bank on Friday. On Monday Irene Díaz takes his place: please remove Pedro's access and
+    > give Irene the same he had."*
+
+    Permissions can be granted in **many places**: the project, each bucket, each secret, each service account… A leaver is only
+    handled properly when none remain. And at the bank access goes **to groups**, not by copying someone else's.
+  objectives:
+  - Find all of Pedro's direct permissions, not just the project ones
+  - Remove them all without touching the team group's
+  - Find out how Irene is onboarded and grant her no direct permissions
+  - Reply to the manager and close
+  hints:
+  - Check the policies of the project, the `ops-scripts-{{.project}}` bucket, the `ops-db-password` secret and the `movimientos-sa` account with `get-iam-policy`.
+  - 'Ask the Identity team how Irene joins: `ask identity "..."`.'
+  ticket:
+    summary: 'Pedro Sáez leaves the bank on Friday. On Monday Irene Díaz takes his place: please remove Pedro''s access and give Irene the same he had.'
+  text:
+    Marcos Gil (responsable de Operaciones): Marcos Gil (Operations lead)
+    Jefe del equipo de operaciones.: Head of the operations team.
+    Irene hará lo mismo que el resto del equipo de operaciones.: Irene will do the same as the rest of the operations team.
+    Todo el equipo está en el grupo ops-plataforma. Pedro tenía además algunos permisos sueltos de cuando montó los scripts.: The whole team is in the ops-plataforma group. Pedro also had some loose permissions from when he set up the scripts.
+    Equipo de Identidad: Identity team
+    Gestionan las cuentas y los grupos de Cloud Identity.: They manage Cloud Identity accounts and groups.
+    Las altas en grupos las hacemos nosotros con la solicitud del responsable.: We handle group memberships on the manager's request.
+    ? Irene entra el lunes en el grupo ops-plataforma; con eso tendrá los permisos del equipo. Nada de permisos directos a personas.
+    : Irene joins the ops-plataforma group on Monday; that gives her the team's permissions. No direct permissions to people.
+    Su cuenta se desactiva el viernes, pero los permisos directos que tenga en Google Cloud los tenéis que quitar vosotros.: His account is disabled on Friday, but you must remove any direct Google Cloud permissions he has.
+    Baja completa: Complete removal
+    Sin permisos en el proyecto: No permissions on the project
+    Sin permisos en el bucket: No permissions on the bucket
+    Sin acceso al secreto: No access to the secret
+    No puede usar la cuenta de servicio: Cannot use the service account
+    Accesos por grupo: Access through groups
+    Ningún permiso directo a Irene: No direct permission for Irene
+    El grupo del equipo conserva sus permisos: The team group keeps its permissions
+    Revisión y consulta: Review and consultation
+    Revisados proyecto, bucket, secreto y cuenta de servicio: Project, bucket, secret and service account reviewed
+    Consultado con Identidad: Checked with Identity
+    Comunicación: Communication
+    Explica que Irene accede por el grupo: Explains Irene gets access through the group
+    Cerrado con lo retirado: Closed with what was removed
+    ? 'Una baja mal hecha deja puertas abiertas: un permiso olvidado en un bucket o un secreto sigue funcionando aunque la persona ya no esté.'
+    : 'A sloppy leaver process leaves doors open: a forgotten permission on a bucket or secret keeps working after the person has gone.'
+    Revisa también los recursos: Check the resources too
+    'Los permisos del proyecto no lo son todo: buckets, secretos y cuentas de servicio tienen su propia política.': 'Project permissions aren''t everything: buckets, secrets and service accounts have their own policies.'
+    ? '«Dale los mismos permisos que a otra persona» es una mala práctica: se arrastran excepciones. El acceso del puesto lo da el grupo.'
+    : '"Give her the same permissions as someone else" is bad practice: exceptions get carried over. The role''s access comes from the group.'

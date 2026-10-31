@@ -1,0 +1,254 @@
+id: bank-b11-bill-spike
+title: COST · La previsión de gasto del proyecto se ha multiplicado por 20
+summary: Explica la subida con la factura y el recomendador, actúa solo con el visto bueno de cada responsable, no toques producción y deja una alerta de presupuesto.
+track: support-bank
+day: 11
+level: intermediate
+branch: finops
+type: incident
+mode: production
+skills:
+- finops.visibility
+- finops.optimization
+- architecture.cost
+- foundations.billing
+wellArchitected:
+- cost
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 40
+baseline:
+- bank-atlas
+faults:
+- type: bill_snapshot
+- type: command
+  run: gcloud compute instances create modelo-riesgo-gpu --zone={{.zone}} --machine-type=g2-standard-4 --accelerator=type=nvidia-l4,count=1 --subnet=app-subnet --no-address --labels=team=riesgos,sim-cpu=idle --image-family=debian-12 --image-project=debian-cloud
+- type: command
+  run: gcloud compute instances create informes-batch --zone={{.zone}} --machine-type=n2-standard-16 --subnet=app-subnet --no-address --labels=team=finanzas,sim-cpu=low --image-family=debian-12 --image-project=debian-cloud
+- type: command
+  run: gcloud compute disks create migracion-old-1 migracion-old-2 --zone={{.zone}} --size=500 --type=pd-ssd
+constraints:
+- protect:movimientos-api
+- protect:movimientos-db
+ticket:
+  id: COST-1187
+  kind: COST
+  priority: P3
+  sla: 2d
+  reporter: Control de gestión · Tecnología
+  summary: La previsión de este mes del proyecto es unas 20 veces la del mes pasado. Necesitamos saber qué ha pasado y volver a la normalidad sin afectar a la aplicación de movimientos.
+actors:
+- role: data
+  name: Sonia Ruiz (Modelos de riesgo)
+  persona: Científica de datos del equipo de riesgos.
+  fallback: Hace semanas probamos un modelo en una GPU.
+  facts:
+  - keywords:
+    - - gpu
+      - modelo-riesgo
+      - borrar
+      - delete
+      - elimin
+    answer: ¿modelo-riesgo-gpu? Esa prueba terminó hace un mes y los resultados están guardados. Podéis borrarla.
+- role: finance
+  name: Óscar Vega (Finanzas)
+  persona: Responsable de los informes de cierre.
+  fallback: informes-batch genera nuestros informes nocturnos.
+  facts:
+  - keywords:
+    - - informes-batch
+      - batch
+      - informes
+    answer: informes-batch se tiene que quedar, pero no necesita una máquina tan grande; con 4 vCPU le sobra.
+  - keywords:
+    - - disco
+      - disk
+      - migracion
+      - old
+    answer: Los discos migracion-old son de la migración de mayo. Guardad un snapshot para auditoría y borradlos.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **COST-1187** · *«La previsión de este mes es unas 20 veces la del mes pasado. Necesitamos saber qué ha pasado y volver a la
+  > normalidad sin afectar a la aplicación de movimientos.»*
+
+  Herramientas: `gcloud billing report` (con `--group-by=resource` o `--group-by=label:team`) y el recomendador
+  (`gcloud recommender recommendations list --recommender=google.compute.instance.IdleResourceRecommender --location=ZONA`, y también
+  `...MachineTypeRecommender` y `google.compute.disk.IdleResourceRecommender`).
+
+  **No borres nada sin el visto bueno de su responsable**, no toques `movimientos-api` ni `movimientos-db`, guarda un snapshot de los
+  discos antiguos y crea un **presupuesto de 300 EUR** con avisos al 50, 90 y 100 %.
+objectives:
+- Explica la subida con la factura y el recomendador
+- Confirma con cada responsable antes de borrar o cambiar
+- Reduce el gasto sin tocar producción y guarda un snapshot
+- Crea el presupuesto con alertas y explica los ahorros
+hints:
+- text: '`gcloud billing report --group-by=resource` señala qué recursos han disparado el coste.'
+- text: 'Para cambiar el tipo de máquina hay que pararla: `instances stop`, `set-machine-type` y `start`.'
+solution: |
+  ticket
+  gcloud billing report
+  gcloud billing report --group-by=resource
+  gcloud recommender recommendations list --recommender=google.compute.instance.IdleResourceRecommender --location={{.zone}}
+  gcloud recommender recommendations list --recommender=google.compute.instance.MachineTypeRecommender --location={{.zone}}
+  gcloud recommender recommendations list --recommender=google.compute.disk.IdleResourceRecommender --location={{.zone}}
+  ask data "¿podemos borrar modelo-riesgo-gpu?"
+  ask finance "¿qué hacemos con informes-batch y los discos migracion-old?"
+  gcloud compute instances delete modelo-riesgo-gpu --zone={{.zone}} --quiet
+  gcloud compute instances stop informes-batch --zone={{.zone}}
+  gcloud compute instances set-machine-type informes-batch --machine-type=n2-standard-4 --zone={{.zone}}
+  gcloud compute instances start informes-batch --zone={{.zone}}
+  gcloud compute disks snapshot migracion-old-1 --zone={{.zone}} --snapshot-names=migracion-auditoria
+  gcloud compute disks delete migracion-old-1 migracion-old-2 --zone={{.zone}} --quiet
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=monthly --budget-amount=300EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+  gcloud billing report
+  ticket update "La subida venía de una VM con GPU ociosa de una prueba de Riesgos ya terminada (borrada con su permiso), de informes-batch sobredimensionada (reducida a 4 vCPU con el visto bueno de Finanzas) y de dos discos SSD de una migración antigua (borrados tras guardar un snapshot). La aplicación de movimientos no se ha tocado. Hemos creado un presupuesto de 300 EUR con avisos al 50, 90 y 100 %."
+  ticket resolve "Borrada la VM con GPU ociosa, redimensionada informes-batch, borrados los discos antiguos con snapshot y creado presupuesto con alertas."
+shortcuts:
+- name: delete every non-production VM without asking
+  run: |
+    gcloud compute instances delete modelo-riesgo-gpu informes-batch --zone={{.zone}} --quiet
+    gcloud compute disks delete migracion-old-1 migracion-old-2 --zone={{.zone}} --quiet
+    ticket resolve "Borrados todos los recursos que no eran producción."
+rubric:
+- name: Gasto de vuelta a la normalidad
+  validator: cost
+  points: 30
+  all: true
+  checks:
+  - type: cost_max
+    eur: 400
+    desc: Previsión mensual por debajo de 400 EUR
+  - type: absent
+    path: instances["modelo-riesgo-gpu"]
+    desc: VM con GPU ociosa eliminada
+  - type: count
+    collection: disks
+    where:
+      name:
+        regex: ^migracion-old
+    max: 0
+    desc: Discos antiguos eliminados
+- name: Lo necesario se conserva
+  validator: functional
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: instances["informes-batch"]
+    expect:
+      machineType:
+        regex: n2-standard-(2|4|8)$
+      status: RUNNING
+    desc: informes-batch redimensionada y en marcha
+  - type: count
+    collection: snapshots
+    min: 1
+    desc: Snapshot de auditoría guardado
+- name: Primero las evidencias y el visto bueno
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: billing report|recommender recommendations list
+    min: 2
+    desc: Factura y recomendador consultados
+  - type: asked
+    min: 2
+    desc: Confirmado con los responsables
+- name: Barrera y explicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: exists
+    path: budgets.monthly
+    expect:
+      amount: 300
+      thresholds:
+        minLen: 3
+    desc: Presupuesto de 300 EUR con tres avisos
+  - type: ticket_update
+    keywords:
+    - - gpu
+    - - informes-batch
+      - redimension
+      - vcpu
+    - - disco
+      - disk
+    - - presupuesto
+      - budget
+    desc: Respuesta con el origen del gasto y lo que se ha hecho
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'En un banco cada recurso tiene dueño: la factura te dice qué cuesta, el recomendador qué sobra, y el responsable decide si se puede borrar.'
+- match: billing report --group-by=resource
+  title: Busca qué recursos han disparado el coste
+  why: Agrupar por recurso señala enseguida la VM con GPU, la máquina grande y los discos SSD.
+- match: ^ask finance
+  title: ''
+  why: 'No todo lo caro sobra: informes-batch hace falta, solo está sobredimensionada. Por eso se pregunta antes de borrar.'
+- match: budgets create
+  title: ''
+  why: El presupuesto no corta el gasto, pero avisa a tiempo de la próxima sorpresa.
+en:
+  title: COST · The project's spending forecast has gone up 20×
+  summary: Explain the increase with the invoice and the recommender, act only with each owner's approval, don't touch production and leave a budget alert.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **COST-1187** · *"This month's forecast is about 20 times last month's. We need to know what happened and get back to normal
+    > without affecting the transactions app."*
+
+    Tools: `gcloud billing report` (with `--group-by=resource` or `--group-by=label:team`) and the recommender
+    (`gcloud recommender recommendations list --recommender=google.compute.instance.IdleResourceRecommender --location=ZONE`, plus
+    `...MachineTypeRecommender` and `google.compute.disk.IdleResourceRecommender`).
+
+    **Delete nothing without its owner's approval**, don't touch `movimientos-api` or `movimientos-db`, keep a snapshot of the old
+    disks and create a **300 EUR budget** with alerts at 50, 90 and 100%.
+  objectives:
+  - Explain the increase with the invoice and the recommender
+  - Confirm with each owner before deleting or changing
+  - Cut spending without touching production and keep a snapshot
+  - Create the budget with alerts and explain the savings
+  hints:
+  - '`gcloud billing report --group-by=resource` points at the resources driving the cost.'
+  - 'To change the machine type you must stop it: `instances stop`, `set-machine-type` and `start`.'
+  ticket:
+    summary: This month's forecast for the project is about 20 times last month's. We need to know what happened and get back to normal without affecting the transactions app.
+  text:
+    Control de gestión · Tecnología: Management control · Technology
+    Sonia Ruiz (Modelos de riesgo): Sonia Ruiz (Risk models)
+    Científica de datos del equipo de riesgos.: Data scientist on the risk team.
+    Hace semanas probamos un modelo en una GPU.: Weeks ago we tested a model on a GPU.
+    ¿modelo-riesgo-gpu? Esa prueba terminó hace un mes y los resultados están guardados. Podéis borrarla.: modelo-riesgo-gpu? That test finished a month ago and the results are saved. You can delete it.
+    Óscar Vega (Finanzas): Óscar Vega (Finance)
+    Responsable de los informes de cierre.: Owner of the closing reports.
+    informes-batch genera nuestros informes nocturnos.: informes-batch generates our nightly reports.
+    informes-batch se tiene que quedar, pero no necesita una máquina tan grande; con 4 vCPU le sobra.: informes-batch must stay, but it doesn't need such a big machine; 4 vCPUs are plenty.
+    Los discos migracion-old son de la migración de mayo. Guardad un snapshot para auditoría y borradlos.: The migracion-old disks are from the May migration. Keep a snapshot for audit and delete them.
+    Gasto de vuelta a la normalidad: Spending back to normal
+    Previsión mensual por debajo de 400 EUR: Monthly forecast below 400 EUR
+    VM con GPU ociosa eliminada: Idle GPU VM removed
+    Discos antiguos eliminados: Old disks removed
+    Lo necesario se conserva: What's needed is kept
+    informes-batch redimensionada y en marcha: informes-batch rightsized and running
+    Snapshot de auditoría guardado: Audit snapshot kept
+    Primero las evidencias y el visto bueno: Evidence and approval first
+    Factura y recomendador consultados: Invoice and recommender checked
+    Confirmado con los responsables: Confirmed with the owners
+    Barrera y explicación: Guardrail and explanation
+    Presupuesto de 300 EUR con tres avisos: 300 EUR budget with three alerts
+    Respuesta con el origen del gasto y lo que se ha hecho: Reply with the cost drivers and what was done
+    ? 'En un banco cada recurso tiene dueño: la factura te dice qué cuesta, el recomendador qué sobra, y el responsable decide si se puede borrar.'
+    : 'In a bank every resource has an owner: the invoice tells you what costs, the recommender what''s spare, and the owner decides whether it can go.'
+    Busca qué recursos han disparado el coste: Find which resources drove the cost
+    Agrupar por recurso señala enseguida la VM con GPU, la máquina grande y los discos SSD.: Grouping by resource quickly points to the GPU VM, the big machine and the SSD disks.
+    'No todo lo caro sobra: informes-batch hace falta, solo está sobredimensionada. Por eso se pregunta antes de borrar.': 'Not everything expensive is spare: informes-batch is needed, it''s just oversized. That''s why you ask before deleting.'
+    El presupuesto no corta el gasto, pero avisa a tiempo de la próxima sorpresa.: The budget doesn't stop spending, but it warns you in time of the next surprise.

@@ -1,6 +1,6 @@
 # Baseline: plataforma GCP de un banco regulado (ficticio: Banco Atlas).
 # Guardarraíles de organización típicos de banca, red privada con salida por
-# Cloud NAT y SSH solo por IAP, identidades por aplicación y una app interna
+# Cloud NAT, SSH solo por IAP, acceso a servicios privados (Cloud SQL sin IP pública), identidades por aplicación y una app interna
 # de «consulta de movimientos» (API en VM + base de datos PostgreSQL).
 gcloud resource-manager org-policies enable-enforce compute.vmExternalIpAccess --project={{.project}}
 gcloud resource-manager org-policies enable-enforce sql.restrictPublicIp --project={{.project}}
@@ -12,6 +12,8 @@ gcloud resource-manager org-policies allow gcp.resourceLocations in:eu-locations
 gcloud compute networks create atlas-vpc --subnet-mode=custom
 gcloud compute networks subnets create app-subnet --network=atlas-vpc --range=10.20.1.0/24 --region={{.region}} --enable-private-ip-google-access
 gcloud compute networks subnets create data-subnet --network=atlas-vpc --range=10.20.2.0/24 --region={{.region}} --enable-private-ip-google-access
+gcloud compute addresses create google-managed-services --global --purpose=VPC_PEERING --prefix-length=16 --network=atlas-vpc
+gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com --ranges=google-managed-services --network=atlas-vpc
 gcloud compute routers create atlas-router --network=atlas-vpc --region={{.region}}
 gcloud compute routers nats create atlas-nat --router=atlas-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
 gcloud compute firewall-rules create allow-iap-ssh --network=atlas-vpc --allow=tcp:22 --source-ranges=35.235.240.0/20

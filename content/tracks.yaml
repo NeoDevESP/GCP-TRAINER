@@ -121,14 +121,14 @@ tracks:
       description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
   - id: support-bank
     title: Soporte GCP en banca
-    description: 'El día a día de soporte de plataforma GCP en un banco regulado: peticiones de acceso, políticas de organización, redes privadas, permisos entre servicios, secretos, incidentes de seguridad y caídas de Google. Tickets reales, preguntas al solicitante, respuestas escritas y escalados, sin saltarse las normas.'
+    description: 'El día a día de soporte de plataforma GCP en un banco regulado: peticiones de acceso, políticas de organización, redes privadas, permisos entre servicios, secretos, incidentes de seguridad, GKE, Cloud SQL, costes, auditoría, rotación de secretos, discos llenos, tickets mal dirigidos y caídas de Google. Tickets reales, preguntas al solicitante, respuestas escritas y escalados, sin saltarse las normas.'
     level: associate
     certs: [ACE, PCSE]
     phase: V3
-    labs: [bank-b01-access-request, bank-b02-vm-policy, bank-b03-no-egress, bank-b04-app-db, bank-b05-run-403, bank-b06-secret-access, bank-b07-public-bucket, bank-b08-region-outage]
+    labs: [bank-b01-access-request, bank-b02-vm-policy, bank-b03-no-egress, bank-b04-app-db, bank-b05-run-403, bank-b06-secret-access, bank-b07-public-bucket, bank-b08-region-outage, bank-b09-gke-crashloop, bank-b10-sql-connections, bank-b11-bill-spike, bank-b12-leaver-joiner, bank-b13-audit-sink, bank-b14-secret-rotation, bank-b15-sa-key-request, bank-b16-region-policy, bank-b17-disk-full, bank-b18-not-gcp, bank-b19-gke-oomkilled, bank-b20-oslogin-ssh, bank-b21-lb-502-healthcheck, bank-b22-sink-no-writer, bank-b23-priority-pressure, bank-b24-gke-imagepull, bank-b25-wrong-identity, bank-b26-provider-outage, bank-b27-run-sql-timeout]
     en:
       title: GCP support in banking
-      description: 'Day-to-day GCP platform support in a regulated bank: access requests, organization policies, private networking, service-to-service permissions, secrets, security incidents and Google outages. Real tickets, questions to the requester, written replies and escalations, without bending the rules.'
+      description: 'Day-to-day GCP platform support in a regulated bank: access requests, organization policies, private networking, service-to-service permissions, secrets, security incidents, GKE, Cloud SQL, costs, auditing, secret rotation, full disks, misrouted tickets and Google outages. Real tickets, questions to the requester, written replies and escalations, without bending the rules.'
   - id: serverless
     title: Sin servidor, datos gestionados y big data
     description: 'Cloud Functions, Cloud Scheduler, App Engine, Dataflow, Memorystore, Spanner y Firestore: los servicios gestionados del día a día con eventos, canarios, streaming y SQL real.'

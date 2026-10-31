@@ -1,0 +1,203 @@
+id: bank-b18-not-gcp
+title: 'INC · «Nóminas va lentísimo»: ¿es nuestro?'
+summary: No todo ticket que llega a soporte GCP es de GCP. Comprueba, pregunta, no toques nada y reasígnalo al equipo correcto con la información recogida.
+track: support-bank
+day: 18
+level: basic
+branch: observability
+type: incident
+mode: production
+skills:
+- observability.incident
+- foundations.hierarchy
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 2
+minutes: 20
+baseline:
+- bank-atlas
+ticket:
+  id: INC-23240
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Recursos Humanos
+  summary: La aplicación de nóminas va lentísima desde ayer, tarda minutos en abrir cada pantalla. Es urgente porque cerramos las nóminas del mes.
+actors:
+- role: requester
+  name: Carmen Ortega (Recursos Humanos)
+  persona: Técnica de nóminas.
+  fallback: Entro como siempre, desde el enlace de la intranet.
+  facts:
+  - keywords:
+    - - url
+      - enlace
+      - direccion
+      - como entras
+      - link
+      - address
+    answer: Entro por http://nominas.atlas.intranet desde el ordenador de la oficina.
+  - keywords:
+    - - cuando
+      - desde
+      - when
+      - otros
+      - compañeros
+    answer: Desde ayer por la tarde, y a todas mis compañeras de RR. HH. les pasa igual.
+- role: cmdb
+  name: Inventario de aplicaciones (CMDB)
+  persona: Registro de qué aplicación está dónde y quién la mantiene.
+  fallback: Consulta por el nombre de la aplicación.
+  facts:
+  - keywords:
+    - - nomina
+      - payroll
+    answer: 'Nóminas: alojada en el centro de datos propio (no en Google Cloud). Equipo responsable: sistemas-onprem.'
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23240** · *«La aplicación de nóminas va lentísima desde ayer, tarda minutos en abrir cada pantalla. Es urgente porque
+  > cerramos las nóminas del mes.»*
+
+  A soporte de GCP llegan tickets mal dirigidos. Antes de tocar nada, comprueba si la aplicación está en Google Cloud. Si no lo
+  está, lo correcto es **reasignarlo al equipo responsable** (`ticket escalate EQUIPO "…"`) con todo lo que has averiguado, y
+  avisar a quien lo abrió. Cambiar cosas «por si acaso» en producción nunca es una opción.
+objectives:
+- Pregunta lo que falta (cómo entra, desde cuándo, a quién afecta)
+- Comprueba si nóminas está en Google Cloud y quién la mantiene
+- No cambies nada
+- Reasigna al equipo responsable con la información y avisa a RR. HH.
+hints:
+- text: '`gcloud compute instances list`, `gcloud run services list` y `gcloud asset search-all-resources --query=nominas` buscan la aplicación en el proyecto.'
+- text: El inventario de aplicaciones (`ask cmdb "..."`) dice dónde está cada aplicación y quién la mantiene.
+solution: |
+  ticket
+  ask requester "¿cómo entras a la aplicación y desde cuándo os pasa?"
+  gcloud compute instances list
+  gcloud run services list
+  gcloud asset search-all-resources --query=nominas
+  ask cmdb "¿dónde está alojada la aplicación de nóminas?"
+  ticket escalate sistemas-onprem "Reasignado desde soporte GCP: la aplicación de nóminas (http://nominas.atlas.intranet) está lenta desde ayer por la tarde, tarda minutos en cada pantalla y afecta a todo RR. HH. durante el cierre de nóminas. No está en Google Cloud (comprobado en el proyecto y en la CMDB: alojada en el CPD propio). No hemos cambiado nada."
+  ticket update "Hola Carmen: la aplicación de nóminas no está en Google Cloud sino en el centro de datos propio del banco, así que hemos pasado tu incidencia al equipo responsable (Sistemas on-premises) con todos los detalles y marcada como urgente por el cierre. Ellos te contactarán."
+shortcuts:
+- name: restart something just in case
+  run: |
+    gcloud compute instances reset movimientos-api --zone={{.zone}}
+    ticket resolve "Reiniciado el servidor de aplicaciones por si acaso."
+rubric:
+- name: No tocar nada
+  validator: security
+  points: 25
+  critical: true
+  checks:
+  - type: command
+    regex: ^gcloud .*(create|delete|update|patch|add-iam-policy-binding|remove-iam-policy-binding|reset|stop|start|resize)
+    max: 0
+    desc: Ningún cambio en la plataforma
+- name: Comprobación
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: instances list|run services list|asset search
+    min: 1
+    desc: Buscada la aplicación en Google Cloud
+  - type: asked
+    min: 2
+    desc: Preguntado al solicitante y al inventario
+- name: Reasignación correcta
+  validator: evidence
+  points: 35
+  checks:
+  - type: ticket_escalated
+    team: onprem|sistemas|cpd
+    keywords:
+    - - nomina
+      - payroll
+    - - lent
+      - slow
+      - minutos
+      - minutes
+    - - no esta en google
+      - no esta en gcp
+      - not on google
+      - not on gcp
+      - cpd
+      - centro de datos
+      - on-prem
+      - onprem
+    desc: Reasignado a Sistemas on-premises con síntoma, alcance y comprobaciones
+- name: Aviso al solicitante
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_update
+    keywords:
+    - - sistemas
+      - on-prem
+      - onprem
+      - centro de datos
+      - equipo
+      - team
+    desc: RR. HH. sabe quién lleva ahora su incidencia
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Un ticket mal dirigido se resuelve rápido si lo detectas pronto: comprueba, reasigna con datos y avisa. Lo malo es tocar cosas que no tienen nada que ver.'
+- match: asset search-all-resources
+  title: Busca la aplicación en el proyecto
+  why: Si no aparece ningún recurso de nóminas, probablemente no está en Google Cloud.
+- match: ^ticket escalate sistemas-onprem
+  title: ''
+  why: Reasignar con todo lo averiguado (síntoma, desde cuándo, a quién afecta, qué has comprobado) ahorra al otro equipo empezar de cero.
+en:
+  title: 'INC · "Payroll is really slow": is it ours?'
+  summary: Not every ticket that reaches GCP support is about GCP. Check, ask, touch nothing and reassign it to the right team with the information gathered.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23240** · *"The payroll application has been really slow since yesterday; each screen takes minutes to open. It's urgent
+    > because we're closing this month's payroll."*
+
+    Misrouted tickets reach GCP support. Before touching anything, check whether the application is on Google Cloud. If it isn't,
+    the right move is to **reassign it to the responsible team** (`ticket escalate TEAM "…"`) with everything you've found out,
+    and let whoever opened it know. Changing things in production "just in case" is never an option.
+  objectives:
+  - Ask for what's missing (how they access it, since when, who's affected)
+  - Check whether payroll is on Google Cloud and who maintains it
+  - Change nothing
+  - Reassign to the responsible team with the information and let HR know
+  hints:
+  - '`gcloud compute instances list`, `gcloud run services list` and `gcloud asset search-all-resources --query=nominas` look for the app in the project.'
+  - The application inventory (`ask cmdb "..."`) says where each application runs and who maintains it.
+  ticket:
+    summary: The payroll application has been really slow since yesterday; each screen takes minutes to open. It's urgent because we're closing this month's payroll.
+  text:
+    Recursos Humanos: Human Resources
+    Carmen Ortega (Recursos Humanos): Carmen Ortega (Human Resources)
+    Técnica de nóminas.: Payroll specialist.
+    Entro como siempre, desde el enlace de la intranet.: I log in as always, from the intranet link.
+    Entro por http://nominas.atlas.intranet desde el ordenador de la oficina.: I go to http://nominas.atlas.intranet from my office computer.
+    Desde ayer por la tarde, y a todas mis compañeras de RR. HH. les pasa igual.: Since yesterday afternoon, and all my HR colleagues have the same problem.
+    Inventario de aplicaciones (CMDB): Application inventory (CMDB)
+    Registro de qué aplicación está dónde y quién la mantiene.: Record of which application runs where and who maintains it.
+    Consulta por el nombre de la aplicación.: Look it up by application name.
+    'Nóminas: alojada en el centro de datos propio (no en Google Cloud). Equipo responsable: sistemas-onprem.': 'Payroll: hosted in the bank''s own data centre (not on Google Cloud). Responsible team: sistemas-onprem.'
+    No tocar nada: Touch nothing
+    Ningún cambio en la plataforma: No change to the platform
+    Comprobación: Verification
+    Buscada la aplicación en Google Cloud: Application searched for on Google Cloud
+    Preguntado al solicitante y al inventario: Asked the requester and the inventory
+    Reasignación correcta: Correct reassignment
+    Reasignado a Sistemas on-premises con síntoma, alcance y comprobaciones: Reassigned to on-premises Systems with symptom, scope and checks
+    Aviso al solicitante: Requester informed
+    RR. HH. sabe quién lleva ahora su incidencia: HR knows who now owns their incident
+    ? 'Un ticket mal dirigido se resuelve rápido si lo detectas pronto: comprueba, reasigna con datos y avisa. Lo malo es tocar cosas que no tienen nada que ver.'
+    : 'A misrouted ticket is solved fast if you spot it early: check, reassign with data and inform. The bad move is touching unrelated things.'
+    Busca la aplicación en el proyecto: Look for the app in the project
+    Si no aparece ningún recurso de nóminas, probablemente no está en Google Cloud.: If no payroll resource shows up, it's probably not on Google Cloud.
+    ? Reasignar con todo lo averiguado (síntoma, desde cuándo, a quién afecta, qué has comprobado) ahorra al otro equipo empezar de cero.
+    : Reassigning with everything you found (symptom, since when, who's affected, what you checked) saves the other team starting from scratch.

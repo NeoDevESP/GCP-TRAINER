@@ -1,0 +1,214 @@
+id: bank-b15-sa-key-request
+title: REQ · «Necesito una clave JSON de la cuenta de servicio»
+summary: 'El banco prohíbe las claves de cuentas de servicio. Ofrece la alternativa segura: suplantar la cuenta desde el propio usuario, concedida a un grupo y solo sobre esa cuenta.'
+track: support-bank
+day: 15
+level: intermediate
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.impersonation
+- iam.serviceaccounts
+- iam.orgpolicy
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 25
+baseline:
+- bank-atlas
+setup: |
+  gcloud iam service-accounts create informes-sa --display-name="proceso de informes"
+  gcloud storage buckets create gs://informes-salida-{{.project}} --location=EU --uniform-bucket-level-access
+  gcloud storage buckets add-iam-policy-binding gs://informes-salida-{{.project}} --member=serviceAccount:informes-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectAdmin
+ticket:
+  id: REQ-11120
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Daniel Cano (Desarrollo · Informes)
+  summary: Necesito una clave JSON de informes-sa para probar el proceso de informes desde mi portátil antes de subirlo. Al crearla me sale «constraint iam.managed.disableServiceAccountKeyCreation». ¿Me la generáis vosotros?
+actors:
+- role: requester
+  name: Daniel Cano (Desarrollo · Informes)
+  persona: Desarrollador del proceso de informes.
+  fallback: Solo quiero probar con los mismos permisos que tendrá el proceso en producción.
+  facts:
+  - keywords:
+    - - equipo
+      - grupo
+      - solo tu
+      - compañeros
+      - team
+      - group
+    answer: Somos tres en el equipo, todos en el grupo dev-informes@gcplab.dev.
+  - keywords:
+    - - gcloud
+      - adc
+      - local
+      - portatil
+      - como
+    answer: Uso gcloud y las librerías de Google en Python en local.
+- role: security
+  name: Elena Castro (Seguridad)
+  persona: Arquitecta de seguridad de la plataforma.
+  fallback: Claves JSON, no. Una clave es una contraseña que no caduca y acaba en un portátil o en un repositorio.
+  facts:
+  - keywords:
+    - - suplant
+      - impersonat
+      - token
+      - alternativa
+      - alternative
+    answer: 'Sí: que suplanten la cuenta con su usuario (Service Account Token Creator), concedido a su grupo y solo sobre informes-sa. Los tokens caducan en una hora y queda todo auditado.'
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **REQ-11120** · *«Necesito una clave JSON de informes-sa para probar el proceso de informes desde mi portátil. Al crearla me sale
+  > «constraint iam.managed.disableServiceAccountKeyCreation». ¿Me la generáis vosotros?»*
+
+  La política del banco prohíbe crear claves de cuentas de servicio, y no se salta por un ticket. Hay una forma de probar con los
+  permisos de `informes-sa` **sin claves**: la suplantación (*impersonation*).
+objectives:
+- Confirma la política y consulta con Seguridad
+- Concede la suplantación de informes-sa al grupo del equipo, solo sobre esa cuenta
+- No crees claves ni toques la política
+- Explica al desarrollador cómo usarlo
+hints:
+- text: '`roles/iam.serviceAccountTokenCreator` concedido en la cuenta de servicio: `gcloud iam service-accounts add-iam-policy-binding CUENTA --member=group:... --role=...`.'
+- text: Luego el desarrollador usa `--impersonate-service-account=CUENTA` en gcloud, o `gcloud auth application-default login --impersonate-service-account=CUENTA` para las librerías.
+solution: |
+  ticket
+  gcloud resource-manager org-policies describe iam.managed.disableServiceAccountKeyCreation --project={{.project}}
+  ask security "¿hay alternativa a la clave JSON?"
+  ask requester "¿es solo para ti o para todo tu equipo?"
+  gcloud iam service-accounts add-iam-policy-binding informes-sa@{{.project}}.iam.gserviceaccount.com --member=group:dev-informes@gcplab.dev --role=roles/iam.serviceAccountTokenCreator
+  ticket update "Hola Daniel: en el banco no se crean claves JSON (la política lo impide y Seguridad no hace excepciones). Hemos dado a vuestro grupo dev-informes permiso para suplantar informes-sa. Para probar: gcloud ... --impersonate-service-account=informes-sa@{{.project}}.iam.gserviceaccount.com, o para las librerías de Python gcloud auth application-default login --impersonate-service-account=informes-sa@{{.project}}.iam.gserviceaccount.com. Los tokens caducan solos y no hay ninguna clave que guardar."
+  ticket resolve "Concedido serviceAccountTokenCreator al grupo dev-informes solo sobre informes-sa; sin claves y con la política intacta."
+shortcuts:
+- name: lift the policy and create a key
+  run: |
+    gcloud resource-manager org-policies disable-enforce iam.managed.disableServiceAccountKeyCreation --project={{.project}}
+    gcloud iam service-accounts keys create informes-key.json --iam-account=informes-sa@{{.project}}.iam.gserviceaccount.com
+    ticket resolve "Generada la clave JSON de informes-sa para Daniel."
+- name: token creator on the whole project
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=group:dev-informes@gcplab.dev --role=roles/iam.serviceAccountTokenCreator
+    ticket update "Hola Daniel, ya podéis suplantar las cuentas de servicio del proyecto con --impersonate-service-account."
+    ticket resolve "Concedido Token Creator al grupo en el proyecto."
+rubric:
+- name: Sin claves
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: org_policy
+    constraint: iam.managed.disableServiceAccountKeyCreation
+    enforced: true
+    desc: La política sigue aplicada
+  - type: command
+    regex: keys create
+    max: 0
+    desc: No se ha creado ninguna clave
+- name: Suplantación acotada
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: group:dev-informes@gcplab.dev
+    permission: iam.serviceAccounts.getAccessToken
+    resource: sa:informes-sa@{{.project}}.iam.gserviceaccount.com
+    desc: El grupo puede suplantar informes-sa
+  - type: iam
+    principal: group:dev-informes@gcplab.dev
+    permission: iam.serviceAccounts.getAccessToken
+    resource: sa:movimientos-sa@{{.project}}.iam.gserviceaccount.com
+    expect: false
+    desc: No puede suplantar otras cuentas
+- name: Consulta
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: asked
+    actor: security
+    min: 1
+    desc: Consultado con Seguridad
+- name: Explicación al desarrollador
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - impersonate
+      - suplant
+    - - clave
+      - key
+      - json
+    desc: Explica por qué no hay clave y cómo suplantar
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: Una clave JSON es una contraseña que no caduca y que acaba en portátiles y repositorios. La suplantación da el mismo acceso con tokens de una hora y auditados.
+- match: service-accounts add-iam-policy-binding
+  title: Concede la suplantación sobre esa cuenta
+  why: 'Token Creator en la cuenta de servicio (no en el proyecto): el grupo puede actuar como informes-sa y como ninguna otra.'
+- match: ^ticket update
+  title: ''
+  why: 'Decir que no funciona mejor con el «cómo sí»: el comando exacto para trabajar con impersonación.'
+en:
+  title: REQ · "I need a JSON key for the service account"
+  summary: 'The bank forbids service account keys. Offer the secure alternative: impersonate the account from one''s own user, granted to a group and only on that account.'
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **REQ-11120** · *"I need a JSON key for informes-sa to test the reports process from my laptop. When I create it I get
+    > "constraint iam.managed.disableServiceAccountKeyCreation". Can you generate it for me?"*
+
+    The bank's policy forbids creating service account keys, and it isn't bypassed because of a ticket. There's a way to test with
+    `informes-sa`'s permissions **without keys**: impersonation.
+  objectives:
+  - Confirm the policy and check with Security
+  - Grant impersonation of informes-sa to the team's group, only on that account
+  - Create no keys and don't touch the policy
+  - Explain to the developer how to use it
+  hints:
+  - '`roles/iam.serviceAccountTokenCreator` granted on the service account: `gcloud iam service-accounts add-iam-policy-binding ACCOUNT --member=group:... --role=...`.'
+  - Then the developer uses `--impersonate-service-account=ACCOUNT` in gcloud, or `gcloud auth application-default login --impersonate-service-account=ACCOUNT` for the libraries.
+  ticket:
+    summary: I need a JSON key for informes-sa to test the reports process from my laptop before deploying it. When I create it I get "constraint iam.managed.disableServiceAccountKeyCreation". Can you generate it for me?
+  text:
+    Daniel Cano (Desarrollo · Informes): Daniel Cano (Development · Reports)
+    Desarrollador del proceso de informes.: Developer of the reports process.
+    Solo quiero probar con los mismos permisos que tendrá el proceso en producción.: I just want to test with the same permissions the process will have in production.
+    Somos tres en el equipo, todos en el grupo dev-informes@gcplab.dev.: We're three on the team, all in the dev-informes@gcplab.dev group.
+    Uso gcloud y las librerías de Google en Python en local.: I use gcloud and the Google Python libraries locally.
+    Elena Castro (Seguridad): Elena Castro (Security)
+    Arquitecta de seguridad de la plataforma.: Platform security architect.
+    Claves JSON, no. Una clave es una contraseña que no caduca y acaba en un portátil o en un repositorio.: JSON keys, no. A key is a password that never expires and ends up on a laptop or in a repository.
+    ? 'Sí: que suplanten la cuenta con su usuario (Service Account Token Creator), concedido a su grupo y solo sobre informes-sa. Los tokens caducan en una hora y queda todo auditado.'
+    : 'Yes: let them impersonate the account with their user (Service Account Token Creator), granted to their group and only on informes-sa. Tokens expire in an hour and everything is audited.'
+    Sin claves: No keys
+    La política sigue aplicada: The policy is still enforced
+    No se ha creado ninguna clave: No key was created
+    Suplantación acotada: Scoped impersonation
+    El grupo puede suplantar informes-sa: The group can impersonate informes-sa
+    No puede suplantar otras cuentas: Cannot impersonate other accounts
+    Consulta: Consultation
+    Consultado con Seguridad: Checked with Security
+    Explicación al desarrollador: Explanation to the developer
+    Explica por qué no hay clave y cómo suplantar: Explains why there's no key and how to impersonate
+    Ticket cerrado: Ticket closed
+    ? Una clave JSON es una contraseña que no caduca y que acaba en portátiles y repositorios. La suplantación da el mismo acceso con tokens de una hora y auditados.
+    : A JSON key is a password that never expires and ends up on laptops and in repositories. Impersonation gives the same access with one-hour, audited tokens.
+    Concede la suplantación sobre esa cuenta: Grant impersonation on that account
+    'Token Creator en la cuenta de servicio (no en el proyecto): el grupo puede actuar como informes-sa y como ninguna otra.': 'Token Creator on the service account (not the project): the group can act as informes-sa and no other.'
+    'Decir que no funciona mejor con el «cómo sí»: el comando exacto para trabajar con impersonación.': 'Saying no works better with the "how to": the exact command to work with impersonation.'

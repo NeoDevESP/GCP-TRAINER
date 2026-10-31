@@ -1,0 +1,217 @@
+id: bank-b27-run-sql-timeout
+title: 'INC · Préstamos no conecta con su base de datos privada: timeout'
+summary: 'Un timeout es un problema de camino, no de contraseña. Comprueba la ruta desde el origen real: Cloud Run necesita salida a la VPC para llegar a una IP privada.'
+track: support-bank
+day: 27
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.vpc
+- compute.serverless
+wellArchitected:
+- reliability
+- security
+certs:
+- ACE
+- PCNE
+difficulty: 3
+minutes: 30
+baseline:
+- bank-atlas
+setup: |
+  gcloud iam service-accounts create prestamos-sa --display-name="API de préstamos"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create prestamos-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=atlas-vpc
+  gcloud sql databases create prestamos --instance=prestamos-db
+  gcloud sql users create app --instance=prestamos-db --password=pw-prestamos-1
+  gcloud run deploy prestamos-api --image=europe-docker.pkg.dev/gcplab-public/apps/inventory-api:1.0 --region={{.region}} --service-account=prestamos-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:prestamos-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:prestamos-db,DB_USER=app,DB_PASSWORD=pw-prestamos-1,DB_NAME=prestamos,DB_POOL_SIZE=5 --max-instances=5 --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding prestamos-api --region={{.region}} --member=user:gestor@gcplab.dev --role=roles/run.invoker
+traffic:
+- name: prestamos
+  target: run:prestamos-api
+  path: /stock
+  rps: 10
+  principal: user:gestor@gcplab.dev
+ticket:
+  id: INC-23533
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Desarrollo · Préstamos
+  summary: 'La nueva API de préstamos da timeout al conectar con prestamos-db. Seguro que es la contraseña: ¿nos la reseteáis? Otra opción es ponerle IP pública a la base de datos para probar.'
+actors:
+- role: dev
+  name: Pablo Ruiz (Desarrollo · Préstamos)
+  persona: Desarrollador de la API de préstamos.
+  fallback: Copiamos el despliegue de transferencias, quitando lo que no entendíamos.
+  facts:
+  - keywords:
+    - - error
+      - mensaje
+      - literal
+      - exacto
+      - message
+      - timeout
+    answer: El error es «connection timed out», no «password authentication failed».
+  - keywords:
+    - - network
+      - vpc
+      - subnet
+      - egress
+      - quitado
+      - removed
+      - flags
+    answer: Quitamos --network, --subnet y --vpc-egress porque no sabíamos para qué eran.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23533** · *«La nueva API de préstamos da timeout al conectar con prestamos-db. Seguro que es la contraseña: ¿nos la
+  > reseteáis? Otra opción es ponerle IP pública a la base de datos para probar.»*
+
+  Un **timeout** significa que el paquete no llega; un error de contraseña sí llega y te contesta. `prestamos-db` solo tiene IP
+  privada en `atlas-vpc` (y la política del banco prohíbe IP públicas en Cloud SQL). Mira el camino **desde el origen real**: el
+  servicio de Cloud Run `prestamos-api`.
+objectives:
+- Consigue el error literal y distingue timeout de error de autenticación
+- Compara la red de la base de datos con la salida del servicio
+- Da al servicio salida a la VPC sin IP pública en la base de datos
+- Comprueba desde el servicio y documenta
+hints:
+- text: '`gcloud sql instances describe prestamos-db` (ipAddresses) y `gcloud run services describe prestamos-api --region={{.region}}`.'
+- text: '`gcloud run services update prestamos-api --region={{.region}} --network=atlas-vpc --subnet=app-subnet --vpc-egress=private-ranges-only`.'
+solution: |
+  ticket
+  ask dev "¿cuál es el error literal y qué cambiasteis respecto al despliegue de transferencias?"
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  gcloud sql instances describe prestamos-db
+  gcloud run services describe prestamos-api --region={{.region}}
+  gcloud run services update prestamos-api --region={{.region}} --network=atlas-vpc --subnet=app-subnet --vpc-egress=private-ranges-only
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  ticket comment "Causa: prestamos-api se desplegó sin salida a la VPC (sin --network/--subnet/--vpc-egress) y no podía llegar a la IP privada de prestamos-db: timeout, no credenciales. Añadida salida directa a atlas-vpc/app-subnet con private-ranges-only. Sin cambios en la base de datos ni en la contraseña."
+  ticket update "Resuelto: la API de préstamos ya conecta. No era la contraseña: el servicio no tenía camino hasta la red privada de la base de datos. Hemos restaurado esa configuración; la base de datos sigue sin IP pública."
+  ticket resolve "Añadida salida directa a la VPC en prestamos-api; conexión a la IP privada de prestamos-db restablecida."
+shortcuts:
+- name: reset the password
+  run: |
+    gcloud sql users set-password app --instance=prestamos-db --password=pw-prestamos-2
+    gcloud run services update prestamos-api --region={{.region}} --update-env-vars=DB_PASSWORD=pw-prestamos-2
+    ticket resolve "Reseteada la contraseña de la base de datos."
+- name: public IP on the database
+  run: |
+    gcloud resource-manager org-policies disable-enforce sql.restrictPublicIp --project={{.project}}
+    gcloud sql instances patch prestamos-db --assign-ip --quiet
+    ticket resolve "Puesta IP pública a la base de datos."
+rubric:
+- name: Conexión restablecida
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    target: run:prestamos-api
+    path: /stock
+    principal: user:gestor@gcplab.dev
+    status: 200
+    desc: La API responde con datos
+- name: Base de datos privada
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: org_policy
+    constraint: sql.restrictPublicIp
+    enforced: true
+    desc: La política de IP pública sigue aplicada
+  - type: command
+    regex: sql instances patch .*(assign-ip|authorized-networks)|users set-password
+    max: 0
+    desc: Ni IP pública ni cambio de contraseña
+- name: Diagnóstico desde el origen
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: run services describe
+    min: 1
+    desc: Revisada la red del servicio
+  - type: asked
+    actor: dev
+    min: 1
+    desc: Pedido el error literal
+- name: Causa documentada
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - timeout
+    - - vpc
+      - red
+      - network
+      - egress
+    desc: Nota interna con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: Timeout = el paquete no llega. Cambiar la contraseña no puede arreglar un camino que no existe.
+- match: sql instances describe prestamos-db
+  title: Mira la red de la base de datos
+  why: 'Solo IP privada en atlas-vpc: hay que llegar por dentro de la VPC.'
+- match: run services describe prestamos-api
+  title: ''
+  why: Sin red VPC configurada, el servicio sale por internet y nunca alcanza una IP privada.
+- match: vpc-egress=private-ranges-only
+  title: ''
+  why: Solo el tráfico a rangos privados va por la VPC; el resto sigue saliendo como antes.
+en:
+  title: 'INC · Loans can''t connect to its private database: timeout'
+  summary: 'A timeout is a path problem, not a password one. Check the route from the real source: Cloud Run needs VPC egress to reach a private IP.'
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23533** · *"The new loans API times out connecting to prestamos-db. It must be the password: can you reset it? Another
+    > option is giving the database a public IP to test."*
+
+    A **timeout** means the packet doesn't arrive; a password error does arrive and gets an answer. `prestamos-db` only has a
+    private IP in `atlas-vpc` (and bank policy forbids public IPs on Cloud SQL). Look at the path **from the real source**: the
+    Cloud Run service `prestamos-api`.
+  objectives:
+  - Get the literal error and tell a timeout from an auth error
+  - Compare the database's network with the service's egress
+  - Give the service VPC egress without a public IP on the database
+  - Verify from the service and document
+  hints:
+  - '`gcloud sql instances describe prestamos-db` (ipAddresses) and `gcloud run services describe prestamos-api --region={{.region}}`.'
+  - '`gcloud run services update prestamos-api --region={{.region}} --network=atlas-vpc --subnet=app-subnet --vpc-egress=private-ranges-only`.'
+  ticket:
+    summary: 'The new loans API times out connecting to prestamos-db. It must be the password: can you reset it? Another option is giving the database a public IP to test.'
+  text:
+    Desarrollo · Préstamos: Development · Loans
+    Pablo Ruiz (Desarrollo · Préstamos): Pablo Ruiz (Development · Loans)
+    Desarrollador de la API de préstamos.: Developer of the loans API.
+    Copiamos el despliegue de transferencias, quitando lo que no entendíamos.: We copied the transfers deployment, removing what we didn't understand.
+    El error es «connection timed out», no «password authentication failed».: The error is "connection timed out", not "password authentication failed".
+    Quitamos --network, --subnet y --vpc-egress porque no sabíamos para qué eran.: We removed --network, --subnet and --vpc-egress because we didn't know what they were for.
+    Conexión restablecida: Connection restored
+    La API responde con datos: The API responds with data
+    Base de datos privada: Private database
+    La política de IP pública sigue aplicada: The public IP policy is still enforced
+    Ni IP pública ni cambio de contraseña: No public IP and no password change
+    Diagnóstico desde el origen: Diagnosis from the source
+    Revisada la red del servicio: Service network reviewed
+    Pedido el error literal: Literal error requested
+    Causa documentada: Cause documented
+    Nota interna con la causa: Internal note with the cause
+    Ticket cerrado: Ticket closed
+    Timeout = el paquete no llega. Cambiar la contraseña no puede arreglar un camino que no existe.: Timeout = the packet doesn't arrive. Changing the password can't fix a path that doesn't exist.
+    Mira la red de la base de datos: Look at the database's network
+    'Solo IP privada en atlas-vpc: hay que llegar por dentro de la VPC.': 'Private IP only in atlas-vpc: you have to get there from inside the VPC.'
+    Sin red VPC configurada, el servicio sale por internet y nunca alcanza una IP privada.: With no VPC network configured, the service goes out via the internet and never reaches a private IP.
+    Solo el tráfico a rangos privados va por la VPC; el resto sigue saliendo como antes.: Only traffic to private ranges goes through the VPC; the rest leaves as before.

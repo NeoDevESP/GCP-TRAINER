@@ -1,0 +1,119 @@
+id: support-compute
+branch: compute
+name: ["Casos de soporte: VMs, GKE y serverless", "Support cases: VMs, GKE and serverless"]
+intro: ["Los tickets más frecuentes de cómputo: no puedo entrar por SSH, la VM no arranca, el pod se reinicia con exit 137, Cloud Run no escucha en el puerto, la función tarda en arrancar o el conector de VPC está roto. Qué significa cada síntoma y qué se recomienda.", "The most frequent compute tickets: I can't SSH in, the VM won't boot, the pod restarts with exit 137, Cloud Run doesn't listen on the port, the function is slow to start or the VPC connector is broken. What each symptom means and what's recommended."]
+concepts:
+  - id: oslogin
+    term: ["SSH con OS Login", "SSH with OS Login"]
+    what: ["Con enable-oslogin=TRUE el acceso SSH lo da IAM y la VM ignora las claves de los metadatos.", "With enable-oslogin=TRUE, IAM grants SSH access and the VM ignores metadata keys."]
+    points:
+      - ["roles/compute.osLogin: entrar sin sudo. roles/compute.osAdminLogin: entrar con sudo.", "roles/compute.osLogin: log in without sudo. roles/compute.osAdminLogin: log in with sudo."]
+      - ["Si la VM tiene cuenta de servicio, el usuario también necesita roles/iam.serviceAccountUser sobre ella.", "If the VM has a service account, the user also needs roles/iam.serviceAccountUser on it."]
+      - ["Sin IP pública: IAP (roles/iap.tunnelResourceAccessor) y cortafuegos desde 35.235.240.0/20 al puerto 22.", "No public IP: IAP (roles/iap.tunnelResourceAccessor) and firewall from 35.235.240.0/20 to port 22."]
+      - ["«Mi clave de metadatos ya no funciona» suele significar que alguien activó OS Login.", "\"My metadata key stopped working\" usually means someone enabled OS Login."]
+    tip: ["No desactives OS Login para «arreglar» un acceso: concede el rol de IAM adecuado.", "Don't disable OS Login to \"fix\" access: grant the right IAM role."]
+  - id: metadata429
+    term: ["Servidor de metadatos y errores 429", "Metadata server and 429 errors"]
+    what: ["El servidor de metadatos (169.254.169.254) limita las peticiones por VM.", "The metadata server (169.254.169.254) rate-limits requests per VM."]
+    points:
+      - ["Scripts o conexiones SSH en ráfaga pueden recibir HTTP 429 (Too Many Requests).", "Bursty scripts or SSH connections can get HTTP 429 (Too Many Requests)."]
+      - ["OS Login consulta metadatos en cada conexión: con 429 aparecen rechazos intermitentes.", "OS Login queries metadata on each connection: with 429 you get intermittent rejections."]
+      - ["Solución: reintentos con backoff exponencial y reutilizar conexiones (multiplexado SSH).", "Fix: retries with exponential backoff and reusing connections (SSH multiplexing)."]
+      - ["Es un límite de protección: no se pide subirlo, se reduce la carga.", "It's a protection limit: you don't ask to raise it, you reduce the load."]
+    tip: ["SSH que falla «a veces» en automatizaciones masivas: piensa en límites de tasa antes que en permisos.", "SSH that fails \"sometimes\" in mass automation: think rate limits before permissions."]
+  - id: serial
+    term: ["La VM no arranca: consola serie", "The VM won't boot: serial console"]
+    what: ["Si el sistema no llega a levantar la red, ni SSH ni IAP sirven: queda el puerto serie.", "If the system never brings up networking, neither SSH nor IAP help: the serial port remains."]
+    points:
+      - ["Ver la salida: gcloud compute instances get-serial-port-output VM.", "See the output: gcloud compute instances get-serial-port-output VM."]
+      - ["Consola interactiva: metadato serial-port-enable=TRUE y gcloud compute connect-to-serial-port.", "Interactive console: metadata serial-port-enable=TRUE and gcloud compute connect-to-serial-port."]
+      - ["Linux en «emergency mode»: a menudo un /etc/fstab con un disco que ya no existe o cambió de UUID (usa nofail en discos de datos).", "Linux in \"emergency mode\": often an /etc/fstab with a disk that no longer exists or changed UUID (use nofail on data disks)."]
+      - ["Windows con pantalla azul: habilitar EMS/SAC (bcdedit, COM a 115200) para llegar al menú de arranque y al modo seguro.", "Windows blue screen: enable EMS/SAC (bcdedit, COM at 115200) to reach the boot menu and safe mode."]
+    tip: ["Desactiva la consola interactiva cuando termines: es un acceso más a proteger.", "Disable the interactive console when you're done: it's one more access path to protect."]
+  - id: oom
+    term: ["OOMKilled y exit code 137 en GKE", "OOMKilled and exit code 137 in GKE"]
+    what: ["El contenedor pasó su límite de memoria (o el nodo se quedó sin memoria) y el núcleo lo mató.", "The container exceeded its memory limit (or the node ran out) and the kernel killed it."]
+    points:
+      - ["kubectl describe pod: Last State OOMKilled, Exit Code 137 (128 + 9, SIGKILL).", "kubectl describe pod: Last State OOMKilled, Exit Code 137 (128 + 9, SIGKILL)."]
+      - ["Con cgroup v2 el kubelet ve cualquier muerte por memoria; con cgroup v1 puede matar un proceso hijo sin que Kubernetes lo refleje (mira journalctl en el nodo).", "With cgroup v2 the kubelet sees any memory kill; with cgroup v1 a child process may be killed without Kubernetes showing it (check journalctl on the node)."]
+      - ["Consumo estable por encima del límite: ajusta requests y limits. Consumo que crece sin parar: fuga, hay que perfilar la aplicación.", "Stable usage above the limit: fit requests and limits. Usage that keeps growing: a leak, the app needs profiling."]
+      - ["Picos de tráfico: el HPA reparte la carga en más réplicas antes de que una se sature.", "Traffic spikes: the HPA spreads load over more replicas before one saturates."]
+    tip: ["Reiniciar o añadir nodos no arregla un límite mal puesto.", "Restarting or adding nodes doesn't fix a wrong limit."]
+  - id: wi
+    term: ["Workload Identity en GKE", "Workload Identity in GKE"]
+    what: ["Une una cuenta de servicio de Kubernetes con una de Google, sin claves JSON.", "Binds a Kubernetes service account to a Google one, without JSON keys."]
+    points:
+      - ["La KSA lleva la anotación iam.gke.io/gcp-service-account=GSA.", "The KSA carries the annotation iam.gke.io/gcp-service-account=GSA."]
+      - ["La GSA concede roles/iam.workloadIdentityUser al miembro serviceAccount:PROYECTO.svc.id.goog[NS/KSA].", "The GSA grants roles/iam.workloadIdentityUser to the member serviceAccount:PROJECT.svc.id.goog[NS/KSA]."]
+      - ["La API IAM Service Account Credentials debe estar habilitada.", "The IAM Service Account Credentials API must be enabled."]
+      - ["En clústeres con miles de KSA, el gke-metadata-server (kube-system) puede quedarse sin memoria: purga cuentas que no se usan.", "In clusters with thousands of KSAs, gke-metadata-server (kube-system) can run out of memory: purge unused accounts."]
+    tip: ["«La app de GKE no puede llamar a las APIs de Google»: revisa anotación, binding y API, en ese orden.", "\"The GKE app can't call Google APIs\": check annotation, binding and API, in that order."]
+  - id: runport
+    term: ["Cloud Run: «failed to start and listen on the port»", "Cloud Run: \"failed to start and listen on the port\""]
+    what: ["El contenedor se desplegó pero no empezó a aceptar peticiones a tiempo.", "The container deployed but didn't start accepting requests in time."]
+    points:
+      - ["La app debe escuchar en el puerto de la variable PORT (8080 por defecto), no en uno fijo distinto.", "The app must listen on the port in the PORT variable (8080 by default), not a different fixed one."]
+      - ["Debe escuchar en 0.0.0.0, no en 127.0.0.1 o localhost.", "It must listen on 0.0.0.0, not 127.0.0.1 or localhost."]
+      - ["La imagen debe ser linux/amd64: una imagen construida en un Mac ARM falla con «exec format error».", "The image must be linux/amd64: an image built on an ARM Mac fails with \"exec format error\"."]
+      - ["Solución robusta: construir con Cloud Build (o docker buildx --platform linux/amd64).", "Robust fix: build with Cloud Build (or docker buildx --platform linux/amd64)."]
+    tip: ["La revisión anterior sigue sirviendo mientras la nueva falla: no es una caída, pero el cambio no ha salido.", "The previous revision keeps serving while the new one fails: not an outage, but the change hasn't shipped."]
+  - id: coldstart
+    term: ["Cloud Functions: arranque en frío y tiempo de espera", "Cloud Functions: cold start and timeouts"]
+    what: ["Inicializar cosas pesadas en el ámbito global hace que el arranque supere el tiempo permitido.", "Initializing heavy things in global scope makes start-up exceed the allowed time."]
+    points:
+      - ["Mal: abrir conexiones, descargar ficheros grandes o cargar modelos al importar el módulo.", "Bad: opening connections, downloading big files or loading models at module import."]
+      - ["Bien: inicialización perezosa (lazy) dentro del manejador, guardando el objeto para reutilizarlo.", "Good: lazy initialization inside the handler, caching the object for reuse."]
+      - ["Dentro de la petición hay CPU completa y puedes gestionar errores y reintentos.", "Inside the request there's full CPU and you can handle errors and retries."]
+      - ["Instancias mínimas reducen arranques en frío, a cambio de coste.", "Minimum instances reduce cold starts, at a cost."]
+    tip: ["Si falla «solo al escalar», sospecha de la inicialización global.", "If it fails \"only when scaling\", suspect global initialization."]
+  - id: vpcconn
+    term: ["Conector de Serverless VPC Access en mal estado", "Serverless VPC Access connector in a bad state"]
+    what: ["«Connector is in a bad state, manual deletion recommended».", "\"Connector is in a bad state, manual deletion recommended\"."]
+    points:
+      - ["El conector lo crean y gestionan agentes de servicio de Google en tu nombre.", "Google service agents create and manage the connector on your behalf."]
+      - ["Causa típica: alguien quitó roles (p. ej. roles/compute.networkUser en la VPC compartida) a esos agentes, incluida PROJECT_NUMBER@cloudservices.gserviceaccount.com.", "Typical cause: someone removed roles (e.g. roles/compute.networkUser on the Shared VPC) from those agents, including PROJECT_NUMBER@cloudservices.gserviceaccount.com."]
+      - ["Restaura los roles, borra el conector y vuelve a crearlo.", "Restore the roles, delete the connector and create it again."]
+      - ["Alternativa moderna: Direct VPC egress en Cloud Run, sin conector.", "Modern alternative: Direct VPC egress on Cloud Run, no connector."]
+    tip: ["No quites roles a cuentas de agentes de servicio en una «limpieza» de IAM: rompen servicios gestionados.", "Don't remove roles from service agent accounts in an IAM \"clean-up\": it breaks managed services."]
+scenarios:
+  - q: ["Tras activar OS Login, un desarrollador ya no puede entrar con la clave que tenía en los metadatos. Solo necesita leer logs.", "After OS Login was enabled, a developer can no longer log in with the key in metadata. He only needs to read logs."]
+    options: [["Conceder roles/compute.osLogin (y lo necesario de IAP)", "Grant roles/compute.osLogin (plus what IAP needs)"], ["Desactivar OS Login en esa VM", "Disable OS Login on that VM"], ["Conceder roles/compute.osAdminLogin", "Grant roles/compute.osAdminLogin"], ["Añadir su clave pública otra vez en los metadatos del proyecto", "Add his public key again to the project metadata"]]
+    answer: 0
+    why: ["Con OS Login el acceso es IAM; osLogin basta sin sudo.", "With OS Login access is IAM; osLogin is enough without sudo."]
+  - q: ["Tras añadir un disco y reiniciar, la VM no responde ni a SSH ni a IAP. ¿Qué haces?", "After adding a disk and rebooting, the VM answers neither SSH nor IAP. What do you do?"]
+    options: [["Leer la salida del puerto serie y, si está en emergency mode, revisar /etc/fstab desde la consola serie", "Read the serial port output and, if it's in emergency mode, check /etc/fstab from the serial console"], ["Abrir el puerto 22 a 0.0.0.0/0", "Open port 22 to 0.0.0.0/0"], ["Borrar la VM y crearla de nuevo", "Delete the VM and create it again"], ["Esperar a que vuelva sola", "Wait for it to come back on its own"]]
+    answer: 0
+    why: ["Si el SO no arranca, la red no existe; la consola serie es la vía.", "If the OS doesn't boot, there's no network; the serial console is the way in."]
+  - q: ["Un pod de GKE se reinicia con Exit Code 137 y el desarrollador dice que el consumo crece hasta morir.", "A GKE pod restarts with Exit Code 137 and the developer says usage grows until it dies."]
+    options: [["Es probablemente una fuga: perfilar la memoria de la aplicación; subir el límite solo lo retrasa", "Probably a leak: profile the app's memory; raising the limit only delays it"], ["Añadir nodos al clúster", "Add nodes to the cluster"], ["Quitar los límites de memoria", "Remove the memory limits"], ["Hacer rollout restart cada hora", "Run a rollout restart every hour"]]
+    answer: 0
+    why: ["Consumo creciente = fuga; el límite protege al nodo.", "Growing usage = leak; the limit protects the node."]
+  - q: ["Un despliegue de Cloud Run falla con «failed to start and listen on the port»; en local en el Mac M2 funciona.", "A Cloud Run deployment fails with \"failed to start and listen on the port\"; locally on the M2 Mac it works."]
+    options: [["Revisar que escucha en $PORT y 0.0.0.0, y construir la imagen para linux/amd64 (Cloud Build)", "Check it listens on $PORT and 0.0.0.0, and build the image for linux/amd64 (Cloud Build)"], ["Aumentar la memoria del servicio", "Increase the service's memory"], ["Hacer el servicio público", "Make the service public"], ["Abrir un P1 con Google", "Open a P1 with Google"]]
+    answer: 0
+    why: ["Puerto, interfaz y arquitectura de CPU son las tres causas típicas.", "Port, interface and CPU architecture are the three typical causes."]
+quiz:
+  - q: ["¿Qué rol permite entrar por OS Login con sudo?", "Which role allows OS Login access with sudo?"]
+    options: [["roles/compute.osAdminLogin", "roles/compute.osAdminLogin"], ["roles/compute.osLogin", "roles/compute.osLogin"], ["roles/iap.tunnelResourceAccessor", "roles/iap.tunnelResourceAccessor"], ["roles/compute.viewer", "roles/compute.viewer"]]
+    answer: 0
+    why: ["osAdminLogin añade sudo; osLogin no.", "osAdminLogin adds sudo; osLogin doesn't."]
+  - q: ["¿Qué significa Exit Code 137?", "What does Exit Code 137 mean?"]
+    options: [["El proceso recibió SIGKILL (128 + 9), normalmente por memoria", "The process received SIGKILL (128 + 9), usually for memory"], ["La imagen no existe", "The image doesn't exist"], ["La sonda de preparación falló", "The readiness probe failed"], ["El proceso terminó correctamente", "The process exited successfully"]]
+    answer: 0
+    why: ["137 = 128 + señal 9 (SIGKILL).", "137 = 128 + signal 9 (SIGKILL)."]
+  - q: ["¿En qué dirección debe escuchar un servidor dentro de Cloud Run?", "Which address must a server listen on inside Cloud Run?"]
+    options: [["0.0.0.0", "0.0.0.0"], ["127.0.0.1", "127.0.0.1"], ["localhost", "localhost"], ["169.254.169.254", "169.254.169.254"]]
+    answer: 0
+    why: ["En localhost no le llega el tráfico del exterior del contenedor.", "On localhost, traffic from outside the container can't reach it."]
+  - q: ["¿Qué metadato habilita la consola serie interactiva?", "Which metadata key enables the interactive serial console?"]
+    options: [["serial-port-enable=TRUE", "serial-port-enable=TRUE"], ["enable-oslogin=TRUE", "enable-oslogin=TRUE"], ["block-project-ssh-keys=TRUE", "block-project-ssh-keys=TRUE"], ["startup-script", "startup-script"]]
+    answer: 0
+    why: ["serial-port-enable activa el acceso interactivo al puerto serie.", "serial-port-enable turns on interactive serial port access."]
+  - q: ["Una función falla al escalar porque abre la conexión a la base de datos al importar el módulo. ¿Qué recomiendas?", "A function fails when scaling because it opens the DB connection at module import. What do you recommend?"]
+    options: [["Inicialización perezosa dentro del manejador, reutilizando la conexión", "Lazy initialization inside the handler, reusing the connection"], ["Aumentar el tiempo de espera al máximo", "Raise the timeout to the maximum"], ["Abrir una conexión nueva en cada línea", "Open a new connection on every line"], ["Pasar la función a una VM", "Move the function to a VM"]]
+    answer: 0
+    why: ["El trabajo pesado va dentro de la petición, con CPU completa.", "Heavy work goes inside the request, with full CPU."]
+  - q: ["¿Qué anotación une una KSA con una GSA en Workload Identity?", "Which annotation binds a KSA to a GSA in Workload Identity?"]
+    options: [["iam.gke.io/gcp-service-account", "iam.gke.io/gcp-service-account"], ["cloud.google.com/neg", "cloud.google.com/neg"], ["kubernetes.io/service-account.name", "kubernetes.io/service-account.name"], ["container.googleapis.com/identity", "container.googleapis.com/identity"]]
+    answer: 0
+    why: ["Además hace falta el binding workloadIdentityUser en la GSA.", "The workloadIdentityUser binding on the GSA is also needed."]

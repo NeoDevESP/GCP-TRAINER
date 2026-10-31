@@ -1,0 +1,204 @@
+id: bank-b20-oslogin-ssh
+title: REQ · «No puedo entrar por SSH a la VM de movimientos»
+summary: Con OS Login el acceso SSH es un permiso de IAM. Da el rol justo (osLogin, sin sudo) y el de IAP, y no vuelvas a las claves en metadatos.
+track: support-bank
+day: 20
+level: basic
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.leastprivilege
+- iam.roles
+- compute.troubleshooting
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 25
+baseline:
+- bank-atlas
+setup: |
+  gcloud compute instances add-metadata movimientos-api --zone={{.zone}} --metadata=enable-oslogin=TRUE
+ticket:
+  id: REQ-11204
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Lucía Ferrer (Desarrollo · Movimientos)
+  summary: Necesito entrar por SSH a movimientos-api para revisar los logs de la aplicación. Me sale «You need roles/compute.osLogin (or osAdminLogin)». Mi jefe ya lo ha aprobado. ¿Me dais acceso de administrador para no volver a pedirlo?
+actors:
+- role: requester
+  name: Lucía Ferrer (Desarrollo · Movimientos)
+  persona: Desarrolladora de la API de movimientos.
+  fallback: Solo quiero leer los logs de la aplicación en /var/log.
+  facts:
+  - keywords:
+    - - sudo
+      - root
+      - administrador
+      - admin
+      - instalar
+      - install
+    answer: 'No, no necesito instalar nada ni ser root: solo leer logs.'
+  - keywords:
+    - - clave
+      - key
+      - metadatos
+      - metadata
+      - ssh-keys
+    answer: Antes añadía mi clave pública en los metadatos de la VM, pero ahora ya no funciona.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **REQ-11204** · *«Necesito entrar por SSH a movimientos-api para revisar los logs de la aplicación. Me sale «You need
+  > roles/compute.osLogin (or osAdminLogin)». Mi jefe ya lo ha aprobado. ¿Me dais acceso de administrador para no volver a pedirlo?»*
+
+  La VM tiene **OS Login** activado (`enable-oslogin=TRUE`): ya no valen las claves SSH de los metadatos, el acceso lo da IAM.
+  `roles/compute.osLogin` permite entrar sin sudo; `roles/compute.osAdminLogin` con sudo. Como la VM no tiene IP pública, también
+  hace falta `roles/iap.tunnelResourceAccessor`. Usuario: `lucia.ferrer@gcplab.dev`.
+objectives:
+- Confirma que la VM usa OS Login
+- Pregunta qué necesita hacer exactamente en la VM
+- 'Concede el acceso mínimo: osLogin e IAP, sin sudo ni administración de la VM'
+- Explica cómo conectarse y cierra
+hints:
+- text: '`gcloud compute instances describe movimientos-api --zone={{.zone}}` muestra los metadatos.'
+- text: '`gcloud projects add-iam-policy-binding {{.project}} --member=user:lucia.ferrer@gcplab.dev --role=roles/compute.osLogin` (y lo mismo con `roles/iap.tunnelResourceAccessor`).'
+solution: |
+  ticket
+  gcloud compute instances describe movimientos-api --zone={{.zone}}
+  ask requester "¿qué necesitas hacer en la VM, necesitas sudo?"
+  gcloud projects add-iam-policy-binding {{.project}} --member=user:lucia.ferrer@gcplab.dev --role=roles/compute.osLogin
+  gcloud projects add-iam-policy-binding {{.project}} --member=user:lucia.ferrer@gcplab.dev --role=roles/iap.tunnelResourceAccessor
+  ticket update "Hola Lucía: la VM usa OS Login, así que las claves en metadatos ya no sirven y el acceso va por IAM. Te hemos dado roles/compute.osLogin (entrar sin sudo, suficiente para leer logs) y acceso por IAP. Conéctate con: gcloud compute ssh movimientos-api --zone={{.zone}} --tunnel-through-iap. Si algún día necesitas sudo, pídelo con su aprobación."
+  ticket resolve "Concedidos compute.osLogin e iap.tunnelResourceAccessor a lucia.ferrer; sin osAdminLogin ni instanceAdmin."
+shortcuts:
+- name: give admin
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:lucia.ferrer@gcplab.dev --role=roles/compute.instanceAdmin.v1
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:lucia.ferrer@gcplab.dev --role=roles/compute.osAdminLogin
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:lucia.ferrer@gcplab.dev --role=roles/iap.tunnelResourceAccessor
+    ticket resolve "Dado acceso de administrador a Lucía."
+- name: disable OS Login
+  run: |
+    gcloud compute instances add-metadata movimientos-api --zone={{.zone}} --metadata=enable-oslogin=FALSE
+    ticket resolve "Desactivado OS Login para que vuelva a usar su clave."
+rubric:
+- name: Puede entrar
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: iam
+    principal: user:lucia.ferrer@gcplab.dev
+    permission: compute.instances.osLogin
+    resource: project
+    desc: Permiso de OS Login
+  - type: iam
+    principal: user:lucia.ferrer@gcplab.dev
+    permission: iap.tunnelInstances.accessViaIAP
+    resource: project
+    desc: Acceso por IAP
+- name: Mínimo privilegio
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:lucia.ferrer@gcplab.dev
+    permission: compute.instances.osAdminLogin
+    resource: project
+    expect: false
+    desc: Sin sudo
+  - type: iam
+    principal: user:lucia.ferrer@gcplab.dev
+    permission: compute.instances.setMetadata
+    resource: project
+    expect: false
+    desc: No puede cambiar metadatos de las VM
+  - type: exists
+    path: instances["movimientos-api"]
+    expect:
+      metadata:
+        regex: enable-oslogin.{0,4}TRUE
+    desc: OS Login sigue activado
+- name: Necesidad aclarada
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: asked
+    actor: requester
+    min: 1
+    desc: Preguntado qué necesita hacer
+- name: Explicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - os login
+      - oslogin
+    - - iap
+      - tunnel
+    desc: Explica OS Login y cómo conectarse
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Con OS Login el SSH es un permiso de IAM: se audita, se retira al quitar el rol y no hay claves sueltas en metadatos.'
+- match: instances describe movimientos-api
+  title: ''
+  why: 'enable-oslogin=TRUE: la VM ignora las claves SSH de los metadatos. Por eso su clave antigua ya no funciona.'
+- match: roles/compute.osLogin
+  title: Rol sin sudo
+  why: Para leer logs basta osLogin. osAdminLogin da sudo, e instanceAdmin permite cambiar la VM entera.
+en:
+  title: REQ · "I can't SSH into the movimientos VM"
+  summary: With OS Login, SSH access is an IAM permission. Grant the right role (osLogin, no sudo) plus the IAP one, and don't fall back to metadata keys.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **REQ-11204** · *"I need to SSH into movimientos-api to look at the application logs. I get "You need roles/compute.osLogin
+    > (or osAdminLogin)". My manager already approved it. Can you give me admin access so I don't have to ask again?"*
+
+    The VM has **OS Login** enabled (`enable-oslogin=TRUE`): metadata SSH keys no longer work, IAM grants access.
+    `roles/compute.osLogin` lets you in without sudo; `roles/compute.osAdminLogin` with sudo. Since the VM has no public IP,
+    `roles/iap.tunnelResourceAccessor` is needed too. User: `lucia.ferrer@gcplab.dev`.
+  objectives:
+  - Confirm the VM uses OS Login
+  - Ask what exactly she needs to do on the VM
+  - 'Grant the minimum access: osLogin and IAP, no sudo or VM admin'
+  - Explain how to connect and close
+  hints:
+  - '`gcloud compute instances describe movimientos-api --zone={{.zone}}` shows the metadata.'
+  - '`gcloud projects add-iam-policy-binding {{.project}} --member=user:lucia.ferrer@gcplab.dev --role=roles/compute.osLogin` (and the same with `roles/iap.tunnelResourceAccessor`).'
+  ticket:
+    summary: I need to SSH into movimientos-api to look at the application logs. I get "You need roles/compute.osLogin (or osAdminLogin)". My manager already approved it. Can you give me admin access so I don't have to ask again?
+  text:
+    Lucía Ferrer (Desarrollo · Movimientos): Lucía Ferrer (Development · Movements)
+    Desarrolladora de la API de movimientos.: Developer of the movements API.
+    Solo quiero leer los logs de la aplicación en /var/log.: I just want to read the application logs in /var/log.
+    'No, no necesito instalar nada ni ser root: solo leer logs.': 'No, I don''t need to install anything or be root: just read logs.'
+    Antes añadía mi clave pública en los metadatos de la VM, pero ahora ya no funciona.: I used to add my public key to the VM metadata, but it doesn't work anymore.
+    Puede entrar: She can log in
+    Permiso de OS Login: OS Login permission
+    Acceso por IAP: IAP access
+    Mínimo privilegio: Least privilege
+    Sin sudo: No sudo
+    No puede cambiar metadatos de las VM: Cannot change VM metadata
+    OS Login sigue activado: OS Login still enabled
+    Necesidad aclarada: Need clarified
+    Preguntado qué necesita hacer: Asked what she needs to do
+    Explicación: Explanation
+    Explica OS Login y cómo conectarse: Explains OS Login and how to connect
+    Ticket cerrado: Ticket closed
+    'Con OS Login el SSH es un permiso de IAM: se audita, se retira al quitar el rol y no hay claves sueltas en metadatos.': 'With OS Login, SSH is an IAM permission: it''s audited, removed with the role, and there are no loose keys in metadata.'
+    'enable-oslogin=TRUE: la VM ignora las claves SSH de los metadatos. Por eso su clave antigua ya no funciona.': 'enable-oslogin=TRUE: the VM ignores metadata SSH keys. That''s why her old key stopped working.'
+    Rol sin sudo: Role without sudo
+    Para leer logs basta osLogin. osAdminLogin da sudo, e instanceAdmin permite cambiar la VM entera.: osLogin is enough to read logs. osAdminLogin grants sudo, and instanceAdmin lets you change the whole VM.

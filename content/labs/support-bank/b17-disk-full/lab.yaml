@@ -1,0 +1,245 @@
+id: bank-b17-disk-full
+title: 'INC · El portal interno de extractos no carga: disco lleno'
+summary: Entra por IAP, mide antes de borrar, libera espacio sin tocar los datos y recupera el servicio. Borrar «lo que más ocupa» sin preguntar puede ser un desastre.
+track: support-bank
+day: 17
+level: intermediate
+branch: linux
+type: incident
+mode: production
+skills:
+- linux.disks
+- linux.troubleshooting
+- compute.troubleshooting
+wellArchitected:
+- operations
+- reliability
+certs:
+- ACE
+difficulty: 3
+minutes: 35
+baseline:
+- bank-atlas
+setup: |
+  gcloud compute firewall-rules create allow-app-to-extractos --network=atlas-vpc --allow=tcp:80 --source-tags=movimientos-api --target-tags=extractos-web
+  gcloud compute instances create extractos-web --zone={{.zone}} --machine-type=e2-small --subnet=app-subnet --no-address --tags=extractos-web --metadata=startup-script='apt-get install -y nginx'
+faults:
+- type: os_user
+  vm: extractos-web
+  user: www-data
+  groups:
+  - www-data
+  - adm
+- type: os_disk
+  vm: extractos-web
+  sizeGB: 20
+  baseUsedGB: '3.2'
+- type: os_service
+  vm: extractos-web
+  service: nginx
+  user: www-data
+  writes: /var/log/nginx
+- type: os_file
+  vm: extractos-web
+  path: /var/log/nginx/access.log
+  sizeMB: '900'
+  owner: www-data
+  group: adm
+  mode: '640'
+- type: os_file
+  vm: extractos-web
+  path: /var/log/nginx/debug.log
+  sizeMB: '13500'
+  owner: www-data
+  group: adm
+  mode: '640'
+- type: os_file
+  vm: extractos-web
+  path: /var/lib/extractos/indice.db
+  sizeMB: '2800'
+  owner: www-data
+  group: www-data
+  mode: '600'
+- type: os_file
+  vm: extractos-web
+  path: /etc/logrotate.d/nginx
+  content: /var/log/nginx/*.log { daily rotate 7 compress }
+  owner: root
+  group: root
+  mode: '644'
+ticket:
+  id: INC-23188
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Oficinas · Centro de atención
+  summary: El portal interno de extractos (extractos-web) no carga desde esta mañana. Los gestores no pueden descargar extractos para los clientes.
+actors:
+- role: dev
+  name: Inés Navarro (Desarrollo · Extractos)
+  persona: Mantiene el portal de extractos.
+  fallback: La semana pasada activamos el log de depuración de nginx para investigar un problema.
+  facts:
+  - keywords:
+    - - debug
+      - depuracion
+      - log
+      - borrar
+      - vaciar
+    answer: debug.log se puede vaciar sin problema; ya no lo necesitamos. ¡Pero no toquéis /var/lib/extractos/indice.db! Es el índice de todos los extractos.
+  - keywords:
+    - - indice
+      - indice.db
+      - db
+      - grande
+    answer: 'indice.db es el índice de extractos: si se borra hay que regenerarlo durante horas.'
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23188** · *«El portal interno de extractos (extractos-web) no carga desde esta mañana. Los gestores no pueden descargar
+  > extractos para los clientes.»*
+
+  La VM no tiene IP pública: entra con `gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='...'`.
+  Antes de borrar nada, **mide** (`df -h`, `du -sh`, `find`) y **pregunta** qué es cada archivo grande.
+objectives:
+- Entra por IAP y confirma por qué nginx no funciona
+- Mide qué llena el disco y pregunta antes de borrar
+- Libera espacio sin tocar los datos y recupera el servicio
+- Deja la causa y la prevención en el ticket
+hints:
+- text: '`df -h` dice qué disco está lleno; `sudo du -sh /var/*` y `sudo find / -size +500M` qué lo llena.'
+- text: Vaciar un log que nginx tiene abierto se hace con `truncate -s 0`, no con `rm`; luego `systemctl restart nginx`.
+solution: |
+  ticket
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='df -h'
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo du -sh /var/*'
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo find / -size +500M'
+  ask dev "¿qué son debug.log e indice.db y se pueden borrar?"
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo truncate -s 0 /var/log/nginx/debug.log'
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo logrotate -f /etc/logrotate.d/nginx'
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
+  gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='df -h'
+  ticket comment "Causa: debug.log de nginx (13,5 GB) llenó el disco; se activó la semana pasada para una investigación y no se desactivó. Vaciado con truncate, rotación forzada y nginx reiniciado. indice.db intacto. Pendiente: Desarrollo debe desactivar el log de depuración."
+  ticket update "Resuelto: el portal de extractos vuelve a funcionar. El disco del servidor se había llenado con un registro de depuración; lo hemos vaciado sin tocar los datos de los extractos."
+  ticket resolve "Vaciado debug.log de nginx, forzada la rotación de logs y reiniciado nginx; disco por debajo del 80 % e indice.db conservado."
+shortcuts:
+- name: delete the biggest data file
+  run: |
+    gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo rm -f /var/lib/extractos/indice.db'
+    gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo rm -f /var/log/nginx/debug.log'
+    gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
+    ticket resolve "Borrados los archivos grandes del disco y reiniciado nginx."
+rubric:
+- name: Servicio recuperado
+  validator: functional
+  points: 30
+  checks:
+  - type: http
+    from: vm:movimientos-api
+    target: vm:extractos-web:80
+    path: /
+    status: 200
+    desc: extractos-web vuelve a responder
+- name: Espacio liberado sin perder datos
+  validator: state
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: vm_disk
+    vm: extractos-web
+    maxPct: 80
+    desc: Disco por debajo del 80 %
+  - type: vm_file
+    vm: extractos-web
+    path: /var/lib/extractos/indice.db
+    desc: indice.db conservado
+- name: Medir y preguntar antes de borrar
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: df -h|du -sh|find / -size
+    min: 2
+    desc: Medido antes de borrar
+  - type: asked
+    actor: dev
+    min: 1
+    desc: Preguntado qué es cada archivo
+- name: Causa y prevención
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - debug
+    - - disco
+      - disk
+      - espacio
+      - space
+    - - desactiv
+      - logrotate
+      - rotacion
+      - rotat
+    desc: Nota interna con la causa y qué evitar
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Disco lleno: el servicio cae porque no puede escribir. La tentación es borrar lo más grande, y lo más grande a veces son los datos.'
+- match: find / -size
+  title: Localiza los archivos grandes
+  why: 'Ahora sabes qué ocupa, pero no qué es: eso te lo dice quien mantiene la aplicación.'
+- match: truncate -s 0
+  title: ''
+  why: truncate vacía el archivo sin borrarlo, así nginx sigue escribiendo en él y el espacio se libera de verdad.
+en:
+  title: 'INC · The internal statements portal won''t load: disk full'
+  summary: Connect through IAP, measure before deleting, free space without touching the data and restore the service. Deleting "whatever's biggest" without asking can be a disaster.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23188** · *"The internal statements portal (extractos-web) hasn't loaded since this morning. Managers can't download
+    > statements for customers."*
+
+    The VM has no public IP: connect with `gcloud compute ssh extractos-web --zone={{.zone}} --tunnel-through-iap --command='...'`.
+    Before deleting anything, **measure** (`df -h`, `du -sh`, `find`) and **ask** what each big file is.
+  objectives:
+  - Connect through IAP and confirm why nginx isn't working
+  - Measure what's filling the disk and ask before deleting
+  - Free space without touching the data and restore the service
+  - Leave the cause and the prevention on the ticket
+  hints:
+  - '`df -h` tells you which disk is full; `sudo du -sh /var/*` and `sudo find / -size +500M` what''s filling it.'
+  - Emptying a log nginx has open is done with `truncate -s 0`, not `rm`; then `systemctl restart nginx`.
+  ticket:
+    summary: The internal statements portal (extractos-web) hasn't loaded since this morning. Managers can't download statements for customers.
+  text:
+    Oficinas · Centro de atención: Branches · Service centre
+    Inés Navarro (Desarrollo · Extractos): Inés Navarro (Development · Statements)
+    Mantiene el portal de extractos.: Maintains the statements portal.
+    La semana pasada activamos el log de depuración de nginx para investigar un problema.: Last week we turned on nginx's debug log to investigate a problem.
+    ? debug.log se puede vaciar sin problema; ya no lo necesitamos. ¡Pero no toquéis /var/lib/extractos/indice.db! Es el índice de todos los extractos.
+    : debug.log can be emptied, no problem; we don't need it anymore. But don't touch /var/lib/extractos/indice.db! It's the index of every statement.
+    'indice.db es el índice de extractos: si se borra hay que regenerarlo durante horas.': 'indice.db is the statements index: if it''s deleted it takes hours to rebuild.'
+    Servicio recuperado: Service restored
+    extractos-web vuelve a responder: extractos-web responds again
+    Espacio liberado sin perder datos: Space freed without data loss
+    Disco por debajo del 80 %: Disk below 80%
+    indice.db conservado: indice.db kept
+    Medir y preguntar antes de borrar: Measure and ask before deleting
+    Medido antes de borrar: Measured before deleting
+    Preguntado qué es cada archivo: Asked what each file is
+    Causa y prevención: Cause and prevention
+    Nota interna con la causa y qué evitar: Internal note with the cause and what to prevent
+    Ticket cerrado: Ticket closed
+    ? 'Disco lleno: el servicio cae porque no puede escribir. La tentación es borrar lo más grande, y lo más grande a veces son los datos.'
+    : 'Disk full: the service dies because it can''t write. The temptation is to delete the biggest thing, and sometimes the biggest thing is the data.'
+    Localiza los archivos grandes: Find the big files
+    'Ahora sabes qué ocupa, pero no qué es: eso te lo dice quien mantiene la aplicación.': 'Now you know what takes the space, but not what it is: whoever maintains the app tells you that.'
+    truncate vacía el archivo sin borrarlo, así nginx sigue escribiendo en él y el espacio se libera de verdad.: truncate empties the file without deleting it, so nginx keeps writing to it and the space is really freed.

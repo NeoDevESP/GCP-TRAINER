@@ -102,6 +102,7 @@ export interface LabSummary {
   fidelity: string[];
   defaultFidelity: string;
   hints: number;
+  ticket?: { id: string; kind: string; priority: string; sla: string } | null;
 }
 
 export interface Question {

@@ -107,12 +107,15 @@ const runTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 export function loadRun<T>(key: string): T | null {
   return read<T | null>(key, null) ?? ((serverRuns[key] as T) || null);
 }
-export function saveRun(key: string, run: unknown | null) {
+// With now, the account copy is saved at once (before leaving the page).
+export function saveRun(key: string, run: unknown | null, now = false): Promise<unknown> {
   clearTimeout(runTimers[key]);
   if (run) {
     write(key, run);
     serverRuns[key] = run;
-    runTimers[key] = setTimeout(() => api(`/api/me/study/runs/${key}`, { method: "PUT", body: run }).catch(() => {}), 800);
+    const put = () => api(`/api/me/study/runs/${key}`, { method: "PUT", body: run }).catch(() => {});
+    if (now) return put();
+    runTimers[key] = setTimeout(put, 800);
   } else {
     try {
       localStorage.removeItem(key);
@@ -120,8 +123,9 @@ export function saveRun(key: string, run: unknown | null) {
       /* ignore */
     }
     delete serverRuns[key];
-    api(`/api/me/study/runs/${key}`, { method: "DELETE" }).catch(() => {});
+    return api(`/api/me/study/runs/${key}`, { method: "DELETE" }).catch(() => {});
   }
+  return Promise.resolve();
 }
 
 interface StudyDoc {

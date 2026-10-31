@@ -1,0 +1,189 @@
+id: bank-b16-region-policy
+title: 'INC · «No puedo desplegar en us-central1: Location violates constraint»'
+summary: La política de ubicaciones mantiene los datos de clientes en la UE. Despliega el servicio en la región europea, privado, y explica por qué la política no se cambia.
+track: support-bank
+day: 16
+level: basic
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.orgpolicy
+- compute.serverless
+- architecture.governance
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 25
+baseline:
+- bank-atlas
+ticket:
+  id: INC-23015
+  kind: INC
+  priority: P4
+  sla: 3d
+  reporter: Irene Molina (Desarrollo · Hipotecas)
+  summary: 'Al desplegar el simulador de hipotecas en Cloud Run (us-central1) me sale «FAILED_PRECONDITION: Location us-central1 violates constraint constraints/gcp.resourceLocations». ¿Podéis permitir esa región?'
+actors:
+- role: requester
+  name: Irene Molina (Desarrollo · Hipotecas)
+  persona: Desarrolladora del simulador de hipotecas.
+  fallback: 'Es el simulador de hipotecas para la web: imagen europe-docker.pkg.dev/gcplab-public/apps/hello:1.0, servicio simulador-hipotecas.'
+  facts:
+  - keywords:
+    - - por que
+      - us-central1
+      - region
+      - motivo
+      - why
+    answer: Lo pone así el tutorial que seguí. Los usuarios son de España, no tengo ningún motivo para usar Estados Unidos.
+  - keywords:
+    - - publico
+      - internet
+      - quien
+      - acceso
+      - public
+    answer: Lo llamará el backend de la web, no hace falta que sea público.
+- role: security
+  name: Elena Castro (Seguridad)
+  persona: Arquitecta de seguridad de la plataforma.
+  fallback: 'Los datos de clientes no salen de la UE: es un requisito regulatorio. La política de ubicaciones no se toca.'
+  facts: []
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23015** · *«Al desplegar el simulador de hipotecas en Cloud Run (us-central1) me sale «FAILED_PRECONDITION: Location
+  > us-central1 violates constraint constraints/gcp.resourceLocations». ¿Podéis permitir esa región?»*
+
+  Muchos tutoriales usan `us-central1` por defecto. En el banco, la política `gcp.resourceLocations` solo permite ubicaciones de
+  la **UE** por residencia de datos. Ayuda a que el servicio quede desplegado donde debe.
+objectives:
+- Confirma qué ubicaciones permite la política
+- Averigua si hay algún motivo real para usar Estados Unidos
+- Despliega simulador-hipotecas en {{.region}}, sin acceso público
+- Explica la política y cierra
+hints:
+- text: '`gcloud resource-manager org-policies describe gcp.resourceLocations --project={{.project}} --effective`.'
+- text: '`gcloud run deploy simulador-hipotecas --image=... --region={{.region}} --no-allow-unauthenticated`.'
+solution: |
+  ticket
+  gcloud resource-manager org-policies describe gcp.resourceLocations --project={{.project}} --effective
+  ask requester "¿por qué us-central1 y quién llamará al servicio?"
+  ask security "¿se puede permitir us-central1?"
+  gcloud run deploy simulador-hipotecas --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --no-allow-unauthenticated
+  ticket update "Hola Irene: la política gcp.resourceLocations del banco solo permite regiones de la UE para que los datos de clientes no salgan de Europa, y no se va a cambiar. Te he desplegado simulador-hipotecas en {{.region}} (Bélgica), privado. Para tus próximos despliegues usa --region={{.region}} aunque el tutorial diga us-central1; para tus usuarios en España además irá más rápido."
+  ticket resolve "Desplegado simulador-hipotecas en {{.region}} sin acceso público; política de ubicaciones UE sin cambios."
+shortcuts:
+- name: allow US locations
+  run: |
+    gcloud resource-manager org-policies allow gcp.resourceLocations in:eu-locations in:us-locations --project={{.project}}
+    gcloud run deploy simulador-hipotecas --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region=us-central1 --no-allow-unauthenticated
+    ticket resolve "Permitidas las regiones de EE. UU. y desplegado en us-central1."
+rubric:
+- name: Servicio desplegado en la UE
+  validator: functional
+  points: 35
+  all: true
+  checks:
+  - type: exists
+    path: runServices["simulador-hipotecas"]
+    expect:
+      region:
+        regex: ^europe-
+    desc: simulador-hipotecas en una región europea
+  - type: http
+    target: run:simulador-hipotecas
+    path: /
+    status: 403
+    desc: Sin acceso público
+- name: Residencia de datos intacta
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: command
+    regex: org-policies (allow|disable-enforce|delete|set-policy)
+    max: 0
+    desc: La política de ubicaciones no se ha tocado
+- name: Consulta
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: asked
+    min: 1
+    desc: Motivo o criterio aclarado
+- name: Explicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - ue
+      - eu
+      - europa
+      - europe
+      - residencia
+    - - '{{.region}}'
+      - region
+    desc: Explica la política y la región a usar
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'La residencia de datos es una obligación regulatoria: la respuesta es ayudar a desplegar en la UE, no abrir la política.'
+- match: org-policies describe gcp.resourceLocations
+  title: Mira qué ubicaciones se permiten
+  why: 'in:eu-locations: solo regiones y multirregiones europeas.'
+- match: run deploy simulador-hipotecas
+  title: ''
+  why: 'Mismo servicio en la región europea y privado: lo que necesitaba, dentro de las normas.'
+en:
+  title: 'INC · "I can''t deploy to us-central1: Location violates constraint"'
+  summary: The locations policy keeps customer data in the EU. Deploy the service in the European region, private, and explain why the policy isn't changed.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23015** · *"When deploying the mortgage simulator on Cloud Run (us-central1) I get "FAILED_PRECONDITION: Location
+    > us-central1 violates constraint constraints/gcp.resourceLocations". Can you allow that region?"*
+
+    Many tutorials use `us-central1` by default. At the bank, the `gcp.resourceLocations` policy only allows **EU** locations for
+    data residency. Help get the service deployed where it belongs.
+  objectives:
+  - Confirm which locations the policy allows
+  - Find out whether there's any real reason to use the US
+  - Deploy simulador-hipotecas in {{.region}}, without public access
+  - Explain the policy and close
+  hints:
+  - '`gcloud resource-manager org-policies describe gcp.resourceLocations --project={{.project}} --effective`.'
+  - '`gcloud run deploy simulador-hipotecas --image=... --region={{.region}} --no-allow-unauthenticated`.'
+  ticket:
+    summary: 'When deploying the mortgage simulator on Cloud Run (us-central1) I get "FAILED_PRECONDITION: Location us-central1 violates constraint constraints/gcp.resourceLocations". Can you allow that region?'
+  text:
+    Irene Molina (Desarrollo · Hipotecas): Irene Molina (Development · Mortgages)
+    Desarrolladora del simulador de hipotecas.: Developer of the mortgage simulator.
+    ? 'Es el simulador de hipotecas para la web: imagen europe-docker.pkg.dev/gcplab-public/apps/hello:1.0, servicio simulador-hipotecas.'
+    : 'It''s the mortgage simulator for the website: image europe-docker.pkg.dev/gcplab-public/apps/hello:1.0, service simulador-hipotecas.'
+    Lo pone así el tutorial que seguí. Los usuarios son de España, no tengo ningún motivo para usar Estados Unidos.: That's what the tutorial I followed uses. The users are in Spain; I have no reason to use the US.
+    Lo llamará el backend de la web, no hace falta que sea público.: The website backend will call it; it doesn't need to be public.
+    Elena Castro (Seguridad): Elena Castro (Security)
+    Arquitecta de seguridad de la plataforma.: Platform security architect.
+    'Los datos de clientes no salen de la UE: es un requisito regulatorio. La política de ubicaciones no se toca.': 'Customer data doesn''t leave the EU: it''s a regulatory requirement. The locations policy isn''t touched.'
+    Servicio desplegado en la UE: Service deployed in the EU
+    simulador-hipotecas en una región europea: simulador-hipotecas in a European region
+    Sin acceso público: No public access
+    Residencia de datos intacta: Data residency intact
+    La política de ubicaciones no se ha tocado: The locations policy wasn't touched
+    Consulta: Consultation
+    Motivo o criterio aclarado: Reason or criterion clarified
+    Explicación: Explanation
+    Explica la política y la región a usar: Explains the policy and the region to use
+    Ticket cerrado: Ticket closed
+    'La residencia de datos es una obligación regulatoria: la respuesta es ayudar a desplegar en la UE, no abrir la política.': 'Data residency is a regulatory obligation: the answer is to help deploy in the EU, not to open up the policy.'
+    Mira qué ubicaciones se permiten: See which locations are allowed
+    'in:eu-locations: solo regiones y multirregiones europeas.': 'in:eu-locations: only European regions and multi-regions.'
+    'Mismo servicio en la región europea y privado: lo que necesitaba, dentro de las normas.': 'Same service in the European region and private: what she needed, within the rules.'

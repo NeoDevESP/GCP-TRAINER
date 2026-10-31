@@ -1,0 +1,227 @@
+id: bank-b24-gke-imagepull
+title: 'INC · Tras migrar de registro, el antifraude no arranca: ImagePullBackOff'
+summary: 'ImagePullBackOff significa que el nodo no descarga la imagen: comprueba que existe la etiqueta y que la cuenta de los nodos puede leer el repositorio, y da solo ese permiso.'
+track: support-bank
+day: 24
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.troubleshooting
+- devops.artifacts
+- iam.serviceaccounts
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+- PCDE
+difficulty: 3
+minutes: 30
+baseline:
+- bank-atlas
+setup: |
+  gcloud iam service-accounts create gke-nodos-sa --display-name="nodos de GKE"
+  gcloud artifacts repositories create imagenes-antiguas --repository-format=docker --location={{.region}}
+  gcloud artifacts repositories create imagenes-riesgo --repository-format=docker --location={{.region}}
+  gcloud artifacts repositories add-iam-policy-binding imagenes-antiguas --location={{.region}} --member=serviceAccount:gke-nodos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/artifactregistry.reader
+  cat > Dockerfile <<'DOCKER'
+  FROM gcr.io/distroless/static:nonroot
+  LABEL sim.behavior=catalog-api
+  COPY app /app
+  USER nonroot:nonroot
+  ENTRYPOINT ["/app"]
+  DOCKER
+  echo app > app
+  docker build -t {{.region}}-docker.pkg.dev/{{.project}}/imagenes-riesgo/fraude-api:3.1 .
+  gcloud auth configure-docker {{.region}}-docker.pkg.dev --quiet
+  docker push {{.region}}-docker.pkg.dev/{{.project}}/imagenes-riesgo/fraude-api:3.1
+  gcloud container clusters create fraude-gke --zone={{.zone}} --num-nodes=2 --machine-type=e2-standard-2 --network=atlas-vpc --subnetwork=app-subnet --enable-private-nodes --service-account=gke-nodos-sa@{{.project}}.iam.gserviceaccount.com
+  gcloud container clusters get-credentials fraude-gke --zone={{.zone}}
+  cat > fraude.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: fraude-api}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: fraude-api}}
+    template:
+      metadata: {labels: {app: fraude-api}}
+      spec:
+        containers:
+        - name: fraude-api
+          image: {{.region}}-docker.pkg.dev/{{.project}}/imagenes-riesgo/fraude-api:3.1
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+  YAML
+  kubectl apply -f fraude.yaml
+ticket:
+  id: INC-23455
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Riesgos · Antifraude
+  summary: Hemos pasado las imágenes al repositorio nuevo imagenes-riesgo y desde entonces el servicio fraude-api no arranca. La imagen 3.1 está subida, lo hemos comprobado.
+actors:
+- role: dev
+  name: Sergio Lago (Desarrollo · Antifraude)
+  persona: Desarrollador del servicio antifraude.
+  fallback: Solo hemos cambiado la ruta de la imagen en el manifiesto.
+  facts:
+  - keywords:
+    - - permiso
+      - permission
+      - antiguo
+      - old
+      - reader
+      - acceso
+    answer: En el repositorio antiguo alguien dio permiso de lectura a los nodos hace tiempo; en el nuevo no hemos tocado permisos.
+  - keywords:
+    - - etiqueta
+      - tag
+      - '3.1'
+      - version
+    answer: La etiqueta es 3.1, la subimos ayer con docker push.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23455** · *«Hemos pasado las imágenes al repositorio nuevo imagenes-riesgo y desde entonces el servicio fraude-api no arranca.
+  > La imagen 3.1 está subida, lo hemos comprobado.»*
+
+  Clúster `fraude-gke` (zona `{{.zone}}`), con nodos que usan la cuenta `gke-nodos-sa`. **ImagePullBackOff** quiere decir que el nodo
+  no consigue descargar la imagen. Hay que distinguir tres causas: la imagen o etiqueta no existe, los nodos no tienen permiso
+  para leer el repositorio, o los nodos no llegan al registro.
+objectives:
+- Lee el motivo exacto del ImagePullBackOff
+- Comprueba que la imagen y la etiqueta existen
+- Da a la cuenta de los nodos solo lectura sobre el repositorio nuevo
+- Comprueba que los pods arrancan y documenta
+hints:
+- text: '`kubectl describe pod` muestra el error de descarga; `gcloud artifacts docker images list {{.region}}-docker.pkg.dev/{{.project}}/imagenes-riesgo` lista las imágenes.'
+- text: '`gcloud artifacts repositories add-iam-policy-binding imagenes-riesgo --location={{.region}} --member=serviceAccount:CUENTA --role=roles/artifactregistry.reader`.'
+solution: |
+  ticket
+  gcloud container clusters get-credentials fraude-gke --zone={{.zone}}
+  kubectl get pods
+  kubectl describe deployment fraude-api
+  gcloud artifacts docker images list {{.region}}-docker.pkg.dev/{{.project}}/imagenes-riesgo
+  ask dev "¿qué permisos tenía el repositorio antiguo?"
+  gcloud artifacts repositories add-iam-policy-binding imagenes-riesgo --location={{.region}} --member=serviceAccount:gke-nodos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/artifactregistry.reader
+  kubectl rollout restart deployment/fraude-api
+  kubectl get pods
+  ticket comment "Causa: ImagePullBackOff por permiso. La imagen fraude-api:3.1 existe en imagenes-riesgo, pero la cuenta de los nodos (gke-nodos-sa) solo tenía artifactregistry.reader en el repositorio antiguo. Concedido reader solo en imagenes-riesgo. Para próximas migraciones: copiar también los permisos del repositorio."
+  ticket update "Resuelto: el servicio antifraude ya arranca. Los servidores del clúster no tenían permiso para leer el repositorio nuevo; se lo hemos dado solo para ese repositorio."
+  ticket resolve "Concedido artifactregistry.reader a gke-nodos-sa en imagenes-riesgo; pods de fraude-api listos."
+shortcuts:
+- name: editor for the node account
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:gke-nodos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/editor
+    ticket resolve "Dado permiso de editor a los nodos."
+- name: restart only
+  run: |
+    gcloud container clusters get-credentials fraude-gke --zone={{.zone}}
+    kubectl rollout restart deployment/fraude-api
+    ticket resolve "Reiniciado el despliegue de fraude-api por si acaso."
+rubric:
+- name: Servicio arrancado
+  validator: functional
+  points: 35
+  checks:
+  - type: k8s_ready
+    cluster: fraude-gke
+    namespace: default
+    deployment: fraude-api
+    desc: Réplicas de fraude-api listas
+- name: Permiso acotado
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: command
+    regex: projects add-iam-policy-binding .*gke-nodos-sa
+    max: 0
+    desc: Ningún rol a los nodos en todo el proyecto
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: kubectl (describe|get pods)
+    min: 1
+    desc: Motivo del fallo leído
+  - type: command
+    regex: docker images list|docker tags list
+    min: 1
+    desc: Imagen o permisos del repositorio revisados
+- name: Causa documentada
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - imagepull
+      - descarg
+      - pull
+    - - reader
+      - permiso
+      - permission
+    desc: Nota interna con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'ImagePullBackOff es un estado, no una causa. Separa: ¿existe la imagen?, ¿pueden leerla los nodos?, ¿llegan al registro?'
+- match: docker images list
+  title: Comprueba que existe
+  why: 'La etiqueta 3.1 está: descartada la primera causa, queda el permiso.'
+- match: repositories add-iam-policy-binding
+  title: ''
+  why: 'Quien descarga es la cuenta de los nodos, no el desarrollador: reader sobre ese repositorio basta.'
+en:
+  title: 'INC · After a registry migration, anti-fraud won''t start: ImagePullBackOff'
+  summary: 'ImagePullBackOff means the node can''t download the image: check the tag exists and that the nodes'' account can read the repository, and grant only that.'
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23455** · *"We moved the images to the new imagenes-riesgo repository and since then the fraude-api service won't start.
+    > Image 3.1 is uploaded, we checked."*
+
+    Cluster `fraude-gke` (zone `{{.zone}}`), whose nodes use the `gke-nodos-sa` account. **ImagePullBackOff** means the node can't
+    download the image. Tell three causes apart: the image or tag doesn't exist, the nodes can't read the repository, or the
+    nodes can't reach the registry.
+  objectives:
+  - Read the exact reason for the ImagePullBackOff
+  - Check the image and tag exist
+  - Give the nodes' account read-only access on the new repository
+  - Check the pods start and document
+  hints:
+  - '`kubectl describe pod` shows the pull error; `gcloud artifacts docker images list {{.region}}-docker.pkg.dev/{{.project}}/imagenes-riesgo` lists the images.'
+  - '`gcloud artifacts repositories add-iam-policy-binding imagenes-riesgo --location={{.region}} --member=serviceAccount:ACCOUNT --role=roles/artifactregistry.reader`.'
+  ticket:
+    summary: We moved the images to the new imagenes-riesgo repository and since then the fraude-api service won't start. Image 3.1 is uploaded, we checked.
+  text:
+    Riesgos · Antifraude: Risk · Anti-fraud
+    Sergio Lago (Desarrollo · Antifraude): Sergio Lago (Development · Anti-fraud)
+    Desarrollador del servicio antifraude.: Developer of the anti-fraud service.
+    Solo hemos cambiado la ruta de la imagen en el manifiesto.: We only changed the image path in the manifest.
+    En el repositorio antiguo alguien dio permiso de lectura a los nodos hace tiempo; en el nuevo no hemos tocado permisos.: On the old repository someone gave the nodes read access long ago; on the new one we haven't touched permissions.
+    La etiqueta es 3.1, la subimos ayer con docker push.: The tag is 3.1, we pushed it yesterday with docker push.
+    Servicio arrancado: Service started
+    Réplicas de fraude-api listas: fraude-api replicas ready
+    Permiso acotado: Scoped permission
+    Ningún rol a los nodos en todo el proyecto: No project-wide role for the nodes
+    Diagnóstico: Diagnosis
+    Motivo del fallo leído: Failure reason read
+    Imagen o permisos del repositorio revisados: Image or repository permissions reviewed
+    Causa documentada: Cause documented
+    Nota interna con la causa: Internal note with the cause
+    Ticket cerrado: Ticket closed
+    'ImagePullBackOff es un estado, no una causa. Separa: ¿existe la imagen?, ¿pueden leerla los nodos?, ¿llegan al registro?': 'ImagePullBackOff is a state, not a cause. Separate: does the image exist? can the nodes read it? can they reach the registry?'
+    Comprueba que existe: Check it exists
+    'La etiqueta 3.1 está: descartada la primera causa, queda el permiso.': 'Tag 3.1 is there: the first cause is ruled out, permissions remain.'
+    'Quien descarga es la cuenta de los nodos, no el desarrollador: reader sobre ese repositorio basta.': 'The nodes'' account pulls, not the developer: reader on that repository is enough.'

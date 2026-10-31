@@ -125,7 +125,8 @@ export default function LearnPage() {
   const TOPIC_TRACK: Record<string, string> = { support: "support-bank" };
   const tpLabs = useMemo(() => {
     if (!tp) return [];
-    if (TOPIC_TRACK[tp.id]) return labs.filter((l) => l.track === TOPIC_TRACK[tp.id]);
+    const track = TOPIC_TRACK[tp.id] ?? (tp.id.startsWith("support-") ? "support-bank" : "");
+    if (track) return labs.filter((l) => l.track === track);
     return labs.filter((l) => l.skills.some((s) => s.split(".")[0] === tp.branch)).slice(0, 6);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tp, labs]);
@@ -228,10 +229,17 @@ export default function LearnPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h2>{t("¿Vas a trabajar en soporte GCP?")}</h2>
                   <p>{t("Aprende el oficio: tipos de ticket, prioridades, qué preguntar, cómo responder y escalar, y las normas de una plataforma bancaria. Luego practícalo con casos reales de soporte.")}</p>
+                  <div className="ln-support-topics">
+                    {(topics ?? []).filter((x) => x.id.startsWith("support-")).map((x) => (
+                      <button key={x.id} type="button" className="res-skill" onClick={() => go(x.id)}>{x.name}</button>
+                    ))}
+                  </div>
                 </div>
                 <div className="row">
                   <button type="button" className="cm-pillbtn ink sm" onClick={() => go("support")}>{t("Estudiar soporte")}</button>
                   <a className="btn secondary" href="/catalog?track=support-bank">{t("Casos de soporte")}</a>
+                  <a className="btn secondary" href="/shift">{t("Turno de soporte")}</a>
+                  <a className="btn secondary" href="/plan">{t("Plan de 10 días")}</a>
                 </div>
               </section>
             )}

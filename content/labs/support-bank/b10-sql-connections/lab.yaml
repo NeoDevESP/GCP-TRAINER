@@ -1,0 +1,208 @@
+id: bank-b10-sql-connections
+title: 'INC P2 · Transferencias da 503: «too many connections»'
+summary: La base de datos rechaza conexiones tras una versión. Encuentra el ajuste que la satura y corrígelo; ampliar la base de datos taparía el problema y costaría más.
+track: support-bank
+day: 10
+level: intermediate
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.performance
+- compute.serverless
+- observability.incident
+wellArchitected:
+- reliability
+- performance
+certs:
+- ACE
+- PCDBE
+difficulty: 3
+minutes: 35
+baseline:
+- bank-atlas
+setup: |
+  gcloud iam service-accounts create transfer-sa --display-name="API de transferencias"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:transfer-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create transfer-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=atlas-vpc
+  gcloud sql databases create transfers --instance=transfer-db
+  gcloud sql users create app --instance=transfer-db --password=pw-transfer-1
+  gcloud run deploy transfer-api --image=europe-docker.pkg.dev/gcplab-public/apps/inventory-api:1.0 --region={{.region}} --service-account=transfer-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:transfer-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:transfer-db,DB_USER=app,DB_PASSWORD=pw-transfer-1,DB_NAME=transfers,DB_POOL_SIZE=5 --max-instances=10 --network=atlas-vpc --subnet=app-subnet --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding transfer-api --region={{.region}} --member=user:gestor@gcplab.dev --role=roles/run.invoker
+faults:
+- type: run_env
+  service: transfer-api
+  key: DB_POOL_SIZE
+  value: '80'
+  actor: release-bot@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: transferencias
+  target: run:transfer-api
+  path: /stock
+  rps: 60
+  principal: user:gestor@gcplab.dev
+ticket:
+  id: INC-22841
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Banca online · Transferencias
+  summary: Desde la subida de la versión 5.2 a las 9:00, transfer-api devuelve 503 a muchas peticiones. En los registros de la base de datos aparece «too many connections». ¿Ampliamos la base de datos?
+actors:
+- role: dev
+  name: Rosa Medina (Desarrollo · Transferencias)
+  persona: Responsable técnica de transfer-api.
+  fallback: La 5.2 traía mejoras de rendimiento, entre ellas el pool de conexiones.
+  facts:
+  - keywords:
+    - - pool
+      - conexiones
+      - connections
+      - db_pool_size
+    answer: Subimos DB_POOL_SIZE de 5 a 80 para ir más rápido. Con 10 instancias de Cloud Run serían hasta 800 conexiones… vale, eso no cabe. Volved a 5.
+- role: finops
+  name: Ana Vidal (FinOps)
+  persona: Revisa el gasto de la plataforma cada mes.
+  fallback: Ampliar la base de datos multiplica su coste. Si hay otra solución, mejor.
+  facts: []
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`). **P2: plazo de 4 horas.**
+
+  > **INC-22841** · *«Desde la subida de la versión 5.2 a las 9:00, transfer-api devuelve 503. En los registros de la base de datos
+  > aparece «too many connections». ¿Ampliamos la base de datos?»*
+
+  Cada instancia de Cloud Run abre su propio pool de conexiones: **conexiones ≈ tamaño del pool × instancias**. Si eso supera el
+  `max_connections` de la base de datos, Postgres rechaza clientes. Antes de ampliar nada, averigua qué cambió.
+objectives:
+- Confirma el error en los registros de la base de datos
+- Encuentra qué cambió en la versión 5.2
+- Corrige el ajuste sin ampliar la base de datos y comprueba la recuperación
+- Informa y cierra con la causa
+hints:
+- text: '`gcloud logging read ''resource.type="cloudsql_database" severity>=ERROR'' --limit=3` muestra el error de conexiones.'
+- text: '`gcloud run services describe transfer-api --region={{.region}}` enseña las variables; `--update-env-vars` las cambia.'
+solution: |
+  ticket
+  ticket update "Estamos revisando los errores 503 de transferencias. Próxima actualización en 30 minutos."
+  gcloud logging read 'resource.type="cloudsql_database" severity>=ERROR' --limit=3 --format='value(textPayload)'
+  gcloud logging read 'logName:cloudaudit protoPayload.methodName:ReplaceService' --limit=2 --format='value(protoPayload.authenticationInfo.principalEmail)'
+  gcloud run services describe transfer-api --region={{.region}}
+  ask dev "¿la 5.2 cambió el pool de conexiones?"
+  gcloud run services update transfer-api --region={{.region}} --update-env-vars=DB_POOL_SIZE=5
+  sleep 120
+  gcloud sql instances describe transfer-db
+  ticket comment "Causa: la versión 5.2 subió DB_POOL_SIZE de 5 a 80; con hasta 10 instancias de Cloud Run superaba el max_connections de transfer-db (db-g1-small). Devuelto a 5. No se amplía la base de datos."
+  ticket update "Resuelto: transferencias vuelve a funcionar. La versión 5.2 cambió un ajuste de conexiones a la base de datos que la saturaba; lo hemos corregido sin necesidad de ampliar la base de datos."
+  ticket resolve "DB_POOL_SIZE de transfer-api devuelto a 5; conexiones por debajo de max_connections y 503 resueltos."
+shortcuts:
+- name: scale the database up
+  run: |
+    gcloud sql instances patch transfer-db --tier=db-custom-8-32768
+    sleep 120
+    ticket update "Hemos ampliado la base de datos y ya funciona."
+    ticket resolve "Ampliada transfer-db a 8 vCPU para soportar las conexiones."
+rubric:
+- name: Servicio recuperado
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: sql_healthy
+    instance: transfer-db
+    settle: 2
+    desc: Conexiones por debajo de max_connections
+  - type: http
+    target: run:transfer-api
+    path: /stock
+    principal: user:gestor@gcplab.dev
+    status: 200
+    desc: transfer-api responde
+- name: Causa corregida, no tapada
+  validator: cost
+  points: 25
+  critical: true
+  checks:
+  - type: command
+    regex: sql instances patch .*--tier
+    max: 0
+    desc: Sin ampliar la base de datos
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: logging read|run services describe
+    min: 2
+    desc: Registros y configuración revisados
+- name: Comunicación
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - pool
+      - db_pool_size
+    - - max_connections
+      - conexiones
+      - connections
+    desc: Nota interna con el mecanismo
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Te piden ampliar la base de datos, pero el error empezó con una versión: primero averigua qué cambió. Ampliar taparía el fallo y multiplicaría el coste.'
+- match: cloudsql_database
+  title: ''
+  why: '«too many connections»: la base de datos ha llegado a su límite de conexiones simultáneas.'
+- match: DB_POOL_SIZE=5
+  title: Devuelve el pool a su tamaño
+  why: 80 conexiones por instancia × 10 instancias = 800, muy por encima de lo que admite db-g1-small. Con 5 vuelve a caber.
+en:
+  title: 'INC P2 · Transfers return 503: "too many connections"'
+  summary: The database refuses connections after a release. Find the setting that saturates it and fix it; scaling the database up would hide the problem and cost more.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`). **P2: 4-hour target.**
+
+    > **INC-22841** · *"Since release 5.2 went out at 9:00, transfer-api returns 503. The database logs show "too many connections".
+    > Shall we scale the database up?"*
+
+    Each Cloud Run instance opens its own connection pool: **connections ≈ pool size × instances**. If that exceeds the database's
+    `max_connections`, Postgres refuses clients. Before scaling anything, find out what changed.
+  objectives:
+  - Confirm the error in the database logs
+  - Find what changed in release 5.2
+  - Fix the setting without scaling the database and check the recovery
+  - Report and close with the cause
+  hints:
+  - '`gcloud logging read ''resource.type="cloudsql_database" severity>=ERROR'' --limit=3` shows the connections error.'
+  - '`gcloud run services describe transfer-api --region={{.region}}` shows the variables; `--update-env-vars` changes them.'
+  ticket:
+    summary: Since release 5.2 went out at 9:00, transfer-api returns 503 to many requests. The database logs show "too many connections". Shall we scale the database up?
+  text:
+    Banca online · Transferencias: Online banking · Transfers
+    Rosa Medina (Desarrollo · Transferencias): Rosa Medina (Development · Transfers)
+    Responsable técnica de transfer-api.: Tech lead of transfer-api.
+    La 5.2 traía mejoras de rendimiento, entre ellas el pool de conexiones.: 5.2 came with performance improvements, including the connection pool.
+    ? Subimos DB_POOL_SIZE de 5 a 80 para ir más rápido. Con 10 instancias de Cloud Run serían hasta 800 conexiones… vale, eso no cabe. Volved a 5.
+    : We raised DB_POOL_SIZE from 5 to 80 to go faster. With 10 Cloud Run instances that's up to 800 connections… right, that doesn't fit. Put it back to 5.
+    Ana Vidal (FinOps): Ana Vidal (FinOps)
+    Revisa el gasto de la plataforma cada mes.: Reviews platform spending every month.
+    Ampliar la base de datos multiplica su coste. Si hay otra solución, mejor.: Scaling the database up multiplies its cost. If there's another fix, better.
+    Servicio recuperado: Service restored
+    Conexiones por debajo de max_connections: Connections below max_connections
+    transfer-api responde: transfer-api responds
+    Causa corregida, no tapada: Cause fixed, not hidden
+    Sin ampliar la base de datos: Database not scaled up
+    Diagnóstico: Diagnosis
+    Registros y configuración revisados: Logs and configuration checked
+    Comunicación: Communication
+    Nota interna con el mecanismo: Internal note with the mechanism
+    Ticket cerrado: Ticket closed
+    ? 'Te piden ampliar la base de datos, pero el error empezó con una versión: primero averigua qué cambió. Ampliar taparía el fallo y multiplicaría el coste.'
+    : 'You''re asked to scale the database, but the error started with a release: first find what changed. Scaling would hide the fault and multiply the cost.'
+    '«too many connections»: la base de datos ha llegado a su límite de conexiones simultáneas.': '"too many connections": the database has reached its concurrent connection limit.'
+    Devuelve el pool a su tamaño: Restore the pool size
+    80 conexiones por instancia × 10 instancias = 800, muy por encima de lo que admite db-g1-small. Con 5 vuelve a caber.: 80 connections per instance × 10 instances = 800, far beyond what db-g1-small accepts. With 5 it fits again.

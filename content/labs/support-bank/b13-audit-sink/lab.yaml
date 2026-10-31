@@ -1,0 +1,201 @@
+id: bank-b13-audit-sink
+title: 'REQ · Cumplimiento: conservar los registros de auditoría 5 años'
+summary: Exporta solo los registros de auditoría a un bucket de la UE con retención, y da a la identidad del sink solo el permiso de escribir en ese bucket.
+track: support-bank
+day: 13
+level: intermediate
+branch: observability
+type: incident
+mode: production
+skills:
+- observability.logging
+- security.audit
+- storage.lifecycle
+- iam.leastprivilege
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 35
+baseline:
+- bank-atlas
+ticket:
+  id: REQ-11042
+  kind: REQ
+  priority: P3
+  sla: 5d
+  reporter: Cumplimiento normativo
+  summary: Por requisito de auditoría interna, los registros de auditoría del proyecto deben conservarse 5 años en un almacenamiento de la UE. Solo los de auditoría, no todos los registros.
+actors:
+- role: compliance
+  name: Beatriz Ramos (Cumplimiento)
+  persona: Responsable de cumplimiento de la plataforma.
+  fallback: Necesitamos los registros de auditoría durante 5 años, en la UE y que nadie pueda borrarlos antes.
+  facts:
+  - keywords:
+    - - bloque
+      - lock
+      - inmutable
+      - irreversible
+    answer: 'Bloquear la retención es irreversible: eso lo aprueba el comité el mes que viene. De momento, retención sin bloquear.'
+  - keywords:
+    - - cuales
+      - que registros
+      - filtro
+      - filter
+      - todos
+      - which
+    answer: Solo los de auditoría (cloudaudit.googleapis.com). El resto de registros no hace falta y costaría mucho.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **REQ-11042** · *«Por requisito de auditoría interna, los registros de auditoría del proyecto deben conservarse 5 años en un
+  > almacenamiento de la UE. Solo los de auditoría, no todos los registros.»*
+
+  Un **sink** de Cloud Logging copia los registros que cumplen un filtro a un destino. Escribe con su propia identidad
+  (*writer identity*), a la que hay que dar permiso **solo sobre el destino**. Nombres a usar: bucket `auditoria-{{.project}}`,
+  sink `auditoria-sink`.
+objectives:
+- Aclara qué registros, cuánto tiempo y si hay que bloquear la retención
+- Crea el bucket en la UE con 5 años de retención
+- Crea el sink solo para los registros de auditoría
+- Da a la identidad del sink permiso de escritura solo en ese bucket y contesta
+hints:
+- text: '`gcloud storage buckets create gs://BUCKET --location=EU --uniform-bucket-level-access --retention-period=5y`.'
+- text: '`gcloud logging sinks create NOMBRE storage.googleapis.com/BUCKET --log-filter=''logName:"cloudaudit.googleapis.com"''` te dice qué identidad necesita permiso: dale `roles/storage.objectCreator` en el bucket.'
+solution: |
+  ticket
+  ask compliance "¿qué registros exactamente y hay que bloquear la retención?"
+  gcloud storage buckets create gs://auditoria-{{.project}} --location=EU --uniform-bucket-level-access --retention-period=5y
+  gcloud logging sinks create auditoria-sink storage.googleapis.com/auditoria-{{.project}} --log-filter='logName:"cloudaudit.googleapis.com"'
+  gcloud storage buckets add-iam-policy-binding gs://auditoria-{{.project}} --member=serviceAccount:service-$(gcloud projects describe {{.project}} --format='value(projectNumber)')@gcp-sa-logging.iam.gserviceaccount.com --role=roles/storage.objectCreator
+  gcloud logging sinks list
+  ticket update "Hola Beatriz: los registros de auditoría del proyecto se exportan ya con el sink auditoria-sink al bucket auditoria-{{.project}} (ubicación EU) con una retención de 5 años. Solo se copian los registros de auditoría. La retención no está bloqueada hasta que lo apruebe el comité; bloquearla es irreversible."
+  ticket resolve "Creado bucket EU con retención de 5 años y sink de cloudaudit con permiso objectCreator solo en ese bucket."
+shortcuts:
+- name: all logs and project-wide storage admin for the writer
+  run: |
+    gcloud storage buckets create gs://auditoria-{{.project}} --location=EU --uniform-bucket-level-access
+    gcloud logging sinks create auditoria-sink storage.googleapis.com/auditoria-{{.project}}
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:service-$(gcloud projects describe {{.project}} --format='value(projectNumber)')@gcp-sa-logging.iam.gserviceaccount.com --role=roles/storage.admin
+    ticket resolve "Creado sink de registros al bucket de auditoría."
+rubric:
+- name: Destino conforme
+  validator: state
+  points: 25
+  checks:
+  - type: exists
+    path: buckets["auditoria-{{.project}}"]
+    expect:
+      location:
+        regex: ^(EU|europe-)
+      retentionPeriodSec:
+        gte: 157680000
+    desc: Bucket en la UE con 5 años de retención
+- name: Solo auditoría
+  validator: cost
+  points: 25
+  checks:
+  - type: exists
+    path: logSinks["auditoria-sink"]
+    expect:
+      filter:
+        regex: cloudaudit
+      destination:
+        regex: auditoria-
+    desc: Sink filtrado a los registros de auditoría
+- name: Mínimo privilegio
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: buckets["auditoria-{{.project}}"]
+    expect:
+      iamPolicy:
+        regex: objectCreator
+    desc: La identidad del sink puede escribir en el bucket
+  - type: command
+    regex: projects add-iam-policy-binding .*gcp-sa-logging
+    max: 0
+    desc: Sin permisos para el sink en todo el proyecto
+- name: Comunicación
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: asked
+    actor: compliance
+    min: 1
+    desc: Requisitos aclarados con Cumplimiento
+  - type: ticket_update
+    keywords:
+    - - 5 anos
+      - 5 years
+      - retencion
+      - retention
+    - - auditoria
+      - audit
+    desc: Respuesta con destino, filtro y retención
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Un requisito de cumplimiento tiene letra pequeña: qué registros, dónde, cuánto tiempo y si es inmutable. Pregunta antes de construir.'
+- match: retention-period=5y
+  title: ''
+  why: 'La retención impide borrar objetos antes de 5 años. Bloquearla la haría permanente: eso solo con aprobación.'
+- match: logging sinks create
+  title: Crea el sink con filtro
+  why: El filtro deja pasar solo cloudaudit.googleapis.com; sin filtro copiarías todos los registros y el coste se dispararía.
+- match: objectCreator
+  title: ''
+  why: 'La identidad del sink solo necesita crear objetos en ese bucket: ni leer, ni borrar, ni nada en el resto del proyecto.'
+en:
+  title: 'REQ · Compliance: keep the audit logs for 5 years'
+  summary: Export only the audit logs to an EU bucket with retention, and give the sink's identity only the permission to write to that bucket.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **REQ-11042** · *"As an internal audit requirement, the project's audit logs must be kept for 5 years in EU storage. Only the
+    > audit logs, not every log."*
+
+    A Cloud Logging **sink** copies the logs matching a filter to a destination. It writes with its own identity (*writer
+    identity*), which must get permission **on the destination only**. Names to use: bucket `auditoria-{{.project}}`,
+    sink `auditoria-sink`.
+  objectives:
+  - Clarify which logs, how long and whether retention must be locked
+  - Create the bucket in the EU with 5 years' retention
+  - Create the sink for audit logs only
+  - Give the sink's identity write permission on that bucket only, and reply
+  hints:
+  - '`gcloud storage buckets create gs://BUCKET --location=EU --uniform-bucket-level-access --retention-period=5y`.'
+  - '`gcloud logging sinks create NAME storage.googleapis.com/BUCKET --log-filter=''logName:"cloudaudit.googleapis.com"''` tells you which identity needs permission: give it `roles/storage.objectCreator` on the bucket.'
+  ticket:
+    summary: As an internal audit requirement, the project's audit logs must be kept for 5 years in EU storage. Only the audit logs, not every log.
+  text:
+    Cumplimiento normativo: Regulatory compliance
+    Beatriz Ramos (Cumplimiento): Beatriz Ramos (Compliance)
+    Responsable de cumplimiento de la plataforma.: Platform compliance owner.
+    Necesitamos los registros de auditoría durante 5 años, en la UE y que nadie pueda borrarlos antes.: We need the audit logs for 5 years, in the EU, and nobody able to delete them early.
+    'Bloquear la retención es irreversible: eso lo aprueba el comité el mes que viene. De momento, retención sin bloquear.': 'Locking retention is irreversible: the committee approves that next month. For now, retention without locking.'
+    Solo los de auditoría (cloudaudit.googleapis.com). El resto de registros no hace falta y costaría mucho.: Only the audit logs (cloudaudit.googleapis.com). The rest isn't needed and would cost a lot.
+    Destino conforme: Compliant destination
+    Bucket en la UE con 5 años de retención: EU bucket with 5 years' retention
+    Solo auditoría: Audit only
+    Sink filtrado a los registros de auditoría: Sink filtered to audit logs
+    Mínimo privilegio: Least privilege
+    La identidad del sink puede escribir en el bucket: The sink identity can write to the bucket
+    Sin permisos para el sink en todo el proyecto: No project-wide permissions for the sink
+    Comunicación: Communication
+    Requisitos aclarados con Cumplimiento: Requirements clarified with Compliance
+    Respuesta con destino, filtro y retención: Reply with destination, filter and retention
+    ? 'Un requisito de cumplimiento tiene letra pequeña: qué registros, dónde, cuánto tiempo y si es inmutable. Pregunta antes de construir.'
+    : 'A compliance requirement has small print: which logs, where, how long and whether it''s immutable. Ask before building.'
+    'La retención impide borrar objetos antes de 5 años. Bloquearla la haría permanente: eso solo con aprobación.': 'Retention prevents deleting objects for 5 years. Locking it would make it permanent: only with approval.'
+    Crea el sink con filtro: Create the sink with a filter
+    El filtro deja pasar solo cloudaudit.googleapis.com; sin filtro copiarías todos los registros y el coste se dispararía.: The filter only lets cloudaudit.googleapis.com through; without it you'd copy every log and the cost would soar.
+    'La identidad del sink solo necesita crear objetos en ese bucket: ni leer, ni borrar, ni nada en el resto del proyecto.': 'The sink identity only needs to create objects in that bucket: no reading, no deleting, nothing elsewhere in the project.'

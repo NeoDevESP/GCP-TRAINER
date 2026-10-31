@@ -149,7 +149,11 @@ func (s *State) ResolveTrafficURL(project, target, path string) string {
 			if len(parts) > 1 {
 				port = parts[1]
 			}
-			return "http://" + vm.ExternalIP + ":" + port + path
+			ip := vm.ExternalIP
+			if ip == "" {
+				ip = vm.InternalIP // private VM: reachable from inside the VPC
+			}
+			return "http://" + ip + ":" + port + path
 		}
 		return ""
 	case strings.HasPrefix(target, "k8s:"):

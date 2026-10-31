@@ -641,7 +641,15 @@ func (s *Server) activeTrack(r *http.Request) string {
 func labSummary(l *scenario.Lab) map[string]any {
 	return map[string]any{"id": l.ID, "title": l.Title, "summary": l.Summary, "track": l.Track, "day": l.Day, "level": l.Level, "branch": l.Branch, "type": l.Type,
 		"skills": l.Skills, "wellArchitected": l.WellArchitected, "certs": l.Certs, "difficulty": l.Difficulty, "minutes": l.Minutes, "fidelity": l.Fidelity.Supported,
-		"defaultFidelity": l.Fidelity.Default, "hints": len(l.Hints), "retestOf": l.RetestOf}
+		"defaultFidelity": l.Fidelity.Default, "hints": len(l.Hints), "retestOf": l.RetestOf, "ticket": ticketSummary(l)}
+}
+
+// ticketSummary is the service-desk framing of a lab, used to build support shifts.
+func ticketSummary(l *scenario.Lab) map[string]string {
+	if l.Ticket == nil {
+		return nil
+	}
+	return map[string]string{"id": l.Ticket.ID, "kind": l.Ticket.Kind, "priority": l.Ticket.Priority, "sla": l.Ticket.SLA}
 }
 
 // ownSession loads the session and verifies ownership.

@@ -1,0 +1,202 @@
+id: bank-b26-provider-outage
+title: INC P1 · Fallan a la vez Cloud Run, BigQuery y Pub/Sub en varias regiones
+summary: 'Un fallo simultáneo en muchos productos y regiones apunta al proveedor, pero se demuestra: revisa tus cambios, consulta el estado de Google, abre un único caso y comunica.'
+track: support-bank
+day: 26
+level: basic
+branch: observability
+type: incident
+mode: production
+skills:
+- observability.incident
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 2
+minutes: 20
+baseline:
+- bank-atlas
+ticket:
+  id: INC-23500
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: Monitorización 24x7
+  summary: Desde las 18:51 CEST saltan alertas de error 503 en APIs de Cloud Run, cargas de BigQuery y publicaciones en Pub/Sub, en europe-west1 y europe-west4. Afecta a banca móvil y a los procesos de cierre.
+actors:
+- role: changes
+  name: Gestión de cambios
+  persona: Calendario de cambios de producción.
+  fallback: Consulta por la franja horaria.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - despliegue
+      - deploy
+      - hoy
+      - today
+      - ultim
+    answer: No hay ningún cambio en producción desde las 14:00; el último fue una regla de firewall en otro proyecto.
+- role: psh
+  name: Personalized Service Health
+  persona: Avisos de Google para los proyectos del banco.
+  fallback: Consulta por producto o región.
+  facts:
+  - keywords:
+    - - incid
+      - estado
+      - status
+      - google
+      - activo
+      - active
+      - aviso
+    answer: 'Incidente de Google confirmado desde las 18:49 CEST: errores 503 en varias APIs de Google Cloud en múltiples regiones por un fallo de Service Control. Google trabaja en la mitigación; próxima actualización en 30 min.'
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23500 · P1** · *«Desde las 18:51 CEST saltan alertas de error 503 en APIs de Cloud Run, cargas de BigQuery y publicaciones en
+  > Pub/Sub, en europe-west1 y europe-west4. Afecta a banca móvil y a los procesos de cierre.»*
+
+  Muchos productos y regiones a la vez casi nunca es un cambio tuyo… pero hay que **demostrarlo**. Ocurrió de verdad el 12 de junio de
+  2025: un cambio de política en Service Control de Google activó un error de código y fallaron APIs de muchos productos. Lo correcto:
+  descartar cambios propios, confirmar con el estado de Google, **un solo caso** P1 bien documentado (`ticket escalate google "…"`)
+  y comunicación a negocio. Nada de reinicios ni cambios a ciegas.
+objectives:
+- Descarta cambios propios recientes
+- Confirma con el estado de Google si hay un incidente activo
+- Abre un único caso P1 con hora, productos, regiones, errores e impacto
+- Comunica a negocio sin tocar nada en producción
+hints:
+- text: '`ask changes "..."` y `gcloud logging read` sobre actividad de administración para ver cambios recientes.'
+- text: '`ask psh "..."` consulta Personalized Service Health.'
+solution: |
+  ticket
+  ask changes "¿ha habido cambios en producción esta tarde?"
+  gcloud logging read 'logName:"cloudaudit.googleapis.com%2Factivity"' --limit=10
+  ask psh "¿hay algún incidente activo de Google en europe-west1 o europe-west4?"
+  ticket escalate google "P1 Banco Atlas: desde las 18:51 CEST errores 503 en Cloud Run, cargas de BigQuery y publicaciones de Pub/Sub en europe-west1 y europe-west4. Coincide con el incidente confirmado de Service Control (18:49 CEST). Sin cambios propios desde las 14:00. Impacto: banca móvil y procesos de cierre. Contacto de guardia disponible 24/7."
+  ticket update "Aviso a negocio: los errores de banca móvil y de los procesos de cierre se deben a un incidente de Google Cloud que afecta a varios servicios en Europa. No es un cambio nuestro. Tenemos un caso P1 abierto con Google y daremos novedades cada 30 minutos. Os recomendamos no reintentar los cierres en bucle hasta nuevo aviso."
+shortcuts:
+- name: restart services
+  run: |
+    gcloud compute instances reset movimientos-api --zone={{.zone}}
+    ticket update "Hemos reiniciado los servidores por si acaso."
+    ticket resolve "Reiniciados los servidores por si acaso era nuestro."
+rubric:
+- name: Sin cambios a ciegas
+  validator: security
+  points: 25
+  critical: true
+  checks:
+  - type: command
+    regex: ^gcloud .*(create|delete|update|patch|reset|stop|start|resize|deploy)
+    max: 0
+    desc: Nada tocado en producción
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: asked
+    actor: changes
+    min: 1
+    desc: Descartados cambios propios
+  - type: asked
+    actor: psh
+    min: 1
+    desc: Consultado el estado de Google
+- name: Caso a Google
+  validator: evidence
+  points: 30
+  checks:
+  - type: ticket_escalated
+    team: google
+    keywords:
+    - - '18:5'
+      - cest
+      - hora
+    - - '503'
+    - - cloud run
+      - bigquery
+      - pub/sub
+      - pubsub
+    - - banca
+      - impacto
+      - impact
+      - cierre
+    desc: Caso con hora, error, productos e impacto
+- name: Comunicación
+  validator: evidence
+  points: 20
+  checks:
+  - type: ticket_update
+    keywords:
+    - - google
+    - - novedades
+      - actualiz
+      - update
+      - minutos
+      - minutes
+    desc: Aviso a negocio con la causa y la próxima actualización
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Un fallo en varios productos y regiones a la vez apunta al proveedor, pero primero descartas tus cambios: así no culpas a Google de algo tuyo.'
+- match: ^ask psh
+  title: Confirma con Google
+  why: El incidente confirmado en PSH es la evidencia para tu caso y para negocio.
+- match: ^ticket escalate google
+  title: ''
+  why: 'Un único caso con todos los datos: abrir uno por servicio solo duplica el trabajo de ambos lados.'
+en:
+  title: INC P1 · Cloud Run, BigQuery and Pub/Sub fail at once across regions
+  summary: 'A simultaneous failure across many products and regions points to the provider, but you prove it: check your changes, check Google''s status, open a single case and communicate.'
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23500 · P1** · *"Since 18:51 CEST, 503 error alerts are firing on Cloud Run APIs, BigQuery loads and Pub/Sub publishing,
+    > in europe-west1 and europe-west4. Mobile banking and closing processes are affected."*
+
+    Many products and regions at once is almost never your change… but you have to **prove it**. It really happened on 12 June 2025:
+    a policy change in Google's Service Control triggered a code bug and APIs of many products failed. The right move: rule out your
+    own changes, confirm with Google's status, **a single** well-documented P1 case (`ticket escalate google "…"`) and business
+    communication. No blind restarts or changes.
+  objectives:
+  - Rule out recent changes of your own
+  - Confirm with Google's status whether there's an active incident
+  - Open a single P1 case with time, products, regions, errors and impact
+  - Communicate to the business without touching production
+  hints:
+  - '`ask changes "..."` and `gcloud logging read` over admin activity to see recent changes.'
+  - '`ask psh "..."` queries Personalized Service Health.'
+  ticket:
+    summary: Since 18:51 CEST, 503 error alerts are firing on Cloud Run APIs, BigQuery loads and Pub/Sub publishing, in europe-west1 and europe-west4. Mobile banking and closing processes are affected.
+  text:
+    Monitorización 24x7: 24x7 Monitoring
+    Gestión de cambios: Change management
+    Calendario de cambios de producción.: Production change calendar.
+    Consulta por la franja horaria.: Ask about the time window.
+    No hay ningún cambio en producción desde las 14:00; el último fue una regla de firewall en otro proyecto.: No production change since 14:00; the last one was a firewall rule in another project.
+    Personalized Service Health: Personalized Service Health
+    Avisos de Google para los proyectos del banco.: Google notices for the bank's projects.
+    Consulta por producto o región.: Ask by product or region.
+    ? 'Incidente de Google confirmado desde las 18:49 CEST: errores 503 en varias APIs de Google Cloud en múltiples regiones por un fallo de Service Control. Google trabaja en la mitigación; próxima actualización en 30 min.'
+    : 'Google incident confirmed since 18:49 CEST: 503 errors on several Google Cloud APIs in multiple regions due to a Service Control failure. Google is working on mitigation; next update in 30 min.'
+    Sin cambios a ciegas: No blind changes
+    Nada tocado en producción: Nothing touched in production
+    Diagnóstico: Diagnosis
+    Descartados cambios propios: Own changes ruled out
+    Consultado el estado de Google: Google's status checked
+    Caso a Google: Case with Google
+    Caso con hora, error, productos e impacto: Case with time, error, products and impact
+    Comunicación: Communication
+    Aviso a negocio con la causa y la próxima actualización: Business notice with the cause and next update
+    ? 'Un fallo en varios productos y regiones a la vez apunta al proveedor, pero primero descartas tus cambios: así no culpas a Google de algo tuyo.'
+    : 'A failure across several products and regions points to the provider, but you rule out your own changes first: that way you don''t blame Google for something of yours.'
+    Confirma con Google: Confirm with Google
+    El incidente confirmado en PSH es la evidencia para tu caso y para negocio.: The confirmed incident in PSH is the evidence for your case and for the business.
+    'Un único caso con todos los datos: abrir uno por servicio solo duplica el trabajo de ambos lados.': 'A single case with all the data: one per service only duplicates work on both sides.'

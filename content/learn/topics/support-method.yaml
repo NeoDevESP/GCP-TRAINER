@@ -1,0 +1,146 @@
+id: support-method
+branch: observability
+name: ["Método de diagnóstico: síntoma frente a causa", "Diagnosis method: symptom vs cause"]
+intro: ["«403», «503», «timeout» y «CrashLoopBackOff» son puntos de partida, no diagnósticos. Este tema da el método de 6 pasos para cualquier ticket y las familias de incidencias que más conviene dominar en GCP empresarial, en este orden: IAM y cuentas de servicio → VPC Service Controls → redes privadas → Compute Engine e IAP/SSH → cuotas y capacidad → Cloud SQL → Cloud Run o GKE.", "\"403\", \"503\", \"timeout\" and \"CrashLoopBackOff\" are starting points, not diagnoses. This topic gives the 6-step method for any ticket and the incident families most worth mastering in enterprise GCP, in this order: IAM and service accounts → VPC Service Controls → private networking → Compute Engine and IAP/SSH → quotas and capacity → Cloud SQL → Cloud Run or GKE."]
+concepts:
+  - id: six
+    term: ["Los 6 pasos de cada ticket", "The 6 steps of every ticket"]
+    what: ["Una secuencia fija evita saltar a la solución equivocada.", "A fixed sequence stops you jumping to the wrong fix."]
+    points:
+      - ["1 · Delimitar el impacto: quién falla, qué operación, proyecto, región y desde cuándo. 2 · Capturar la evidencia: error completo, hora con zona horaria, recurso e ID de petición o de job.", "1 · Scope the impact: who fails, which operation, project, region and since when. 2 · Capture evidence: full error, time with time zone, resource and request or job ID."]
+      - ["3 · Identificar quién ejecuta de verdad la operación: usuario, cuenta de servicio o identidad del workload.", "3 · Identify who really runs the operation: user, service account or workload identity."]
+      - ["4 · Revisar cambios recientes: despliegues, IAM, políticas, rutas, secretos. 5 · Probar una hipótesis concreta: permisos, red, aplicación, capacidad o proveedor.", "4 · Review recent changes: deployments, IAM, policies, routes, secrets. 5 · Test one concrete hypothesis: permissions, network, application, capacity or provider."]
+      - ["6 · Validar la recuperación desde el mismo origen que fallaba y registrar causa, solución y prevención.", "6 · Validate recovery from the same source that was failing and record cause, fix and prevention."]
+    tip: ["Validar desde otro sitio (tu portátil, la consola) no prueba que el usuario o el servicio ya funcione.", "Validating from somewhere else (your laptop, the console) doesn't prove the user or service works now."]
+  - id: deny403
+    term: ["403 / PERMISSION_DENIED", "403 / PERMISSION_DENIED"]
+    what: ["Tres causas distintas con el mismo código.", "Three different causes with the same code."]
+    points:
+      - ["Falta el permiso: el principal no tiene ningún rol que lo incluya sobre ese recurso.", "Missing permission: the principal has no role including it on that resource."]
+      - ["Identidad equivocada: quien llama no es quien crees (p. ej. Cloud Run con la cuenta de Compute por defecto).", "Wrong identity: the caller isn't who you think (e.g. Cloud Run with the default Compute account)."]
+      - ["Una política lo restringe aunque haya rol: políticas de denegación de IAM, políticas de organización o VPC Service Controls.", "A policy restricts it despite the role: IAM deny policies, organization policies or VPC Service Controls."]
+      - ["Herramienta: Policy Troubleshooter con principal, permiso y recurso exactos.", "Tool: Policy Troubleshooter with the exact principal, permission and resource."]
+    tip: ["Nunca respondas a un 403 dando un rol amplio «para salir del paso».", "Never answer a 403 by granting a broad role \"to get by\"."]
+  - id: timeout
+    term: ["Timeout entre servicios", "Timeout between services"]
+    what: ["Un timeout es un problema de camino: el paquete no llega o no vuelve.", "A timeout is a path problem: the packet doesn't arrive or doesn't return."]
+    points:
+      - ["Precisa origen, destino, puerto y sentido del tráfico.", "Pin down source, destination, port and traffic direction."]
+      - ["Causas: cortafuegos, ruta ausente, redes sin conexión (sin peering o VPN) o el origen sin salida a la VPC.", "Causes: firewall, missing route, unconnected networks (no peering or VPN) or the source has no VPC egress."]
+      - ["Connectivity Tests simula el camino y dice qué regla o ruta lo corta.", "Connectivity Tests simulates the path and says which rule or route cuts it."]
+      - ["Un error de contraseña sí llega y contesta: si es timeout, no toques credenciales.", "A password error does arrive and answers: if it's a timeout, don't touch credentials."]
+    tip: ["Prueba desde el origen real (la VM, el pod, el servicio), no desde tu máquina.", "Test from the real source (the VM, the pod, the service), not from your machine."]
+  - id: k8sstates
+    term: ["CrashLoopBackOff frente a ImagePullBackOff", "CrashLoopBackOff vs ImagePullBackOff"]
+    what: ["Dos estados de pod que se confunden y tienen causas opuestas.", "Two pod states that get confused and have opposite causes."]
+    points:
+      - ["CrashLoopBackOff: el contenedor arranca y termina una y otra vez. Mira los logs del contenedor anterior (kubectl logs --previous), OOMKilled, configuración y sondas.", "CrashLoopBackOff: the container starts and exits again and again. Check the previous container's logs (kubectl logs --previous), OOMKilled, config and probes."]
+      - ["ImagePullBackOff: el nodo no consigue descargar la imagen. Mira que exista imagen y etiqueta, el permiso de la cuenta de los nodos en el registro y la conectividad.", "ImagePullBackOff: the node can't download the image. Check the image and tag exist, the node account's registry permission and connectivity."]
+      - ["Ninguno de los dos es la causa: son el estado que la produce.", "Neither is the cause: they're the state it produces."]
+      - ["Corrige el fallo identificado antes de añadir recursos.", "Fix the identified fault before adding resources."]
+    tip: ["Si el pod nunca llegó a arrancar, no busques el fallo en los logs de la aplicación.", "If the pod never started, don't look for the fault in the app logs."]
+  - id: run5xx
+    term: ["Cloud Run: revisión que no arranca y errores 500/503/504", "Cloud Run: revision that won't start and 500/503/504 errors"]
+    what: ["Cada código apunta a una capa distinta.", "Each code points to a different layer."]
+    points:
+      - ["La revisión no arranca: puerto de PORT, escuchar en 0.0.0.0 y errores de inicio en los logs.", "Revision won't start: the PORT port, listening on 0.0.0.0 and start-up errors in the logs."]
+      - ["500: error de la aplicación (excepción, configuración, dependencia).", "500: application error (exception, config, dependency)."]
+      - ["503: sin instancias disponibles (límite de instancias, memoria agotada, arranque lento).", "503: no instances available (instance limit, memory exhausted, slow start-up)."]
+      - ["504: la petición superó el tiempo de espera, a menudo por una dependencia lenta.", "504: the request exceeded the timeout, often because of a slow dependency."]
+    tip: ["Correlaciona el log de la petición con el del contenedor y con memoria, instancias y latencia de las dependencias.", "Correlate the request log with the container log and with memory, instances and dependency latency."]
+  - id: lbdetails
+    term: ["Balanceador: statusDetails", "Load balancer: statusDetails"]
+    what: ["El código HTTP no basta; el registro del balanceador dice por qué.", "The HTTP code isn't enough; the load balancer log says why."]
+    points:
+      - ["statusDetails como failed_to_pick_backend: ningún backend sano.", "statusDetails like failed_to_pick_backend: no healthy backend."]
+      - ["failed_to_connect_to_backend: el backend no acepta la conexión.", "failed_to_connect_to_backend: the backend doesn't accept the connection."]
+      - ["backend_connection_closed_before_data_sent_to_client: el backend cerró la conexión (keepalive, caída).", "backend_connection_closed_before_data_sent_to_client: the backend closed the connection (keepalive, crash)."]
+      - ["Combínalo con backend-services get-health.", "Combine it with backend-services get-health."]
+    tip: ["Busca el campo statusDetails antes de tocar el backend.", "Look for the statusDetails field before touching the backend."]
+  - id: capacity
+    term: ["Cuota agotada frente a falta de capacidad", "Exhausted quota vs lack of capacity"]
+    what: ["Dos errores parecidos con soluciones distintas.", "Two similar errors with different fixes."]
+    points:
+      - ["Cuota (QUOTA_EXCEEDED): has llegado a tu límite; se pide aumento o se libera uso.", "Quota (QUOTA_EXCEEDED): you've hit your limit; request an increase or free usage."]
+      - ["Capacidad (ZONE_RESOURCE_POOL_EXHAUSTED, stockout): no hay máquinas libres en esa zona; subir la cuota no ayuda.", "Capacity (ZONE_RESOURCE_POOL_EXHAUSTED, stockout): no free machines in that zone; raising quota doesn't help."]
+      - ["Para capacidad: otra zona, otro tipo de máquina, menos réplicas o reservas.", "For capacity: another zone, another machine type, fewer replicas or reservations."]
+      - ["Lee el error completo: el nombre exacto del error decide el camino.", "Read the full error: the exact error name decides the path."]
+    tip: ["Grupos regionales repartidos en varias zonas resisten mejor la falta de capacidad.", "Regional groups spread across zones cope better with capacity shortages."]
+  - id: natports
+    term: ["Cloud NAT sin puertos suficientes", "Cloud NAT running out of ports"]
+    what: ["Uno de los problemas más engañosos: fallos intermitentes hacia fuera.", "One of the most misleading problems: intermittent outbound failures."]
+    points:
+      - ["Síntoma: conexiones a servicios externos que fallan a ratos, con pérdida de paquetes.", "Symptom: connections to external services that fail now and then, with packet loss."]
+      - ["Señal: OUT_OF_RESOURCES en la métrica de paquetes descartados de NAT.", "Signal: OUT_OF_RESOURCES in the NAT dropped-packets metric."]
+      - ["Revisa los puertos por VM (min-ports-per-vm) y la asignación dinámica de puertos.", "Check ports per VM (min-ports-per-vm) and dynamic port allocation."]
+      - ["En la aplicación: reutilizar conexiones (keepalive, pools) para no abrir miles de conexiones cortas.", "In the app: reuse connections (keepalive, pools) to avoid opening thousands of short connections."]
+    tip: ["Si falla «a veces» y solo hacia internet, mira las métricas de NAT.", "If it fails \"sometimes\" and only to the internet, check the NAT metrics."]
+  - id: bootfull
+    term: ["Disco de arranque lleno", "Full boot disk"]
+    what: ["Puede impedir incluso entrar por SSH y parecer un problema de acceso.", "It can even block SSH login and look like an access problem."]
+    points:
+      - ["Busca «No space left on device» en la salida del puerto serie o en los logs.", "Look for \"No space left on device\" in the serial port output or logs."]
+      - ["Revisa espacio (df -h) e inodos (df -i): muchos ficheros pequeños también llenan el disco.", "Check space (df -h) and inodes (df -i): many small files also fill the disk."]
+      - ["Si no entras, amplía el disco o móntalo en otra VM para limpiarlo.", "If you can't log in, grow the disk or attach it to another VM to clean it."]
+      - ["Antes de borrar, pregunta qué es cada fichero grande.", "Before deleting, ask what each big file is."]
+    tip: ["El diagnóstico de SSH de la consola y la consola serie ayudan a separar autenticación, red y disco.", "The console's SSH troubleshooting and the serial console help separate authentication, network and disk."]
+  - id: bqerrors
+    term: ["BigQuery: resourcesExceeded y «no encontrado»", "BigQuery: resourcesExceeded and \"not found\""]
+    what: ["El motivo del job dice qué está fallando.", "The job's reason says what is failing."]
+    points:
+      - ["rateLimitExceeded: demasiadas peticiones por segundo. quotaExceeded: cuota agotada.", "rateLimitExceeded: too many requests per second. quotaExceeded: quota used up."]
+      - ["resourcesExceeded: la consulta necesita más recursos de los que puede usar (ORDER BY sin LIMIT, joins enormes): reescribirla.", "resourcesExceeded: the query needs more resources than it can use (ORDER BY without LIMIT, huge joins): rewrite it."]
+      - ["«Not found» con una tabla que sí existe: el job se ejecuta en una ubicación distinta a la del dataset (EU frente a US).", "\"Not found\" for a table that does exist: the job runs in a different location from the dataset (EU vs US)."]
+      - ["Revisa proyecto, nombre completo del recurso y ubicación del job y del dataset.", "Check project, full resource name and the job's and dataset's location."]
+    tip: ["En el banco los datasets están en la UE: un job lanzado en US no los ve.", "At the bank datasets are in the EU: a job launched in US won't see them."]
+  - id: provider
+    term: ["Cuando el que falla es Google", "When Google is the one failing"]
+    what: ["También hay averías reales del proveedor.", "There are real provider outages too."]
+    points:
+      - ["12 de junio de 2025: un cambio de política en Service Control activó un error de puntero nulo y fallaron APIs de muchos productos y regiones.", "12 June 2025: a policy change in Service Control triggered a null-pointer bug and APIs of many products and regions failed."]
+      - ["Señal: muchos productos y regiones a la vez, sin cambios propios.", "Signal: many products and regions at once, with no change of your own."]
+      - ["Consulta Service Health y Personalized Service Health y revisa tus cambios en paralelo.", "Check Service Health and Personalized Service Health and review your changes in parallel."]
+      - ["Un caso único y bien documentado, comunicación periódica y nada de cambios a ciegas.", "One well-documented case, regular communication and no blind changes."]
+    tip: ["Descartar tus cambios primero evita culpar al proveedor de algo tuyo.", "Ruling out your changes first avoids blaming the provider for something of yours."]
+scenarios:
+  - q: ["Un servicio devuelve 403 al leer un bucket «aunque su cuenta tiene objectViewer».", "A service returns 403 reading a bucket \"even though its account has objectViewer\"."]
+    options: [["Comprobar con qué identidad se ejecuta realmente el servicio", "Check which identity the service really runs as"], ["Dar Storage Admin a la cuenta", "Give the account Storage Admin"], ["Hacer público el bucket", "Make the bucket public"], ["Recrear el bucket", "Recreate the bucket"]]
+    answer: 0
+    why: ["Paso 3 del método: quién ejecuta de verdad la operación.", "Step 3 of the method: who really runs the operation."]
+  - q: ["Las VMs privadas fallan a ratos al llamar a la API de un proveedor externo; el resto funciona.", "Private VMs fail now and then calling an external provider's API; everything else works."]
+    options: [["Mirar OUT_OF_RESOURCES en las métricas de Cloud NAT y el uso de puertos", "Check OUT_OF_RESOURCES in the Cloud NAT metrics and port usage"], ["Dar IP pública a las VMs", "Give the VMs public IPs"], ["Reiniciar las VMs", "Restart the VMs"], ["Abrir el cortafuegos de entrada", "Open the ingress firewall"]]
+    answer: 0
+    why: ["Intermitente y solo hacia internet: típico de puertos NAT agotados.", "Intermittent and only to the internet: typical of exhausted NAT ports."]
+  - q: ["Un MIG no puede crear VMs: ZONE_RESOURCE_POOL_EXHAUSTED. Piden más cuota de CPU.", "A MIG can't create VMs: ZONE_RESOURCE_POOL_EXHAUSTED. They ask for more CPU quota."]
+    options: [["Explicar que es falta de capacidad en la zona y usar otra zona o tipo de máquina", "Explain it's a lack of capacity in the zone and use another zone or machine type"], ["Pedir aumento de cuota", "Request a quota increase"], ["Borrar el MIG y crearlo igual", "Delete the MIG and recreate it the same"], ["Abrir un P1", "Open a P1"]]
+    answer: 0
+    why: ["La cuota no crea máquinas físicas.", "Quota doesn't create physical machines."]
+  - q: ["Un job de BigQuery dice «Not found: Table» pero la tabla aparece en la consola.", "A BigQuery job says \"Not found: Table\" but the table shows in the console."]
+    options: [["Comprobar que el job se ejecuta en la misma ubicación que el dataset", "Check the job runs in the same location as the dataset"], ["Recrear la tabla", "Recreate the table"], ["Dar roles/bigquery.admin al usuario", "Give the user roles/bigquery.admin"], ["Esperar a que se propague", "Wait for it to propagate"]]
+    answer: 0
+    why: ["Un job en US no ve un dataset en EU.", "A job in US doesn't see a dataset in EU."]
+quiz:
+  - q: ["¿Qué herramienta explica si un principal tiene un permiso sobre un recurso y por qué?", "Which tool explains whether a principal has a permission on a resource and why?"]
+    options: [["Policy Troubleshooter", "Policy Troubleshooter"], ["Connectivity Tests", "Connectivity Tests"], ["Cloud Trace", "Cloud Trace"], ["Recommender", "Recommender"]]
+    answer: 0
+    why: ["Policy Troubleshooter evalúa principal, permiso y recurso.", "Policy Troubleshooter evaluates principal, permission and resource."]
+  - q: ["¿Qué herramienta simula el camino de red entre dos puntos?", "Which tool simulates the network path between two points?"]
+    options: [["Connectivity Tests", "Connectivity Tests"], ["Policy Troubleshooter", "Policy Troubleshooter"], ["Cloud Profiler", "Cloud Profiler"], ["Security Command Center", "Security Command Center"]]
+    answer: 0
+    why: ["Dice qué regla o ruta corta el tráfico.", "It says which rule or route cuts the traffic."]
+  - q: ["ImagePullBackOff significa que…", "ImagePullBackOff means that…"]
+    options: [["El nodo no consigue descargar la imagen", "The node can't download the image"], ["El contenedor arranca y se cae", "The container starts and crashes"], ["La sonda de salud falla", "The health probe fails"], ["Falta memoria en el nodo", "The node is out of memory"]]
+    answer: 0
+    why: ["Imagen, permiso del registro o conectividad.", "Image, registry permission or connectivity."]
+  - q: ["Un 504 en Cloud Run suele indicar…", "A 504 on Cloud Run usually indicates…"]
+    options: [["Que la petición superó el tiempo de espera", "The request exceeded the timeout"], ["Que falta un permiso", "A permission is missing"], ["Que la imagen no existe", "The image doesn't exist"], ["Que el dominio no resuelve", "The domain doesn't resolve"]]
+    answer: 0
+    why: ["Mira la latencia de las dependencias.", "Look at dependency latency."]
+  - q: ["¿Qué paso del método valida de verdad la recuperación?", "Which method step truly validates recovery?"]
+    options: [["Probar desde el mismo origen que fallaba", "Testing from the same source that was failing"], ["Probar desde tu portátil", "Testing from your laptop"], ["Ver que la consola no da errores", "Seeing the console shows no errors"], ["Cerrar el ticket y esperar quejas", "Closing the ticket and waiting for complaints"]]
+    answer: 0
+    why: ["Solo el origen real demuestra que el camino y los permisos funcionan.", "Only the real source proves the path and permissions work."]
+  - q: ["Fallan a la vez APIs de muchos productos en varias regiones y no hay cambios propios. ¿Qué es lo más probable?", "APIs of many products fail at once across regions and there are no changes of your own. What's most likely?"]
+    options: [["Una incidencia del proveedor: confirmar en Service Health", "A provider incident: confirm in Service Health"], ["Un cortafuegos mal configurado", "A misconfigured firewall"], ["Una cuota agotada", "An exhausted quota"], ["Un disco lleno", "A full disk"]]
+    answer: 0
+    why: ["Como el incidente de Service Control del 12 de junio de 2025.", "Like the Service Control incident of 12 June 2025."]

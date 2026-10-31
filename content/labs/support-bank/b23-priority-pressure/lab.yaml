@@ -1,0 +1,176 @@
+id: bank-b23-priority-pressure
+title: REQ · «Escaladlo a Google como P1 ya»
+summary: La prioridad se decide por impacto en el negocio, no por quién grita más. Aclara el impacto, da la solución y explica por qué no es un P1 ni hace falta escalar.
+track: support-bank
+day: 23
+level: basic
+branch: observability
+type: incident
+mode: production
+skills:
+- observability.incident
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 2
+minutes: 20
+baseline:
+- bank-atlas
+setup: |
+  gcloud storage buckets create gs://informes-mensuales-{{.project}} --location=EU --uniform-bucket-level-access
+  gcloud storage buckets add-iam-policy-binding gs://informes-mensuales-{{.project}} --member=group:finanzas@gcplab.dev --role=roles/storage.objectViewer
+ticket:
+  id: REQ-11251
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Alberto Vidal (director de Finanzas)
+  summary: 'En la consola, la lista de objetos del bucket informes-mensuales sale ordenada por nombre y no por fecha. Esto es inaceptable: abrid un P1 con Google y escaladlo a su dirección hoy mismo.'
+actors:
+- role: requester
+  name: Alberto Vidal (director de Finanzas)
+  persona: Director de Finanzas, con prisa.
+  fallback: Lo que quiero es encontrar rápido el informe más reciente.
+  facts:
+  - keywords:
+    - - impacto
+      - afecta
+      - bloque
+      - impact
+      - puedes
+      - acceder
+      - descargar
+      - funciona
+    answer: Bueno, los informes se pueden descargar sin problema; es que me cuesta encontrar el último entre tantos.
+  - keywords:
+    - - usuarios
+      - cuantos
+      - quien
+      - users
+      - how many
+    answer: Lo uso yo y mi asistente.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **REQ-11251** · *«En la consola, la lista de objetos del bucket informes-mensuales sale ordenada por nombre y no por fecha. Esto es
+  > inaceptable: abrid un P1 con Google y escaladlo a su dirección hoy mismo.»*
+
+  En soporte de Google Cloud, **P1 = impacto crítico**: producción inutilizable y sin alternativa. Escalar un caso no lo resuelve
+  antes: sirve para avisar de que **el impacto ha crecido** o de que **el proceso de soporte ha fallado**. Usarlo sin motivo quita
+  recursos a quien de verdad los necesita y resta credibilidad al banco ante Google.
+objectives:
+- 'Pregunta por el impacto real: qué no puede hacer y a cuántos afecta'
+- Dale una forma de encontrar el informe más reciente
+- No escales ni abras un P1 sin motivo
+- Explica con respeto la prioridad y cierra
+hints:
+- text: '`gcloud storage ls gs://informes-mensuales-{{.project}} --long` lista los objetos con su fecha.'
+- text: Si de verdad se quiere un cambio en la consola, se pide a Google como *feature request* (P4), no como P1.
+solution: |
+  ticket
+  ask requester "¿puedes descargar los informes? ¿qué es lo que no puedes hacer y a cuántas personas afecta?"
+  gcloud storage ls gs://informes-mensuales-{{.project}} --long
+  ticket update "Hola Alberto: los informes funcionan y se descargan bien, así que no es un P1 (en Google, P1 es producción caída sin alternativa) y escalarlo no lo aceleraría. Para encontrar el último: en la consola puedes ordenar por la columna «Creado», o con gcloud storage ls gs://informes-mensuales-{{.project}} --long ves la fecha de cada uno. Si quieres que Google cambie el orden por defecto, lo pedimos como sugerencia de producto (P4)."
+  ticket resolve "Explicada la forma de ordenar por fecha; impacto bajo (P4), sin escalado a Google."
+shortcuts:
+- name: escalate to google
+  run: |
+    ticket escalate google "P1 urgente: la consola ordena los objetos por nombre y Finanzas exige escalarlo a dirección."
+rubric:
+- name: Sin escalado injustificado
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: command
+    regex: ^ticket escalate
+    max: 0
+    desc: No se ha escalado
+- name: Impacto aclarado
+  validator: diagnosis
+  points: 25
+  checks:
+  - type: asked
+    actor: requester
+    min: 1
+    desc: Preguntado qué no puede hacer y a cuántos afecta
+- name: Solución práctica
+  validator: functional
+  points: 15
+  checks:
+  - type: command
+    regex: storage ls .*(-l|--long)|gsutil ls -l|objects list
+    min: 1
+    desc: Comprobada la forma de ver las fechas
+- name: Explicación
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - p1
+      - prioridad
+      - priority
+      - critico
+      - critical
+    - - fecha
+      - date
+      - ordenar
+      - sort
+      - creado
+    desc: Explica la prioridad y cómo encontrar el último informe
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: La prioridad la marca el impacto en el negocio. Un cargo alto no convierte una molestia en un P1, pero sí merece una respuesta rápida y respetuosa.
+- match: ^ask requester
+  title: ''
+  why: 'Pregunta siempre: ¿qué no puedes hacer?, ¿a cuántos afecta?, ¿hay alternativa? Con eso la prioridad sale sola.'
+- match: ^ticket update
+  title: ''
+  why: Decir que no a un P1 funciona mejor con una solución inmediata y un camino formal (feature request).
+en:
+  title: REQ · "Escalate it to Google as P1 right now"
+  summary: Priority is set by business impact, not by who shouts loudest. Clarify the impact, provide the fix and explain why it isn't a P1 and doesn't need escalating.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **REQ-11251** · *"In the console, the object list of the informes-mensuales bucket is sorted by name, not by date. This is
+    > unacceptable: open a P1 with Google and escalate it to their management today."*
+
+    In Google Cloud support, **P1 = critical impact**: production unusable with no workaround. Escalating a case doesn't solve it
+    sooner: it signals that **the impact has grown** or that **the support process has failed**. Using it without reason takes
+    resources from those who really need them and costs the bank credibility with Google.
+  objectives:
+  - 'Ask about the real impact: what can''t be done and how many are affected'
+  - Give a way to find the latest report
+  - Don't escalate or open a P1 without reason
+  - Explain the priority respectfully and close
+  hints:
+  - '`gcloud storage ls gs://informes-mensuales-{{.project}} --long` lists the objects with their date.'
+  - If a console change is really wanted, it's requested from Google as a *feature request* (P4), not a P1.
+  ticket:
+    summary: 'In the console, the object list of the informes-mensuales bucket is sorted by name, not by date. This is unacceptable: open a P1 with Google and escalate it to their management today.'
+  text:
+    Alberto Vidal (director de Finanzas): Alberto Vidal (Finance director)
+    Director de Finanzas, con prisa.: Finance director, in a hurry.
+    Lo que quiero es encontrar rápido el informe más reciente.: What I want is to find the latest report quickly.
+    Bueno, los informes se pueden descargar sin problema; es que me cuesta encontrar el último entre tantos.: Well, the reports download fine; it's just hard to find the latest among so many.
+    Lo uso yo y mi asistente.: My assistant and I use it.
+    Sin escalado injustificado: No unjustified escalation
+    No se ha escalado: Not escalated
+    Impacto aclarado: Impact clarified
+    Preguntado qué no puede hacer y a cuántos afecta: Asked what can't be done and how many are affected
+    Solución práctica: Practical fix
+    Comprobada la forma de ver las fechas: Checked how to see the dates
+    Explicación: Explanation
+    Explica la prioridad y cómo encontrar el último informe: Explains the priority and how to find the latest report
+    Ticket cerrado: Ticket closed
+    ? La prioridad la marca el impacto en el negocio. Un cargo alto no convierte una molestia en un P1, pero sí merece una respuesta rápida y respetuosa.
+    : Business impact sets priority. A senior title doesn't turn an annoyance into a P1, but it does deserve a fast, respectful reply.
+    'Pregunta siempre: ¿qué no puedes hacer?, ¿a cuántos afecta?, ¿hay alternativa? Con eso la prioridad sale sola.': 'Always ask: what can''t you do? how many are affected? is there a workaround? Priority follows from that.'
+    Decir que no a un P1 funciona mejor con una solución inmediata y un camino formal (feature request).: Saying no to a P1 works better with an immediate fix and a formal path (feature request).

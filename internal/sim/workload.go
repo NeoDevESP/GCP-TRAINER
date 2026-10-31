@@ -59,6 +59,7 @@ func DefaultImages() map[string]*Behavior {
 		"uploader":                 {Name: "uploader", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/upload"}, Deps: []Dep{{Kind: "gcs-write", Env: "BUCKET", Paths: []string{"/upload"}}}, Public: true},
 		"web-frontend":             {Name: "web-frontend", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/shop"}, Deps: []Dep{{Kind: "http", Env: "BACKEND_URL", Paths: []string{"/shop"}}}, Public: true, CPUPerRPS: 0.004},
 		"catalog-api":              {Name: "catalog-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/products"}, Public: true, CPUPerRPS: 0.02},
+		"catalog-api:2.4":          {Name: "catalog-api", Port: 8080, Mode: "crash", Public: true, Description: "Release 2.4: exits on start-up (missing FEATURE_FLAGS_URL)"},
 		"payments-api":             {Name: "payments-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/pay"}, Deps: []Dep{{Kind: "secret", Env: "API_KEY"}}, Public: true},
 		"payments-api:3.0-bad":     {Name: "payments-api", Port: 8080, Mode: "crash", Public: true},
 		"inventory-api":            {Name: "inventory-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/stock"}, Deps: pg, PoolEnv: "DB_POOL_SIZE", Public: true},

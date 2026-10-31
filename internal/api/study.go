@@ -58,7 +58,8 @@ type Study struct {
 	Updated  time.Time                  `json:"updated"`
 }
 
-var runKey = regexp.MustCompile(`^cm-exam-run-[A-Z]{2,6}-(full|quick)$`)
+// Practice exams in progress, the support shift and the 10-day plan checklist.
+var runKey = regexp.MustCompile(`^(cm-exam-run-[A-Z]{2,6}-(full|quick)|cm-shift|cm-plan)$`)
 
 func (s *Server) loadStudy(user string) (*Study, error) {
 	st := &Study{User: user}

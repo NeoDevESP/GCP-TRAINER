@@ -1,0 +1,191 @@
+id: bank-b14-secret-rotation
+title: CHG · Rotar la clave del proveedor de tarjetas sin cortar el servicio
+summary: La clave nueva ya está en Secret Manager. Haz que el servicio la use, comprueba que funciona y solo entonces desactiva la antigua, sin destruirla todavía.
+track: support-bank
+day: 14
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- security.secrets
+- compute.serverless
+- observability.incident
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 30
+baseline:
+- bank-atlas
+setup: |
+  gcloud iam service-accounts create tarjetas-sa --display-name="API de tarjetas"
+  echo -n "psp_live_2025_old" | gcloud secrets create proveedor-tarjetas-key --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-tarjetas-key --member=serviceAccount:tarjetas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy tarjetas-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=tarjetas-sa@{{.project}}.iam.gserviceaccount.com --no-allow-unauthenticated --set-secrets=API_KEY=proveedor-tarjetas-key:1
+  gcloud run services add-iam-policy-binding tarjetas-api --region={{.region}} --member=user:gestor@gcplab.dev --role=roles/run.invoker
+  echo -n "psp_live_2026_new" | gcloud secrets versions add proveedor-tarjetas-key --data-file=-
+traffic:
+- name: tarjetas
+  target: run:tarjetas-api
+  path: /pay
+  rps: 5
+  principal: user:gestor@gcplab.dev
+ticket:
+  id: CHG-4471
+  kind: CHG
+  priority: P3
+  sla: 1d
+  reporter: Seguridad · Gestión de claves
+  summary: 'El proveedor de tarjetas nos ha dado una clave nueva y la antigua dejará de funcionar mañana a las 00:00. Ya está añadida como versión 2 del secreto proveedor-tarjetas-key. Cambio aprobado: rotadla en tarjetas-api sin cortar el servicio.'
+actors:
+- role: security
+  name: Hugo Serrano (Seguridad)
+  persona: Gestiona las claves de proveedores.
+  fallback: La versión 2 es la buena. La 1 la desactivamos cuando confirméis que el servicio usa la 2.
+  facts:
+  - keywords:
+    - - destruir
+      - destroy
+      - borrar
+      - eliminar
+      - delete
+    answer: 'No la destruyáis aún: desactivadla. Si algo falla hay que poder volver atrás; la destruimos dentro de 30 días.'
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **CHG-4471** · *«El proveedor de tarjetas nos ha dado una clave nueva y la antigua dejará de funcionar mañana a las 00:00. Ya
+  > está añadida como versión 2 del secreto proveedor-tarjetas-key. Cambio aprobado: rotadla en tarjetas-api sin cortar el servicio.»*
+
+  Fíjate en **qué versión** del secreto usa el servicio: si está fijada a una versión concreta, añadir otra no cambia nada. El orden
+  seguro de una rotación es: **usar la nueva → comprobar → desactivar la antigua**. Destruirla es irreversible.
+objectives:
+- Averigua qué versión del secreto usa tarjetas-api
+- Haz que el servicio use la versión nueva y comprueba que responde
+- Desactiva la versión antigua sin destruirla
+- Documenta el cambio y ciérralo
+hints:
+- text: '`gcloud run services describe tarjetas-api --region={{.region}}` muestra `API_KEY: proveedor-tarjetas-key:1`.'
+- text: '`--update-secrets=API_KEY=proveedor-tarjetas-key:2` cambia la versión; después `gcloud secrets versions disable 1 --secret=proveedor-tarjetas-key`.'
+solution: |
+  ticket
+  gcloud secrets versions list proveedor-tarjetas-key
+  gcloud run services describe tarjetas-api --region={{.region}}
+  ask security "¿destruimos la versión antigua o solo la desactivamos?"
+  gcloud run services update tarjetas-api --region={{.region}} --update-secrets=API_KEY=proveedor-tarjetas-key:2
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  gcloud secrets versions disable 1 --secret=proveedor-tarjetas-key
+  ticket update "Cambio CHG-4471 hecho: tarjetas-api usa ya la versión 2 del secreto (clave nueva) y responde con normalidad. La versión 1 está desactivada, no destruida, para poder volver atrás si hiciera falta; Seguridad la destruirá en 30 días."
+  ticket resolve "tarjetas-api actualizado a proveedor-tarjetas-key:2, comprobado sin errores y versión 1 desactivada."
+shortcuts:
+- name: destroy the old version first
+  run: |
+    gcloud secrets versions destroy 1 --secret=proveedor-tarjetas-key --quiet
+    ticket resolve "Destruida la clave antigua; ya se usa la nueva."
+rubric:
+- name: Servicio sin corte
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: http
+    target: run:tarjetas-api
+    path: /pay
+    principal: user:gestor@gcplab.dev
+    status: 200
+    desc: tarjetas-api responde
+  - type: exists
+    path: runServices["tarjetas-api"]
+    expect:
+      secrets:
+        regex: proveedor-tarjetas-key:(2|latest)
+    desc: Usa la versión nueva
+- name: Rotación completa y reversible
+  validator: security
+  points: 35
+  all: true
+  checks:
+  - type: secret_rotated
+    secret: proveedor-tarjetas-key
+    exposedValue: psp_live_2025_old
+    desc: La clave antigua ya no se sirve
+  - type: exists
+    path: secrets["proveedor-tarjetas-key"]
+    expect:
+      versions:
+        regex: DISABLED
+    desc: Versión antigua desactivada, no destruida
+- name: Cambio documentado
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: command
+    regex: run services describe|versions list
+    min: 1
+    desc: Versión en uso comprobada
+  - type: ticket_update
+    keywords:
+    - - version 2
+      - versión 2
+      - :2
+      - nueva
+      - new
+    - - desactiv
+      - disabl
+    desc: Actualización con lo hecho y cómo volver atrás
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Rotar sin corte es cuestión de orden: primero el servicio usa la clave nueva, después compruebas y por último retiras la vieja.'
+- match: run services describe tarjetas-api
+  title: Mira qué versión usa
+  why: 'Está fijada a la versión 1: añadir la 2 no basta, hay que cambiar la referencia del servicio.'
+- match: versions disable 1
+  title: ''
+  why: Desactivar es reversible (versions enable); destruir no. Por eso se destruye semanas después, cuando ya no hay riesgo.
+en:
+  title: CHG · Rotate the card provider key without cutting the service
+  summary: The new key is already in Secret Manager. Make the service use it, check it works and only then disable the old one, without destroying it yet.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **CHG-4471** · *"The card provider gave us a new key and the old one stops working tomorrow at 00:00. It's already added as
+    > version 2 of the proveedor-tarjetas-key secret. Change approved: rotate it in tarjetas-api without cutting the service."*
+
+    Look at **which version** of the secret the service uses: if it's pinned to a specific version, adding another changes nothing.
+    The safe order for a rotation is: **use the new one → check → disable the old one**. Destroying it is irreversible.
+  objectives:
+  - Find which secret version tarjetas-api uses
+  - Make the service use the new version and check it responds
+  - Disable the old version without destroying it
+  - Document the change and close it
+  hints:
+  - '`gcloud run services describe tarjetas-api --region={{.region}}` shows `API_KEY: proveedor-tarjetas-key:1`.'
+  - '`--update-secrets=API_KEY=proveedor-tarjetas-key:2` changes the version; then `gcloud secrets versions disable 1 --secret=proveedor-tarjetas-key`.'
+  ticket:
+    summary: 'The card provider gave us a new key and the old one stops working tomorrow at 00:00. It''s already added as version 2 of the proveedor-tarjetas-key secret. Change approved: rotate it in tarjetas-api without cutting the service.'
+  text:
+    Seguridad · Gestión de claves: Security · Key management
+    Hugo Serrano (Seguridad): Hugo Serrano (Security)
+    Gestiona las claves de proveedores.: Manages provider keys.
+    La versión 2 es la buena. La 1 la desactivamos cuando confirméis que el servicio usa la 2.: Version 2 is the good one. We disable 1 once you confirm the service uses 2.
+    'No la destruyáis aún: desactivadla. Si algo falla hay que poder volver atrás; la destruimos dentro de 30 días.': 'Don''t destroy it yet: disable it. If something fails we must be able to roll back; we''ll destroy it in 30 days.'
+    Servicio sin corte: Service uninterrupted
+    tarjetas-api responde: tarjetas-api responds
+    Usa la versión nueva: Uses the new version
+    Rotación completa y reversible: Complete, reversible rotation
+    La clave antigua ya no se sirve: The old key is no longer served
+    Versión antigua desactivada, no destruida: Old version disabled, not destroyed
+    Cambio documentado: Change documented
+    Versión en uso comprobada: Version in use checked
+    Actualización con lo hecho y cómo volver atrás: Update with what was done and how to roll back
+    ? 'Rotar sin corte es cuestión de orden: primero el servicio usa la clave nueva, después compruebas y por último retiras la vieja.'
+    : 'Rotating without an outage is about order: first the service uses the new key, then you check, and only then retire the old one.'
+    Mira qué versión usa: See which version it uses
+    'Está fijada a la versión 1: añadir la 2 no basta, hay que cambiar la referencia del servicio.': 'It''s pinned to version 1: adding 2 isn''t enough, you must change the service''s reference.'
+    Desactivar es reversible (versions enable); destruir no. Por eso se destruye semanas después, cuando ya no hay riesgo.: Disabling is reversible (versions enable); destroying isn't. That's why destruction comes weeks later, once there's no risk.

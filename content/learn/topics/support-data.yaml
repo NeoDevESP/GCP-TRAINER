@@ -1,0 +1,110 @@
+id: support-data
+branch: data
+name: ["Casos de soporte: datos, BigQuery, Dataflow e IA", "Support cases: data, BigQuery, Dataflow and AI"]
+intro: ["Cuotas de BigQuery, búfer de streaming, conexiones y disco en Cloud SQL, pipelines de Dataflow atascados, falta de GPU y seguridad de modelos generativos: cómo leer el error y qué recomendar sin pedir a Google lo que no toca.", "BigQuery quotas, the streaming buffer, Cloud SQL connections and disk, stuck Dataflow pipelines, GPU shortages and generative model security: how to read the error and what to recommend without asking Google for the wrong thing."]
+concepts:
+  - id: bqquota
+    term: ["BigQuery: rateLimitExceeded frente a quotaExceeded", "BigQuery: rateLimitExceeded vs quotaExceeded"]
+    what: ["El campo reason del error dice si es un límite de ritmo o una cuota agotada.", "The error's reason field says whether it's a rate limit or an exhausted quota."]
+    points:
+      - ["rateLimitExceeded: demasiadas llamadas por segundo (p. ej. sondear jobs.get sin pausa). Solución: backoff exponencial truncado y agrupar operaciones.", "rateLimitExceeded: too many calls per second (e.g. polling jobs.get non-stop). Fix: truncated exponential backoff and batching operations."]
+      - ["quotaExceeded: se agotó una cuota a más largo plazo (p. ej. bytes exportados al día). Solución: optimizar, esperar al reinicio o pedir aumento justificado.", "quotaExceeded: a longer-term quota was used up (e.g. bytes exported per day). Fix: optimize, wait for the reset or request a justified increase."]
+      - ["Las cuotas diarias se reinician a medianoche hora del Pacífico, no a medianoche en España.", "Daily quotas reset at midnight Pacific time, not midnight in Spain."]
+      - ["Las cuotas personalizadas por usuario o proyecto limitan el gasto bajo demanda; entrenar modelos de BigQuery ML puede consumir mucho más que una SELECT sobre los mismos datos.", "Custom per-user or per-project quotas cap on-demand spend; training BigQuery ML models can consume far more than a SELECT over the same data."]
+    tip: ["Ante rateLimitExceeded no se pide subir el límite: se corrige el cliente.", "For rateLimitExceeded you don't ask for a higher limit: you fix the client."]
+  - id: bqstream
+    term: ["Búfer de streaming y DML", "Streaming buffer and DML"]
+    what: ["Las filas insertadas con el streaming antiguo (insertAll) pasan un tiempo en un búfer antes de quedar en almacenamiento.", "Rows inserted with legacy streaming (insertAll) spend time in a buffer before reaching storage."]
+    points:
+      - ["UPDATE, DELETE o MERGE sobre filas que siguen en el búfer fallan.", "UPDATE, DELETE or MERGE over rows still in the buffer fail."]
+      - ["streamingBuffer.oldestEntryTime en los metadatos de la tabla dice desde cuándo hay datos en el búfer.", "streamingBuffer.oldestEntryTime in the table metadata says since when the buffer holds data."]
+      - ["Mitigación: excluir las filas recientes en el DML.", "Mitigation: exclude recent rows from the DML."]
+      - ["Solución de fondo: la Storage Write API, cuyas filas se pueden modificar enseguida.", "Root fix: the Storage Write API, whose rows can be modified right away."]
+    tip: ["«El DELETE falla solo con los datos de hoy» suele ser el búfer de streaming.", "\"The DELETE fails only on today's data\" is usually the streaming buffer."]
+  - id: sqlops
+    term: ["Cloud SQL: conexiones y disco lleno", "Cloud SQL: connections and full disk"]
+    what: ["Una instancia gestionada sigue teniendo límites de su máquina.", "A managed instance still has its machine's limits."]
+    points:
+      - ["Cada conexión reserva memoria; al llegar a max_connections se rechazan nuevas.", "Each connection reserves memory; at max_connections new ones are rejected."]
+      - ["Solución: pools de conexiones bien dimensionados y cerrar conexiones; en serverless, limitar instancias o usar un pooler.", "Fix: well-sized connection pools and closing connections; in serverless, cap instances or use a pooler."]
+      - ["Con el disco lleno, la base de datos deja de aceptar escrituras para proteger los datos.", "With a full disk, the database stops accepting writes to protect the data."]
+      - ["Prevención: aumento automático de almacenamiento y alertas de uso de disco.", "Prevention: automatic storage increase and disk-usage alerts."]
+    tip: ["Subir de máquina por un pool mal configurado cuesta dinero y no arregla la causa.", "Upsizing the machine for a misconfigured pool costs money and doesn't fix the cause."]
+  - id: dataflow
+    term: ["Dataflow: pipeline atascado y claves calientes", "Dataflow: stuck pipeline and hot keys"]
+    what: ["Si suben a la vez la frescura de datos (data freshness) y el backlog, el pipeline no da abasto.", "If data freshness and backlog both rise, the pipeline can't keep up."]
+    points:
+      - ["Clave caliente: una clave con muchísimos más datos que el resto se procesa en un solo worker.", "Hot key: one key with far more data than the rest is processed on a single worker."]
+      - ["Solución: fan-out de claves calientes (Combine.perKey().withHotKeyFanout en Java, with_hot_key_fanout en Python).", "Fix: hot-key fan-out (Combine.perKey().withHotKeyFanout in Java, with_hot_key_fanout in Python)."]
+      - ["Streaming Engine saca el estado y el shuffle de los workers y escala mejor.", "Streaming Engine moves state and shuffle off the workers and scales better."]
+      - ["Algunas opciones de selección automática de máquinas no son compatibles con GPU, VMs confidenciales o ciertos discos: revisa la combinación de opciones si el trabajo no arranca.", "Some automatic machine-selection options aren't compatible with GPUs, confidential VMs or certain disks: review the option mix if the job won't start."]
+    tip: ["Más workers no arreglan una clave caliente: el cuello de botella es una sola clave.", "More workers don't fix a hot key: the bottleneck is a single key."]
+  - id: gpu
+    term: ["Falta de GPU (stockout)", "GPU shortage (stockout)"]
+    what: ["No es tu cuota: no hay aceleradores libres en esa zona en ese momento.", "It isn't your quota: there are no free accelerators in that zone right now."]
+    points:
+      - ["Errores tipo ZONE_RESOURCE_POOL_EXHAUSTED o «resource stockout».", "Errors like ZONE_RESOURCE_POOL_EXHAUSTED or \"resource stockout\"."]
+      - ["A corto plazo: otra zona o región, otro tipo de GPU o menos réplicas.", "Short term: another zone or region, another GPU type or fewer replicas."]
+      - ["Para cargas que no pueden fallar: reservas de Compute Engine (SPECIFIC_RESERVATION) asociadas al trabajo; se pagan aunque no se usen.", "For workloads that can't fail: Compute Engine reservations (SPECIFIC_RESERVATION) tied to the job; paid even when unused."]
+      - ["Para experimentos tolerantes a fallos: VMs Spot, mucho más baratas pero Google puede reclamarlas con unos 30 s de aviso.", "For fault-tolerant experiments: Spot VMs, much cheaper but Google can reclaim them with about 30 s notice."]
+    tip: ["En el banco, la región alternativa también debe estar en la UE.", "At the bank, the alternative region must also be in the EU."]
+  - id: modelarmor
+    term: ["Seguridad de IA generativa: Model Armor", "Generative AI security: Model Armor"]
+    what: ["Inspecciona las instrucciones y respuestas de los modelos, como un WAF para LLM.", "Inspects model prompts and responses, like a WAF for LLMs."]
+    points:
+      - ["Detecta inyección de instrucciones (prompt injection), jailbreak y URL maliciosas dentro del texto.", "Detects prompt injection, jailbreaks and malicious URLs inside the text."]
+      - ["Con Sensitive Data Protection enmascara o bloquea datos personales: IBAN, DNI, tarjetas…", "With Sensitive Data Protection it masks or blocks personal data: IBANs, ID numbers, cards…"]
+      - ["Funciona con Gemini y con otros modelos.", "Works with Gemini and other models."]
+      - ["Falsos positivos: se ajustan los umbrales de confianza por aplicación según el riesgo aceptado.", "False positives: confidence thresholds are tuned per application according to accepted risk."]
+    tip: ["Desactivar el filtro por un falso positivo deja la puerta abierta: ajusta el umbral de esa aplicación.", "Disabling the filter over a false positive leaves the door open: tune that application's threshold."]
+  - id: bulletins
+    term: ["Boletines de seguridad y responsabilidad compartida", "Security bulletins and shared responsibility"]
+    what: ["Google publica boletines cuando una vulnerabilidad (CVE) afecta a sus productos.", "Google publishes bulletins when a vulnerability (CVE) affects its products."]
+    points:
+      - ["En servicios gestionados, Google aplica el parche.", "On managed services, Google applies the patch."]
+      - ["En lo que gestionas tú (nodos, imágenes, Apigee hybrid o instalaciones propias), te toca a ti actualizar.", "On what you manage (nodes, images, Apigee hybrid or self-run installs), updating is on you."]
+      - ["Ejemplo: CVE-2024-6387 (regreSSHion, OpenSSH) exigió actualizar imágenes de nodos y VMs.", "Example: CVE-2024-6387 (regreSSHion, OpenSSH) required updating node and VM images."]
+      - ["Suscríbete a los boletines de los productos que usa el banco.", "Subscribe to the bulletins for the products the bank uses."]
+    tip: ["Ante un boletín, la primera pregunta es: ¿esto lo parchea Google o lo parcheamos nosotros?", "For a bulletin, the first question is: does Google patch this or do we?"]
+scenarios:
+  - q: ["Un panel de BI falla con rateLimitExceeded porque consulta el estado de los trabajos cada 10 ms.", "A BI dashboard fails with rateLimitExceeded because it polls job status every 10 ms."]
+    options: [["Recomendar backoff exponencial y reducir el sondeo", "Recommend exponential backoff and less polling"], ["Pedir a Google que suba el límite", "Ask Google to raise the limit"], ["Comprar slots de BigQuery", "Buy BigQuery slots"], ["Crear otro proyecto para repartir la carga", "Create another project to spread the load"]]
+    answer: 0
+    why: ["Es un límite de ritmo de la API: se corrige el cliente.", "It's an API rate limit: you fix the client."]
+  - q: ["Un proceso hace DELETE de las filas de hoy y falla; las de ayer se borran bien. Insertan con insertAll.", "A job DELETEs today's rows and fails; yesterday's delete fine. They insert with insertAll."]
+    options: [["Son filas en el búfer de streaming: excluirlas o migrar a la Storage Write API", "They're rows in the streaming buffer: exclude them or move to the Storage Write API"], ["Pedir más cuota de DML", "Request more DML quota"], ["Recrear la tabla cada día", "Recreate the table every day"], ["Es un fallo de BigQuery: abrir P1", "It's a BigQuery bug: open a P1"]]
+    answer: 0
+    why: ["El DML no puede modificar filas aún en el búfer.", "DML can't modify rows still in the buffer."]
+  - q: ["El pipeline de Dataflow de transferencias acumula retraso; el 80 % de los eventos son de una sola oficina.", "The transfers Dataflow pipeline is falling behind; 80% of events come from one branch."]
+    options: [["Clave caliente: aplicar fan-out a esa clave en la agregación", "Hot key: apply fan-out to that key in the aggregation"], ["Duplicar el número de workers", "Double the number of workers"], ["Reiniciar el pipeline cada hora", "Restart the pipeline every hour"], ["Pasar a máquinas más grandes", "Switch to bigger machines"]]
+    answer: 0
+    why: ["Una sola clave satura un solo worker por muchos que añadas.", "A single key saturates a single worker however many you add."]
+  - q: ["El equipo de IA no consigue GPU A100 en europe-west4 para entrenar el modelo de riesgo de mañana.", "The AI team can't get A100 GPUs in europe-west4 to train tomorrow's risk model."]
+    options: [["Probar otra zona o región de la UE u otro tipo de GPU; para el futuro, una reserva", "Try another EU zone or region or another GPU type; for the future, a reservation"], ["Pedir más cuota de GPU", "Request more GPU quota"], ["Entrenar en us-central1", "Train in us-central1"], ["Abrir un P1 a Google", "Open a P1 with Google"]]
+    answer: 0
+    why: ["Es falta de capacidad física, no de cuota; la residencia de datos limita a la UE.", "It's a lack of physical capacity, not quota; data residency limits you to the EU."]
+quiz:
+  - q: ["¿A qué hora se reinician las cuotas diarias de BigQuery?", "When do BigQuery daily quotas reset?"]
+    options: [["A medianoche hora del Pacífico", "At midnight Pacific time"], ["A medianoche hora local del usuario", "At midnight user local time"], ["A medianoche UTC", "At midnight UTC"], ["24 h después del primer uso", "24 h after first use"]]
+    answer: 0
+    why: ["Se reinician a medianoche PT, sea cual sea tu zona.", "They reset at midnight PT, whatever your zone."]
+  - q: ["¿Qué API evita los problemas del búfer de streaming?", "Which API avoids the streaming buffer problems?"]
+    options: [["Storage Write API", "Storage Write API"], ["insertAll", "insertAll"], ["jobs.query", "jobs.query"], ["tables.patch", "tables.patch"]]
+    answer: 0
+    why: ["Sus filas se pueden consultar y modificar enseguida.", "Its rows can be queried and modified right away."]
+  - q: ["¿Qué hace Cloud SQL cuando se llena el disco?", "What does Cloud SQL do when the disk fills up?"]
+    options: [["Deja de aceptar escrituras para proteger los datos", "Stops accepting writes to protect the data"], ["Borra los registros más antiguos", "Deletes the oldest records"], ["Pasa a solo lectura en otra región", "Becomes read-only in another region"], ["Amplía la máquina automáticamente", "Upsizes the machine automatically"]]
+    answer: 0
+    why: ["Por eso conviene el aumento automático de almacenamiento.", "That's why automatic storage increase is advisable."]
+  - q: ["¿Qué indica que suban a la vez la frescura de datos y el backlog en Dataflow?", "What does rising data freshness and backlog in Dataflow indicate?"]
+    options: [["Que el pipeline no da abasto con los datos que llegan", "The pipeline can't keep up with incoming data"], ["Que el pipeline ha terminado", "The pipeline has finished"], ["Que Pub/Sub está caído", "Pub/Sub is down"], ["Que todo va bien", "Everything is fine"]]
+    answer: 0
+    why: ["Ambas métricas creciendo = atasco.", "Both metrics growing = backlog."]
+  - q: ["¿Cuál es la contrapartida de las VMs Spot?", "What's the trade-off of Spot VMs?"]
+    options: [["Google puede reclamarlas en cualquier momento con aviso breve", "Google can reclaim them at any time with short notice"], ["Son más caras", "They're more expensive"], ["No admiten GPU", "They don't support GPUs"], ["Solo existen en EE. UU.", "They only exist in the US"]]
+    answer: 0
+    why: ["Son muy baratas a cambio de poder interrumpirse.", "They're very cheap in exchange for being interruptible."]
+  - q: ["Model Armor bloquea por error preguntas legítimas sobre hipotecas. ¿Qué haces?", "Model Armor wrongly blocks legitimate mortgage questions. What do you do?"]
+    options: [["Ajustar el umbral de confianza de esa aplicación según su riesgo", "Tune that application's confidence threshold to its risk"], ["Desactivar Model Armor", "Disable Model Armor"], ["Quitar el filtro de datos personales", "Remove the personal-data filter"], ["Cambiar de modelo", "Change model"]]
+    answer: 0
+    why: ["Los umbrales se ajustan por canal; quitar la protección no es la solución.", "Thresholds are tuned per channel; removing the protection isn't the fix."]

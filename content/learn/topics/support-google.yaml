@@ -1,0 +1,110 @@
+id: support-google
+branch: observability
+name: ["Soporte de Google Cloud: niveles, prioridades y escalados", "Google Cloud support: tiers, priorities and escalations"]
+intro: ["Cómo funciona el soporte de Google por dentro: qué cubre cada nivel, qué tiempos de respuesta da, cómo se clasifica un caso, qué significa de verdad escalar y cómo saber si el problema es de Google antes de abrir cien tickets.", "How Google support works inside: what each tier covers, which response times it gives, how a case is classified, what escalating really means and how to tell whether the problem is Google's before opening a hundred tickets."]
+concepts:
+  - id: tiers
+    term: ["Niveles de soporte", "Support tiers"]
+    what: ["El contrato de soporte decide quién te atiende, cuándo y con qué rapidez.", "The support contract decides who helps you, when and how fast."]
+    points:
+      - ["Basic: incluido para todos; solo facturación, pagos, documentación y comunidad. Sin soporte técnico.", "Basic: included for everyone; billing, payments, documentation and community only. No technical support."]
+      - ["Standard: soporte técnico en horario laboral; respuesta inicial de 4 h en P2. Pensado para desarrollo y pruebas.", "Standard: technical support in business hours; 4 h initial response for P2. Meant for development and testing."]
+      - ["Enhanced: 24/7 para producción; respuesta inicial de 1 h en P1, soporte de tecnologías de terceros.", "Enhanced: 24/7 for production; 1 h initial response for P1, third-party technology support."]
+      - ["Premium: 24/7, respuesta inicial de 15 min en P1, Technical Account Manager (TAM) que conoce tu arquitectura.", "Premium: 24/7, 15 min initial response for P1, a Technical Account Manager (TAM) who knows your architecture."]
+    tip: ["El SLA es de primera respuesta, no de resolución: Google garantiza cuándo te contesta un ingeniero, no cuándo está arreglado.", "The SLA is for first response, not resolution: Google guarantees when an engineer answers, not when it's fixed."]
+  - id: valueadd
+    term: ["Servicios añadidos: MCS, Assured Support y partners", "Add-on services: MCS, Assured Support and partners"]
+    what: ["Para cargas críticas o reguladas hay extensiones sobre Premium.", "Critical or regulated workloads have extensions on top of Premium."]
+    points:
+      - ["Mission Critical Services (MCS): prioridad P0 con respuesta de 5 min, tras una preparación previa (revisión de arquitectura, simulacros).", "Mission Critical Services (MCS): P0 priority with a 5 min response, after prior onboarding (architecture review, drills)."]
+      - ["Assured Support: el personal que atiende cumple requisitos de ubicación y nacionalidad (p. ej. FedRAMP High, IL4, CJIS en EE. UU.).", "Assured Support: support staff meet location and citizenship requirements (e.g. FedRAMP High, IL4, CJIS in the US)."]
+      - ["Collaborative Support Partner: con tu consentimiento, tu integrador y Google comparten datos del caso y lo trabajan juntos.", "Collaborative Support Partner: with your consent, your integrator and Google share case data and work it together."]
+      - ["TAM: tu defensor dentro de Google; coordina con SRE y producto en problemas de fondo.", "TAM: your advocate inside Google; coordinates with SRE and product on deep issues."]
+    tip: ["En banca, la soberanía de los datos de soporte también importa: quién de Google puede ver tus datos durante un caso.", "In banking, sovereignty of support data matters too: who at Google can see your data during a case."]
+  - id: gpriority
+    term: ["Prioridades de un caso con Google (P1–P4)", "Google case priorities (P1–P4)"]
+    what: ["La prioridad se decide por el impacto en el negocio, no por lo difícil o interesante que sea el problema.", "Priority is set by business impact, not by how hard or interesting the problem is."]
+    points:
+      - ["P1 · impacto crítico: producción inutilizable, errores masivos a usuarios o riesgo para los datos, y sin alternativa.", "P1 · critical impact: production unusable, mass user-facing errors or data at risk, and no workaround."]
+      - ["P2 · alto impacto: producción muy degradada, pero hay una alternativa limitada.", "P2 · high impact: production badly degraded, but there's a limited workaround."]
+      - ["P3 · impacto medio: afectación parcial, sin impacto visible directo para los usuarios finales.", "P3 · medium impact: partial impact, no direct visible impact on end users."]
+      - ["P4 · bajo impacto: el servicio funciona; dudas, consultas de arquitectura, fallos estéticos o peticiones de funcionalidad.", "P4 · low impact: the service works; questions, architecture queries, cosmetic bugs or feature requests."]
+    tip: ["Sobrevalorar la prioridad gasta recursos de emergencia y resta credibilidad; infravalorarla deja una caída sin atender.", "Overstating priority wastes emergency resources and costs credibility; understating it leaves an outage unattended."]
+  - id: followsun
+    term: ["P1: Follow-the-Sun y tu disponibilidad", "P1: Follow-the-Sun and your availability"]
+    what: ["Un P1 se trabaja sin parar, pasando de un centro de soporte a otro según la zona horaria.", "A P1 is worked non-stop, handed between support centres across time zones."]
+    points:
+      - ["Se trabaja 24/7, a menudo con videollamada en directo, hasta mitigar.", "It's worked 24/7, often on a live video call, until mitigated."]
+      - ["Exige que tu lado también esté disponible: enviar registros, ejecutar comandos y validar mitigaciones.", "It requires your side to be available too: sending logs, running commands and validating mitigations."]
+      - ["Si el cliente deja de responder, Google puede bajar la prioridad hasta que vuelva.", "If the customer stops responding, Google may lower the priority until they're back."]
+      - ["Para casos no críticos puedes pedir que el caso se quede en tu zona horaria.", "For non-critical cases you can ask for the case to stay in your time zone."]
+    tip: ["Si abres un P1, deja a alguien de guardia en el caso: un P1 sin respuesta del cliente deja de ser P1.", "If you open a P1, keep someone on call on the case: a P1 with no customer response stops being a P1."]
+  - id: gescalate
+    term: ["Escalar un caso con Google", "Escalating a case with Google"]
+    what: ["Escalar no acelera la ingeniería: avisa a la dirección de soporte de que algo ha cambiado.", "Escalating doesn't speed up engineering: it tells support management that something has changed."]
+    points:
+      - ["Motivo válido: el impacto ha crecido (de degradación intermitente a caída total).", "Valid reason: impact has grown (from intermittent degradation to full outage)."]
+      - ["Motivo válido: el proceso falla (no llegan las actualizaciones prometidas o el caso no avanza).", "Valid reason: the process is failing (promised updates don't arrive or the case is stuck)."]
+      - ["No es motivo: tener prisa, un cargo alto o un problema P4 molesto.", "Not a reason: being in a hurry, a senior title or an annoying P4 issue."]
+      - ["Con Premium, el TAM puede impulsar el escalado en paralelo.", "With Premium, the TAM can push the escalation in parallel."]
+    tip: ["Si el impacto cambió, actualiza también la prioridad del caso: escalar no la cambia por sí solo.", "If the impact changed, update the case priority too: escalating doesn't change it by itself."]
+  - id: psh
+    term: ["Personalized Service Health (PSH)", "Personalized Service Health (PSH)"]
+    what: ["Incidencias de Google filtradas para tus proyectos y regiones, no el panel público genérico.", "Google incidents filtered for your projects and regions, not the generic public dashboard."]
+    points:
+      - ["Incidente emergente: Google investiga alertas internas, el impacto aún no está claro.", "Emerging incident: Google is investigating internal alerts, impact still unclear."]
+      - ["Incidente confirmado: Google ha validado que afecta a clientes.", "Confirmed incident: Google has validated customer impact."]
+      - ["Se puede consultar por API y enviar alertas para activar planes de contingencia (failover, página de estado interna).", "It can be queried by API and sent as alerts to trigger contingency plans (failover, internal status page)."]
+      - ["Si PSH ya confirma la causa, no hace falta abrir decenas de tickets iguales: uno, enlazado al incidente.", "If PSH already confirms the cause, there's no need for dozens of identical tickets: one, linked to the incident."]
+    tip: ["Ante muchas alertas a la vez en una región, mira PSH antes de tocar nada.", "When many alerts fire at once in one region, check PSH before touching anything."]
+  - id: goodcase
+    term: ["Abrir un buen caso con Google", "Opening a good case with Google"]
+    what: ["Un caso completo ahorra horas de idas y venidas.", "A complete case saves hours of back-and-forth."]
+    points:
+      - ["ID del proyecto, recurso exacto, región o zona.", "Project ID, exact resource, region or zone."]
+      - ["Hora de inicio con zona horaria y si sigue ocurriendo.", "Start time with time zone and whether it's ongoing."]
+      - ["Error literal, petición de ejemplo e ID de solicitud o de traza si lo hay.", "Literal error, a sample request and a request or trace ID if any."]
+      - ["Impacto en el negocio, qué ha cambiado y qué has probado ya.", "Business impact, what changed and what you've already tried."]
+    tip: ["Gemini Cloud Assist, desde la consola, puede investigar y proponer causas antes de abrir el caso; si lo abres, adjunta lo que encontró.", "Gemini Cloud Assist, from the console, can investigate and suggest causes before you open the case; if you open it, attach what it found."]
+scenarios:
+  - q: ["El banco tiene soporte Premium. La API de pagos está caída para todos los clientes y no hay alternativa. ¿Qué haces?", "The bank has Premium support. The payments API is down for all customers with no workaround. What do you do?"]
+    options: [["Abrir un caso P1 con proyecto, hora, error e impacto, y quedarte disponible en el caso", "Open a P1 case with project, time, error and impact, and stay available on the case"], ["Abrir un caso P3 y esperar a que contesten", "Open a P3 case and wait for an answer"], ["Escalar el caso antes de abrirlo para que vaya más rápido", "Escalate the case before opening it so it goes faster"], ["Abrir un caso por cada microservicio afectado", "Open one case per affected microservice"]]
+    answer: 0
+    why: ["Producción inutilizable sin alternativa es P1; con Premium la primera respuesta llega en 15 min, y necesitan que alguien responda.", "Unusable production with no workaround is P1; with Premium the first response arrives within 15 min, and they need someone to respond."]
+  - q: ["Tu caso P2 lleva dos días sin la actualización que Google prometió cada 4 horas. ¿Qué haces?", "Your P2 case has gone two days without the update Google promised every 4 hours. What do you do?"]
+    options: [["Escalar el caso explicando que el proceso de soporte no se está cumpliendo", "Escalate the case explaining the support process isn't being met"], ["Subirlo a P1 para que alguien lo mire", "Raise it to P1 so someone looks at it"], ["Cerrarlo y abrir uno nuevo", "Close it and open a new one"], ["Esperar, escalar no sirve para nada", "Wait, escalating is useless"]]
+    answer: 0
+    why: ["Una ruptura del proceso es un motivo válido de escalado; inflar la prioridad no lo es.", "A process breakdown is a valid escalation reason; inflating the priority isn't."]
+  - q: ["Saltan a la vez las alertas de 40 servicios en europe-west1. ¿Qué miras primero?", "Alerts for 40 services in europe-west1 fire at once. What do you check first?"]
+    options: [["Personalized Service Health para ver si hay un incidente de Google en esa región", "Personalized Service Health to see if there's a Google incident in that region"], ["Los registros de cada servicio uno por uno", "The logs of each service one by one"], ["Reiniciar los servicios más críticos", "Restart the most critical services"], ["Abrir 40 casos, uno por servicio", "Open 40 cases, one per service"]]
+    answer: 0
+    why: ["Un fallo masivo y simultáneo en una región apunta al proveedor; PSH lo confirma y evita tickets redundantes.", "A massive, simultaneous failure in one region points to the provider; PSH confirms it and avoids redundant tickets."]
+  - q: ["Tienes un P1 abierto a las 2:00 y tu turno termina. ¿Qué es lo correcto?", "You have a P1 open at 2:00 and your shift ends. What's right?"]
+    options: [["Pasar el caso a la persona de guardia con el contexto y avisar a Google del nuevo contacto", "Hand the case to the on-call person with context and tell Google the new contact"], ["Irte; Google lo trabaja 24/7 sin ti", "Leave; Google works it 24/7 without you"], ["Bajarlo a P3 hasta mañana sin decir nada", "Lower it to P3 until tomorrow without saying anything"], ["Cerrar el caso y reabrirlo mañana", "Close the case and reopen it tomorrow"]]
+    answer: 0
+    why: ["Follow-the-Sun necesita también continuidad en el cliente; si nadie responde, el caso puede perder prioridad.", "Follow-the-Sun needs continuity on the customer side too; if nobody responds, the case can lose priority."]
+quiz:
+  - q: ["¿Qué nivel de soporte incluye un Technical Account Manager?", "Which support tier includes a Technical Account Manager?"]
+    options: [["Premium", "Premium"], ["Enhanced", "Enhanced"], ["Standard", "Standard"], ["Basic", "Basic"]]
+    answer: 0
+    why: ["El TAM es parte de Premium.", "The TAM is part of Premium."]
+  - q: ["¿Cuál es la primera respuesta objetivo de un P1 en Premium?", "What is the target first response for a P1 on Premium?"]
+    options: [["15 minutos", "15 minutes"], ["5 minutos", "5 minutes"], ["1 hora", "1 hour"], ["4 horas", "4 hours"]]
+    answer: 0
+    why: ["15 min en Premium; 1 h en Enhanced; 5 min es la P0 de Mission Critical Services.", "15 min on Premium; 1 h on Enhanced; 5 min is Mission Critical Services' P0."]
+  - q: ["¿Qué cubre el soporte Basic?", "What does Basic support cover?"]
+    options: [["Facturación, pagos, documentación y comunidad", "Billing, payments, documentation and community"], ["Soporte técnico en horario laboral", "Technical support in business hours"], ["Soporte técnico 24/7 en producción", "24/7 technical support in production"], ["Soporte técnico solo para P1", "Technical support for P1 only"]]
+    answer: 0
+    why: ["Basic no incluye soporte técnico.", "Basic includes no technical support."]
+  - q: ["Un error estético en la consola que no impide trabajar es…", "A cosmetic console bug that doesn't stop work is…"]
+    options: [["P4", "P4"], ["P3", "P3"], ["P2", "P2"], ["P1", "P1"]]
+    answer: 0
+    why: ["El servicio es totalmente utilizable: bajo impacto.", "The service is fully usable: low impact."]
+  - q: ["¿Qué es un «incidente emergente» en Personalized Service Health?", "What is an \"emerging incident\" in Personalized Service Health?"]
+    options: [["Google investiga alertas pero aún no ha confirmado el impacto en clientes", "Google is investigating alerts but hasn't confirmed customer impact yet"], ["Un incidente ya resuelto", "An incident that's already resolved"], ["Una caída confirmada en todas las regiones", "A confirmed outage in every region"], ["Un caso que tú has abierto", "A case you opened"]]
+    answer: 0
+    why: ["Emergente = en investigación; confirmado = impacto validado.", "Emerging = under investigation; confirmed = impact validated."]
+  - q: ["¿Qué garantiza el SLA de soporte?", "What does the support SLA guarantee?"]
+    options: [["El tiempo hasta la primera respuesta de un ingeniero", "The time to an engineer's first response"], ["El tiempo hasta resolver el problema", "The time to resolve the problem"], ["Que el servicio no vuelva a fallar", "That the service won't fail again"], ["Una compensación económica por cada caso", "Financial compensation for every case"]]
+    answer: 0
+    why: ["Es un SLA de respuesta inicial, no de resolución.", "It's an initial-response SLA, not a resolution one."]

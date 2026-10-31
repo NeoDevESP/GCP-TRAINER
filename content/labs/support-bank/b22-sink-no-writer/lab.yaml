@@ -1,0 +1,186 @@
+id: bank-b22-sink-no-writer
+title: 'INC · Auditoría: el bucket de registros lleva semanas vacío'
+summary: 'Un sink sin permiso de escritura en su destino no da error visible: descarta los registros. Da a su identidad el rol justo sobre el bucket.'
+track: support-bank
+day: 22
+level: intermediate
+branch: observability
+type: incident
+mode: production
+skills:
+- observability.logging
+- security.audit
+- iam.leastprivilege
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 25
+baseline:
+- bank-atlas
+setup: |
+  gcloud storage buckets create gs://registros-acceso-{{.project}} --location=EU --uniform-bucket-level-access --retention-period=5y
+  gcloud logging sinks create accesos-sink storage.googleapis.com/registros-acceso-{{.project}} --log-filter='logName:"cloudaudit.googleapis.com"'
+ticket:
+  id: INC-23412
+  kind: INC
+  priority: P3
+  sla: 1d
+  reporter: Auditoría interna
+  summary: En la revisión trimestral hemos visto que el bucket registros-acceso, donde deberían llegar los registros de auditoría, está vacío. El sink accesos-sink se creó hace un mes. ¿Qué pasa?
+actors:
+- role: compliance
+  name: Beatriz Ramos (Cumplimiento)
+  persona: Responsable de cumplimiento de la plataforma.
+  fallback: Lo creó un compañero que ya no está; dijo que estaba todo listo.
+  facts:
+  - keywords:
+    - - perdido
+      - lost
+      - recuper
+      - anterior
+      - mes
+    answer: Los registros de auditoría de actividad de administración se guardan 400 días en Logging, así que no se han perdido; pero necesitamos que lleguen al bucket.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23412** · *«En la revisión trimestral hemos visto que el bucket registros-acceso, donde deberían llegar los registros de
+  > auditoría, está vacío. El sink accesos-sink se creó hace un mes. ¿Qué pasa?»*
+
+  Cada sink escribe con su propia identidad (*writerIdentity*). Si esa identidad no tiene permiso en el destino, los registros
+  **se descartan en silencio**. Descúbrelo y arréglalo con el mínimo privilegio.
+objectives:
+- 'Revisa el sink: destino, filtro e identidad de escritura'
+- Comprueba qué permisos tiene esa identidad en el bucket
+- Concede solo la creación de objetos en ese bucket
+- Explica la causa a Auditoría y cierra
+hints:
+- text: '`gcloud logging sinks list` muestra destino, filtro y *writerIdentity*.'
+- text: '`gcloud storage buckets add-iam-policy-binding gs://BUCKET --member=IDENTIDAD --role=roles/storage.objectCreator`.'
+solution: |
+  ticket
+  gcloud logging sinks list
+  gcloud storage buckets get-iam-policy gs://registros-acceso-{{.project}}
+  ask compliance "¿se han perdido los registros de este mes?"
+  gcloud storage buckets add-iam-policy-binding gs://registros-acceso-{{.project}} --member=serviceAccount:service-$(gcloud projects describe {{.project}} --format='value(projectNumber)')@gcp-sa-logging.iam.gserviceaccount.com --role=roles/storage.objectCreator
+  gcloud storage buckets get-iam-policy gs://registros-acceso-{{.project}}
+  ticket update "Hola Beatriz: el sink estaba bien configurado (destino y filtro de auditoría), pero a su identidad de escritura nunca se le dio permiso en el bucket, así que los registros se descartaban sin avisar. Le hemos concedido roles/storage.objectCreator solo sobre registros-acceso. Los registros de actividad de administración del último mes siguen en Cloud Logging (se guardan 400 días) por si los necesitáis."
+  ticket resolve "Concedido objectCreator a la writerIdentity del sink accesos-sink solo en el bucket registros-acceso."
+shortcuts:
+- name: project-wide storage admin for the sink identity
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:service-$(gcloud projects describe {{.project}} --format='value(projectNumber)')@gcp-sa-logging.iam.gserviceaccount.com --role=roles/storage.admin
+    ticket resolve "Dado permiso de almacenamiento a la cuenta del sink."
+- name: recreate the sink
+  run: |
+    gcloud logging sinks delete accesos-sink --quiet
+    gcloud logging sinks create accesos-sink storage.googleapis.com/registros-acceso-{{.project}} --log-filter='logName:"cloudaudit.googleapis.com"'
+    ticket resolve "Recreado el sink de auditoría."
+rubric:
+- name: El sink puede escribir
+  validator: functional
+  points: 35
+  checks:
+  - type: exists
+    path: buckets["registros-acceso-{{.project}}"]
+    expect:
+      iamPolicy:
+        regex: gcp-sa-logging[^}]*objectCreator|objectCreator[^}]*gcp-sa-logging
+    desc: La identidad del sink puede crear objetos en el bucket
+- name: Mínimo privilegio
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: command
+    regex: projects add-iam-policy-binding .*gcp-sa-logging
+    max: 0
+    desc: Sin permisos en todo el proyecto
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: sinks list|sinks describe
+    min: 1
+    desc: Revisado el sink y su identidad
+  - type: command
+    regex: buckets get-iam-policy
+    min: 1
+    desc: Revisados los permisos del bucket
+- name: Explicación
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - permiso
+      - permission
+      - identidad
+      - identity
+    - - descart
+      - drop
+      - silencio
+      - silent
+      - nunca
+    desc: Explica por qué no llegaban
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Un sink sin permisos no falla con un error que veas: simplemente no entrega. Por eso hay que comprobar el destino después de crearlo.'
+- match: sinks list
+  title: Fíjate en writerIdentity
+  why: Esa cuenta (service-NÚMERO@gcp-sa-logging...) es la que escribe; necesita permiso en el bucket.
+- match: buckets add-iam-policy-binding
+  title: ''
+  why: 'objectCreator en ese bucket: puede añadir registros, no leerlos ni borrarlos, y nada fuera de ahí.'
+en:
+  title: 'INC · Audit: the logs bucket has been empty for weeks'
+  summary: 'A sink without write permission on its destination shows no visible error: it drops the logs. Grant its identity the exact role on the bucket.'
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23412** · *"In the quarterly review we found the registros-acceso bucket, where the audit logs should arrive, is empty.
+    > The accesos-sink sink was created a month ago. What's going on?"*
+
+    Each sink writes with its own identity (*writerIdentity*). If that identity has no permission on the destination, the logs
+    **are silently dropped**. Find it and fix it with least privilege.
+  objectives:
+  - 'Review the sink: destination, filter and writer identity'
+  - Check what permissions that identity has on the bucket
+  - Grant only object creation on that bucket
+  - Explain the cause to Audit and close
+  hints:
+  - '`gcloud logging sinks list` shows destination, filter and *writerIdentity*.'
+  - '`gcloud storage buckets add-iam-policy-binding gs://BUCKET --member=IDENTITY --role=roles/storage.objectCreator`.'
+  ticket:
+    summary: In the quarterly review we found the registros-acceso bucket, where the audit logs should arrive, is empty. The accesos-sink sink was created a month ago. What's going on?
+  text:
+    Auditoría interna: Internal audit
+    Beatriz Ramos (Cumplimiento): Beatriz Ramos (Compliance)
+    Responsable de cumplimiento de la plataforma.: Platform compliance owner.
+    Lo creó un compañero que ya no está; dijo que estaba todo listo.: A colleague who has left created it; he said it was all set.
+    ? Los registros de auditoría de actividad de administración se guardan 400 días en Logging, así que no se han perdido; pero necesitamos que lleguen al bucket.
+    : Admin Activity audit logs are kept for 400 days in Logging, so they aren't lost; but we need them to reach the bucket.
+    El sink puede escribir: The sink can write
+    La identidad del sink puede crear objetos en el bucket: The sink identity can create objects in the bucket
+    Mínimo privilegio: Least privilege
+    Sin permisos en todo el proyecto: No project-wide permissions
+    Diagnóstico: Diagnosis
+    Revisado el sink y su identidad: Sink and identity reviewed
+    Revisados los permisos del bucket: Bucket permissions reviewed
+    Explicación: Explanation
+    Explica por qué no llegaban: Explains why they weren't arriving
+    Ticket cerrado: Ticket closed
+    ? 'Un sink sin permisos no falla con un error que veas: simplemente no entrega. Por eso hay que comprobar el destino después de crearlo.'
+    : 'A sink without permissions doesn''t fail with an error you''d see: it just doesn''t deliver. That''s why you check the destination after creating it.'
+    Fíjate en writerIdentity: Look at writerIdentity
+    Esa cuenta (service-NÚMERO@gcp-sa-logging...) es la que escribe; necesita permiso en el bucket.: That account (service-NUMBER@gcp-sa-logging...) is the one writing; it needs permission on the bucket.
+    'objectCreator en ese bucket: puede añadir registros, no leerlos ni borrarlos, y nada fuera de ahí.': 'objectCreator on that bucket: it can add logs, not read or delete them, and nothing outside it.'

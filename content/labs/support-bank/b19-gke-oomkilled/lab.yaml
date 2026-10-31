@@ -1,0 +1,226 @@
+id: bank-b19-gke-oomkilled
+title: 'INC · Los informes de riesgo se reinician sin parar: OOMKilled'
+summary: Exit code 137 significa que el núcleo mató el contenedor por pasar su límite de memoria. Ajusta el límite al consumo real, no reinicies ni añadas nodos a ciegas.
+track: support-bank
+day: 19
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.troubleshooting
+- gke.workloads
+- observability.incident
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- bank-atlas
+setup: |
+  gcloud container clusters create riesgos-gke --zone={{.zone}} --num-nodes=2 --machine-type=e2-standard-4 --network=atlas-vpc --subnetwork=app-subnet --enable-private-nodes
+  gcloud container clusters get-credentials riesgos-gke --zone={{.zone}}
+  cat > informes.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: informes-riesgo}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: informes-riesgo}}
+    template:
+      metadata: {labels: {app: informes-riesgo}}
+      spec:
+        containers:
+        - name: informes-riesgo
+          image: europe-docker.pkg.dev/gcplab-public/apps/report-generator:1.0
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {memory: 256Mi}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: informes-riesgo}
+  spec:
+    selector: {app: informes-riesgo}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  kubectl apply -f informes.yaml
+ticket:
+  id: INC-23301
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Riesgos · Analítica
+  summary: 'Desde la subida de ayer los informes de riesgo de crédito no terminan: el servicio informes-riesgo se reinicia cada pocos minutos. Mañana se presentan al comité.'
+actors:
+- role: dev
+  name: Raúl Pastor (Desarrollo · Riesgos)
+  persona: Desarrollador del generador de informes.
+  fallback: La versión nueva genera los informes en memoria para ir más rápido.
+  facts:
+  - keywords:
+    - - memoria
+      - memory
+      - consume
+      - cuanto
+      - how much
+      - ram
+    answer: 'En las pruebas de carga se queda en unos 700 MiB por réplica, estable, sin crecer: no es una fuga.'
+  - keywords:
+    - - limite
+      - limit
+      - manifiesto
+      - manifest
+      - '256'
+    answer: El límite de 256Mi viene de la versión antigua; nadie lo revisó al subir la nueva.
+story: |
+  **Soporte de plataforma GCP · Banco Atlas** (proyecto `{{.project}}`).
+
+  > **INC-23301** · *«Desde la subida de ayer los informes de riesgo de crédito no terminan: el servicio informes-riesgo se
+  > reinicia cada pocos minutos. Mañana se presentan al comité.»*
+
+  Clúster `riesgos-gke` (zona `{{.zone}}`). Lo primero es configurar `kubectl` con
+  `gcloud container clusters get-credentials riesgos-gke --zone={{.zone}}`. En Kubernetes, **exit code 137** = 128 + 9 (SIGKILL):
+  el núcleo mató el proceso, casi siempre por superar `resources.limits.memory`.
+objectives:
+- Confirma por qué se reinician los pods (motivo y código de salida)
+- Averigua cuánta memoria necesita de verdad la aplicación y si es una fuga
+- Ajusta límite y petición de memoria al consumo real
+- Documenta la causa y cierra
+hints:
+- text: '`kubectl get pods` y `kubectl describe pod NOMBRE`: busca *Last State: OOMKilled* y *Exit Code: 137*.'
+- text: '`kubectl set resources deployment/informes-riesgo --limits=memory=1Gi --requests=memory=768Mi`.'
+solution: |
+  ticket
+  gcloud container clusters get-credentials riesgos-gke --zone={{.zone}}
+  kubectl get pods
+  kubectl describe deployment informes-riesgo
+  ask dev "¿cuánta memoria consume la versión nueva y crece con el tiempo?"
+  kubectl set resources deployment/informes-riesgo --limits=memory=1Gi --requests=memory=768Mi
+  kubectl rollout status deployment/informes-riesgo
+  kubectl get pods
+  ticket comment "Causa: OOMKilled (exit code 137). La versión nueva usa unos 700 MiB estables por réplica y el límite seguía en 256Mi de la versión anterior. Ajustado a requests 768Mi y limits 1Gi. No es una fuga según Desarrollo; revisar los límites en cada release."
+  ticket update "Resuelto: el servicio de informes de riesgo ya no se reinicia. La versión nueva necesitaba más memoria de la que tenía asignada; lo hemos ajustado y ya podéis generar los informes."
+  ticket resolve "Ajustados requests 768Mi y limits 1Gi en informes-riesgo; pods estables tras el OOMKilled (exit 137)."
+shortcuts:
+- name: restart the pods
+  run: |
+    gcloud container clusters get-credentials riesgos-gke --zone={{.zone}}
+    kubectl rollout restart deployment/informes-riesgo
+    ticket resolve "Reiniciados los pods del servicio de informes."
+- name: add nodes
+  run: |
+    gcloud container clusters resize riesgos-gke --zone={{.zone}} --num-nodes=4 --quiet
+    ticket resolve "Añadidos nodos al clúster para dar más memoria."
+rubric:
+- name: Servicio estable
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: k8s_ready
+    cluster: riesgos-gke
+    namespace: default
+    deployment: informes-riesgo
+    desc: Todas las réplicas listas
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: kubectl (describe|get pods|logs)
+    min: 1
+    desc: Motivo del reinicio comprobado
+  - type: asked
+    actor: dev
+    min: 1
+    desc: Consumo real consultado con Desarrollo
+- name: Sin gasto innecesario
+  validator: cost
+  points: 15
+  checks:
+  - type: command
+    regex: clusters resize|node-pools (create|update)
+    max: 0
+    desc: No se han añadido nodos
+- name: Causa documentada
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - oom
+      - '137'
+    - - limit
+      - memoria
+      - memory
+    desc: Nota interna con OOMKilled y el límite
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: '@intro'
+  title: ''
+  why: 'Un pod que se reinicia no se arregla reiniciándolo. Primero el motivo: OOMKilled y exit code 137 apuntan al límite de memoria.'
+- match: kubectl get pods
+  title: Mira los reinicios
+  why: 'CrashLoopBackOff con OOMKilled: el proceso pide más memoria que su límite y el núcleo lo mata (SIGKILL = 9, 128+9 = 137).'
+- match: ^ask dev
+  title: ''
+  why: Si el consumo crece sin parar es una fuga y subir el límite solo la retrasa; si es estable, el límite estaba mal.
+- match: set resources
+  title: ''
+  why: Petición cerca del consumo real (para que el planificador reserve sitio) y límite con margen.
+en:
+  title: 'INC · The risk reports keep restarting: OOMKilled'
+  summary: Exit code 137 means the kernel killed the container for exceeding its memory limit. Fit the limit to real usage; don't restart or add nodes blindly.
+  story: |
+    **GCP platform support · Banco Atlas** (project `{{.project}}`).
+
+    > **INC-23301** · *"Since yesterday's release the credit-risk reports don't finish: the informes-riesgo service restarts every
+    > few minutes. They're presented to the committee tomorrow."*
+
+    Cluster `riesgos-gke` (zone `{{.zone}}`). First configure `kubectl` with
+    `gcloud container clusters get-credentials riesgos-gke --zone={{.zone}}`. In Kubernetes, **exit code 137** = 128 + 9 (SIGKILL):
+    the kernel killed the process, almost always for exceeding `resources.limits.memory`.
+  objectives:
+  - Confirm why the pods restart (reason and exit code)
+  - Find out how much memory the app really needs and whether it's a leak
+  - Fit the memory limit and request to real usage
+  - Document the cause and close
+  hints:
+  - '`kubectl get pods` and `kubectl describe pod NAME`: look for *Last State: OOMKilled* and *Exit Code: 137*.'
+  - '`kubectl set resources deployment/informes-riesgo --limits=memory=1Gi --requests=memory=768Mi`.'
+  ticket:
+    summary: 'Since yesterday''s release the credit-risk reports don''t finish: the informes-riesgo service restarts every few minutes. They''re presented to the committee tomorrow.'
+  text:
+    Riesgos · Analítica: Risk · Analytics
+    Raúl Pastor (Desarrollo · Riesgos): Raúl Pastor (Development · Risk)
+    Desarrollador del generador de informes.: Developer of the report generator.
+    La versión nueva genera los informes en memoria para ir más rápido.: The new version builds the reports in memory to be faster.
+    'En las pruebas de carga se queda en unos 700 MiB por réplica, estable, sin crecer: no es una fuga.': 'In load tests it stays around 700 MiB per replica, stable, not growing: it isn''t a leak.'
+    El límite de 256Mi viene de la versión antigua; nadie lo revisó al subir la nueva.: The 256Mi limit comes from the old version; nobody reviewed it when the new one shipped.
+    Servicio estable: Service stable
+    Todas las réplicas listas: All replicas ready
+    Diagnóstico: Diagnosis
+    Motivo del reinicio comprobado: Restart reason checked
+    Consumo real consultado con Desarrollo: Real usage checked with Development
+    Sin gasto innecesario: No needless spend
+    No se han añadido nodos: No nodes added
+    Causa documentada: Cause documented
+    Nota interna con OOMKilled y el límite: Internal note with OOMKilled and the limit
+    Ticket cerrado: Ticket closed
+    ? 'Un pod que se reinicia no se arregla reiniciándolo. Primero el motivo: OOMKilled y exit code 137 apuntan al límite de memoria.'
+    : 'A restarting pod isn''t fixed by restarting it. Reason first: OOMKilled and exit code 137 point at the memory limit.'
+    Mira los reinicios: Look at the restarts
+    'CrashLoopBackOff con OOMKilled: el proceso pide más memoria que su límite y el núcleo lo mata (SIGKILL = 9, 128+9 = 137).': 'CrashLoopBackOff with OOMKilled: the process wants more memory than its limit and the kernel kills it (SIGKILL = 9, 128+9 = 137).'
+    Si el consumo crece sin parar es una fuga y subir el límite solo la retrasa; si es estable, el límite estaba mal.: If usage keeps growing it's a leak and raising the limit only delays it; if it's stable, the limit was wrong.
+    Petición cerca del consumo real (para que el planificador reserve sitio) y límite con margen.: Request near real usage (so the scheduler reserves room) and a limit with headroom.
