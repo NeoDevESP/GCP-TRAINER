@@ -117,7 +117,7 @@ tutor:
 - match: regions describe
   title: Mira la cuota
   why: 'Uso de CPUS por debajo del límite: no es cuota.'
-- match: --zone={{.region}}-c
+- match: instances create riesgo-calculo
   title: ''
   why: 'Otra zona de la misma región: misma latencia, mismos datos en la UE y con máquinas libres.'
 en:
