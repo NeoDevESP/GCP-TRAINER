@@ -1305,6 +1305,47 @@ func init() {
 		k.Versions = append(k.Versions, sim.KeyVersion{ID: len(k.Versions) + 1, State: "ENABLED"})
 		return "", nil
 	})
+	kmsVersionState := func(verb, from, to string) handler {
+		return func(c *Cmd) (any, error) {
+			v, _ := c.Arg(0, "VERSION")
+			p, kr, k, err := keyOf(c, c.Str("key", ""))
+			if err != nil {
+				return nil, err
+			}
+			if err := c.Need("cloudkms.cryptoKeyVersions.update", keyRes(p, kr, k)); err != nil {
+				return nil, err
+			}
+			id, _ := strconv.Atoi(v)
+			for i := range k.Versions {
+				if k.Versions[i].ID == id {
+					if from != "" && k.Versions[i].State != from {
+						return nil, fmt.Errorf("FAILED_PRECONDITION: The request cannot be fulfilled. Version %d is %s, not %s.", id, k.Versions[i].State, from)
+					}
+					k.Versions[i].State = to
+					c.Audit("cloudkms.googleapis.com", verb, "projects/"+p.ID+"/locations/"+kr.Location+"/keyRings/"+kr.Name+"/cryptoKeys/"+k.Name+"/cryptoKeyVersions/"+v)
+					return map[string]any{"name": "projects/" + p.ID + "/locations/" + kr.Location + "/keyRings/" + kr.Name + "/cryptoKeys/" + k.Name + "/cryptoKeyVersions/" + v, "state": to}, nil
+				}
+			}
+			return nil, fmt.Errorf("NOT_FOUND: CryptoKeyVersion %s not found.", v)
+		}
+	}
+	reg("kms keys versions disable", kmsVersionState("UpdateCryptoKeyVersion", "", "DISABLED"))
+	reg("kms keys versions enable", kmsVersionState("UpdateCryptoKeyVersion", "", "ENABLED"))
+	reg("kms keys versions restore", kmsVersionState("RestoreCryptoKeyVersion", "DESTROY_SCHEDULED", "DISABLED"))
+	reg("kms keys versions describe", func(c *Cmd) (any, error) {
+		v, _ := c.Arg(0, "VERSION")
+		_, _, k, err := keyOf(c, c.Str("key", ""))
+		if err != nil {
+			return nil, err
+		}
+		id, _ := strconv.Atoi(v)
+		for _, kv := range k.Versions {
+			if kv.ID == id {
+				return Obj{V: map[string]any{"name": v, "state": kv.State, "primary": k.PrimaryVersion() != nil && k.PrimaryVersion().ID == id}}, nil
+			}
+		}
+		return nil, fmt.Errorf("NOT_FOUND: CryptoKeyVersion %s not found.", v)
+	})
 	reg("kms keys versions destroy", func(c *Cmd) (any, error) {
 		v, _ := c.Arg(0, "VERSION")
 		_, _, k, err := keyOf(c, c.Str("key", ""))

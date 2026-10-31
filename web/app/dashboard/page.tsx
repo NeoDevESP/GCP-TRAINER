@@ -159,7 +159,7 @@ export default function Dashboard() {
                 <h2 id="yp-title">{zDone === 0 ? t("Empieza aquí, desde cero") : t("Tu camino")}</h2>
                 <p className="muted small" style={{ margin: "4px 0 0", maxWidth: 760 }}>
                   {zDone === 0
-                    ? t("No necesitas saber nada de la nube. Sigue el camino en orden: la Semana 0 te enseña lo básico con talleres guiados y la Semana 1, el oficio de soporte (tickets, prioridades, escalados, P1, cambios y postmortem); después, siete semanas de casos reales en Zentra, de básico a profesional, y el examen final.")
+                    ? t("No necesitas saber nada de la nube. Sigue el camino en orden: la Semana 0 te enseña lo básico con talleres guiados y la Semana 1, el oficio de soporte (tickets, prioridades, escalados, P1, cambios y postmortem); después, ocho semanas de casos reales en Zentra, de básico a profesional (la última, los tickets más habituales en banca), y el examen final.")
                     : t("Sigue en orden: cada semana termina con una prueba y la siguiente sube de nivel.")}
                 </p>
               </div>

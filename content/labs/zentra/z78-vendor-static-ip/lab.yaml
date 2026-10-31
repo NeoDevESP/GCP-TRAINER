@@ -1,0 +1,227 @@
+id: zentra-z78-vendor-static-ip
+title: REQ · El proveedor de tarjetas pide nuestra IP de salida fija
+summary: Un proveedor externo va a filtrar por IP. Hoy salimos a internet por Cloud NAT con IPs automáticas, que pueden cambiar. Reserva IPs estáticas, pásalas al NAT con un cambio planificado y comunica la IP.
+track: zentra
+day: 88
+level: professional
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.nat
+- networking.vpc
+- compute.vm
+wellArchitected:
+- operations
+- security
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create pagos-gateway --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=pagos
+ticket:
+  id: REQ-31078
+  kind: REQ
+  priority: P3
+  sla: 3d
+  reporter: Lucía Navarro (Pagos)
+  summary: Paymentia (procesador de tarjetas) va a filtrar por IP origen a partir del viernes. Nos piden la IP pública fija desde la que salimos. ¿Cuál les damos?
+actors:
+- role: network
+  name: Tomás Vidal (Arquitecto de red)
+  persona: Dueño de la VPC, la VPN y el Interconnect con el CPD.
+  fallback: 'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.'
+  facts:
+  - keywords:
+    - - nat
+      - ip
+      - estatica
+      - estática
+      - static
+      - fija
+      - fixed
+      - auto
+      - reserv
+    answer: 'Ahora mismo zentra-nat usa IPs automáticas: pueden cambiar sin avisar. Reserva una IP estática en la región, nómbrala nat-proveedores y pásala al NAT; al cambiar la IP del NAT se cortan las conexiones abiertas un momento, así que en ventana de cambio.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: ¿Corta conexiones? Entonces cambio normal en la ventana de esta noche.
+  facts:
+  - keywords:
+    - - nat
+      - ip
+      - cambio
+      - change
+      - ventana
+      - window
+    answer: Cambio normal CHG-7820 aprobado para la ventana de esta noche (corte breve de conexiones salientes). Anota la vuelta atrás.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **REQ-31078 · P3** · Pagos: *«Paymentia va a filtrar por IP origen a partir del viernes. ¿Qué IP fija les damos?»*
+
+  Las VMs de Zentra **no tienen IP pública**: salen a internet por **Cloud NAT** (`zentra-nat` en `zentra-router`). Con **asignación automática**, Google elige y **puede cambiar** las IPs: no valen para que un proveedor nos filtre. Hay que **reservar IPs estáticas** y pasarle el NAT a **asignación manual**. Es un cambio en producción: al cambiar la IP del NAT se cortan un momento las conexiones salientes abiertas.
+
+  1. Mira cómo sale ahora: `gcloud compute routers nats describe zentra-nat --router=zentra-router --region={{.region}}`.
+  2. Pregunta a Red y pide el cambio (¿estándar, normal o emergencia?).
+  3. Reserva la IP: `gcloud compute addresses create nat-proveedores --region={{.region}}` y mira cuál es (`addresses describe`).
+  4. Pásala al NAT: `gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --nat-external-ip-pool=nat-proveedores`.
+  5. Comprueba que se sigue saliendo a internet y comunica la IP con el número de cambio.
+objectives:
+- Mira cómo sale ahora
+- Cambio aprobado
+- IP estática en el NAT
+- Comprueba y comunica la IP
+hints:
+- text: '`gcloud compute addresses describe nat-proveedores --region={{.region}} --format=''value(address)''`'
+quiz:
+- id: q1
+  question: ¿Por qué no sirven las IPs automáticas de Cloud NAT para que un proveedor nos filtre?
+  options:
+  - Google puede cambiarlas
+  - Son privadas
+  - Son IPv6
+  - No salen a internet
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud compute routers nats describe zentra-nat --router=zentra-router --region={{.region}}
+  ask network "¿Reservo una IP estática para zentra-nat para que Paymentia nos filtre?"
+  ask change "Pasar zentra-nat a IP estática corta conexiones un momento, ¿cambio en ventana?"
+  gcloud compute addresses create nat-proveedores --region={{.region}}
+  gcloud compute addresses describe nat-proveedores --region={{.region}} --format='value(address)'
+  gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --nat-external-ip-pool=nat-proveedores
+  gcloud compute routers nats describe zentra-nat --router=zentra-router --region={{.region}}
+  gcloud compute ssh pagos-gateway --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://example.com'
+  ticket update "Hola Lucía: hecho con el cambio CHG-7820 en la ventana de esta noche. Desde ahora salimos siempre por la IP estática reservada nat-proveedores (la que ves en addresses describe): esa es la IP que hay que dar a Paymentia. Vuelta atrás si hiciera falta: devolver zentra-nat a IPs automáticas."
+  ticket resolve "zentra-nat con IP estática nat-proveedores (CHG-7820); salida a internet comprobada; IP comunicada a Pagos."
+shortcuts:
+- name: give them the current automatic IP
+  run: |
+    ticket update "Dadles la IP que tenemos ahora en el NAT, que de momento no cambia."
+    ticket resolve "IP actual del NAT comunicada a Pagos sin cambiar nada."
+rubric:
+- name: IP fija en el NAT
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: addresses["nat-proveedores"]
+    desc: IP estática reservada
+  - type: exists
+    path: routers["zentra-router"]
+    expect:
+      nats:
+        regex: nat-proveedores
+    desc: zentra-nat usa nat-proveedores
+  - type: egress
+    from: vm:pagos-gateway
+    desc: Se sigue saliendo a internet
+- name: Cambio planificado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio aprobado
+  - type: command
+    regex: nats describe
+    min: 1
+    desc: Estado actual revisado
+- name: Comunicación
+  validator: evidence
+  points: 35
+  checks:
+  - type: ticket_update
+    keywords:
+    - - chg-7820
+    - - ip
+    - - vuelta atr
+      - rollback
+      - automatic
+    desc: IP, número de cambio y vuelta atrás
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: nats describe
+  title: Cómo sale
+  why: 'autoAllocateIps: true. Esas IPs pueden cambiar.'
+- match: addresses create nat-proveedores
+  title: Reservar
+  why: Una IP externa regional que ya no cambia.
+- match: --nat-external-ip-pool
+  title: Al NAT
+  why: 'Asignación manual: toda la salida usa esa IP.'
+en:
+  title: REQ · The card provider asks for our fixed egress IP
+  summary: An external provider will filter by IP. Today we go out through Cloud NAT with automatic IPs, which can change. Reserve static IPs, put them on the NAT with a planned change and communicate the IP.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **REQ-31078 · P3** · Payments: *"Paymentia will filter by source IP from Friday. Which fixed IP do we give them?"*
+
+    Zentra's VMs **have no public IP**: they reach the internet through **Cloud NAT** (`zentra-nat` on `zentra-router`). With **automatic allocation**, Google chooses and **can change** the IPs: useless for a provider to filter on. You need to **reserve static IPs** and switch the NAT to **manual allocation**. It's a production change: changing the NAT IP briefly cuts open outbound connections.
+
+    1. See how it goes out now: `gcloud compute routers nats describe zentra-nat --router=zentra-router --region={{.region}}`.
+    2. Ask Network and request the change (standard, normal or emergency?).
+    3. Reserve the IP: `gcloud compute addresses create nat-proveedores --region={{.region}}` and look it up (`addresses describe`).
+    4. Put it on the NAT: `gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --nat-external-ip-pool=nat-proveedores`.
+    5. Check the internet is still reachable and communicate the IP with the change number.
+  objectives:
+  - See how it goes out now
+  - Approved change
+  - Static IP on the NAT
+  - Verify and communicate the IP
+  hints:
+  - '`gcloud compute addresses describe nat-proveedores --region={{.region}} --format=''value(address)''`'
+  ticket:
+    summary: Paymentia (card processor) will filter by source IP from Friday. They ask for the fixed public IP we go out from. Which one do we give them?
+  text:
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tomás Vidal (Arquitecto de red): Tomás Vidal (Network architect)
+    Dueño de la VPC, la VPN y el Interconnect con el CPD.: Owner of the VPC, the VPN and the Interconnect with the data centre.
+    'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.': 'Check the tunnel first, then the BGP session: a tunnel being up doesn''t mean there are routes.'
+    ? 'Ahora mismo zentra-nat usa IPs automáticas: pueden cambiar sin avisar. Reserva una IP estática en la región, nómbrala nat-proveedores y pásala al NAT; al cambiar la IP del NAT se cortan las conexiones abiertas un momento, así que en ventana de cambio.'
+    : 'Right now zentra-nat uses automatic IPs: they can change without notice. Reserve a static IP in the region, name it nat-proveedores and put it on the NAT; changing the NAT IP briefly cuts open connections, so do it in a change window.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    ¿Corta conexiones? Entonces cambio normal en la ventana de esta noche.: Does it cut connections? Then a normal change in tonight's window.
+    ? Cambio normal CHG-7820 aprobado para la ventana de esta noche (corte breve de conexiones salientes). Anota la vuelta atrás.
+    : Normal change CHG-7820 approved for tonight's window (brief cut of outbound connections). Note the rollback.
+    ¿Por qué no sirven las IPs automáticas de Cloud NAT para que un proveedor nos filtre?: Why are Cloud NAT's automatic IPs no good for a provider to filter on?
+    Google puede cambiarlas: Google can change them
+    Son privadas: They're private
+    Son IPv6: They're IPv6
+    No salen a internet: They don't reach the internet
+    IP fija en el NAT: Fixed IP on the NAT
+    IP estática reservada: Static IP reserved
+    zentra-nat usa nat-proveedores: zentra-nat uses nat-proveedores
+    Se sigue saliendo a internet: Internet still reachable
+    Cambio planificado: Planned change
+    Cambio aprobado: Change approved
+    Estado actual revisado: Current state reviewed
+    Comunicación: Communication
+    IP, número de cambio y vuelta atrás: IP, change number and rollback
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    Cómo sale: How it goes out
+    'autoAllocateIps: true. Esas IPs pueden cambiar.': 'autoAllocateIps: true. Those IPs can change.'
+    Reservar: Reserve
+    Una IP externa regional que ya no cambia.: A regional external IP that won't change.
+    Al NAT: Onto the NAT
+    'Asignación manual: toda la salida usa esa IP.': 'Manual allocation: all egress uses that IP.'

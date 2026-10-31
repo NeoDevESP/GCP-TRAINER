@@ -310,6 +310,9 @@ func (s *State) Explain(principal, perm string, r Resource) (bool, string) {
 	if s.Suspended(principal) {
 		return false, "the user account is suspended in Google Workspace"
 	}
+	if dp := s.DeniedBy(principal, perm, r); dp != "" {
+		return false, "denied by IAM deny policy " + dp
+	}
 	pols := append([]*Policy{}, r.Policies...)
 	if r.Project != "" {
 		pols = append(pols, s.hierarchyPolicies(r.Project)...)

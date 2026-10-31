@@ -281,6 +281,16 @@ func (s *State) CheckFlow(src, dst Endpoint, proto string, port int) FlowResult 
 		// Different VPCs without peering: only possible through public IPs.
 		return FlowResult{Allowed: false, Stage: "route", Reason: fmt.Sprintf("no route from %s/%s to %s/%s (VPCs are not peered)", src.Project, src.Network, dst.Project, dst.Network), Error: timeout}
 	}
+	if src.Kind == "onprem" && dst.Network != "" {
+		if ok, why := s.HybridPath(dst.Project, dst.Network, dst.IP, src.IP); !ok {
+			return FlowResult{Stage: "route", Reason: why, Error: timeout}
+		}
+	}
+	if dst.Kind == "onprem" && src.Network != "" {
+		if ok, why := s.HybridPath(src.Project, src.Network, src.IP, dst.IP); !ok {
+			return FlowResult{Stage: "route", Reason: why, Error: timeout}
+		}
+	}
 	if dst.Kind == "vm" {
 		dp := s.Projects[dst.Project]
 		if dp == nil {
@@ -488,6 +498,14 @@ func (s *State) ResolveHost(host string, from Endpoint) (string, bool) {
 				if !visible {
 					continue
 				}
+			}
+			if len(z.ForwardingTargets) > 0 && z.Visibility == "private" {
+				dom := strings.TrimSuffix(strings.ToLower(z.DNSName), ".")
+				if host == dom || strings.HasSuffix(host, "."+dom) {
+					ip, ok, _ := s.resolveForwarded(z, host, from)
+					return ip, ok
+				}
+				continue
 			}
 			for _, r := range z.Records {
 				if strings.TrimSuffix(r.Name, ".") == host && (r.Type == "A") && len(r.Data) > 0 {

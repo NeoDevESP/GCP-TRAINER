@@ -1,0 +1,254 @@
+id: zentra-z72-vpcsc-dryrun
+title: 'CHG · Antes de activar un perímetro: el modo prueba'
+summary: El lunes Seguridad activa el perímetro del proyecto de pagos. Hoy está en modo prueba y los registros dicen qué rompería. Separa lo legítimo de lo que debe seguir bloqueado y deja la configuración lista, sin activarla.
+track: zentra
+day: 82
+level: professional
+branch: security
+type: incident
+mode: production
+skills:
+- iam.orgpolicy
+- security.audit
+- storage.access
+wellArchitected:
+- security
+- operations
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud storage buckets create gs://zentra-liquidaciones-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  gcloud access-context-manager perimeters dry-run create zentra-pagos --title="Pagos" --resources=projects/$(gcloud projects describe {{.project}} --format='value(projectNumber)') --restricted-services=storage.googleapis.com,bigquery.googleapis.com
+traffic:
+- name: conciliacion
+  target: api:storage.googleapis.com
+  path: storage.objects.create
+  rps: 5
+  principal: serviceAccount:conciliacion-sa@zentra-batch.iam.gserviceaccount.com
+  from: project:zentra-batch/731045226118
+- name: desconocido
+  target: api:storage.googleapis.com
+  path: storage.objects.get
+  rps: 1
+  principal: user:pruebas.zentra@gmail.com
+  from: ip:203.0.113.77
+ticket:
+  id: CHG-31072
+  kind: CHG
+  priority: P3
+  sla: 3d
+  reporter: Nadia Kowalski (Seguridad cloud)
+  summary: 'El lunes activamos el perímetro zentra-pagos (ahora en modo prueba). Revisa los registros de modo prueba, dime qué flujos rompería y deja preparada la configuración para los legítimos. No lo actives: lo hacemos nosotros en la ventana del lunes.'
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.
+  fallback: 'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.'
+  facts:
+  - keywords:
+    - - conciliacion
+      - conciliación
+      - batch
+      - zentra-batch
+      - legitim
+      - legítim
+    answer: 'La conciliación es legítima: conciliacion-sa del proyecto zentra-batch (731045226118) escribe las liquidaciones en Storage. Regla de entrada solo para eso.'
+  - keywords:
+    - - gmail
+      - pruebas
+      - desconocid
+      - unknown
+      - 203.0.113
+      - usuario
+      - user
+      - ip
+    answer: '¿Una cuenta de Gmail leyendo liquidaciones desde internet? Eso no está autorizado: que siga bloqueado y lo investigamos nosotros. Bien visto.'
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **CHG-31072 · P3** · Seguridad: *«El lunes activamos el perímetro zentra-pagos. Revisa los registros del modo prueba y deja preparada la configuración para lo legítimo. No lo actives.»*
+
+  Activar un perímetro a ciegas rompe producción. Por eso primero se pone en **modo prueba** (*dry-run*): no bloquea nada, pero **registra lo que bloquearía** (`metadata.dryRun="true"`). Durante unos días se revisan esos registros, se añaden reglas para los flujos **legítimos** y se dejan fuera los que **no deben** existir.
+
+  1. Mira la configuración en prueba: `gcloud access-context-manager perimeters dry-run describe zentra-pagos`.
+  2. Lee las infracciones de prueba: `gcloud logging read 'protoPayload.metadata.dryRun="true"' --limit=10`. Anota cada flujo: identidad, origen, servicio.
+  3. Pregunta a Seguridad por cada flujo: ¿es legítimo?
+  4. Para lo legítimo, una regla de entrada mínima en la configuración de prueba: `perimeters dry-run update zentra-pagos --set-ingress-policies=FICHERO`.
+  5. **No actives** el perímetro. Informa a Seguridad de qué has encontrado y qué has preparado.
+objectives:
+- Lee las infracciones de prueba
+- Separa legítimo de sospechoso
+- Regla en la configuración de prueba
+- Informa sin activar
+hints:
+- text: 'Dos flujos: conciliacion-sa desde zentra-batch y una cuenta de Gmail desde 203.0.113.77.'
+- text: '`gcloud access-context-manager perimeters dry-run update zentra-pagos --set-ingress-policies=entrada.yaml`'
+solution: |
+  ticket
+  gcloud access-context-manager perimeters dry-run describe zentra-pagos
+  gcloud logging read 'protoPayload.metadata.dryRun="true"' --limit=10
+  ask security "¿Es legítima la conciliación de conciliacion-sa desde zentra-batch?"
+  ask security "Hay una cuenta pruebas.zentra@gmail.com leyendo desde 203.0.113.77, ¿la dejo fuera?"
+  cat > entrada.yaml <<'YAML'
+  - ingressFrom:
+      identities:
+      - serviceAccount:conciliacion-sa@zentra-batch.iam.gserviceaccount.com
+      sources:
+      - resource: projects/731045226118
+    ingressTo:
+      operations:
+      - serviceName: storage.googleapis.com
+        methodSelectors:
+        - method: "*"
+      resources:
+      - "*"
+  YAML
+  gcloud access-context-manager perimeters dry-run update zentra-pagos --set-ingress-policies=entrada.yaml
+  gcloud access-context-manager perimeters dry-run describe zentra-pagos
+  ticket update "Nadia: en modo prueba salen dos flujos. 1) conciliacion-sa desde zentra-batch escribiendo liquidaciones en Storage: legítimo, he dejado preparada una regla de entrada solo para esa cuenta, ese proyecto y Storage. 2) pruebas.zentra@gmail.com leyendo desde 203.0.113.77: no autorizado, lo dejo fuera para que siga bloqueado y lo investiguéis. No he activado el perímetro: queda listo para el lunes."
+shortcuts:
+- name: enforce now with everything allowed
+  run: |
+    cat > todo.yaml <<'YAML'
+    - ingressFrom:
+        identityType: ANY_IDENTITY
+        sources:
+        - accessLevel: "*"
+      ingressTo:
+        operations:
+        - serviceName: "*"
+    YAML
+    gcloud access-context-manager perimeters dry-run update zentra-pagos --set-ingress-policies=todo.yaml
+    gcloud access-context-manager perimeters dry-run enforce zentra-pagos
+    ticket update "Activado ya con todo permitido para que no se rompa nada el lunes."
+rubric:
+- name: Lo legítimo, preparado
+  validator: functional
+  points: 25
+  checks:
+  - type: api_call
+    dryRun: true
+    service: storage.googleapis.com
+    principal: serviceAccount:conciliacion-sa@zentra-batch.iam.gserviceaccount.com
+    from: project:zentra-batch/731045226118
+    desc: La conciliación ya no daría infracción
+- name: Lo sospechoso, fuera y sin activar
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: api_call
+    dryRun: true
+    service: storage.googleapis.com
+    principal: user:pruebas.zentra@gmail.com
+    from: ip:203.0.113.77
+    expect: false
+    desc: La cuenta de Gmail seguiría bloqueada
+  - type: perimeter
+    name: zentra-pagos
+    dryRun: true
+    restricts:
+    - storage.googleapis.com
+    resource: self
+    noWildcardIngress: true
+    desc: Configuración de prueba sin comodines
+  - type: perimeter
+    name: zentra-pagos
+    expect: false
+    desc: Sin activar (lo activa Seguridad el lunes)
+- name: Revisión
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: dryRun|dry-run describe
+    min: 1
+    desc: Registros o configuración de prueba revisados
+  - type: asked
+    actor: security
+    min: 2
+    desc: Preguntado por cada flujo
+- name: Informe a Seguridad
+  validator: evidence
+  points: 20
+  checks:
+  - type: ticket_update
+    keywords:
+    - - conciliacion
+      - conciliación
+    - - gmail
+      - 203.0.113.77
+      - pruebas.zentra
+    - - lunes
+      - monday
+      - no he activado
+      - sin activar
+      - not enforced
+    desc: Los dos flujos y que no está activado
+tutor:
+- match: dry-run describe
+  title: Modo prueba
+  why: Hay configuración de prueba (spec) pero ninguna activa (status).
+- match: dryRun="true"
+  title: Lo que rompería
+  why: 'Dos flujos: la conciliación desde zentra-batch y una cuenta de Gmail desde internet.'
+- match: dry-run update
+  title: Preparar
+  why: La regla va en la configuración de prueba; el lunes se activa entera.
+en:
+  title: 'CHG · Before enforcing a perimeter: dry-run mode'
+  summary: On Monday Security enforces the payments project perimeter. Today it's in dry-run and the logs say what it would break. Tell the legitimate from what must stay blocked and leave the configuration ready, without enforcing it.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **CHG-31072 · P3** · Security: *"On Monday we enforce the zentra-pagos perimeter. Review the dry-run logs and prepare the configuration for what's legitimate. Don't enforce it."*
+
+    Enforcing a perimeter blindly breaks production. That's why it first goes into **dry-run**: it blocks nothing, but **logs what it would block** (`metadata.dryRun="true"`). For a few days those logs are reviewed, rules are added for the **legitimate** flows and the ones that **shouldn't** exist are left out.
+
+    1. Look at the dry-run configuration: `gcloud access-context-manager perimeters dry-run describe zentra-pagos`.
+    2. Read the dry-run violations: `gcloud logging read 'protoPayload.metadata.dryRun="true"' --limit=10`. Note each flow: identity, source, service.
+    3. Ask Security about each flow: is it legitimate?
+    4. For the legitimate one, a minimal ingress rule in the dry-run configuration: `perimeters dry-run update zentra-pagos --set-ingress-policies=FILE`.
+    5. **Don't enforce** the perimeter. Tell Security what you found and what you prepared.
+  objectives:
+  - Read the dry-run violations
+  - Separate legitimate from suspicious
+  - Rule in the dry-run configuration
+  - Report without enforcing
+  hints:
+  - 'Two flows: conciliacion-sa from zentra-batch and a Gmail account from 203.0.113.77.'
+  - '`gcloud access-context-manager perimeters dry-run update zentra-pagos --set-ingress-policies=entrada.yaml`'
+  ticket:
+    summary: 'On Monday we enforce the zentra-pagos perimeter (now in dry-run). Review the dry-run logs, tell me which flows it would break and prepare the configuration for the legitimate ones. Don''t enforce it: we do that in Monday''s window.'
+  text:
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.: Cloud security engineer, owner of perimeters, keys and deny policies.
+    'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.': 'Security controls aren''t removed: they''re adjusted with the minimum scope. Tell me identity, source and service.'
+    ? 'La conciliación es legítima: conciliacion-sa del proyecto zentra-batch (731045226118) escribe las liquidaciones en Storage. Regla de entrada solo para eso.'
+    : 'Reconciliation is legitimate: conciliacion-sa from project zentra-batch (731045226118) writes settlements to Storage. An ingress rule only for that.'
+    ? '¿Una cuenta de Gmail leyendo liquidaciones desde internet? Eso no está autorizado: que siga bloqueado y lo investigamos nosotros. Bien visto.'
+    : 'A Gmail account reading settlements from the internet? That isn''t authorised: keep it blocked and we''ll investigate. Well spotted.'
+    Lo legítimo, preparado: Legitimate flow prepared
+    La conciliación ya no daría infracción: Reconciliation would no longer violate
+    Lo sospechoso, fuera y sin activar: Suspicious kept out, not enforced
+    La cuenta de Gmail seguiría bloqueada: The Gmail account would stay blocked
+    Configuración de prueba sin comodines: Dry-run configuration without wildcards
+    Sin activar (lo activa Seguridad el lunes): Not enforced (Security does it on Monday)
+    Revisión: Review
+    Registros o configuración de prueba revisados: Dry-run logs or configuration reviewed
+    Preguntado por cada flujo: Asked about each flow
+    Informe a Seguridad: Report to Security
+    Los dos flujos y que no está activado: Both flows and that it isn't enforced
+    Modo prueba: Dry run
+    Hay configuración de prueba (spec) pero ninguna activa (status).: There's a dry-run configuration (spec) but no enforced one (status).
+    Lo que rompería: What it would break
+    'Dos flujos: la conciliación desde zentra-batch y una cuenta de Gmail desde internet.': 'Two flows: reconciliation from zentra-batch and a Gmail account from the internet.'
+    Preparar: Preparing
+    La regla va en la configuración de prueba; el lunes se activa entera.: The rule goes into the dry-run configuration; on Monday it's enforced as a whole.

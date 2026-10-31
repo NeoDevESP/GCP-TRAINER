@@ -1,0 +1,294 @@
+id: zentra-z75-bgp-asn
+title: INC P1 · El túnel está arriba pero no llega nada al core bancario
+summary: 'La conciliación no conecta con el CPD. El túnel VPN dice ESTABLISHED, pero la sesión BGP está caída: anoche el CPD cambió su router y su número de sistema autónomo.'
+track: zentra
+day: 85
+level: professional
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.hybrid
+- networking.routing
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+setup: "gcloud compute routers create cpd-router --network=zentra-vpc --region={{.region}} --asn=64514 \ngcloud compute vpn-gateways create cpd-vpn --network=zentra-vpc --region={{.region}}\ngcloud compute vpn-tunnels create tunel-cpd-0 --vpn-gateway=cpd-vpn --region={{.region}} --peer-address=203.0.113.5 --router=cpd-router --interface=0\ngcloud compute routers add-bgp-peer cpd-router --region={{.region}} --peer-name=cpd-madrid --peer-asn=65001 --interface=if-tunel-cpd-0\ngcloud compute instances create pagos-batch --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=batch\n"
+faults:
+- type: onprem
+  name: CPD Madrid
+  asn: 65010
+  ranges:
+  - 192.168.0.0/16
+  dns: 192.168.10.53
+  hosts:
+  - name: core.zentra.corp
+    ip: 192.168.20.10
+    ports:
+    - 443
+    body: core bancario OK
+  - name: mq.zentra.corp
+    ip: 192.168.20.20
+    ports:
+    - 1414
+    - 443
+    body: MQ OK
+  - name: batch.zentra.corp
+    ip: 192.168.20.30
+    ports:
+    - 22
+    - 443
+    body: batch OK
+traffic:
+- name: conciliacion
+  target: internal:pagos-batch http://192.168.20.10:443
+  path: /
+  rps: 5
+ticket:
+  id: INC-31075
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: pagos-batch no conecta con el core bancario (core.zentra.corp, 192.168.20.10:443) desde las 02:10. La conciliación con los bancos corresponsales tiene que salir antes de las 07:00.
+actors:
+- role: network
+  name: Tomás Vidal (Arquitecto de red)
+  persona: Dueño de la VPC, la VPN y el Interconnect con el CPD.
+  fallback: 'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.'
+  facts:
+  - keywords:
+    - - bgp
+      - asn
+      - sesion
+      - sesión
+      - session
+      - idle
+      - peer
+    answer: Si la sesión BGP está Idle con «Bad Peer AS», es que los ASN no cuadran. Nosotros tenemos configurado 65001 para el CPD; pregunta al CPD qué ASN anuncian ahora.
+- role: datacenter
+  name: Redes CPD Madrid
+  persona: El equipo de red del centro de datos propio del banco.
+  fallback: Por nuestro lado todo está como siempre. ¿Qué veis en la sesión BGP?
+  facts:
+  - keywords:
+    - - asn
+      - router
+      - cambio
+      - change
+      - anoche
+      - last night
+      - migra
+      - bgp
+    answer: Anoche migramos al router nuevo del CPD (CHG-7712) y ahora anunciamos el ASN 65010. Se avisó por correo… ¿no os llegó?
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - bgp
+      - asn
+      - anunci
+      - advert
+      - firewall
+      - cortafuegos
+      - nat
+      - ip
+    answer: Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31075 · P1** · NOC: *«pagos-batch no conecta con el core bancario (192.168.20.10:443) desde las 02:10. La conciliación tiene que salir antes de las 07:00.»*
+
+  **La conexión con el CPD.** Zentra tiene su **centro de datos propio** en Madrid (el core bancario, la mensajería MQ, los batch) unido a Google Cloud por **Cloud VPN**: un túnel cifrado (`tunel-cpd-0`) y, por encima, una sesión **BGP** en el Cloud Router `cpd-router` que intercambia rutas. Para que haya tráfico hacen falta tres cosas: el **túnel** arriba, la **sesión BGP** establecida (los dos lados de acuerdo en los números de sistema autónomo, ASN) y **rutas en los dos sentidos** (Google aprende `192.168.0.0/16` del CPD y el CPD aprende lo que el Cloud Router anuncia).
+
+  1. ¿Llega o no? `gcloud compute ssh pagos-batch --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://192.168.20.10'`.
+  2. El túnel: `gcloud compute vpn-tunnels describe tunel-cpd-0 --region={{.region}}`.
+  3. La sesión BGP y las rutas: `gcloud compute routers get-status cpd-router --region={{.region}}`. Lee bien el motivo.
+  4. Habla con Red (Tomás) y con el CPD: ¿qué ha cambiado?
+  5. Con cambio de emergencia, ajusta nuestro lado: `gcloud compute routers update-bgp-peer cpd-router --region={{.region}} --peer-name=cpd-madrid --peer-asn=…`.
+  6. Comprueba la sesión y la conexión, comunica y deja en la nota interna el fallo de proceso (un cambio del CPD que no llegó a Cloud).
+objectives:
+- Confirma que no llega
+- Túnel arriba, BGP caído
+- Corrige el ASN con cambio de emergencia
+- Verifica y comunica
+hints:
+- text: 'get-status dice «Bad Peer AS: configured peer ASN 65001, the peer announced ASN 65010».'
+quiz:
+- id: q1
+  question: El túnel VPN está ESTABLISHED pero no hay tráfico. ¿Qué miras después?
+  options:
+  - La sesión BGP y las rutas aprendidas del Cloud Router
+  - Reiniciar la VM
+  - Abrir el cortafuegos a 0.0.0.0/0
+  - Crear otro túnel
+  answer:
+  - 0
+solution: |
+  ticket
+  ticket update "Estamos investigando la conexión entre Google Cloud y el CPD que afecta a la conciliación. Próxima actualización a las 03:00."
+  gcloud compute vpn-tunnels describe tunel-cpd-0 --region={{.region}}
+  gcloud compute routers get-status cpd-router --region={{.region}}
+  ask network "La sesión BGP de cpd-router está Idle con Bad Peer AS, ¿qué ASN tenemos para el CPD?"
+  ask datacenter "¿Habéis cambiado el ASN o el router del CPD?"
+  ask change "Necesito cambiar el ASN del peer BGP cpd-madrid a 65010 como cambio de emergencia"
+  gcloud compute routers update-bgp-peer cpd-router --region={{.region}} --peer-name=cpd-madrid --peer-asn=65010
+  gcloud compute routers get-status cpd-router --region={{.region}}
+  gcloud compute ssh pagos-batch --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://192.168.20.10'
+  ticket comment "Causa: anoche el CPD migró de router (CHG-7712) y anuncia el ASN 65010; cpd-router seguía esperando 65001 y la sesión BGP quedó Idle (Bad Peer AS) con el túnel arriba. Cambiado el peer cpd-madrid a 65010 (CHG-7795). Pendiente: que los cambios del CPD que afectan a BGP pasen también por Cloud."
+  ticket update "Resuelto: desde las 02:55 la conciliación vuelve a conectar con el core bancario. Fue un cambio de configuración en el CPD que no se reflejó en la nube; ya está alineado y la conciliación saldrá a tiempo."
+  ticket resolve "Peer BGP cpd-madrid con el ASN nuevo del CPD (65010); sesión establecida y core accesible desde pagos-batch."
+shortcuts:
+- name: static route over the tunnel
+  run: |
+    gcloud compute routes create a-cpd --network=zentra-vpc --destination-range=192.168.0.0/16 --next-hop-vpn-tunnel=tunel-cpd-0 --next-hop-vpn-tunnel-region={{.region}}
+    ticket resolve "Ruta estática al CPD para saltarnos el BGP."
+rubric:
+- name: Core bancario accesible
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: bgp
+    router: cpd-router
+    peer: cpd-madrid
+    desc: Sesión BGP establecida
+  - type: http
+    from: vm:pagos-batch
+    target: onprem:core:443
+    path: /
+    status: 200
+    desc: pagos-batch llega al core
+- name: Diagnóstico por capas
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: vpn-tunnels describe
+    min: 1
+    desc: Túnel revisado
+  - type: command
+    regex: routers get-status
+    min: 1
+    desc: Sesión BGP revisada
+  - type: asked
+    actor: datacenter
+    min: 1
+    desc: Preguntado al CPD qué cambió
+- name: Cambio y comunicación
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio de emergencia
+  - type: ticket_update
+    min: 2
+    desc: Inicio y resolución
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - asn
+      - '65010'
+    - - bgp
+    desc: Nota interna con BGP y ASN
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: vpn-tunnels describe
+  title: El túnel
+  why: 'ESTABLISHED: el cifrado funciona. Eso no garantiza rutas.'
+- match: routers get-status
+  title: BGP
+  why: 'Idle, «Bad Peer AS»: nosotros esperamos 65001 y el CPD anuncia 65010.'
+- match: --peer-asn=65010
+  title: El arreglo
+  why: Nuestro lado alineado con el router nuevo del CPD.
+en:
+  title: INC P1 · The tunnel is up but nothing reaches core banking
+  summary: 'Reconciliation can''t connect to the data centre. The VPN tunnel says ESTABLISHED, but the BGP session is down: last night the data centre replaced its router and its autonomous system number.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31075 · P1** · NOC: *"pagos-batch can't connect to core banking (192.168.20.10:443) since 02:10. Reconciliation must go out before 07:00."*
+
+    **The data-centre link.** Zentra has its **own data centre** in Madrid (core banking, MQ messaging, batch) joined to Google Cloud by **Cloud VPN**: an encrypted tunnel (`tunel-cpd-0`) and, on top, a **BGP** session on Cloud Router `cpd-router` that exchanges routes. Traffic needs three things: the **tunnel** up, the **BGP session** established (both sides agreeing on the autonomous system numbers, ASN) and **routes both ways** (Google learns `192.168.0.0/16` from the data centre and the data centre learns what the Cloud Router advertises).
+
+    1. Does it get through? `gcloud compute ssh pagos-batch --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://192.168.20.10'`.
+    2. The tunnel: `gcloud compute vpn-tunnels describe tunel-cpd-0 --region={{.region}}`.
+    3. The BGP session and routes: `gcloud compute routers get-status cpd-router --region={{.region}}`. Read the reason carefully.
+    4. Talk to Network (Tomás) and the data centre: what changed?
+    5. With an emergency change, adjust our side: `gcloud compute routers update-bgp-peer cpd-router --region={{.region}} --peer-name=cpd-madrid --peer-asn=…`.
+    6. Check the session and the connection, communicate and put the process failure in the internal note (a data-centre change that never reached Cloud).
+  objectives:
+  - Confirm it doesn't get through
+  - Tunnel up, BGP down
+  - Fix the ASN with an emergency change
+  - Verify and communicate
+  hints:
+  - 'get-status says "Bad Peer AS: configured peer ASN 65001, the peer announced ASN 65010".'
+  ticket:
+    summary: pagos-batch can't connect to core banking (core.zentra.corp, 192.168.20.10:443) since 02:10. Reconciliation with correspondent banks must go out before 07:00.
+  text:
+    NOC 24x7: NOC 24x7
+    Tomás Vidal (Arquitecto de red): Tomás Vidal (Network architect)
+    Dueño de la VPC, la VPN y el Interconnect con el CPD.: Owner of the VPC, the VPN and the Interconnect with the data centre.
+    'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.': 'Check the tunnel first, then the BGP session: a tunnel being up doesn''t mean there are routes.'
+    ? Si la sesión BGP está Idle con «Bad Peer AS», es que los ASN no cuadran. Nosotros tenemos configurado 65001 para el CPD; pregunta al CPD qué ASN anuncian ahora.
+    : If the BGP session is Idle with "Bad Peer AS", the ASNs don't match. We have 65001 configured for the data centre; ask them which ASN they announce now.
+    Redes CPD Madrid: Madrid data-centre networking
+    El equipo de red del centro de datos propio del banco.: The networking team of the bank's own data centre.
+    Por nuestro lado todo está como siempre. ¿Qué veis en la sesión BGP?: On our side everything is as usual. What do you see in the BGP session?
+    Anoche migramos al router nuevo del CPD (CHG-7712) y ahora anunciamos el ASN 65010. Se avisó por correo… ¿no os llegó?: Last night we migrated to the data centre's new router (CHG-7712) and we now announce ASN 65010. It was emailed… didn't you get it?
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.: Approved as an emergency change (CHG-7795). Note it in the ticket with what you change and how to roll back.
+    El túnel VPN está ESTABLISHED pero no hay tráfico. ¿Qué miras después?: The VPN tunnel is ESTABLISHED but there's no traffic. What do you check next?
+    La sesión BGP y las rutas aprendidas del Cloud Router: The Cloud Router's BGP session and learned routes
+    Reiniciar la VM: Restart the VM
+    Abrir el cortafuegos a 0.0.0.0/0: Open the firewall to 0.0.0.0/0
+    Crear otro túnel: Create another tunnel
+    Core bancario accesible: Core banking reachable
+    Sesión BGP establecida: BGP session established
+    pagos-batch llega al core: pagos-batch reaches core
+    Diagnóstico por capas: Layered diagnosis
+    Túnel revisado: Tunnel checked
+    Sesión BGP revisada: BGP session checked
+    Preguntado al CPD qué cambió: Asked the data centre what changed
+    Cambio y comunicación: Change and communication
+    Cambio de emergencia: Emergency change
+    Inicio y resolución: Start and resolution
+    Nota interna con BGP y ASN: Internal note with BGP and ASN
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    El túnel: The tunnel
+    'ESTABLISHED: el cifrado funciona. Eso no garantiza rutas.': 'ESTABLISHED: encryption works. That doesn''t guarantee routes.'
+    BGP: BGP
+    'Idle, «Bad Peer AS»: nosotros esperamos 65001 y el CPD anuncia 65010.': 'Idle, "Bad Peer AS": we expect 65001 and the data centre announces 65010.'
+    El arreglo: The fix
+    Nuestro lado alineado con el router nuevo del CPD.: Our side aligned with the data centre's new router.

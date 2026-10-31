@@ -1,0 +1,251 @@
+id: zentra-z77-deny-policy
+title: REQ · «Tengo Storage Admin y no me deja borrar»
+summary: 'Un SRE con todos los roles no puede borrar unos ficheros del bucket de evidencias. No le falta ningún rol: una política de denegación lo impide a propósito. Explícalo, no la toques y pasa el borrado por el procedimiento de emergencia.'
+track: zentra
+day: 87
+level: professional
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.leastprivilege
+- iam.roles
+- security.audit
+wellArchitected:
+- security
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud identity groups create gcp-breakglass@zentra.dev --organization=zentra.dev --display-name="Break-glass (Seguridad)" --labels=cloudidentity.googleapis.com/groups.security
+  gcloud identity groups memberships add --group-email=gcp-breakglass@zentra.dev --member-email=nadia.kowalski@zentra.dev
+  gcloud storage buckets create gs://zentra-evidencias-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  gcloud storage buckets add-iam-policy-binding gs://zentra-evidencias-{{.project}} --member=group:gcp-sre@zentra.dev --role=roles/storage.admin
+  echo "prueba" > prueba1.csv
+  gcloud storage cp prueba1.csv gs://zentra-evidencias-{{.project}}/pruebas/prueba1.csv
+  cat > deny.json <<'JSON'
+  {"displayName":"Proteger evidencias de auditoria","rules":[{"description":"Nadie borra evidencias salvo break-glass","denyRule":{"deniedPrincipals":["principalSet://goog/public:all"],"exceptionPrincipals":["principalSet://goog/group/gcp-breakglass@zentra.dev"],"deniedPermissions":["storage.googleapis.com/objects.delete","storage.googleapis.com/buckets.delete"]}}]}
+  JSON
+  gcloud iam policies create proteger-evidencias --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies --policy-file=deny.json
+ticket:
+  id: REQ-31077
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Diego Ferrer (SRE)
+  summary: Subí por error unos ficheros de prueba a gs://zentra-evidencias (carpeta pruebas/) y no me deja borrarlos aunque tengo Storage Admin en el bucket. ¿Me falta algún rol? Dame lo que haga falta.
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.
+  fallback: 'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.'
+  facts:
+  - keywords:
+    - - deneg
+      - deny
+      - politica
+      - política
+      - policy
+      - evidencias
+      - borrar
+      - delete
+      - break
+      - pruebas
+    answer: 'La política de denegación proteger-evidencias es a propósito: es el bucket de evidencias de auditoría (DORA) y nadie borra nada, ni Owner. Los ficheros de prueba los borro yo por break-glass con el ticket aprobado. No toques la política ni metas a nadie en gcp-breakglass; escálame el ticket con la ruta exacta.'
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: Solo quiero limpiar lo que subí por error.
+  facts:
+  - keywords:
+    - - que fichero
+      - qué fichero
+      - ruta
+      - path
+      - cuales
+      - cuáles
+      - which
+      - nombre
+    answer: 'Solo uno: gs://zentra-evidencias-{{.project}}/pruebas/prueba1.csv.'
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-auditoria-prod*).
+
+  > **REQ-31077 · P4** · Diego: *«No me deja borrar unos ficheros de prueba aunque tengo Storage Admin. ¿Me falta algún rol? Dame lo que haga falta.»*
+
+  En IAM hay **dos tipos de políticas**: las de **permitir** (los roles de siempre) y las de **denegación** (*deny policies*). La denegación **se evalúa antes** y gana siempre: si una política deniega `objects.delete`, da igual que tengas Storage Admin u Owner. Los bancos las usan para lo que **nunca** debe pasar (borrar evidencias de auditoría, desactivar registros), con una excepción controlada: un grupo de **emergencia** (*break-glass*).
+
+  1. Comprueba qué pasa: `gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/zentra-evidencias-{{.project}} --principal-email=diego.ferrer@zentra.dev --permission=storage.objects.delete`.
+  2. Mira las políticas de denegación: `gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies` y `get`.
+  3. Habla con Seguridad, dueña de la política.
+  4. **No** borres ni cambies la política, **no** metas a nadie en `gcp-breakglass` y **no** des más roles: no servirían.
+  5. Escala a Seguridad con la ruta exacta para que lo hagan por break-glass y explica a Diego por qué.
+objectives:
+- Comprueba por qué se deniega
+- Encuentra la política de denegación
+- Sin tocar la política
+- Escala a break-glass y explica
+hints:
+- text: '`gcloud iam policies get proteger-evidencias --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies`'
+quiz:
+- id: q1
+  question: Una política de denegación y un rol Owner chocan. ¿Qué gana?
+  options:
+  - La denegación
+  - Owner
+  - El más reciente
+  - Depende del recurso
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/zentra-evidencias-{{.project}} --principal-email=diego.ferrer@zentra.dev --permission=storage.objects.delete
+  gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies
+  gcloud iam policies get proteger-evidencias --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies
+  ask sre "¿Qué ficheros exactos quieres borrar?"
+  ask security "Diego quiere borrar pruebas/prueba1.csv del bucket de evidencias; la política proteger-evidencias lo deniega. ¿Break-glass?"
+  ticket escalate seguridad "Borrado por break-glass: Diego subió por error gs://zentra-evidencias-{{.project}}/pruebas/prueba1.csv (fichero de prueba, no evidencia). La política de denegación proteger-evidencias impide borrar a todos salvo gcp-breakglass. No se ha tocado la política ni el grupo."
+  ticket update "Hola Diego: no te falta ningún rol. El bucket de evidencias tiene una política de denegación que impide borrar a cualquiera, incluso con Storage Admin u Owner, para cumplir con auditoría. Ni yo puedo. He pasado el ticket a Seguridad con la ruta exacta para que lo borren por el procedimiento de emergencia (break-glass)."
+shortcuts:
+- name: delete the deny policy
+  run: |
+    gcloud iam policies delete proteger-evidencias --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies
+    gcloud storage rm gs://zentra-evidencias-{{.project}}/pruebas/prueba1.csv
+    ticket resolve "Quitada la política que molestaba y borrados los ficheros."
+- name: add him to break-glass
+  run: |
+    gcloud identity groups memberships add --group-email=gcp-breakglass@zentra.dev --member-email=diego.ferrer@zentra.dev
+    ticket resolve "Metido Diego en el grupo de emergencia para que pueda borrar."
+rubric:
+- name: La protección sigue intacta
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: denyPolicies["proteger-evidencias"]
+    desc: La política de denegación sigue
+  - type: iam
+    principal: user:diego.ferrer@zentra.dev
+    permission: storage.objects.delete
+    resource: bucket:zentra-evidencias-{{.project}}/pruebas/prueba1.csv
+    expect: false
+    desc: Diego sigue sin poder borrar evidencias
+  - type: command
+    regex: iam policies (delete|update)|breakglass.*member-email=diego|member-email=diego.*breakglass
+    max: 0
+    desc: Sin tocar la política ni el grupo de emergencia
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: troubleshoot-policy|iam policies (list|get)
+    min: 1
+    desc: Encontrada la denegación
+  - type: asked
+    actor: security
+    min: 1
+    desc: Seguridad consultada
+- name: Escalado y explicación
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_escalated
+    team: seguridad|security
+    keywords:
+    - - prueba1.csv
+      - pruebas/
+    - - break-glass
+      - breakglass
+      - emergencia
+    desc: A Seguridad con la ruta para break-glass
+  - type: ticket_update
+    keywords:
+    - - deneg
+      - deny
+    - - rol
+      - role
+      - owner
+      - storage admin
+    desc: Explica que no es un rol
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: troubleshoot-policy
+  title: ¿Por qué no?
+  why: 'NOT_GRANTED por una política de denegación: ningún rol lo arregla.'
+- match: iam policies get
+  title: La política
+  why: Deniega objects.delete a todos excepto gcp-breakglass.
+- match: ticket escalate seguridad
+  title: Break-glass
+  why: Lo hace Seguridad, con ticket y rastro de auditoría.
+en:
+  title: REQ · "I have Storage Admin and it won't let me delete"
+  summary: 'An SRE with every role can''t delete some files from the evidence bucket. No role is missing: a deny policy prevents it on purpose. Explain it, don''t touch it and route the deletion through the break-glass procedure.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-auditoria-prod*).
+
+    > **REQ-31077 · P4** · Diego: *"It won't let me delete some test files even though I have Storage Admin. Am I missing a role? Give me whatever is needed."*
+
+    IAM has **two kinds of policies**: **allow** policies (the usual roles) and **deny** policies. Deny **is evaluated first** and always wins: if a policy denies `objects.delete`, it doesn't matter that you have Storage Admin or Owner. Banks use them for what must **never** happen (deleting audit evidence, disabling logs), with one controlled exception: a **break-glass** group.
+
+    1. Check what happens: `gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/zentra-evidencias-{{.project}} --principal-email=diego.ferrer@zentra.dev --permission=storage.objects.delete`.
+    2. Look at the deny policies: `gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies` and `get`.
+    3. Talk to Security, the policy owner.
+    4. **Don't** delete or change the policy, **don't** add anyone to `gcp-breakglass` and **don't** grant more roles: they wouldn't help.
+    5. Escalate to Security with the exact path so they do it via break-glass, and explain to Diego why.
+  objectives:
+  - Check why it's denied
+  - Find the deny policy
+  - Without touching the policy
+  - Escalate to break-glass and explain
+  hints:
+  - '`gcloud iam policies get proteger-evidencias --attachment-point=cloudresourcemanager.googleapis.com/projects/{{.project}} --kind=denypolicies`'
+  ticket:
+    summary: I uploaded some test files to gs://zentra-evidencias by mistake (pruebas/ folder) and it won't let me delete them even though I have Storage Admin on the bucket. Am I missing a role? Give me whatever is needed.
+  text:
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.: Cloud security engineer, owner of perimeters, keys and deny policies.
+    'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.': 'Security controls aren''t removed: they''re adjusted with the minimum scope. Tell me identity, source and service.'
+    ? 'La política de denegación proteger-evidencias es a propósito: es el bucket de evidencias de auditoría (DORA) y nadie borra nada, ni Owner. Los ficheros de prueba los borro yo por break-glass con el ticket aprobado. No toques la política ni metas a nadie en gcp-breakglass; escálame el ticket con la ruta exacta.'
+    : 'The proteger-evidencias deny policy is on purpose: it''s the audit evidence bucket (DORA) and nobody deletes anything, not even Owner. I''ll delete the test files via break-glass with the approved ticket. Don''t touch the policy or add anyone to gcp-breakglass; escalate the ticket to me with the exact path.'
+    SRE de guardia.: On-call SRE.
+    Solo quiero limpiar lo que subí por error.: I just want to clean up what I uploaded by mistake.
+    'Solo uno: gs://zentra-evidencias-{{.project}}/pruebas/prueba1.csv.': 'Just one: gs://zentra-evidencias-{{.project}}/pruebas/prueba1.csv.'
+    Una política de denegación y un rol Owner chocan. ¿Qué gana?: A deny policy and an Owner role clash. Which wins?
+    La denegación: The deny
+    Owner: Owner
+    El más reciente: The most recent
+    Depende del recurso: Depends on the resource
+    La protección sigue intacta: Protection intact
+    La política de denegación sigue: The deny policy is still there
+    Diego sigue sin poder borrar evidencias: Diego still can't delete evidence
+    Sin tocar la política ni el grupo de emergencia: Policy and break-glass group untouched
+    Diagnóstico: Diagnosis
+    Encontrada la denegación: Deny found
+    Seguridad consultada: Security consulted
+    Escalado y explicación: Escalation and explanation
+    A Seguridad con la ruta para break-glass: To Security with the path for break-glass
+    Explica que no es un rol: Explains it isn't a role
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    ¿Por qué no?: Why not?
+    'NOT_GRANTED por una política de denegación: ningún rol lo arregla.': 'NOT_GRANTED because of a deny policy: no role fixes it.'
+    La política: The policy
+    Deniega objects.delete a todos excepto gcp-breakglass.: Denies objects.delete to everyone except gcp-breakglass.
+    Break-glass: Break-glass
+    Lo hace Seguridad, con ticket y rastro de auditoría.: Security does it, with a ticket and an audit trail.

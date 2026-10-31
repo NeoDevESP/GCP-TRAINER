@@ -489,6 +489,13 @@ func (s *State) checkDep(w *Workload, d Dep) (int, string) {
 		if !write && perm == "storage.objects.get" && !s.Allowed(w.Principal, "storage.objects.list", s.BucketResource(b, "")) && w.Env["NEEDS_LIST"] == "true" {
 			return 403, "googleapi: Error 403: storage.objects.list denied"
 		}
+		if ok, why := s.CMEKUsable(b, write); !ok {
+			code := 403
+			if strings.Contains(why, "HTTPError 400") {
+				code = 400
+			}
+			return code, "googleapi: Error " + strings.TrimPrefix(why, "HTTPError ")
+		}
 		return 200, ""
 	case "pubsub-publish":
 		if val == "" {
@@ -855,6 +862,17 @@ func (s *State) HTTP(req HTTPRequest) HTTPResponse {
 		if r, ok := s.k8sExternalCall(pid, ip, port, path, req); ok {
 			return r
 		}
+	}
+	if h := s.OnPremHostByIP(ip); h != nil {
+		if ok, why := s.onPremFlow(req.From, ip, port); !ok {
+			s.note("network", "fail", "TCP %s → %s:%d (data centre) blocked: %s", endpointName(req.From), h.Name, port, why)
+			return HTTPResponse{Error: fmt.Sprintf("Failed to connect to %s port %d after 130000 ms: Connection timed out", host, port), Trace: append(res.Trace, why)}
+		}
+		if !intIn(h.Ports, port) {
+			return HTTPResponse{Error: fmt.Sprintf("Failed to connect to %s port %d: Connection refused", host, port), Trace: res.Trace}
+		}
+		s.note("network", "ok", "TCP %s → %s:%d reached the data centre through the VPN", endpointName(req.From), h.Name, port)
+		return HTTPResponse{Status: 200, Body: firstNonEmptyStr(h.Body, "OK "+h.Name), Trace: res.Trace, Target: "onprem:" + h.Name}
 	}
 	ep, ok := s.FindIP(ip)
 	if !ok {
@@ -1392,4 +1410,34 @@ func (sp *SecurityPolicy) Evaluate(srcIP, path string) (string, string) {
 		}
 	}
 	return "allow", "default"
+}
+
+// onPremFlow checks a connection from a GCP endpoint to a data-centre address.
+func (s *State) onPremFlow(from Endpoint, ip string, port int) (bool, string) {
+	switch from.Kind {
+	case "vm", "pod", "run-vpc":
+		fl := s.CheckFlow(from, Endpoint{Kind: "onprem", IP: ip}, "tcp", port)
+		return fl.Allowed, fl.Reason
+	case "onprem":
+		return true, "inside the data centre"
+	}
+	return false, "private data-centre address not routable from " + endpointName(from)
+}
+
+func intIn(list []int, v int) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func firstNonEmptyStr(a ...string) string {
+	for _, x := range a {
+		if x != "" {
+			return x
+		}
+	}
+	return ""
 }

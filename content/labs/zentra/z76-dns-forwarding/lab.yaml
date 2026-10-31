@@ -1,0 +1,293 @@
+id: zentra-z76-dns-forwarding
+title: 'REQ · «Could not resolve host: mq.zentra.corp»'
+summary: Un servicio nuevo tiene que hablar con la mensajería del CPD por nombre. Por IP llega; por nombre no. Crea el reenvío de DNS hacia el CPD y descubre por qué al principio sigue sin responder.
+track: zentra
+day: 86
+level: professional
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.dns
+- networking.hybrid
+- networking.routing
+wellArchitected:
+- operations
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+setup: "gcloud compute routers create cpd-router --network=zentra-vpc --region={{.region}} --asn=64514 \ngcloud compute vpn-gateways create cpd-vpn --network=zentra-vpc --region={{.region}}\ngcloud compute vpn-tunnels create tunel-cpd-0 --vpn-gateway=cpd-vpn --region={{.region}} --peer-address=203.0.113.5 --router=cpd-router --interface=0\ngcloud compute routers add-bgp-peer cpd-router --region={{.region}} --peer-name=cpd-madrid --peer-asn=65010 --interface=if-tunel-cpd-0\ngcloud compute instances create tarjetas-sync --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=tarjetas\n"
+faults:
+- type: onprem
+  name: CPD Madrid
+  asn: 65010
+  ranges:
+  - 192.168.0.0/16
+  dns: 192.168.10.53
+  hosts:
+  - name: core.zentra.corp
+    ip: 192.168.20.10
+    ports:
+    - 443
+    body: core bancario OK
+  - name: mq.zentra.corp
+    ip: 192.168.20.20
+    ports:
+    - 1414
+    - 443
+    body: MQ OK
+  - name: batch.zentra.corp
+    ip: 192.168.20.30
+    ports:
+    - 22
+    - 443
+    body: batch OK
+ticket:
+  id: REQ-31076
+  kind: REQ
+  priority: P3
+  sla: 8h
+  reporter: Hugo Martín (Tarjetas)
+  summary: 'tarjetas-sync tiene que publicar en la cola del CPD (mq.zentra.corp, puerto 1414) pero falla con «Could not resolve host: mq.zentra.corp». Desde la oficina sí resuelve.'
+actors:
+- role: network
+  name: Tomás Vidal (Arquitecto de red)
+  persona: Dueño de la VPC, la VPN y el Interconnect con el CPD.
+  fallback: 'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.'
+  facts:
+  - keywords:
+    - - dns
+      - reenv
+      - forward
+      - servidor
+      - server
+      - zentra.corp
+      - '35.199'
+      - resolver
+    answer: 'Los DNS del CPD son 192.168.10.53 y llevan la zona zentra.corp. Para que respondan a Cloud DNS hace falta que el CPD tenga ruta a 35.199.192.0/19, que es de donde salen las consultas reenviadas: eso se anuncia desde el Cloud Router, y en modo personalizado no te olvides de seguir anunciando todas las subredes.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - bgp
+      - asn
+      - anunci
+      - advert
+      - firewall
+      - cortafuegos
+      - nat
+      - ip
+    answer: Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-tarjetas-prod*).
+
+  > **REQ-31076 · P3** · *«tarjetas-sync falla con Could not resolve host: mq.zentra.corp. Desde la oficina sí resuelve.»*
+
+  **La conexión con el CPD.** Zentra tiene su **centro de datos propio** en Madrid (el core bancario, la mensajería MQ, los batch) unido a Google Cloud por **Cloud VPN**: un túnel cifrado (`tunel-cpd-0`) y, por encima, una sesión **BGP** en el Cloud Router `cpd-router` que intercambia rutas. Para que haya tráfico hacen falta tres cosas: el **túnel** arriba, la **sesión BGP** establecida (los dos lados de acuerdo en los números de sistema autónomo, ASN) y **rutas en los dos sentidos** (Google aprende `192.168.0.0/16` del CPD y el CPD aprende lo que el Cloud Router anuncia).
+
+  Los nombres `*.zentra.corp` viven en los **DNS del CPD**, no en Google. Para que las VMs de la VPC los resuelvan se crea una **zona de reenvío** privada en Cloud DNS que manda esas consultas a los DNS del CPD. Ojo: esas consultas salen de Google desde el rango **35.199.192.0/19**, y el CPD solo puede contestar si tiene **ruta de vuelta** a ese rango.
+
+  1. Separa el problema: `gcloud compute ssh tarjetas-sync --zone={{.zone}} --tunnel-through-iap --command='dig mq.zentra.corp'` y `--command='curl -s -m 5 https://192.168.20.20'` (¿falla el nombre o la red?).
+  2. Pregunta a Red qué DNS tiene el CPD.
+  3. Crea la zona de reenvío: `gcloud dns managed-zones create cpd-zentra-corp --dns-name=zentra.corp. --visibility=private --networks=zentra-vpc --forwarding-targets=… --description="Reenvío al CPD"`.
+  4. Vuelve a probar `dig`. Si no responde, mira qué anuncia el Cloud Router (`routers get-status`) y añade 35.199.192.0/19 **sin dejar de anunciar las subredes**.
+  5. Comprueba nombre y conexión, y responde.
+objectives:
+- ¿Nombre o red?
+- Zona de reenvío al CPD
+- Ruta de vuelta para 35.199.192.0/19
+- Comprueba y responde
+hints:
+- text: '`gcloud compute routers update cpd-router --region={{.region}} --advertisement-mode=custom --set-advertisement-groups=all_subnets --set-advertisement-ranges=35.199.192.0/19`'
+quiz:
+- id: q1
+  question: ¿Por qué una zona de reenvío al CPD puede no responder aunque el túnel y BGP estén bien?
+  options:
+  - El CPD no tiene ruta de vuelta a 35.199.192.0/19
+  - Cloud DNS no admite reenvío
+  - Falta abrir el puerto 53 a internet
+  - Hay que reiniciar la VM
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud compute ssh tarjetas-sync --zone={{.zone}} --tunnel-through-iap --command='dig mq.zentra.corp'
+  gcloud compute ssh tarjetas-sync --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://192.168.20.20'
+  ask network "¿Qué servidores DNS tiene el CPD para zentra.corp?"
+  gcloud dns managed-zones create cpd-zentra-corp --dns-name=zentra.corp. --visibility=private --networks=zentra-vpc --forwarding-targets=192.168.10.53 --description="Reenvio al CPD"
+  gcloud compute ssh tarjetas-sync --zone={{.zone}} --tunnel-through-iap --command='dig mq.zentra.corp'
+  gcloud compute routers get-status cpd-router --region={{.region}}
+  ask change "Necesito anunciar 35.199.192.0/19 desde cpd-router para el reenvío de DNS"
+  gcloud compute routers update cpd-router --region={{.region}} --advertisement-mode=custom --set-advertisement-groups=all_subnets --set-advertisement-ranges=35.199.192.0/19
+  gcloud compute ssh tarjetas-sync --zone={{.zone}} --tunnel-through-iap --command='dig mq.zentra.corp'
+  gcloud compute ssh tarjetas-sync --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://mq.zentra.corp'
+  ticket update "Hola Hugo: ya resuelve mq.zentra.corp desde tarjetas-sync. Hemos creado el reenvío de DNS de zentra.corp hacia los DNS del CPD y anunciado la ruta de vuelta que necesitan para contestar. Pruébalo y dinos."
+  ticket resolve "Zona de reenvío zentra.corp a 192.168.10.53 y anuncio de 35.199.192.0/19 en cpd-router manteniendo todas las subredes."
+shortcuts:
+- name: hard-code the IP in a private zone
+  run: |
+    gcloud dns managed-zones create corp --dns-name=zentra.corp. --visibility=private --networks=zentra-vpc --description=copia
+    gcloud dns record-sets create mq.zentra.corp. --zone=corp --type=A --ttl=300 --rrdatas=192.168.20.20
+    ticket resolve "Copiado el registro del CPD en una zona privada nuestra."
+- name: advertise only the DNS range
+  run: |
+    gcloud dns managed-zones create cpd-zentra-corp --dns-name=zentra.corp. --visibility=private --networks=zentra-vpc --forwarding-targets=192.168.10.53 --description=cpd
+    gcloud compute routers update cpd-router --region={{.region}} --advertisement-mode=custom --set-advertisement-ranges=35.199.192.0/19
+    ticket resolve "Anunciado el rango de DNS de Google al CPD."
+rubric:
+- name: Resuelve y conecta
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: dns_resolve
+    from: vm:tarjetas-sync
+    host: mq.zentra.corp
+    ip: 192.168.20.20
+    desc: mq.zentra.corp resuelve a 192.168.20.20
+  - type: http
+    from: vm:tarjetas-sync
+    target: onprem:mq:443
+    path: /
+    status: 200
+    desc: Y la red al CPD sigue funcionando (subredes anunciadas)
+- name: Reenvío, no copias
+  validator: security
+  points: 20
+  all: true
+  checks:
+  - type: count
+    collection: dnsZones
+    where:
+      forwardingTargets:
+        contains: 192.168.10.53
+    min: 1
+    desc: Zona de reenvío a los DNS del CPD
+  - type: command
+    regex: record-sets (create|transaction)
+    max: 0
+    desc: Sin copiar registros del CPD a mano
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: 'dig |nslookup '
+    min: 1
+    desc: Probado el nombre
+  - type: command
+    regex: curl .*192.168.20.20|routers get-status
+    min: 1
+    desc: Separado nombre de red
+- name: Respuesta
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_update
+    keywords:
+    - - resuelve
+      - resolve
+      - dns
+    - - cpd
+      - data centre
+      - data center
+      - reenv
+      - forward
+    desc: Respuesta clara al solicitante
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: dig mq.zentra.corp
+  title: ¿Nombre?
+  why: 'NXDOMAIN o SERVFAIL: Google no sabe nada de zentra.corp todavía.'
+- match: curl -s -m 5 https://192.168.20.20
+  title: ¿Red?
+  why: 'Por IP llega: la VPN y BGP están bien. Es DNS.'
+- match: --forwarding-targets=192.168.10.53
+  title: Reenvío
+  why: Las consultas de zentra.corp van a los DNS del CPD.
+- match: 35.199.192.0/19
+  title: La ruta de vuelta
+  why: 'Las consultas salen de ese rango: el CPD necesita poder contestar. Y all_subnets para no cortar lo demás.'
+en:
+  title: 'REQ · "Could not resolve host: mq.zentra.corp"'
+  summary: A new service must talk to the data centre's messaging by name. By IP it works; by name it doesn't. Create DNS forwarding to the data centre and discover why it still doesn't answer at first.
+  story: |-
+    **Project `{{.project}}`** (*zentra-tarjetas-prod*).
+
+    > **REQ-31076 · P3** · *"tarjetas-sync fails with Could not resolve host: mq.zentra.corp. From the office it resolves."*
+
+    **The data-centre link.** Zentra has its **own data centre** in Madrid (core banking, MQ messaging, batch) joined to Google Cloud by **Cloud VPN**: an encrypted tunnel (`tunel-cpd-0`) and, on top, a **BGP** session on Cloud Router `cpd-router` that exchanges routes. Traffic needs three things: the **tunnel** up, the **BGP session** established (both sides agreeing on the autonomous system numbers, ASN) and **routes both ways** (Google learns `192.168.0.0/16` from the data centre and the data centre learns what the Cloud Router advertises).
+
+    The `*.zentra.corp` names live in the **data centre's DNS**, not in Google. For VPC VMs to resolve them you create a private **forwarding zone** in Cloud DNS that sends those queries to the data centre's DNS. Careful: those queries leave Google from the **35.199.192.0/19** range, and the data centre can only answer if it has a **route back** to that range.
+
+    1. Split the problem: `gcloud compute ssh tarjetas-sync --zone={{.zone}} --tunnel-through-iap --command='dig mq.zentra.corp'` and `--command='curl -s -m 5 https://192.168.20.20'` (is it the name or the network?).
+    2. Ask Network which DNS the data centre uses.
+    3. Create the forwarding zone: `gcloud dns managed-zones create cpd-zentra-corp --dns-name=zentra.corp. --visibility=private --networks=zentra-vpc --forwarding-targets=… --description="Forwarding to the data centre"`.
+    4. Try `dig` again. If it doesn't answer, check what the Cloud Router advertises (`routers get-status`) and add 35.199.192.0/19 **while still advertising the subnets**.
+    5. Check name and connection, and reply.
+  objectives:
+  - Name or network?
+  - Forwarding zone to the data centre
+  - Route back for 35.199.192.0/19
+  - Verify and reply
+  hints:
+  - '`gcloud compute routers update cpd-router --region={{.region}} --advertisement-mode=custom --set-advertisement-groups=all_subnets --set-advertisement-ranges=35.199.192.0/19`'
+  ticket:
+    summary: 'tarjetas-sync must publish to the data centre queue (mq.zentra.corp, port 1414) but fails with "Could not resolve host: mq.zentra.corp". From the office it resolves.'
+  text:
+    Hugo Martín (Tarjetas): Hugo Martín (Cards)
+    Tomás Vidal (Arquitecto de red): Tomás Vidal (Network architect)
+    Dueño de la VPC, la VPN y el Interconnect con el CPD.: Owner of the VPC, the VPN and the Interconnect with the data centre.
+    'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.': 'Check the tunnel first, then the BGP session: a tunnel being up doesn''t mean there are routes.'
+    ? 'Los DNS del CPD son 192.168.10.53 y llevan la zona zentra.corp. Para que respondan a Cloud DNS hace falta que el CPD tenga ruta a 35.199.192.0/19, que es de donde salen las consultas reenviadas: eso se anuncia desde el Cloud Router, y en modo personalizado no te olvides de seguir anunciando todas las subredes.'
+    : 'The data centre DNS servers are 192.168.10.53 and hold the zentra.corp zone. For them to answer Cloud DNS, the data centre needs a route to 35.199.192.0/19, which is where forwarded queries come from: that''s advertised from the Cloud Router, and in custom mode don''t forget to keep advertising all subnets.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.: Approved as an emergency change (CHG-7795). Note it in the ticket with what you change and how to roll back.
+    ¿Por qué una zona de reenvío al CPD puede no responder aunque el túnel y BGP estén bien?: Why might a forwarding zone to the data centre not answer even with the tunnel and BGP fine?
+    El CPD no tiene ruta de vuelta a 35.199.192.0/19: The data centre has no route back to 35.199.192.0/19
+    Cloud DNS no admite reenvío: Cloud DNS doesn't support forwarding
+    Falta abrir el puerto 53 a internet: Port 53 must be opened to the internet
+    Hay que reiniciar la VM: The VM must be restarted
+    Resuelve y conecta: Resolves and connects
+    mq.zentra.corp resuelve a 192.168.20.20: mq.zentra.corp resolves to 192.168.20.20
+    Y la red al CPD sigue funcionando (subredes anunciadas): And the network to the data centre still works (subnets advertised)
+    Reenvío, no copias: Forwarding, not copies
+    Zona de reenvío a los DNS del CPD: Forwarding zone to the data-centre DNS
+    Sin copiar registros del CPD a mano: No hand-copied data-centre records
+    Diagnóstico: Diagnosis
+    Probado el nombre: Name tested
+    Separado nombre de red: Name separated from network
+    Respuesta: Reply
+    Respuesta clara al solicitante: Clear reply to the requester
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    ¿Nombre?: Name?
+    'NXDOMAIN o SERVFAIL: Google no sabe nada de zentra.corp todavía.': 'NXDOMAIN or SERVFAIL: Google knows nothing about zentra.corp yet.'
+    ¿Red?: Network?
+    'Por IP llega: la VPN y BGP están bien. Es DNS.': 'By IP it works: VPN and BGP are fine. It''s DNS.'
+    Reenvío: Forwarding
+    Las consultas de zentra.corp van a los DNS del CPD.: zentra.corp queries go to the data centre's DNS.
+    La ruta de vuelta: The route back
+    'Las consultas salen de ese rango: el CPD necesita poder contestar. Y all_subnets para no cortar lo demás.': 'Queries leave from that range: the data centre must be able to answer. And all_subnets so nothing else breaks.'

@@ -142,6 +142,16 @@ func (s *State) ResolveTrafficURL(project, target, path string) string {
 			return "http://" + fr.IP + path
 		}
 		return ""
+	case strings.HasPrefix(target, "onprem:"):
+		parts := strings.Split(strings.TrimPrefix(target, "onprem:"), ":")
+		if ep, ok := s.OnPremEndpoint(parts[0]); ok {
+			port := "80"
+			if len(parts) > 1 {
+				port = parts[1]
+			}
+			return "http://" + ep.IP + ":" + port + path
+		}
+		return ""
 	case strings.HasPrefix(target, "vm:"):
 		parts := strings.Split(strings.TrimPrefix(target, "vm:"), ":")
 		if vm := p.Instances[parts[0]]; vm != nil {
@@ -180,6 +190,10 @@ func (s *State) runTraffic(t TrafficSpec) {
 	}
 	p := s.Projects[pid]
 	if p == nil {
+		return
+	}
+	if strings.HasPrefix(t.Target, "api:") {
+		s.runAPITraffic(pid, t)
 		return
 	}
 	if strings.HasPrefix(t.Target, "pubsub:") {

@@ -28,6 +28,7 @@ type State struct {
 	Tick        int                  `json:"tick"`
 	Extra       map[string]string    `json:"extra,omitempty"`
 	Directory   *Directory           `json:"directory,omitempty"` // Workspace / Cloud Identity users and groups
+	OnPrem      *OnPrem              `json:"onprem,omitempty"`    // the bank's data centre behind Cloud VPN
 	ipSeq       map[string]int
 	rng         *rand.Rand
 	explain     *[]Hop // causal-chain recorder for "teach me why" (not serialised)
@@ -152,6 +153,7 @@ type Project struct {
 	Budgets       map[string]*Budget              `json:"budgets"`
 	LogSinks      map[string]*LogSink             `json:"logSinks"`
 	Perimeters    map[string]*Perimeter           `json:"perimeters"`
+	DenyPolicies  map[string]*DenyPolicy          `json:"denyPolicies,omitempty"`
 }
 
 type ServiceAccount struct {
@@ -243,6 +245,11 @@ type Router struct {
 	ASN      int       `json:"asn"`
 	NATs     []NAT     `json:"nats"`
 	BGPPeers []BGPPeer `json:"bgpPeers,omitempty"`
+	// Route advertisement: DEFAULT announces every subnet; CUSTOM announces
+	// the groups (ALL_SUBNETS) plus the listed ranges.
+	AdvertiseMode    string   `json:"advertiseMode,omitempty"`
+	AdvertiseGroups  []string `json:"advertisedGroups,omitempty"`
+	AdvertisedRanges []string `json:"advertisedIpRanges,omitempty"`
 }
 
 type BGPPeer struct {
@@ -256,6 +263,7 @@ type NAT struct {
 	AllSubnets bool     `json:"allSubnets"`
 	Subnets    []string `json:"subnets"`
 	AutoIPs    bool     `json:"autoAllocateIps"`
+	IPs        []string `json:"natIps,omitempty"` // static addresses (manual allocation)
 	LogErrors  bool     `json:"logErrors"`
 	MinPorts   int      `json:"minPortsPerVm,omitempty"` // default 64
 	Dynamic    bool     `json:"enableDynamicPortAllocation,omitempty"`
@@ -502,6 +510,9 @@ type DNSZone struct {
 	Records     []DNSRecord `json:"records"`
 	DNSSEC      bool        `json:"dnssec"`
 	Description string      `json:"description"`
+	// ForwardingTargets turns a private zone into a forwarding zone: queries
+	// go to these DNS servers (e.g. the data centre's) instead of records.
+	ForwardingTargets []string `json:"forwardingTargets,omitempty"`
 }
 
 type DNSRecord struct {
@@ -695,12 +706,29 @@ type CryptoKey struct {
 	NextRotation   string       `json:"nextRotationTime,omitempty"`
 	Protection     string       `json:"protectionLevel"`
 	Versions       []KeyVersion `json:"versions"`
+	Primary        int          `json:"primaryVersion,omitempty"`
 	IAM            Policy       `json:"iamPolicy"`
 }
 
 type KeyVersion struct {
 	ID    int    `json:"id"`
 	State string `json:"state"`
+}
+
+// PrimaryVersion is the version new data is encrypted with (the latest
+// version that hasn't been destroyed; 0 when there is none).
+func (k *CryptoKey) PrimaryVersion() *KeyVersion {
+	if k.Primary > 0 {
+		for i := range k.Versions {
+			if k.Versions[i].ID == k.Primary {
+				return &k.Versions[i]
+			}
+		}
+	}
+	if len(k.Versions) == 0 {
+		return nil
+	}
+	return &k.Versions[len(k.Versions)-1]
 }
 
 type Cluster struct {
@@ -957,10 +985,11 @@ type LogSink struct {
 }
 
 type Perimeter struct {
-	Name       string   `json:"name"`
-	Resources  []string `json:"resources"`
-	Restricted []string `json:"restrictedServices"`
-	DryRun     bool     `json:"dryRun"`
+	Name   string           `json:"name"`
+	Title  string           `json:"title"`
+	Status *PerimeterConfig `json:"status,omitempty"` // enforced configuration
+	Spec   *PerimeterConfig `json:"spec,omitempty"`   // dry-run configuration
+	DryRun bool             `json:"useExplicitDryRunSpec"`
 }
 
 // LogEntry mimics a Cloud Logging entry.
@@ -1005,6 +1034,9 @@ type TrafficSpec struct {
 	// Principal authenticates the requests (e.g. internal users of a private
 	// Cloud Run service); empty means anonymous internet traffic.
 	Principal string `json:"principal,omitempty" yaml:"principal"`
+	// From is where API traffic (target api:SERVICE) comes from:
+	// project:ID/NUMBER outside the bank's perimeter, or ip:ADDRESS.
+	From string `json:"from,omitempty" yaml:"from"`
 }
 
 // New creates an empty world with an organization, a training folder and one

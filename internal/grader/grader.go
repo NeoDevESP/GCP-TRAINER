@@ -239,6 +239,8 @@ func (c *Context) run(ch scenario.Check) (res CheckResult) {
 		ok, detail = c.count(ch)
 	case "http":
 		ok, detail = c.http(ch)
+	case "api_call", "perimeter", "bgp", "dns_resolve":
+		ok, detail = c.bankCheck(res.Type, ch)
 	case "tcp":
 		ok, detail = c.tcp(ch)
 	case "egress":
@@ -649,6 +651,12 @@ func (c *Context) endpoint(ref string) (sim.Endpoint, string, error) {
 	switch {
 	case ref == "" || ref == "internet":
 		return sim.InternetEndpoint(""), "", nil
+	case strings.HasPrefix(ref, "onprem:"):
+		ep, ok := c.State.OnPremEndpoint(strings.TrimPrefix(ref, "onprem:"))
+		if !ok {
+			return sim.Endpoint{}, "", fmt.Errorf(c.p("no se encuentra el servidor del CPD %s", "data-centre server %s not found"), ref)
+		}
+		return ep, "", nil
 	case strings.HasPrefix(ref, "vm:"):
 		vm := p.Instances[strings.TrimPrefix(ref, "vm:")]
 		if vm == nil {

@@ -1,0 +1,280 @@
+id: zentra-z74-cmek-version
+title: INC P1 · Un script de limpieza desactivó la versión de la clave
+summary: 'Nadie puede descargar sus informes: la versión de la clave con la que están cifrados está desactivada. Reactívala (nunca la destruyas), averigua quién y por qué, y avisa a Seguridad.'
+track: zentra
+day: 84
+level: professional
+branch: security
+type: incident
+mode: production
+skills:
+- security.kms
+- storage.encryption
+- security.audit
+wellArchitected:
+- security
+- reliability
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud kms keyrings create zentra-datos --location={{.region}}
+  gcloud kms keys create informes --keyring=zentra-datos --location={{.region}} --purpose=encryption
+  gcloud kms keys versions create --key=informes --keyring=zentra-datos --location={{.region}}
+  gcloud kms keys add-iam-policy-binding informes --keyring=zentra-datos --location={{.region}} --member=serviceAccount:$(gcloud storage service-agent) --role=roles/cloudkms.cryptoKeyEncrypterDecrypter
+  gcloud storage buckets create gs://zentra-informes-{{.project}} --location={{.region}} --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/{{.project}}/locations/{{.region}}/keyRings/zentra-datos/cryptoKeys/informes
+  echo "informe de riesgos Q3" > q3.pdf
+  gcloud storage cp q3.pdf gs://zentra-informes-{{.project}}/data/report.csv
+  gcloud iam service-accounts create informes-sa --display-name="informes-api"
+  gcloud storage buckets add-iam-policy-binding gs://zentra-informes-{{.project}} --member=serviceAccount:informes-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud run deploy informes-api --image=europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0 --region={{.region}} --service-account=informes-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BUCKET=zentra-informes-{{.project}} --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding informes-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: kms_version
+  keyring: zentra-datos
+  key: informes
+  version: 2
+  state: DISABLED
+  actor: kms-limpieza@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: informes
+  target: run:informes-api
+  path: /reports
+  rps: 15
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31074
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: Todas las descargas de informes de la app de empresas fallan desde las 10:02 (error 400 de almacenamiento). Los clientes empresa no pueden bajar sus extractos fiscales.
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.
+  fallback: 'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.'
+  facts:
+  - keywords:
+    - - version
+      - versión
+      - desactiv
+      - disabl
+      - limpieza
+      - clean
+      - script
+      - kms-limpieza
+      - reactiv
+      - enable
+    answer: 'Uf. El script kms-limpieza desactiva versiones «antiguas» y se ha equivocado: la 2 es la primaria. Reactívala ya, no destruyas nada, y paramos el script nosotros. Desactivar una versión deja ilegible todo lo cifrado con ella.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - bgp
+      - asn
+      - anunci
+      - advert
+      - firewall
+      - cortafuegos
+      - nat
+      - ip
+    answer: Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-empresas-prod*).
+
+  > **INC-31074 · P1** · NOC: *«Todas las descargas de informes fallan desde las 10:02 (error 400 de almacenamiento).»*
+
+  Una clave de Cloud KMS tiene **versiones**: al rotar se crea una nueva (la **primaria**, con la que se cifra lo nuevo) y las anteriores se conservan para **descifrar** lo antiguo. Cada versión puede estar **habilitada**, **deshabilitada** (no se puede usar, pero se puede reactivar) o **programada para destrucción** (24 h o más para arrepentirse; después, los datos cifrados con ella se pierden **para siempre**).
+
+  1. El error: `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+  2. Las versiones: `gcloud kms keys versions list --key=informes --keyring=zentra-datos --location={{.region}}`.
+  3. Quién y cuándo: auditoría de `cloudkms.googleapis.com`.
+  4. Habla con Seguridad (dueña de las claves) y pide el cambio de emergencia.
+  5. **Reactiva** la versión (`versions enable`). Nunca la destruyas.
+  6. Comunica con cadencia y deja en la nota interna quién la desactivó.
+objectives:
+- Encuentra la versión deshabilitada
+- Averigua quién
+- Reactívala con cambio de emergencia
+- Comunica
+hints:
+- text: '`gcloud kms keys versions enable 2 --key=informes --keyring=zentra-datos --location={{.region}}`'
+quiz:
+- id: q1
+  question: ¿Qué pasa con los datos si destruyes una versión de clave?
+  options:
+  - Lo cifrado con ella es ilegible para siempre
+  - Se recifra solo con la siguiente
+  - Nada, Google guarda una copia
+  - Se vuelve público
+  answer:
+  - 0
+solution: |
+  ticket
+  ticket update "Estamos investigando el fallo en las descargas de informes. Próxima actualización a las 10:45."
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  gcloud kms keys versions list --key=informes --keyring=zentra-datos --location={{.region}}
+  gcloud logging read 'protoPayload.serviceName="cloudkms.googleapis.com"' --limit=5
+  ask security "La versión 2 de la clave informes está deshabilitada por kms-limpieza, ¿la reactivo?"
+  ask change "Necesito reactivar la versión 2 de la clave informes como cambio de emergencia"
+  gcloud kms keys versions enable 2 --key=informes --keyring=zentra-datos --location={{.region}}
+  gcloud kms keys versions list --key=informes --keyring=zentra-datos --location={{.region}}
+  ticket comment "Causa: a las 10:02 la cuenta kms-limpieza deshabilitó la versión 2 (primaria) de la clave informes; el bucket es CMEK y no se podía leer ni escribir. Reactivada con CHG-7795. Seguridad para el script."
+  ticket update "Resuelto: desde las 10:40 los clientes empresa vuelven a descargar sus informes. Un proceso automático de mantenimiento bloqueó por error la clave de cifrado; ya está corregido y el proceso detenido. Ningún dato se ha perdido."
+  ticket resolve "Versión 2 de la clave informes reactivada (no destruida); el script kms-limpieza queda parado por Seguridad."
+shortcuts:
+- name: new key version instead
+  run: |
+    gcloud kms keys versions create --key=informes --keyring=zentra-datos --location={{.region}}
+    ticket resolve "Creada una versión nueva de la clave."
+- name: destroy the disabled version
+  run: |
+    gcloud kms keys versions destroy 2 --key=informes --keyring=zentra-datos --location={{.region}}
+    ticket resolve "Eliminada la versión mala de la clave."
+rubric:
+- name: Informes descargándose
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: http
+    target: run:informes-api
+    path: /reports
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: /reports responde 200
+- name: Sin destruir nada
+  validator: security
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: versions destroy
+    max: 0
+    desc: Ninguna versión destruida
+  - type: command
+    regex: versions enable
+    min: 1
+    desc: Versión reactivada
+- name: Diagnóstico y cambio
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: versions list|cloudkms.googleapis.com
+    min: 1
+    desc: Versiones o auditoría revisadas
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio de emergencia
+- name: Comunicación de P1
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    min: 2
+    desc: Inicio y resolución
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - kms-limpieza
+      - limpieza
+      - script
+    - - version 2
+      - versión 2
+      - version
+      - versión
+    desc: Nota interna con quién y qué
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: versions list
+  title: Las versiones
+  why: 'La 2 (primaria) está DISABLED: todo lo cifrado con ella es ilegible.'
+- match: cloudkms.googleapis.com
+  title: Quién
+  why: kms-limpieza, un script de mantenimiento, a las 10:02.
+- match: versions enable 2
+  title: Reactivar
+  why: Deshabilitar es reversible; destruir, no.
+en:
+  title: INC P1 · A clean-up script disabled the key version
+  summary: 'Nobody can download their reports: the key version they''re encrypted with is disabled. Re-enable it (never destroy it), find out who and why, and tell Security.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-empresas-prod*).
+
+    > **INC-31074 · P1** · NOC: *"Every report download has failed since 10:02 (storage error 400)."*
+
+    A Cloud KMS key has **versions**: rotating creates a new one (the **primary**, used to encrypt new data) and the older ones are kept to **decrypt** old data. Each version can be **enabled**, **disabled** (unusable, but can be re-enabled) or **scheduled for destruction** (24 h or more to change your mind; after that, data encrypted with it is lost **forever**).
+
+    1. The error: `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+    2. The versions: `gcloud kms keys versions list --key=informes --keyring=zentra-datos --location={{.region}}`.
+    3. Who and when: the `cloudkms.googleapis.com` audit log.
+    4. Talk to Security (key owner) and ask for the emergency change.
+    5. **Re-enable** the version (`versions enable`). Never destroy it.
+    6. Communicate on a cadence and put who disabled it in the internal note.
+  objectives:
+  - Find the disabled version
+  - Find out who
+  - Re-enable it with an emergency change
+  - Communicate
+  hints:
+  - '`gcloud kms keys versions enable 2 --key=informes --keyring=zentra-datos --location={{.region}}`'
+  ticket:
+    summary: Every report download in the business app has failed since 10:02 (storage error 400). Business customers can't download their tax statements.
+  text:
+    NOC 24x7: NOC 24x7
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.: Cloud security engineer, owner of perimeters, keys and deny policies.
+    'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.': 'Security controls aren''t removed: they''re adjusted with the minimum scope. Tell me identity, source and service.'
+    ? 'Uf. El script kms-limpieza desactiva versiones «antiguas» y se ha equivocado: la 2 es la primaria. Reactívala ya, no destruyas nada, y paramos el script nosotros. Desactivar una versión deja ilegible todo lo cifrado con ella.'
+    : 'Ugh. The kms-limpieza script disables "old" versions and got it wrong: version 2 is the primary. Re-enable it now, don''t destroy anything, and we''ll stop the script. Disabling a version makes everything encrypted with it unreadable.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.: Approved as an emergency change (CHG-7795). Note it in the ticket with what you change and how to roll back.
+    ¿Qué pasa con los datos si destruyes una versión de clave?: What happens to the data if you destroy a key version?
+    Lo cifrado con ella es ilegible para siempre: What's encrypted with it is unreadable forever
+    Se recifra solo con la siguiente: It's re-encrypted with the next one automatically
+    Nada, Google guarda una copia: Nothing, Google keeps a copy
+    Se vuelve público: It becomes public
+    Informes descargándose: Reports downloading
+    /reports responde 200: /reports returns 200
+    Sin destruir nada: Nothing destroyed
+    Ninguna versión destruida: No version destroyed
+    Versión reactivada: Version re-enabled
+    Diagnóstico y cambio: Diagnosis and change
+    Versiones o auditoría revisadas: Versions or audit log checked
+    Cambio de emergencia: Emergency change
+    Comunicación de P1: P1 communication
+    Inicio y resolución: Start and resolution
+    Nota interna con quién y qué: Internal note with who and what
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    Las versiones: The versions
+    'La 2 (primaria) está DISABLED: todo lo cifrado con ella es ilegible.': 'Version 2 (primary) is DISABLED: everything encrypted with it is unreadable.'
+    Quién: Who
+    kms-limpieza, un script de mantenimiento, a las 10:02.: kms-limpieza, a maintenance script, at 10:02.
+    Reactivar: Re-enable
+    Deshabilitar es reversible; destruir, no.: Disabling is reversible; destroying isn't.

@@ -1307,3 +1307,228 @@ runbooks:
   labs:
   - zentra-z70-canary
   - ace-d27-deploy-rollback
+- id: vpc-sc
+  area: security
+  symptom:
+  - «Request is prohibited by organization's policy» al usar BigQuery o Storage
+  - '"Request is prohibited by organization''s policy" when using BigQuery or Storage'
+  errors:
+  - Request is prohibited by organization's policy
+  - vpcServiceControlsUniqueIdentifier
+  means:
+  - 'Es un **perímetro de VPC Service Controls**, no un permiso IAM: quien llama está fuera del perímetro del proyecto. El identificador `vpcServiceControlsUniqueIdentifier` lleva a la infracción en la auditoría.'
+  - 'It''s a **VPC Service Controls perimeter**, not an IAM permission: the caller is outside the project''s perimeter. The `vpcServiceControlsUniqueIdentifier` leads to the violation in the audit log.'
+  steps:
+  - text:
+    - 'Busca la infracción: identidad, origen, servicio y perímetro'
+    - 'Find the violation: identity, source, service and perimeter'
+    cmd: gcloud logging read 'protoPayload.metadata.violationReason="RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER"' --limit=3
+  - text:
+    - Mira el perímetro
+    - Look at the perimeter
+    cmd: gcloud access-context-manager perimeters describe PERIMETRO
+  causes:
+  - - Proyecto recién metido en un perímetro
+    - Project just put inside a perimeter
+  - - Herramienta en otro proyecto (BI, batch) sin regla de entrada
+    - A tool in another project (BI, batch) without an ingress rule
+  fix:
+  - Regla de entrada mínima (esa identidad, ese proyecto de origen, ese servicio) con Seguridad, dueña del perímetro. Antes de activar un perímetro, modo prueba.
+  - A minimal ingress rule (that identity, that source project, that service) with Security, the perimeter owner. Before enforcing a perimeter, dry-run.
+  avoid:
+  - Sacar el proyecto del perímetro o abrir la entrada a cualquier identidad.
+  - Taking the project out of the perimeter or opening ingress to any identity.
+  labs:
+  - zentra-z71-vpcsc-ingress
+  - zentra-z72-vpcsc-dryrun
+- id: cmek
+  area: security
+  symptom:
+  - Cloud Storage falla con «Permission denied on Cloud KMS key» o «key version is not enabled»
+  - Cloud Storage fails with "Permission denied on Cloud KMS key" or "key version is not enabled"
+  errors:
+  - Permission denied on Cloud KMS key
+  - FAILED_PRECONDITION
+  means:
+  - El bucket está cifrado con una clave propia (CMEK). Quien usa la clave es el **agente de servicio de Cloud Storage**, no tu aplicación; y la versión de la clave tiene que estar **habilitada**.
+  - The bucket is encrypted with a customer-managed key (CMEK). The **Cloud Storage service agent** uses the key, not your application; and the key version must be **enabled**.
+  steps:
+  - text:
+    - La clave del bucket
+    - The bucket's key
+    cmd: gcloud storage buckets describe gs://BUCKET --format='value(default_kms_key)'
+  - text:
+    - Quién puede usar la clave
+    - Who can use the key
+    cmd: gcloud kms keys get-iam-policy CLAVE --keyring=LLAVERO --location=REGION
+  - text:
+    - Estado de las versiones
+    - Version states
+    cmd: gcloud kms keys versions list --key=CLAVE --keyring=LLAVERO --location=REGION
+  causes:
+  - - El agente de Storage perdió roles/cloudkms.cryptoKeyEncrypterDecrypter
+    - The Storage agent lost roles/cloudkms.cryptoKeyEncrypterDecrypter
+  - - Una versión de la clave deshabilitada o programada para destrucción
+    - A key version disabled or scheduled for destruction
+  fix:
+  - Devuelve el rol solo al agente (`gcloud storage service-agent`) en esa clave, o reactiva la versión. Con Seguridad y cambio de emergencia.
+  - Give the role back only to the agent (`gcloud storage service-agent`) on that key, or re-enable the version. With Security and an emergency change.
+  avoid:
+  - Dar KMS a la aplicación, quitar la CMEK o destruir versiones.
+  - Giving the application KMS, removing the CMEK or destroying versions.
+  labs:
+  - zentra-z73-cmek-agent
+  - zentra-z74-cmek-version
+  - ace-d24-cmek
+- id: bgp-down
+  area: network
+  symptom:
+  - El túnel VPN está arriba pero no llega nada al centro de datos
+  - The VPN tunnel is up but nothing reaches the data centre
+  errors:
+  - Bad Peer AS
+  means:
+  - El túnel solo cifra. Las rutas las pone **BGP** en el Cloud Router. Si la sesión no está establecida, no hay rutas aunque el túnel diga ESTABLISHED.
+  - The tunnel only encrypts. Routes come from **BGP** on the Cloud Router. If the session isn't established, there are no routes even though the tunnel says ESTABLISHED.
+  steps:
+  - text:
+    - El túnel
+    - The tunnel
+    cmd: gcloud compute vpn-tunnels describe TUNEL --region=REGION
+  - text:
+    - La sesión BGP, su motivo y las rutas
+    - The BGP session, its reason and the routes
+    cmd: gcloud compute routers get-status ROUTER --region=REGION
+  causes:
+  - - ASN distinto en un lado («Bad Peer AS»)
+    - Different ASN on one side ("Bad Peer AS")
+  - - 'La subred no se anuncia (modo personalizado): el CPD no tiene ruta de vuelta'
+    - 'The subnet isn''t advertised (custom mode): the data centre has no route back'
+  fix:
+  - Alinea el ASN del peer (`update-bgp-peer --peer-asn`) o anuncia la subred (`routers update --add-advertisement-ranges`), con cambio aprobado.
+  - Align the peer ASN (`update-bgp-peer --peer-asn`) or advertise the subnet (`routers update --add-advertisement-ranges`), with an approved change.
+  avoid:
+  - Rutas estáticas para saltarse BGP o abrir todo el CPD en el cortafuegos.
+  - Static routes to bypass BGP or opening the whole data centre in the firewall.
+  labs:
+  - zentra-z75-bgp-asn
+  - zentra-z80-week9-test
+- id: dns-forwarding
+  area: network
+  symptom:
+  - «Could not resolve host» con nombres del centro de datos (*.corp)
+  - '"Could not resolve host" with data-centre names (*.corp)'
+  errors: []
+  means:
+  - Esos nombres viven en los DNS del CPD. Hace falta una **zona de reenvío** en Cloud DNS y que el CPD tenga **ruta de vuelta a 35.199.192.0/19**, de donde salen las consultas.
+  - Those names live in the data centre's DNS. You need a Cloud DNS **forwarding zone** and the data centre needs a **route back to 35.199.192.0/19**, where the queries come from.
+  steps:
+  - text:
+    - ¿Nombre o red? Prueba por nombre y por IP
+    - Name or network? Try by name and by IP
+    cmd: gcloud compute ssh VM --tunnel-through-iap --command='dig HOST'
+  - text:
+    - Zona de reenvío
+    - Forwarding zone
+    cmd: gcloud dns managed-zones create ZONA --dns-name=DOMINIO. --visibility=private --networks=RED --forwarding-targets=IP_DNS_CPD --description=cpd
+  causes:
+  - - No hay zona de reenvío
+    - No forwarding zone
+  - - El Cloud Router no anuncia 35.199.192.0/19
+    - The Cloud Router doesn't advertise 35.199.192.0/19
+  fix:
+  - Zona de reenvío + anuncio personalizado de 35.199.192.0/19 **manteniendo** all_subnets.
+  - Forwarding zone + custom advertisement of 35.199.192.0/19 **keeping** all_subnets.
+  avoid:
+  - Copiar registros del CPD en una zona privada propia.
+  - Copying data-centre records into a private zone of your own.
+  labs:
+  - zentra-z76-dns-forwarding
+- id: deny-policy
+  area: access
+  symptom:
+  - «Tengo el rol (incluso Owner) y no me deja»
+  - '"I have the role (even Owner) and it won''t let me"'
+  errors: []
+  means:
+  - Una **política de denegación** de IAM se evalúa antes que los roles y gana siempre. Suele proteger algo a propósito (evidencias, registros) con un grupo de emergencia (break-glass).
+  - An IAM **deny policy** is evaluated before roles and always wins. It usually protects something on purpose (evidence, logs) with a break-glass group.
+  steps:
+  - text:
+    - ¿Por qué no?
+    - Why not?
+    cmd: gcloud policy-intelligence troubleshoot-policy iam RECURSO --principal-email=EMAIL --permission=PERMISO
+  - text:
+    - Políticas de denegación del proyecto
+    - The project's deny policies
+    cmd: gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com/projects/PROYECTO --kind=denypolicies
+  causes:
+  - - Bucket de evidencias o auditoría protegido
+    - Protected evidence or audit bucket
+  fix:
+  - Explicar que no es un rol y escalar a Seguridad para el procedimiento de emergencia (break-glass).
+  - Explain it isn't a role and escalate to Security for the break-glass procedure.
+  avoid:
+  - Borrar o cambiar la política, o meter a alguien en el grupo de emergencia.
+  - Deleting or changing the policy, or adding someone to the break-glass group.
+  labs:
+  - zentra-z77-deny-policy
+- id: fixed-egress-ip
+  area: network
+  symptom:
+  - 'Petición: «danos la IP fija desde la que salimos» (proveedor que filtra por IP)'
+  - 'Request: "give us the fixed IP we go out from" (provider filtering by IP)'
+  errors: []
+  means:
+  - Con Cloud NAT en asignación automática las IPs **pueden cambiar**. Hay que reservar IPs estáticas y pasar el NAT a asignación manual.
+  - With Cloud NAT on automatic allocation the IPs **can change**. Reserve static IPs and switch the NAT to manual allocation.
+  steps:
+  - text:
+    - Cómo sale ahora
+    - How it goes out now
+    cmd: gcloud compute routers nats describe NAT --router=ROUTER --region=REGION
+  - text:
+    - Reservar y asignar
+    - Reserve and assign
+    cmd: gcloud compute routers nats update NAT --router=ROUTER --region=REGION --nat-external-ip-pool=IP_RESERVADA
+  causes:
+  - - NAT con IPs automáticas
+    - NAT with automatic IPs
+  fix:
+  - IP estática + NAT manual en ventana de cambio (corta un momento las conexiones salientes) y comunicar la IP.
+  - Static IP + manual NAT in a change window (briefly cuts outbound connections) and communicate the IP.
+  avoid:
+  - 'Dar la IP automática actual: puede cambiar mañana.'
+  - 'Giving today''s automatic IP: it can change tomorrow.'
+  labs:
+  - zentra-z78-vendor-static-ip
+- id: terraform-drift
+  area: compute
+  symptom:
+  - El plan de Terraform quiere deshacer un cambio que nadie recuerda
+  - The Terraform plan wants to undo a change nobody remembers
+  errors: []
+  means:
+  - 'Es **deriva**: alguien cambió el recurso fuera del código (a menudo un arreglo de emergencia). Si aplicas el plan, deshaces el arreglo.'
+  - 'It''s **drift**: someone changed the resource outside the code (often an emergency fix). If you apply the plan, you undo the fix.'
+  steps:
+  - text:
+    - Qué quiere cambiar
+    - What it wants to change
+    cmd: terraform plan
+  - text:
+    - Quién lo cambió a mano
+    - Who changed it by hand
+    cmd: gcloud logging read 'protoPayload.methodName:"firewalls"' --limit=5
+  causes:
+  - - Arreglo de emergencia que no se llevó al código
+    - Emergency fix never brought into the code
+  fix:
+  - Si el cambio es legítimo, llévalo al código y repite el plan hasta «No changes».
+  - If the change is legitimate, bring it into the code and repeat the plan until "No changes".
+  avoid:
+  - Aplicar el plan tal cual o dejar de gestionar el recurso con Terraform.
+  - Applying the plan as is or stopping managing the resource with Terraform.
+  labs:
+  - zentra-z79-terraform-drift
+  - devops-tf01-drift-import

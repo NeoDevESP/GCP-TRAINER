@@ -1,7 +1,7 @@
 "use client";
 
-// Zentra final exam (internal L2 certification): six cases drawn at random
-// from weeks 3-8, solved without tutor or hints, plus a theory test. The
+// Zentra final exam (internal L2 certification): seven cases drawn at random
+// from weeks 3-9, solved without tutor or hints, plus a theory test. The
 // result is a report by area with strengths, weak spots and what to review
 // (guide symptoms, cases to repeat, study topics), and a printable
 // certificate when passed. The exam lives in the learner's study runs.
@@ -34,7 +34,7 @@ const TOPIC_AREA: Record<string, string> = {
   compute: "compute", "support-compute": "compute",
   storage: "data", databases: "data", data: "data", "support-data": "data",
   gke: "platform",
-  security: "secops", observability: "secops", support: "secops", "support-craft": "secops", "support-method": "secops", "support-governance": "secops",
+  security: "secops", observability: "secops", support: "secops", "support-craft": "secops", "support-banking": "secops", "support-method": "secops", "support-governance": "secops",
 };
 // Guide (runbook) areas behind each exam area.
 const GUIDE_AREAS: Record<string, string[]> = { access: ["access"], network: ["network"], compute: ["compute"], data: ["data"], platform: ["gke", "serverless"], secops: ["security"] };
@@ -216,7 +216,7 @@ export default function FinalPage() {
           <div>
             <h1>{t("Examen final de Zentra")}</h1>
             <p className="muted" style={{ margin: "6px 0 0", maxWidth: 720 }}>
-              {t("La certificación interna de Soporte N2: seis casos al azar de las semanas 3 a 8, sin profesor ni pistas, y un test de teoría con preguntas del oficio de soporte. Al terminar recibes un informe por áreas con lo que dominas y lo que debes repasar.")}
+              {t("La certificación interna de Soporte N2: siete casos al azar de las semanas 3 a 9, sin profesor ni pistas, y un test de teoría con preguntas del oficio de soporte. Al terminar recibes un informe por áreas con lo que dominas y lo que debes repasar.")}
             </p>
           </div>
         </header>
@@ -228,7 +228,7 @@ export default function FinalPage() {
             <section className="card fx-rules">
               <h2>{t("Cómo funciona")}</h2>
               <ul>
-                <li>{t("Seis casos, uno de cada semana de la 3 a la 8, elegidos al azar. Se abren en modo examen: sin profesor ni pistas.")}</li>
+                <li>{t("Siete casos, uno de cada semana de la 3 a la 9, elegidos al azar. Se abren en modo examen: sin profesor ni pistas.")}</li>
                 <li>{t("Veinte preguntas de teoría de los temas de soporte y de Google Cloud.")}</li>
                 <li>{t("Nota: 70 % los casos y 30 % el test. Apruebas con {n} o más y ningún caso por debajo de 50.", { n: PASS })}</li>
                 <li>{t("Un caso hecho con el profesor o viendo la solución cuenta como 0. Tiempo orientativo: 4 horas; puedes parar y seguir otro día.")}</li>
@@ -385,7 +385,7 @@ function Report({ res, labs, guide, topics, name, stageOf }: { res: FinalResult;
           <div className="fx-cert-kick">Cloud Mastery · Zentra</div>
           <div className="fx-cert-title">{t("Certificado de Soporte N2")}</div>
           <div className="fx-cert-name">{name}</div>
-          <p>{t("ha superado el examen final de la ruta Zentra con una nota de {n} sobre 100: seis incidencias y peticiones reales de Google Cloud resueltas sin ayuda y la prueba de teoría.", { n: res.total })}</p>
+          <p>{t("ha superado el examen final de la ruta Zentra con una nota de {n} sobre 100: siete incidencias y peticiones reales de Google Cloud resueltas sin ayuda y la prueba de teoría.", { n: res.total })}</p>
           <div className="muted small">{date} · {t("Banco ficticio creado para aprender")}</div>
         </div>
       )}

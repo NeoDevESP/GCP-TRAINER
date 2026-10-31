@@ -22,6 +22,15 @@ func (s *State) TCPConnect(from Endpoint, host string, port int) (bool, string, 
 			}
 		}
 	}
+	if h := s.OnPremHostByIP(ip); h != nil {
+		if ok, why := s.onPremFlow(from, ip, port); !ok {
+			return false, "timeout", fmt.Sprintf("connect to %s port %d (tcp) timed out: Operation now in progress (%s)", host, port, why)
+		}
+		if !intIn(h.Ports, port) {
+			return false, "refused", fmt.Sprintf("connect to %s port %d (tcp) failed: Connection refused", host, port)
+		}
+		return true, "", fmt.Sprintf("Connection to %s %d port [tcp/*] succeeded!", host, port)
+	}
 	ep, ok := s.FindIP(ip)
 	if !ok {
 		if from.Kind == "vm" || from.Kind == "pod" {

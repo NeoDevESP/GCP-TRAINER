@@ -1,0 +1,95 @@
+id: support-banking
+branch: security
+name: ["Plataforma bancaria: perímetros, claves, CPD y código", "Banking platform: perimeters, keys, data centre and code"]
+intro: ["Los controles que más tickets generan en el soporte de un banco: VPC Service Controls, claves propias de Cloud KMS, la conexión con el centro de datos (VPN, BGP y DNS), las políticas de denegación de IAM, la IP fija de salida y la infraestructura como código. Se practica en la Semana 9 de Zentra.", "The controls that generate the most tickets in bank support: VPC Service Controls, Cloud KMS customer-managed keys, the data-centre link (VPN, BGP and DNS), IAM deny policies, the fixed egress IP and infrastructure as code. Practised in Zentra's Week 9."]
+concepts:
+  - id: vpcsc
+    term: [VPC Service Controls, VPC Service Controls]
+    what: ["Un perímetro alrededor de proyectos: sus APIs restringidas (BigQuery, Storage…) solo aceptan llamadas desde dentro, aunque quien llame tenga permisos IAM.", "A perimeter around projects: their restricted APIs (BigQuery, Storage…) only accept calls from inside, even if the caller has IAM permissions."]
+    points:
+      - ["El error «Request is prohibited by organization's policy» siempre es un perímetro, nunca un rol.", "The \"Request is prohibited by organization's policy\" error is always a perimeter, never a role."]
+      - ["La infracción queda en la auditoría de política con identidad, origen, servicio, perímetro y motivo (RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER, NO_MATCHING_ACCESS_LEVEL).", "The violation is in the policy audit log with identity, source, service, perimeter and reason (RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER, NO_MATCHING_ACCESS_LEVEL)."]
+      - ["Para un flujo legítimo desde fuera: regla de entrada (ingress) con esa identidad, ese proyecto de origen y ese servicio.", "For a legitimate flow from outside: an ingress rule with that identity, that source project and that service."]
+      - ["Antes de activar un perímetro, modo prueba (dry-run): registra lo que bloquearía sin bloquear nada.", "Before enforcing a perimeter, dry-run: it logs what it would block without blocking anything."]
+    tip: ["Nunca se saca un proyecto del perímetro ni se abre la entrada a cualquier identidad para «arreglar» un ticket.", "You never take a project out of the perimeter or open ingress to any identity to \"fix\" a ticket."]
+  - id: cmek
+    term: [Claves propias (CMEK), Customer-managed keys (CMEK)]
+    what: ["Los datos se cifran con una clave del banco en Cloud KMS: el banco la controla y puede revocarla.", "Data is encrypted with a bank key in Cloud KMS: the bank controls it and can revoke it."]
+    points:
+      - ["Con CMEK en un bucket, la clave la usa el agente de servicio de Cloud Storage (service-NÚMERO@gs-project-accounts…), no la aplicación.", "With CMEK on a bucket, the key is used by the Cloud Storage service agent (service-NUMBER@gs-project-accounts…), not the application."]
+      - ["Versiones: la primaria cifra lo nuevo; las anteriores descifran lo antiguo.", "Versions: the primary encrypts new data; older ones decrypt old data."]
+      - ["Deshabilitar una versión deja ilegible lo cifrado con ella (reversible). Destruirla lo pierde para siempre.", "Disabling a version makes what's encrypted with it unreadable (reversible). Destroying it loses it forever."]
+    tip: ["Si falla una CMEK: mira la clave del bucket, quién puede usarla y el estado de sus versiones.", "If a CMEK fails: check the bucket's key, who can use it and the state of its versions."]
+  - id: hybrid
+    term: [La conexión con el CPD, The data-centre link]
+    what: ["Cloud VPN o Interconnect unen la VPC con el centro de datos; BGP en el Cloud Router intercambia las rutas.", "Cloud VPN or Interconnect join the VPC to the data centre; BGP on the Cloud Router exchanges the routes."]
+    points:
+      - ["Túnel arriba no significa rutas: la sesión BGP tiene que estar establecida (ASN de acuerdo en los dos lados).", "A tunnel up doesn't mean routes: the BGP session must be established (ASNs agreed on both sides)."]
+      - ["Rutas en los dos sentidos: Google aprende las del CPD y el CPD aprende lo que el Cloud Router anuncia.", "Routes both ways: Google learns the data centre's and the data centre learns what the Cloud Router advertises."]
+      - ["En modo de anuncio personalizado, una subred nueva no se anuncia sola.", "In custom advertisement mode, a new subnet isn't advertised by itself."]
+      - ["Para resolver nombres del CPD: zona de reenvío en Cloud DNS y ruta de vuelta a 35.199.192.0/19.", "To resolve data-centre names: a Cloud DNS forwarding zone and a route back to 35.199.192.0/19."]
+    tip: ["Diagnostica por capas: túnel, sesión BGP, rutas aprendidas y anunciadas, cortafuegos, y por último DNS.", "Diagnose layer by layer: tunnel, BGP session, learned and advertised routes, firewall, and finally DNS."]
+  - id: deny
+    term: [Políticas de denegación de IAM, IAM deny policies]
+    what: ["Reglas que deniegan permisos a principales aunque tengan roles que los concedan. Se evalúan antes y ganan siempre.", "Rules that deny permissions to principals even if they have roles granting them. They're evaluated first and always win."]
+    points:
+      - ["Protegen lo que nunca debe pasar: borrar evidencias, desactivar registros.", "They protect what must never happen: deleting evidence, disabling logs."]
+      - ["Suelen tener una excepción: un grupo de emergencia (break-glass) que usa Seguridad con ticket.", "They usually have one exception: a break-glass group used by Security with a ticket."]
+      - ["El solucionador de políticas lo muestra: NOT_GRANTED por denegación.", "The policy troubleshooter shows it: NOT_GRANTED because of a deny."]
+    tip: ["Si alguien tiene el rol y aun así no puede, piensa en una denegación antes de dar más roles.", "If someone has the role and still can't, think of a deny before granting more roles."]
+  - id: egress-ip
+    term: [IP fija de salida, Fixed egress IP]
+    what: ["Los proveedores que filtran por IP necesitan una IP que no cambie.", "Providers that filter by IP need an IP that doesn't change."]
+    points:
+      - ["Cloud NAT con asignación automática puede cambiar las IPs.", "Cloud NAT with automatic allocation can change the IPs."]
+      - ["Se reservan IPs estáticas y el NAT pasa a asignación manual, en ventana de cambio (corta un momento las conexiones).", "Static IPs are reserved and the NAT switches to manual allocation, in a change window (it briefly cuts connections)."]
+    tip: ["Comunica la IP junto con el número de cambio y cómo se vuelve atrás.", "Communicate the IP together with the change number and how to roll back."]
+  - id: drift
+    term: [Deriva de Terraform, Terraform drift]
+    what: ["La realidad y el código no coinciden porque alguien cambió algo a mano.", "Reality and the code don't match because someone changed something by hand."]
+    points:
+      - ["Suele ser un arreglo de emergencia que no se llevó al código.", "It's usually an emergency fix that wasn't brought into the code."]
+      - ["Si el cambio es legítimo, se lleva al código y el plan debe quedar sin cambios; aplicar el plan tal cual deshace el arreglo.", "If the change is legitimate, it's brought into the code and the plan must show no changes; applying the plan as is undoes the fix."]
+    tip: ["Después de cada cambio de emergencia: ticket para llevarlo al código.", "After every emergency change: a ticket to bring it into the code."]
+scenarios:
+  - q: ["Un equipo de analítica en otro proyecto recibe «Request is prohibited by organization's policy» al consultar BigQuery de producción.", "An analytics team in another project gets \"Request is prohibited by organization's policy\" querying production BigQuery."]
+    options: [["Con Seguridad, regla de entrada para esa identidad, ese proyecto y BigQuery", "With Security, an ingress rule for that identity, that project and BigQuery"], ["Darles BigQuery Admin", "Grant them BigQuery Admin"], ["Sacar el proyecto del perímetro", "Take the project out of the perimeter"], ["Abrir la entrada a cualquier identidad", "Open ingress to any identity"]]
+    answer: 0
+    why: ["Es un perímetro, no un permiso; la regla mínima resuelve sin debilitar la protección.", "It's a perimeter, not a permission; the minimal rule fixes it without weakening protection."]
+  - q: ["Las subidas a un bucket con CMEK fallan con «Permission denied on Cloud KMS key».", "Uploads to a CMEK bucket fail with \"Permission denied on Cloud KMS key\"."]
+    options: [["Devolver el rol de cifrado al agente de Cloud Storage en esa clave", "Give the encryption role back to the Cloud Storage agent on that key"], ["Dar KMS Admin a la aplicación", "Give the application KMS Admin"], ["Quitar la CMEK del bucket", "Remove the CMEK from the bucket"], ["Crear otra clave", "Create another key"]]
+    answer: 0
+    why: ["Con CMEK el que cifra es el agente de servicio de Storage.", "With CMEK the encrypting party is the Storage service agent."]
+  - q: ["El túnel VPN está ESTABLISHED, pero get-status del Cloud Router dice Idle y «Bad Peer AS».", "The VPN tunnel is ESTABLISHED, but the Cloud Router get-status says Idle and \"Bad Peer AS\"."]
+    options: [["Confirmar el ASN con el CPD y corregir el peer con cambio aprobado", "Confirm the ASN with the data centre and fix the peer with an approved change"], ["Recrear el túnel", "Recreate the tunnel"], ["Poner una ruta estática", "Add a static route"], ["Abrir el cortafuegos a todo el CPD", "Open the firewall to the whole data centre"]]
+    answer: 0
+    why: ["Sin BGP establecido no hay rutas; el motivo dice exactamente qué no cuadra.", "Without established BGP there are no routes; the reason says exactly what doesn't match."]
+  - q: ["El plan de Terraform quiere quitar un puerto que la guardia abrió anoche en un incidente.", "The Terraform plan wants to remove a port on-call opened last night during an incident."]
+    options: [["Confirmar que es necesario, llevarlo al código y repetir el plan", "Confirm it's needed, bring it into the code and repeat the plan"], ["Aplicar el plan: el código manda", "Apply the plan: the code rules"], ["Borrar el estado", "Delete the state"], ["Dejar de gestionar la regla con Terraform", "Stop managing the rule with Terraform"]]
+    answer: 0
+    why: ["Aplicar deshace el arreglo; el cambio legítimo se consolida en el código.", "Applying undoes the fix; the legitimate change is consolidated in the code."]
+quiz:
+  - q: ["«Request is prohibited by organization's policy» indica…", "\"Request is prohibited by organization's policy\" indicates…"]
+    options: [["Un perímetro de VPC Service Controls", "A VPC Service Controls perimeter"], ["Falta un rol IAM", "A missing IAM role"], ["Una cuota agotada", "An exhausted quota"], ["Una API desactivada", "A disabled API"]]
+    answer: 0
+    why: ["Es el mensaje de VPC Service Controls; la auditoría de política da los detalles.", "It's the VPC Service Controls message; the policy audit log gives the details."]
+  - q: ["¿Para qué sirve el modo prueba (dry-run) de un perímetro?", "What is a perimeter's dry-run mode for?"]
+    options: [["Ver qué bloquearía sin bloquear nada", "Seeing what it would block without blocking anything"], ["Bloquear solo de noche", "Blocking only at night"], ["Permitir todo para siempre", "Allowing everything forever"], ["Borrar las infracciones", "Deleting violations"]]
+    answer: 0
+    why: ["Se revisan sus registros y se preparan las reglas antes de activarlo.", "Its logs are reviewed and rules prepared before enforcing it."]
+  - q: ["Con CMEK en un bucket, ¿quién necesita el rol de cifrado en la clave?", "With CMEK on a bucket, who needs the encryption role on the key?"]
+    options: [["El agente de servicio de Cloud Storage", "The Cloud Storage service agent"], ["La cuenta de la aplicación", "The application's account"], ["Todos los usuarios", "Every user"], ["Nadie", "Nobody"]]
+    answer: 0
+    why: ["El servicio cifra y descifra en nombre del proyecto.", "The service encrypts and decrypts on behalf of the project."]
+  - q: ["¿Qué pasa al destruir una versión de clave?", "What happens when a key version is destroyed?"]
+    options: [["Lo cifrado con ella es ilegible para siempre", "What's encrypted with it is unreadable forever"], ["Se recifra con la siguiente", "It's re-encrypted with the next one"], ["Nada", "Nothing"], ["Se hace público", "It becomes public"]]
+    answer: 0
+    why: ["Por eso se deshabilita (reversible) y se destruye solo con certeza y aprobación.", "That's why it's disabled (reversible) and destroyed only with certainty and approval."]
+  - q: ["Una zona de reenvío de Cloud DNS al CPD no responde aunque BGP esté bien. ¿Qué falta? (Elige 2)", "A Cloud DNS forwarding zone to the data centre doesn't answer though BGP is fine. What's missing? (Choose 2)"]
+    options: [["Anunciar 35.199.192.0/19 desde el Cloud Router", "Advertising 35.199.192.0/19 from the Cloud Router"], ["Seguir anunciando las subredes (all_subnets) al pasar a modo personalizado", "Keep advertising the subnets (all_subnets) when switching to custom mode"], ["Abrir el puerto 53 a internet", "Opening port 53 to the internet"], ["Una IP pública en la VM", "A public IP on the VM"]]
+    answers: [0, 1]
+    why: ["El CPD necesita ruta de vuelta a las consultas reenviadas, sin perder las rutas de las subredes.", "The data centre needs a route back to forwarded queries, without losing the subnet routes."]
+  - q: ["Una política de denegación y un rol Owner chocan. ¿Qué gana?", "A deny policy and an Owner role clash. Which wins?"]
+    options: [["La denegación", "The deny"], ["Owner", "Owner"], ["El más reciente", "The most recent"], ["Ninguno", "Neither"]]
+    answer: 0
+    why: ["La denegación se evalúa antes que los permisos.", "Deny is evaluated before allow."]

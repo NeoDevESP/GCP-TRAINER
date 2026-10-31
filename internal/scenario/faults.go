@@ -47,7 +47,7 @@ var FaultTypes = []string{
 	"run_iam_public", "sql_flag", "sql_slow_query", "sql_extra_connections", "vm_tag_remove", "vm_stop", "vm_metadata",
 	"health_check_path", "named_port_remove", "mig_autoscaler", "bucket_public", "api_disable", "k8s_image",
 	"k8s_remove_requests", "k8s_probe_port", "k8s_scale", "leaked_key_miner", "subnet_pga_off", "dns_record",
-	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource", "region_outage", "zone_outage", "bill_snapshot", "os_file", "os_service", "os_disk", "os_user",
+	"pubsub_push_endpoint", "secret_version_disable", "log_noise", "decoy_resource", "region_outage", "zone_outage", "bill_snapshot", "onprem", "vpn_tunnel_status", "kms_version", "kms_agent_remove", "os_file", "os_service", "os_disk", "os_user",
 }
 
 // ApplyFault mutates the world. Faults mutate real resource state, so symptoms
@@ -393,6 +393,63 @@ func ApplyFault(st *sim.State, project string, l *Lab, f Fault) error {
 	case "bill_snapshot":
 		// Records the current estimate as last month's invoice (FinOps anomalies).
 		st.SnapshotBill(project)
+	case "onprem":
+		// The bank's data centre at the other end of the VPN.
+		o := &sim.OnPrem{Name: fs(f, "name"), ASN: fi(f, "asn", 65010), GoogleASN: fi(f, "googleAsn", 0), Ranges: fl(f, "ranges"), DNSServer: fs(f, "dns")}
+		if hs, ok := f["hosts"].([]any); ok {
+			for _, h := range hs {
+				m := map[string]any{}
+				switch hm := h.(type) {
+				case Fault:
+					m = hm
+				case map[string]any:
+					m = hm
+				case map[any]any:
+					for k, v := range hm {
+						m[fmt.Sprint(k)] = v
+					}
+				}
+				hh := sim.OnPremHost{Name: fmt.Sprint(m["name"]), IP: fmt.Sprint(m["ip"])}
+				if b, ok := m["body"]; ok {
+					hh.Body = fmt.Sprint(b)
+				}
+				if ps, ok := m["ports"].([]any); ok {
+					for _, pp := range ps {
+						n, _ := strconv.Atoi(fmt.Sprint(pp))
+						hh.Ports = append(hh.Ports, n)
+					}
+				}
+				o.Hosts = append(o.Hosts, hh)
+			}
+		}
+		st.OnPrem = o
+	case "vpn_tunnel_status":
+		for _, gn := range sim.SortedKeys(p.VPNGateways) {
+			gw := p.VPNGateways[gn]
+			for i := range gw.Tunnels {
+				if gw.Tunnels[i].Name == fs(f, "tunnel") {
+					gw.Tunnels[i].Status = fs(f, "status")
+				}
+			}
+		}
+	case "kms_version", "kms_agent_remove":
+		kr := p.KeyRings[fs(f, "keyring")]
+		if kr == nil || kr.Keys[fs(f, "key")] == nil {
+			return fmt.Errorf("kms key %s/%s not found", fs(f, "keyring"), fs(f, "key"))
+		}
+		k := kr.Keys[fs(f, "key")]
+		name := "projects/" + project + "/locations/" + kr.Location + "/keyRings/" + kr.Name + "/cryptoKeys/" + k.Name
+		if t == "kms_version" {
+			for i := range k.Versions {
+				if k.Versions[i].ID == fi(f, "version", 1) {
+					k.Versions[i].State = fs(f, "state")
+				}
+			}
+			audit("cloudkms.googleapis.com", "UpdateCryptoKeyVersion", name+"/cryptoKeyVersions/"+fs(f, "version"))
+		} else {
+			k.IAM.RemoveBinding("roles/cloudkms.cryptoKeyEncrypterDecrypter", "serviceAccount:"+st.StorageAgent(project))
+			audit("cloudkms.googleapis.com", "SetIamPolicy", name)
+		}
 	case "region_outage", "zone_outage":
 		where := fs(f, "region")
 		if t == "zone_outage" {
@@ -439,6 +496,12 @@ func policyFor(st *sim.State, p *sim.Project, res string) (*sim.Policy, error) {
 			return nil, fmt.Errorf("run service %s not found", name)
 		}
 		return &s.IAM, nil
+	case "kms":
+		ring, key, _ := strings.Cut(name, "/")
+		if kr := p.KeyRings[ring]; kr != nil && kr.Keys[key] != nil {
+			return &kr.Keys[key].IAM, nil
+		}
+		return nil, fmt.Errorf("kms key %s not found", name)
 	case "dataset":
 		d := p.Datasets[name]
 		if d == nil {

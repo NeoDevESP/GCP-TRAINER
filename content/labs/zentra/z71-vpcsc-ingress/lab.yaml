@@ -1,0 +1,318 @@
+id: zentra-z71-vpcsc-ingress
+title: 'INC · «Request is prohibited by organization''s policy»: el panel de riesgos no lee BigQuery'
+summary: 'Seguridad metió anoche el proyecto de datos en un perímetro de VPC Service Controls y el panel de riesgos, que vive en otro proyecto, se quedó fuera. Ni quitar el perímetro ni abrirlo a todos: una regla de entrada exacta.'
+track: zentra
+day: 81
+level: professional
+branch: security
+type: incident
+mode: production
+skills:
+- iam.orgpolicy
+- security.audit
+- data.bigquery
+wellArchitected:
+- security
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  bq mk --dataset --location=EU riesgo
+  bq mk --table --sim_rows=500000 riesgo.exposiciones cliente:STRING:16,importe:NUMERIC:16,fecha:DATE:4
+  gcloud access-context-manager perimeters create zentra-datos --title="Datos de producción" --resources=projects/$(gcloud projects describe {{.project}} --format='value(projectNumber)') --restricted-services=bigquery.googleapis.com,storage.googleapis.com
+traffic:
+- name: panel-riesgos
+  target: api:bigquery.googleapis.com
+  path: google.cloud.bigquery.v2.JobService.InsertJob
+  rps: 5
+  principal: serviceAccount:looker-sa@zentra-bi.iam.gserviceaccount.com
+  from: project:zentra-bi/418230557192
+ticket:
+  id: INC-31071
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Riesgos · Analítica
+  summary: 'Desde esta mañana el panel de riesgos (Looker, proyecto zentra-bi) no carga ningún informe. Error: «Request is prohibited by organization''s policy. vpcServiceControlsUniqueIdentifier: …». El comité de riesgos es a las 12:00.'
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.
+  fallback: 'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.'
+  facts:
+  - keywords:
+    - - perimetro
+      - perímetro
+      - perimeter
+      - vpc
+      - service controls
+      - anoche
+      - cambio
+      - change
+      - looker
+      - bi
+      - regla
+      - rule
+      - ingress
+      - entrada
+    answer: 'Sí: anoche metimos el proyecto de datos en el perímetro zentra-datos (BigQuery y Storage restringidos). El perímetro no se quita ni se abre a todo zentra-bi: haz una regla de entrada solo para looker-sa, desde el proyecto zentra-bi (número 418230557192) y solo para BigQuery.'
+- role: risk
+  name: Riesgos · Analítica
+  persona: Equipo de analítica de riesgos.
+  fallback: Solo leemos BigQuery desde el panel; Storage no lo usamos.
+  facts:
+  - keywords:
+    - - cuenta
+      - account
+      - identidad
+      - identity
+      - service account
+      - proyecto
+      - project
+      - numero
+      - número
+    answer: El panel usa la cuenta looker-sa@zentra-bi.iam.gserviceaccount.com, en el proyecto zentra-bi (número 418230557192). Solo consulta BigQuery.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **INC-31071 · P2** · *«El panel de riesgos (Looker, proyecto zentra-bi) no carga: Request is prohibited by organization's policy. vpcServiceControlsUniqueIdentifier: …»*
+
+  **VPC Service Controls** pone un **perímetro** alrededor de proyectos: las APIs restringidas (BigQuery, Storage…) de los proyectos de dentro **solo aceptan llamadas desde dentro**, aunque quien llama tenga permisos IAM. Es la defensa del banco contra la exfiltración de datos. Ese mensaje de error **siempre** es un perímetro, nunca un permiso.
+
+  1. Busca la infracción en los registros de auditoría de política: `gcloud logging read 'protoPayload.metadata.violationReason="RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER"' --limit=3` (identidad, origen, servicio y perímetro).
+  2. Mira el perímetro: `gcloud access-context-manager perimeters list` y `describe zentra-datos`.
+  3. Habla con Seguridad, dueña del perímetro, y confirma con Riesgos qué cuenta y qué servicio usan.
+  4. Crea una **regla de entrada** (ingress) con el mínimo alcance (esa identidad, ese proyecto de origen, ese servicio) en un fichero YAML y aplícala con `perimeters update zentra-datos --set-ingress-policies=FICHERO`.
+  5. Responde y deja la explicación técnica en una nota interna.
+objectives:
+- Encuentra la infracción del perímetro
+- Confirma identidad, origen y servicio
+- Regla de entrada mínima
+- Responde
+hints:
+- text: |-
+    Formato del fichero:
+    ```yaml
+    - ingressFrom:
+        identities:
+        - serviceAccount:looker-sa@zentra-bi.iam.gserviceaccount.com
+        sources:
+        - resource: projects/418230557192
+      ingressTo:
+        operations:
+        - serviceName: bigquery.googleapis.com
+          methodSelectors:
+          - method: "*"
+        resources:
+        - "*"
+    ```
+- text: '`gcloud access-context-manager perimeters update zentra-datos --set-ingress-policies=entrada.yaml`'
+solution: |
+  ticket
+  gcloud logging read 'protoPayload.metadata.violationReason="RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER"' --limit=3
+  gcloud access-context-manager perimeters list
+  gcloud access-context-manager perimeters describe zentra-datos
+  ask risk "¿Qué cuenta usa el panel y desde qué proyecto? ¿Solo BigQuery?"
+  ask security "¿Metisteis anoche el proyecto en el perímetro? ¿Hago una regla de entrada para looker-sa?"
+  cat > entrada.yaml <<'YAML'
+  - ingressFrom:
+      identities:
+      - serviceAccount:looker-sa@zentra-bi.iam.gserviceaccount.com
+      sources:
+      - resource: projects/418230557192
+    ingressTo:
+      operations:
+      - serviceName: bigquery.googleapis.com
+        methodSelectors:
+        - method: "*"
+      resources:
+      - "*"
+  YAML
+  gcloud access-context-manager perimeters update zentra-datos --set-ingress-policies=entrada.yaml
+  gcloud access-context-manager perimeters describe zentra-datos
+  ticket comment "Causa: anoche Seguridad metió el proyecto en el perímetro zentra-datos (BigQuery y Storage restringidos) y looker-sa (proyecto zentra-bi, 418230557192) quedó fuera: RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER. Añadida regla de entrada solo para esa identidad, ese origen y BigQuery, con visto bueno de Nadia."
+  ticket update "Hola: el panel de riesgos vuelve a cargar. Anoche se reforzó la protección de los datos de producción y el panel quedó fuera; hemos autorizado solo al panel y solo para las consultas que hace. El perímetro sigue activo."
+  ticket resolve "Regla de entrada en zentra-datos para looker-sa desde zentra-bi solo a BigQuery; perímetro intacto."
+shortcuts:
+- name: take the project out of the perimeter
+  run: |
+    gcloud access-context-manager perimeters update zentra-datos --remove-resources=projects/$(gcloud projects describe {{.project}} --format='value(projectNumber)')
+    ticket resolve "Quitado el proyecto del perímetro para que funcione el panel."
+- name: ingress for any identity
+  run: |
+    cat > todo.yaml <<'YAML'
+    - ingressFrom:
+        identityType: ANY_IDENTITY
+        sources:
+        - accessLevel: "*"
+      ingressTo:
+        operations:
+        - serviceName: "*"
+        resources:
+        - "*"
+    YAML
+    gcloud access-context-manager perimeters update zentra-datos --set-ingress-policies=todo.yaml
+    ticket resolve "Abierta la entrada al perímetro para que no vuelva a fallar."
+rubric:
+- name: El panel vuelve a leer
+  validator: functional
+  points: 25
+  checks:
+  - type: api_call
+    service: bigquery.googleapis.com
+    principal: serviceAccount:looker-sa@zentra-bi.iam.gserviceaccount.com
+    from: project:zentra-bi/418230557192
+    desc: looker-sa llega a BigQuery
+- name: Perímetro intacto y regla mínima
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: perimeter
+    name: zentra-datos
+    restricts:
+    - bigquery.googleapis.com
+    - storage.googleapis.com
+    resource: self
+    noWildcardIngress: true
+    desc: El proyecto sigue dentro y restringido
+  - type: api_call
+    service: storage.googleapis.com
+    principal: serviceAccount:looker-sa@zentra-bi.iam.gserviceaccount.com
+    from: project:zentra-bi/418230557192
+    expect: false
+    desc: Solo BigQuery, no Storage
+  - type: api_call
+    service: bigquery.googleapis.com
+    principal: serviceAccount:otra-sa@zentra-bi.iam.gserviceaccount.com
+    from: project:zentra-bi/418230557192
+    expect: false
+    desc: Solo esa identidad
+- name: Diagnóstico y dueño
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: violationReason|vpcServiceControls|cloudaudit.googleapis.com%2Fpolicy|perimeters describe
+    min: 1
+    desc: Infracción o perímetro revisados
+  - type: asked
+    actor: security
+    min: 1
+    desc: Seguridad, dueña del perímetro
+- name: Comunicación
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - perimetro
+      - perímetro
+      - perimeter
+      - zentra-datos
+    - - ingress
+      - entrada
+      - regla
+      - rule
+    desc: Nota interna con perímetro y regla
+  - type: ticket_update
+    keywords:
+    - - panel
+      - dashboard
+    - - carga
+      - funciona
+      - works
+      - load
+    desc: Respuesta clara al solicitante
+tutor:
+- match: violationReason
+  title: ¿Perímetro o permiso?
+  why: 'RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER: quien llama está fuera del perímetro. IAM no tiene nada que ver.'
+- match: perimeters describe zentra-datos
+  title: El perímetro
+  why: Tu proyecto dentro, BigQuery y Storage restringidos, sin reglas de entrada.
+- match: entrada.yaml
+  title: La regla
+  why: Identidad exacta, proyecto de origen por número y solo bigquery.googleapis.com.
+- match: --set-ingress-policies
+  title: Aplicar
+  why: El perímetro sigue igual de cerrado para todo lo demás.
+en:
+  title: 'INC · "Request is prohibited by organization''s policy": the risk dashboard can''t read BigQuery'
+  summary: 'Last night Security put the data project inside a VPC Service Controls perimeter and the risk dashboard, which lives in another project, was left outside. Neither remove the perimeter nor open it to everyone: one exact ingress rule.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **INC-31071 · P2** · *"The risk dashboard (Looker, project zentra-bi) won't load: Request is prohibited by organization's policy. vpcServiceControlsUniqueIdentifier: …"*
+
+    **VPC Service Controls** puts a **perimeter** around projects: the restricted APIs (BigQuery, Storage…) of the projects inside **only accept calls from inside**, even if the caller has IAM permissions. It's the bank's defence against data exfiltration. That error message is **always** a perimeter, never a permission.
+
+    1. Find the violation in the policy audit logs: `gcloud logging read 'protoPayload.metadata.violationReason="RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER"' --limit=3` (identity, source, service and perimeter).
+    2. Look at the perimeter: `gcloud access-context-manager perimeters list` and `describe zentra-datos`.
+    3. Talk to Security, the perimeter owner, and confirm with Risk which account and service they use.
+    4. Create an **ingress rule** with the minimum scope (that identity, that source project, that service) in a YAML file and apply it with `perimeters update zentra-datos --set-ingress-policies=FILE`.
+    5. Reply and leave the technical explanation in an internal note.
+  objectives:
+  - Find the perimeter violation
+  - Confirm identity, source and service
+  - Minimal ingress rule
+  - Reply
+  hints:
+  - |-
+    File format:
+    ```yaml
+    - ingressFrom:
+        identities:
+        - serviceAccount:looker-sa@zentra-bi.iam.gserviceaccount.com
+        sources:
+        - resource: projects/418230557192
+      ingressTo:
+        operations:
+        - serviceName: bigquery.googleapis.com
+          methodSelectors:
+          - method: "*"
+        resources:
+        - "*"
+    ```
+  - '`gcloud access-context-manager perimeters update zentra-datos --set-ingress-policies=entrada.yaml`'
+  ticket:
+    summary: 'Since this morning the risk dashboard (Looker, project zentra-bi) loads no reports. Error: "Request is prohibited by organization''s policy. vpcServiceControlsUniqueIdentifier: …". The risk committee is at 12:00.'
+  text:
+    Riesgos · Analítica: Risk · Analytics
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.: Cloud security engineer, owner of perimeters, keys and deny policies.
+    'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.': 'Security controls aren''t removed: they''re adjusted with the minimum scope. Tell me identity, source and service.'
+    ? 'Sí: anoche metimos el proyecto de datos en el perímetro zentra-datos (BigQuery y Storage restringidos). El perímetro no se quita ni se abre a todo zentra-bi: haz una regla de entrada solo para looker-sa, desde el proyecto zentra-bi (número 418230557192) y solo para BigQuery.'
+    : 'Yes: last night we put the data project in the zentra-datos perimeter (BigQuery and Storage restricted). The perimeter isn''t removed or opened to all of zentra-bi: make an ingress rule only for looker-sa, from project zentra-bi (number 418230557192) and only for BigQuery.'
+    Equipo de analítica de riesgos.: Risk analytics team.
+    Solo leemos BigQuery desde el panel; Storage no lo usamos.: We only read BigQuery from the dashboard; we don't use Storage.
+    ? El panel usa la cuenta looker-sa@zentra-bi.iam.gserviceaccount.com, en el proyecto zentra-bi (número 418230557192). Solo consulta BigQuery.
+    : The dashboard uses looker-sa@zentra-bi.iam.gserviceaccount.com, in project zentra-bi (number 418230557192). It only queries BigQuery.
+    El panel vuelve a leer: The dashboard reads again
+    looker-sa llega a BigQuery: looker-sa reaches BigQuery
+    Perímetro intacto y regla mínima: Perimeter intact, minimal rule
+    El proyecto sigue dentro y restringido: The project stays inside and restricted
+    Solo BigQuery, no Storage: Only BigQuery, not Storage
+    Solo esa identidad: Only that identity
+    Diagnóstico y dueño: Diagnosis and owner
+    Infracción o perímetro revisados: Violation or perimeter checked
+    Seguridad, dueña del perímetro: Security, the perimeter owner
+    Comunicación: Communication
+    Nota interna con perímetro y regla: Internal note with perimeter and rule
+    Respuesta clara al solicitante: Clear reply to the requester
+    ¿Perímetro o permiso?: Perimeter or permission?
+    'RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER: quien llama está fuera del perímetro. IAM no tiene nada que ver.': 'RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER: the caller is outside the perimeter. IAM has nothing to do with it.'
+    El perímetro: The perimeter
+    Tu proyecto dentro, BigQuery y Storage restringidos, sin reglas de entrada.: Your project inside, BigQuery and Storage restricted, no ingress rules.
+    La regla: The rule
+    Identidad exacta, proyecto de origen por número y solo bigquery.googleapis.com.: Exact identity, source project by number and only bigquery.googleapis.com.
+    Aplicar: Apply
+    El perímetro sigue igual de cerrado para todo lo demás.: The perimeter stays just as closed for everything else.

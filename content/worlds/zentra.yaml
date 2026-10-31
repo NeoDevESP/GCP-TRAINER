@@ -724,6 +724,15 @@ sections:
     meta:
     - Nivel profesional · 10 casos
     - Professional level · 10 cases
+  - title:
+    - Semana 9 · Los tickets de cada día en banca
+    - Week 9 · Everyday banking tickets
+    text:
+    - 'Lo que más se ve en el soporte de un banco: perímetros de VPC Service Controls (y su modo prueba), claves propias de Cloud KMS, la conexión con el CPD (BGP, anuncios de rutas y DNS), políticas de denegación, IP fija para proveedores y deriva de Terraform. Termina con la conciliación que no habla con el core.'
+    - 'What you see most in bank support: VPC Service Controls perimeters (and their dry-run), Cloud KMS customer-managed keys, the data-centre link (BGP, route advertisements and DNS), deny policies, a fixed IP for providers and Terraform drift. Ends with the reconciliation that cannot talk to the core.'
+    meta:
+    - Nivel profesional · 10 casos
+    - Professional level · 10 cases
 people:
 - name: Marta Ibáñez
   email: marta.ibanez@zentra.dev

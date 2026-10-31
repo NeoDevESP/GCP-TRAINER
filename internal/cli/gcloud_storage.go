@@ -291,6 +291,9 @@ func (s *Session) storageCp(c *Cmd, src, dst string) (string, error) {
 		if err := c.Need("storage.objects.create", s.State.BucketResource(b, obj)); err != nil {
 			return "", err
 		}
+		if ok, why := s.State.CMEKUsable(b, true); !ok {
+			return "", fmt.Errorf("%s", why)
+		}
 		gen := 1
 		if old := b.Objects[obj]; old != nil {
 			if b.RetentionSec > 0 {
@@ -317,6 +320,9 @@ func (s *Session) storageCp(c *Cmd, src, dst string) (string, error) {
 		o := b.Objects[obj]
 		if o == nil {
 			return "", fmt.Errorf("The following URLs matched no objects or files:\n-%s", src)
+		}
+		if ok, why := s.State.CMEKUsable(b, false); !ok {
+			return "", fmt.Errorf("%s", why)
 		}
 		if dst == "-" {
 			return o.Content, nil

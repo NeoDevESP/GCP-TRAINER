@@ -842,6 +842,10 @@ func init() {
 		if ok {
 			access = "GRANTED"
 		}
+		if strings.HasPrefix(role, "denied by") {
+			return Obj{V: map[string]any{"access": "NOT_GRANTED", "principal": pm, "permission": perm, "resource": res, "denyPolicyDecision": role,
+				"note": "an IAM deny policy blocks this permission even if a role grants it"}}, nil
+		}
 		return Obj{V: map[string]any{"access": access, "principal": pm, "permission": perm, "resource": res, "grantingRole": role,
 			"explainedPolicies": len(r.Policies) + 3}}, nil
 	})

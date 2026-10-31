@@ -1,0 +1,308 @@
+id: zentra-z79-terraform-drift
+title: CHG · El plan de Terraform quiere deshacer el arreglo de anoche
+summary: Durante un incidente se abrió a mano un puerto en el cortafuegos. Ahora el código no lo sabe y el próximo apply lo quitaría, tirando la conciliación. Lleva el cambio al código, no a la consola.
+track: zentra
+day: 89
+level: professional
+branch: devops
+type: incident
+mode: production
+skills:
+- devops.iac
+- devops.iacops
+- networking.firewall
+wellArchitected:
+- operations
+- reliability
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud storage buckets create gs://tfstate-red-{{.project}} --location=EU --uniform-bucket-level-access --versioning
+  cat > main.tf <<'HCL'
+  terraform {
+    backend "gcs" {
+      bucket = "tfstate-red-{{.project}}"
+      prefix = "red"
+    }
+  }
+  provider "google" {
+    project = "{{.project}}"
+    region  = "{{.region}}"
+  }
+  resource "google_compute_firewall" "cpd_batch" {
+    name          = "allow-cpd-batch"
+    network       = "zentra-vpc"
+    source_ranges = ["192.168.20.0/24"]
+    target_tags   = ["batch"]
+    allow {
+      protocol = "tcp"
+      ports    = ["8443"]
+    }
+  }
+  HCL
+  terraform init
+  terraform apply -auto-approve
+faults:
+- type: command
+  actor: sre-guardia@{{.project}}.iam.gserviceaccount.com
+  run: |
+    gcloud compute firewall-rules update allow-cpd-batch --allow=tcp:8443,tcp:8444
+files:
+  main.tf: |
+    terraform {
+      backend "gcs" {
+        bucket = "tfstate-red-{{.project}}"
+        prefix = "red"
+      }
+    }
+    provider "google" {
+      project = "{{.project}}"
+      region  = "{{.region}}"
+    }
+    resource "google_compute_firewall" "cpd_batch" {
+      name          = "allow-cpd-batch"
+      network       = "zentra-vpc"
+      source_ranges = ["192.168.20.0/24"]
+      target_tags   = ["batch"]
+      allow {
+        protocol = "tcp"
+        ports    = ["8443"]
+      }
+    }
+ticket:
+  id: CHG-31079
+  kind: CHG
+  priority: P3
+  sla: 1d
+  reporter: Pipeline de red (Terraform)
+  summary: 'El plan nocturno de Terraform de red marca cambios pendientes en allow-cpd-batch: quiere quitar el puerto 8444. El pipeline está parado esperando revisión antes de aplicar.'
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: Anoche hubo lío con la conciliación.
+  facts:
+  - keywords:
+    - - '8444'
+      - puerto
+      - port
+      - anoche
+      - last night
+      - mano
+      - hand
+      - cortafuegos
+      - firewall
+    answer: 'Sí, fui yo con la cuenta de guardia: el core bancario empezó a llamar por el 8444 tras su actualización y abrí el puerto en el incidente de anoche (CHG-7790, emergencia). Es necesario: si lo quitáis, se cae la conciliación. No me dio tiempo a pasarlo al código.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - bgp
+      - asn
+      - anunci
+      - advert
+      - firewall
+      - cortafuegos
+      - nat
+      - ip
+    answer: Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-red-prod*).
+
+  > **CHG-31079 · P3** · Pipeline: *«El plan de Terraform quiere quitar el puerto 8444 de allow-cpd-batch. Pipeline parado esperando revisión.»*
+
+  En un banco la infraestructura vive en **código** (Terraform) y se cambia por *pull request* y pipeline. Pero en un incidente a veces se toca a mano con un cambio de emergencia. Si después **no se lleva al código**, aparece la **deriva** (*drift*): el código dice una cosa, la realidad otra, y el **próximo apply deshace el arreglo** sin que nadie lo note. Regla: el arreglo de emergencia se **consolida en el código** en cuanto pasa el incidente.
+
+  1. Mira la deriva: `terraform plan` (¿qué quiere cambiar?) y la regla real (`gcloud compute firewall-rules describe allow-cpd-batch`).
+  2. Averigua quién y por qué (auditoría, la guardia). ¿Es un cambio legítimo?
+  3. **No apliques** el plan tal cual: tiraría la conciliación.
+  4. Lleva el cambio a `main.tf` (añade `"8444"` a los puertos) y repite `terraform plan` hasta que diga **No changes**.
+  5. Comunica en el ticket: qué era la deriva, que es legítima y que el código ya la recoge.
+objectives:
+- Mira la deriva
+- Quién y por qué
+- Lleva el cambio al código
+- Plan limpio y comunicación
+hints:
+- text: Reescribe main.tf con `ports = ["8443", "8444"]` (con `cat > main.tf <<'HCL'` … `HCL`).
+quiz:
+- id: q1
+  question: El plan de Terraform quiere deshacer un arreglo de emergencia legítimo. ¿Qué haces?
+  options:
+  - Llevar el cambio al código y comprobar que el plan queda sin cambios
+  - Aplicar el plan, el código manda
+  - Borrar el estado de Terraform
+  - Dejar de usar Terraform para esa regla
+  answer:
+  - 0
+solution: |
+  ticket
+  terraform init
+  terraform plan
+  gcloud compute firewall-rules describe allow-cpd-batch
+  gcloud logging read 'protoPayload.methodName:"firewalls"' --limit=5
+  ask sre "¿Abriste a mano el 8444 en allow-cpd-batch? ¿Es necesario?"
+  cat > main.tf <<'HCL'
+  terraform {
+    backend "gcs" {
+      bucket = "tfstate-red-{{.project}}"
+      prefix = "red"
+    }
+  }
+  provider "google" {
+    project = "{{.project}}"
+    region  = "{{.region}}"
+  }
+  resource "google_compute_firewall" "cpd_batch" {
+    name          = "allow-cpd-batch"
+    network       = "zentra-vpc"
+    source_ranges = ["192.168.20.0/24"]
+    target_tags   = ["batch"]
+    allow {
+      protocol = "tcp"
+      ports    = ["8443", "8444"]
+    }
+  }
+  HCL
+  terraform plan
+  ticket update "Revisado: la deriva es el puerto 8444 que la guardia abrió anoche en allow-cpd-batch con el cambio de emergencia CHG-7790 (el core bancario llama ahora por ahí). Es necesario, así que no se aplica el plan tal cual: he llevado el 8444 al código (main.tf) y el plan ya sale sin cambios. El pipeline puede seguir."
+  ticket resolve "Deriva de allow-cpd-batch consolidada en Terraform (puertos 8443 y 8444); plan sin cambios."
+shortcuts:
+- name: apply the plan as is
+  run: |
+    terraform init
+    terraform apply -auto-approve
+    ticket resolve "Aplicado el plan, el código manda."
+rubric:
+- name: Conciliación a salvo
+  validator: functional
+  points: 30
+  critical: true
+  checks:
+  - type: exists
+    path: firewalls["allow-cpd-batch"]
+    expect:
+      rules:
+        regex: '8444'
+    desc: El 8444 sigue abierto
+- name: En el código
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: file_contains
+    file: main.tf
+    regex: '"8444"'
+    desc: main.tf recoge el 8444
+  - type: command
+    regex: terraform plan
+    min: 2
+    desc: Plan antes y después
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: asked
+    actor: sre
+    min: 1
+    desc: Confirmado con quien lo cambió
+- name: Comunicación
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_update
+    keywords:
+    - - '8444'
+    - - codigo
+      - código
+      - code
+      - main.tf
+      - terraform
+    desc: Qué era y que está en el código
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: terraform plan
+  title: La deriva
+  why: 'El plan quiere dejar solo el 8443: alguien añadió el 8444 fuera del código.'
+- match: firewalls
+  title: Quién
+  why: 'sre-guardia, anoche: el arreglo de emergencia.'
+- match: 8444"]
+  title: Al código
+  why: 'Ahora código y realidad coinciden: plan sin cambios.'
+en:
+  title: CHG · The Terraform plan wants to undo last night's fix
+  summary: During an incident a firewall port was opened by hand. Now the code doesn't know and the next apply would remove it, taking reconciliation down. Bring the change into the code, not the console.
+  story: |-
+    **Project `{{.project}}`** (*zentra-red-prod*).
+
+    > **CHG-31079 · P3** · Pipeline: *"The Terraform plan wants to remove port 8444 from allow-cpd-batch. Pipeline paused awaiting review."*
+
+    At a bank infrastructure lives in **code** (Terraform) and changes through pull requests and pipelines. But during an incident it's sometimes touched by hand with an emergency change. If it then **isn't brought into the code**, **drift** appears: the code says one thing, reality another, and the **next apply undoes the fix** without anyone noticing. Rule: the emergency fix is **consolidated into the code** as soon as the incident is over.
+
+    1. Look at the drift: `terraform plan` (what does it want to change?) and the real rule (`gcloud compute firewall-rules describe allow-cpd-batch`).
+    2. Find out who and why (audit log, on-call). Is it a legitimate change?
+    3. **Don't apply** the plan as is: it would take reconciliation down.
+    4. Bring the change into `main.tf` (add `"8444"` to the ports) and repeat `terraform plan` until it says **No changes**.
+    5. Communicate in the ticket: what the drift was, that it's legitimate and that the code now includes it.
+  objectives:
+  - Look at the drift
+  - Who and why
+  - Bring the change into the code
+  - Clean plan and communication
+  hints:
+  - Rewrite main.tf with `ports = ["8443", "8444"]` (with `cat > main.tf <<'HCL'` … `HCL`).
+  ticket:
+    summary: 'The nightly network Terraform plan flags pending changes on allow-cpd-batch: it wants to remove port 8444. The pipeline is paused awaiting review before applying.'
+  text:
+    Pipeline de red (Terraform): Network pipeline (Terraform)
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    Anoche hubo lío con la conciliación.: There was trouble with reconciliation last night.
+    ? 'Sí, fui yo con la cuenta de guardia: el core bancario empezó a llamar por el 8444 tras su actualización y abrí el puerto en el incidente de anoche (CHG-7790, emergencia). Es necesario: si lo quitáis, se cae la conciliación. No me dio tiempo a pasarlo al código.'
+    : 'Yes, it was me with the on-call account: core banking started calling on 8444 after its upgrade and I opened the port in last night''s incident (CHG-7790, emergency). It''s needed: if you remove it, reconciliation goes down. I didn''t have time to put it in the code.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.: Approved as an emergency change (CHG-7795). Note it in the ticket with what you change and how to roll back.
+    El plan de Terraform quiere deshacer un arreglo de emergencia legítimo. ¿Qué haces?: The Terraform plan wants to undo a legitimate emergency fix. What do you do?
+    Llevar el cambio al código y comprobar que el plan queda sin cambios: Bring the change into the code and check the plan has no changes
+    Aplicar el plan, el código manda: Apply the plan, the code rules
+    Borrar el estado de Terraform: Delete the Terraform state
+    Dejar de usar Terraform para esa regla: Stop using Terraform for that rule
+    Conciliación a salvo: Reconciliation safe
+    El 8444 sigue abierto: 8444 is still open
+    En el código: In the code
+    main.tf recoge el 8444: main.tf includes 8444
+    Plan antes y después: Plan before and after
+    Diagnóstico: Diagnosis
+    Confirmado con quien lo cambió: Confirmed with whoever changed it
+    Comunicación: Communication
+    Qué era y que está en el código: What it was and that it's in the code
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    La deriva: The drift
+    'El plan quiere dejar solo el 8443: alguien añadió el 8444 fuera del código.': 'The plan wants to leave only 8443: someone added 8444 outside the code.'
+    Quién: Who
+    'sre-guardia, anoche: el arreglo de emergencia.': 'sre-guardia, last night: the emergency fix.'
+    Al código: Into the code
+    'Ahora código y realidad coinciden: plan sin cambios.': 'Now code and reality match: no changes in the plan.'

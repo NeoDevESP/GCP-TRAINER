@@ -664,6 +664,7 @@ func init() {
 			return nil, err
 		}
 		p.Routers[n] = &sim.Router{Name: n, Region: region, Network: netName, ASN: c.Int("asn", 64512)}
+		routerAdvertisementFlags(c, p.Routers[n])
 		c.Audit("compute.googleapis.com", "v1.compute.routers.insert", "projects/"+p.ID+"/regions/"+region+"/routers/"+n)
 		return created(p.ID, "routers", "regions/"+region, n), nil
 	})
@@ -751,8 +752,20 @@ func init() {
 					nat.Subnets = append(nat.Subnets, s)
 				}
 			}
-			if c.Bool("auto-allocate-nat-external-ips") || c.Has("nat-external-ip-pool") {
-				nat.AutoIPs = true
+			if c.Bool("auto-allocate-nat-external-ips") {
+				nat.AutoIPs, nat.IPs = true, nil
+			}
+			if c.Has("nat-external-ip-pool") {
+				var ips []string
+				for _, an := range c.List("nat-external-ip-pool") {
+					an = an[strings.LastIndex(an, "/")+1:]
+					a := p.Addresses[an]
+					if a == nil || a.Region != r.Region {
+						return nil, fmt.Errorf("Could not fetch resource:\n - The resource 'projects/%s/regions/%s/addresses/%s' was not found", p.ID, r.Region, an)
+					}
+					ips = append(ips, an)
+				}
+				nat.AutoIPs, nat.IPs = false, ips
 			}
 			if c.Bool("enable-logging") {
 				nat.LogErrors = true
@@ -838,8 +851,13 @@ func init() {
 		}
 		for _, x := range r.NATs {
 			if x.Name == n {
+				alloc, ips := "AUTO_ONLY", []string{}
+				for _, an := range x.IPs {
+					alloc = "MANUAL_ONLY"
+					ips = append(ips, "https://www.googleapis.com/compute/v1/projects/"+p.ID+"/regions/"+r.Region+"/addresses/"+an)
+				}
 				return map[string]any{"name": x.Name, "sourceSubnetworkIpRangesToNat": map[bool]string{true: "ALL_SUBNETWORKS_ALL_IP_RANGES", false: "LIST_OF_SUBNETWORKS"}[x.AllSubnets],
-					"subnetworks": x.Subnets, "natIpAllocateOption": "AUTO_ONLY", "minPortsPerVm": x.PortsPerVMMin(), "enableDynamicPortAllocation": x.Dynamic, "maxPortsPerVm": x.MaxPorts,
+					"subnetworks": x.Subnets, "natIpAllocateOption": alloc, "natIps": ips, "minPortsPerVm": x.PortsPerVMMin(), "enableDynamicPortAllocation": x.Dynamic, "maxPortsPerVm": x.MaxPorts,
 					"logConfig": map[string]any{"enable": x.LogErrors, "filter": "ERRORS_ONLY"}}, nil
 			}
 		}
@@ -1735,6 +1753,12 @@ func init() {
 				}
 				z.Networks = append(z.Networks, nw)
 			}
+		}
+		if ft := c.List("forwarding-targets"); len(ft) > 0 {
+			if vis != "private" {
+				return nil, fmt.Errorf("INVALID_ARGUMENT: forwarding zones must be private (--visibility=private)")
+			}
+			z.ForwardingTargets = ft
 		}
 		p.DNSZones[n] = z
 		c.Audit("dns.googleapis.com", "dns.managedZones.create", "projects/"+p.ID+"/managedZones/"+n)

@@ -1,0 +1,255 @@
+id: zentra-z73-cmek-agent
+title: 'INC · «Permission denied on Cloud KMS key»: los extractos no se guardan'
+summary: El bucket de extractos está cifrado con una clave propia (CMEK). Quien cifra no es la aplicación sino el agente de servicio de Cloud Storage, y alguien le quitó el permiso en la clave.
+track: zentra
+day: 83
+level: professional
+branch: security
+type: incident
+mode: production
+skills:
+- security.kms
+- storage.encryption
+- iam.serviceaccounts
+wellArchitected:
+- security
+- reliability
+certs:
+- PCSE
+- PCNE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud kms keyrings create zentra-datos --location={{.region}}
+  gcloud kms keys create extractos --keyring=zentra-datos --location={{.region}} --purpose=encryption --rotation-period=90d --next-rotation-time=2026-12-01T00:00:00Z
+  gcloud kms keys add-iam-policy-binding extractos --keyring=zentra-datos --location={{.region}} --member=serviceAccount:$(gcloud storage service-agent) --role=roles/cloudkms.cryptoKeyEncrypterDecrypter
+  gcloud storage buckets create gs://zentra-extractos-{{.project}} --location={{.region}} --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/{{.project}}/locations/{{.region}}/keyRings/zentra-datos/cryptoKeys/extractos
+  gcloud iam service-accounts create extractos-sa --display-name="extractos-api"
+  gcloud storage buckets add-iam-policy-binding gs://zentra-extractos-{{.project}} --member=serviceAccount:extractos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectCreator
+  gcloud run deploy extractos-api --image=europe-docker.pkg.dev/gcplab-public/apps/uploader:1.0 --region={{.region}} --service-account=extractos-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BUCKET=zentra-extractos-{{.project}} --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding extractos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: kms_agent_remove
+  keyring: zentra-datos
+  key: extractos
+  actor: terraform-seguridad@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: extractos
+  target: run:extractos-api
+  path: /upload
+  rps: 10
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31073
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Operaciones de clientes
+  summary: La generación de extractos mensuales falla al guardar los PDF desde hace una hora. El error dice algo de «Permission denied on Cloud KMS key». ¿Le damos permiso de KMS a la aplicación?
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.
+  fallback: 'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.'
+  facts:
+  - keywords:
+    - - clave
+      - key
+      - kms
+      - agente
+      - agent
+      - terraform
+      - permiso
+      - permission
+      - rotacion
+      - rotación
+    answer: 'Ayer cambiamos el Terraform de las claves y se perdió el permiso del agente de Storage en extractos: error nuestro. Devuélveselo solo a ese agente y solo en esa clave; a la aplicación no le des nada de KMS. Lo corregimos en el código hoy.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - bgp
+      - asn
+      - anunci
+      - advert
+      - firewall
+      - cortafuegos
+      - nat
+      - ip
+    answer: Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **INC-31073 · P2** · *«La generación de extractos falla al guardar los PDF: Permission denied on Cloud KMS key. ¿Le damos permiso de KMS a la aplicación?»*
+
+  Los datos de clientes del banco se cifran con **claves propias** en Cloud KMS (**CMEK**): el banco controla la clave y puede revocarla. Lo que mucha gente no sabe: con CMEK en un bucket, **quien usa la clave no es tu aplicación**, es el **agente de servicio de Cloud Storage** del proyecto (`service-NÚMERO@gs-project-accounts.iam.gserviceaccount.com`). Si pierde el rol `cryptoKeyEncrypterDecrypter` en la clave, **nadie puede escribir ni leer** en el bucket, tenga los permisos que tenga.
+
+  1. Mira el error: `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+  2. El bucket y su clave: `gcloud storage buckets describe gs://zentra-extractos-{{.project}}`.
+  3. Quién puede usar la clave: `gcloud kms keys get-iam-policy extractos --keyring=zentra-datos --location={{.region}}`, y qué cambió en la auditoría.
+  4. El agente de Storage del proyecto: `gcloud storage service-agent`.
+  5. Arreglo mínimo, con cambio de emergencia: el rol **solo al agente** y **solo en esa clave**. A la aplicación no le hace falta nada de KMS.
+objectives:
+- Lee el error
+- Mira la clave y quién puede usarla
+- Devuelve el rol solo al agente
+- Comunica y avisa al dueño
+hints:
+- text: '`gcloud kms keys add-iam-policy-binding extractos --keyring=zentra-datos --location={{.region}} --member=serviceAccount:$(gcloud storage service-agent) --role=roles/cloudkms.cryptoKeyEncrypterDecrypter`'
+solution: |
+  ticket
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  gcloud storage buckets describe gs://zentra-extractos-{{.project}}
+  gcloud kms keys get-iam-policy extractos --keyring=zentra-datos --location={{.region}}
+  gcloud logging read 'protoPayload.serviceName="cloudkms.googleapis.com"' --limit=5
+  gcloud storage service-agent
+  ask security "El agente de Storage ha perdido el rol en la clave extractos, ¿se lo devuelvo?"
+  ask change "Necesito devolver el rol de cifrado al agente de Storage en la clave extractos como cambio de emergencia"
+  gcloud kms keys add-iam-policy-binding extractos --keyring=zentra-datos --location={{.region}} --member=serviceAccount:$(gcloud storage service-agent) --role=roles/cloudkms.cryptoKeyEncrypterDecrypter
+  gcloud kms keys get-iam-policy extractos --keyring=zentra-datos --location={{.region}}
+  ticket comment "Causa: el Terraform de Seguridad (terraform-seguridad) quitó roles/cloudkms.cryptoKeyEncrypterDecrypter del agente de servicio de Cloud Storage en la clave extractos; el bucket es CMEK y no podía cifrar. Devuelto el rol solo al agente en esa clave (CHG-7795). Seguridad corrige su Terraform."
+  ticket update "Hola: los extractos vuelven a guardarse. Fallaba un permiso de la clave de cifrado del almacenamiento, no de la aplicación, así que no hace falta darle permisos nuevos. Ya está corregido y Seguridad lo deja fijado para que no se repita."
+  ticket resolve "Rol de cifrado devuelto al agente de Cloud Storage en la clave extractos; aplicación sin permisos de KMS; Seguridad corrige su Terraform."
+shortcuts:
+- name: KMS admin for the app
+  run: |
+    gcloud kms keys add-iam-policy-binding extractos --keyring=zentra-datos --location={{.region}} --member=serviceAccount:extractos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudkms.admin
+    ticket resolve "Dado KMS a la aplicación para que pueda cifrar."
+- name: drop the CMEK
+  run: |
+    gcloud storage buckets update gs://zentra-extractos-{{.project}} --clear-default-encryption-key
+    ticket resolve "Quitado el cifrado con clave propia del bucket para que funcione."
+rubric:
+- name: Extractos guardándose
+  validator: functional
+  points: 30
+  checks:
+  - type: http
+    target: run:extractos-api
+    path: /upload
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: /upload responde 200
+- name: CMEK intacta y mínimo privilegio
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: buckets["zentra-extractos-{{.project}}"]
+    expect:
+      defaultKmsKey:
+        regex: cryptoKeys/extractos$
+    desc: El bucket sigue cifrado con la clave del banco
+  - type: command
+    regex: member=serviceAccount:extractos-sa.*cloudkms|cloudkms.*member=serviceAccount:extractos-sa
+    max: 0
+    desc: Ningún permiso de KMS a la aplicación
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: keys get-iam-policy|cloudkms.googleapis.com|service-agent
+    min: 2
+    desc: Clave, agente o auditoría revisados
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio de emergencia
+- name: Comunicación
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - agente
+      - agent
+      - gs-project-accounts
+    - - terraform
+    desc: 'Nota interna: agente y Terraform'
+  - type: ticket_update
+    keywords:
+    - - extractos
+      - statements
+    - - guard
+      - sav
+      - funciona
+      - works
+    desc: Respuesta clara al solicitante
+tutor:
+- match: severity>=ERROR
+  title: El error
+  why: '«Permission denied on Cloud KMS key… Cloud Storage service account»: el que falla es el agente de Storage.'
+- match: keys get-iam-policy
+  title: La clave
+  why: 'Nadie tiene el rol de cifrado: lo quitó terraform-seguridad (auditoría).'
+- match: add-iam-policy-binding extractos
+  title: El arreglo
+  why: Solo el agente, solo esta clave. La aplicación no toca KMS.
+en:
+  title: 'INC · "Permission denied on Cloud KMS key": statements aren''t saved'
+  summary: The statements bucket is encrypted with a customer-managed key (CMEK). What encrypts isn't the application but the Cloud Storage service agent, and someone removed its permission on the key.
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **INC-31073 · P2** · *"Statement generation fails saving the PDFs: Permission denied on Cloud KMS key. Should we give the application KMS permission?"*
+
+    The bank's customer data is encrypted with **its own keys** in Cloud KMS (**CMEK**): the bank controls the key and can revoke it. What many people don't know: with CMEK on a bucket, **your application isn't what uses the key**, the project's **Cloud Storage service agent** is (`service-NUMBER@gs-project-accounts.iam.gserviceaccount.com`). If it loses the `cryptoKeyEncrypterDecrypter` role on the key, **nobody can write or read** the bucket, whatever permissions they have.
+
+    1. Check the error: `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+    2. The bucket and its key: `gcloud storage buckets describe gs://zentra-extractos-{{.project}}`.
+    3. Who can use the key: `gcloud kms keys get-iam-policy extractos --keyring=zentra-datos --location={{.region}}`, and what changed in the audit log.
+    4. The project's Storage agent: `gcloud storage service-agent`.
+    5. Minimal fix, with an emergency change: the role **only to the agent** and **only on that key**. The application needs nothing in KMS.
+  objectives:
+  - Read the error
+  - Check the key and who may use it
+  - Restore the role to the agent only
+  - Communicate and tell the owner
+  hints:
+  - '`gcloud kms keys add-iam-policy-binding extractos --keyring=zentra-datos --location={{.region}} --member=serviceAccount:$(gcloud storage service-agent) --role=roles/cloudkms.cryptoKeyEncrypterDecrypter`'
+  ticket:
+    summary: Monthly statement generation has been failing to save PDFs for an hour. The error mentions "Permission denied on Cloud KMS key". Should we give the application KMS permission?
+  text:
+    Operaciones de clientes: Customer operations
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud, dueña de perímetros, claves y políticas de denegación.: Cloud security engineer, owner of perimeters, keys and deny policies.
+    'Los controles de seguridad no se quitan: se ajustan con el mínimo alcance. Dime identidad, origen y servicio.': 'Security controls aren''t removed: they''re adjusted with the minimum scope. Tell me identity, source and service.'
+    ? 'Ayer cambiamos el Terraform de las claves y se perdió el permiso del agente de Storage en extractos: error nuestro. Devuélveselo solo a ese agente y solo en esa clave; a la aplicación no le des nada de KMS. Lo corregimos en el código hoy.'
+    : 'Yesterday we changed the keys'' Terraform and the Storage agent''s permission on extractos was lost: our mistake. Give it back only to that agent and only on that key; don''t give the application anything in KMS. We''ll fix it in the code today.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.: Approved as an emergency change (CHG-7795). Note it in the ticket with what you change and how to roll back.
+    Extractos guardándose: Statements saving
+    /upload responde 200: /upload returns 200
+    CMEK intacta y mínimo privilegio: CMEK intact, least privilege
+    El bucket sigue cifrado con la clave del banco: The bucket is still encrypted with the bank's key
+    Ningún permiso de KMS a la aplicación: No KMS permission for the application
+    Diagnóstico: Diagnosis
+    Clave, agente o auditoría revisados: Key, agent or audit log checked
+    Cambio de emergencia: Emergency change
+    Comunicación: Communication
+    'Nota interna: agente y Terraform': 'Internal note: agent and Terraform'
+    Respuesta clara al solicitante: Clear reply to the requester
+    El error: The error
+    '«Permission denied on Cloud KMS key… Cloud Storage service account»: el que falla es el agente de Storage.': '"Permission denied on Cloud KMS key… Cloud Storage service account": the failing one is the Storage agent.'
+    La clave: The key
+    'Nadie tiene el rol de cifrado: lo quitó terraform-seguridad (auditoría).': 'Nobody has the encryption role: terraform-seguridad removed it (audit log).'
+    El arreglo: The fix
+    Solo el agente, solo esta clave. La aplicación no toca KMS.: Only the agent, only this key. The application doesn't touch KMS.

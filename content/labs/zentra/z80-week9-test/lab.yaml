@@ -1,0 +1,365 @@
+id: zentra-z80-week9-test
+title: Prueba de la semana 9 · La conciliación nueva no habla con el core
+summary: 'Sin tutor: una VM nueva en una subred nueva no llega al core bancario y el core no le puede devolver los resultados. Dos causas en dos sentidos. Diagnostica por capas, arregla con cambio y comunica.'
+track: zentra
+day: 90
+level: professional
+branch: networking
+type: boss
+mode: production
+skills:
+- networking.hybrid
+- networking.firewall
+- observability.incident
+wellArchitected:
+- reliability
+- security
+certs:
+- PCSE
+- PCNE
+difficulty: 4
+minutes: 45
+baseline:
+- zentra-core
+setup: |
+  gcloud compute routers create cpd-router --network=zentra-vpc --region={{.region}} --asn=64514 --advertisement-mode=custom --set-advertisement-ranges=10.40.1.0/24,10.40.2.0/24
+  gcloud compute vpn-gateways create cpd-vpn --network=zentra-vpc --region={{.region}}
+  gcloud compute vpn-tunnels create tunel-cpd-0 --vpn-gateway=cpd-vpn --region={{.region}} --peer-address=203.0.113.5 --router=cpd-router --interface=0
+  gcloud compute routers add-bgp-peer cpd-router --region={{.region}} --peer-name=cpd-madrid --peer-asn=65010 --interface=if-tunel-cpd-0
+  gcloud compute networks subnets create conciliacion --network=zentra-vpc --range=10.40.3.0/24 --region={{.region}} --enable-private-ip-google-access
+  gcloud compute instances create conciliacion-v2 --zone={{.zone}} --machine-type=e2-small --subnet=conciliacion --no-address --tags=conciliacion --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create pagos-batch --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=batch
+faults:
+- type: onprem
+  name: CPD Madrid
+  asn: 65010
+  ranges:
+  - 192.168.0.0/16
+  dns: 192.168.10.53
+  hosts:
+  - name: core.zentra.corp
+    ip: 192.168.20.10
+    ports:
+    - 443
+    body: core bancario OK
+  - name: mq.zentra.corp
+    ip: 192.168.20.20
+    ports:
+    - 1414
+    - 443
+    body: MQ OK
+  - name: batch.zentra.corp
+    ip: 192.168.20.30
+    ports:
+    - 22
+    - 443
+    body: batch OK
+traffic:
+- name: conciliacion-v2
+  target: internal:conciliacion-v2 http://192.168.20.10:443
+  path: /
+  rps: 5
+ticket:
+  id: INC-31080
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Lucía Navarro (Pagos)
+  summary: Hoy estrenamos conciliacion-v2 (subred nueva conciliacion). No conecta con el core (192.168.20.10:443) y el core dice que tampoco puede enviarle los resultados por HTTP (puerto 80). pagos-batch, la versión vieja, sí funciona.
+actors:
+- role: network
+  name: Tomás Vidal (Arquitecto de red)
+  persona: Dueño de la VPC, la VPN y el Interconnect con el CPD.
+  fallback: 'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.'
+  facts:
+  - keywords:
+    - - anunci
+      - advert
+      - custom
+      - personaliz
+      - subred
+      - subnet
+      - ruta
+      - route
+    answer: cpd-router está en modo de anuncio personalizado con la lista antigua (10.40.1.0/24 y 10.40.2.0/24). Lo nuevo no se anuncia solo. Puedes añadir la subred o pasar a all_subnets.
+- role: payments
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: Tiene que estar hoy.
+  facts:
+  - keywords:
+    - - puerto
+      - port
+      - resultado
+      - result
+      - core
+      - origen
+      - source
+      - entrada
+      - inbound
+    answer: El core envía los resultados desde 192.168.20.10 al puerto 80 de conciliacion-v2 (etiqueta conciliacion). Solo eso.
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - bgp
+      - asn
+      - anunci
+      - advert
+      - firewall
+      - cortafuegos
+      - nat
+      - ip
+    answer: Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.
+story: |-
+  > 🎯 **Prueba de la semana 9.** Sin profesor: aplica lo de la semana. Dos sentidos, dos causas.
+
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31080 · P2** · Pagos: *«conciliacion-v2 (subred nueva conciliacion) no conecta con el core (192.168.20.10:443) y el core no le puede enviar los resultados por el puerto 80. pagos-batch, la versión vieja, sí funciona.»*
+
+  Diagnostica por capas (túnel, BGP, rutas en los dos sentidos, cortafuegos), arregla con el **mínimo alcance** y **cambio aprobado**, comprueba **los dos sentidos**, comunica y cierra. Termina con las preguntas de la semana.
+objectives:
+- Por capas
+- Ruta de vuelta para la subred nueva
+- Entrada solo desde el core al 80
+- Los dos sentidos, comunicación y cierre
+hints:
+- text: Compara pagos-batch (10.40.1.0/24) con conciliacion-v2 (10.40.3.0/24) en lo que anuncia cpd-router.
+quiz:
+- id: q1
+  question: El túnel y BGP están bien, pero una subred nueva no llega al CPD. ¿Qué miras?
+  options:
+  - Qué anuncia el Cloud Router (modo personalizado)
+  - La cuota de CPU
+  - El DNS público
+  - La versión de la imagen
+  answer:
+  - 0
+- id: q2
+  question: «Request is prohibited by organization's policy» significa…
+  options:
+  - Un perímetro de VPC Service Controls
+  - Falta un rol IAM
+  - La API está desactivada
+  - Cuota agotada
+  answer:
+  - 0
+- id: q3
+  question: Con CMEK en un bucket, ¿quién necesita el rol de cifrado en la clave?
+  options:
+  - El agente de servicio de Cloud Storage
+  - La cuenta de servicio de la aplicación
+  - Todos los usuarios
+  - Nadie
+  answer:
+  - 0
+- id: q4
+  question: Una política de denegación y un rol Owner chocan. ¿Qué gana?
+  options:
+  - La denegación
+  - Owner
+  - El más reciente
+  - Ninguno
+  answer:
+  - 0
+solution: |
+  ticket
+  ticket update "Recibido, lo estamos revisando con Red. Próxima actualización en 30 minutos."
+  gcloud compute ssh pagos-batch --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://192.168.20.10'
+  gcloud compute vpn-tunnels describe tunel-cpd-0 --region={{.region}}
+  gcloud compute routers get-status cpd-router --region={{.region}}
+  gcloud compute firewall-rules list --filter="network:zentra-vpc"
+  ask network "cpd-router no anuncia 10.40.3.0/24, ¿lo añado?"
+  ask payments "¿Desde dónde y a qué puerto envía el core los resultados?"
+  ask change "Necesito anunciar 10.40.3.0/24 en cpd-router y abrir el 80 desde el core a conciliacion-v2"
+  gcloud compute routers update cpd-router --region={{.region}} --add-advertisement-ranges=10.40.3.0/24
+  gcloud compute firewall-rules create allow-core-to-conciliacion --network=zentra-vpc --direction=INGRESS --allow=tcp:80 --source-ranges=192.168.20.10/32 --target-tags=conciliacion
+  gcloud compute routers get-status cpd-router --region={{.region}}
+  gcloud compute ssh conciliacion-v2 --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 5 https://192.168.20.10'
+  ticket comment "Causas: 1) cpd-router en anuncio personalizado con la lista antigua: 10.40.3.0/24 (subred conciliacion) no se anunciaba y el CPD no tenía ruta de vuelta. Añadido el rango. 2) Faltaba la regla de entrada desde el core (192.168.20.10) al 80 de conciliacion-v2. Creada allow-core-to-conciliacion solo para eso. CHG-7795."
+  ticket update "Resuelto: conciliacion-v2 ya conecta con el core y el core le envía los resultados. Faltaba dar de alta la red nueva en la conexión con el CPD y permitir solo la entrada de resultados desde el core. pagos-batch no se ha tocado."
+  ticket resolve "Anunciada 10.40.3.0/24 en cpd-router y entrada tcp:80 solo desde 192.168.20.10 a la etiqueta conciliacion; los dos sentidos comprobados."
+shortcuts:
+- name: open everything from the data centre
+  run: |
+    gcloud compute firewall-rules create allow-cpd-todo --network=zentra-vpc --allow=all --source-ranges=192.168.0.0/16
+    ticket resolve "Abierto todo desde el CPD."
+rubric:
+- name: Los dos sentidos
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: http
+    from: vm:conciliacion-v2
+    target: onprem:core:443
+    path: /
+    status: 200
+    desc: conciliacion-v2 llega al core
+  - type: http
+    from: onprem:core
+    target: vm:conciliacion-v2:80
+    path: /
+    status: 200
+    desc: El core llega a conciliacion-v2 por el 80
+  - type: http
+    from: vm:pagos-batch
+    target: onprem:core:443
+    path: /
+    status: 200
+    desc: pagos-batch sigue funcionando
+- name: Mínimo alcance
+  validator: security
+  points: 20
+  all: true
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 192.168.0.0/16
+    max: 0
+    desc: Sin abrir todo el CPD
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+    max: 0
+    desc: Nada abierto a internet
+- name: Cambio y comunicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio aprobado
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - 10.40.3.0/24
+      - anunci
+      - advert
+    - - '80'
+      - entrada
+      - ingress
+      - firewall
+      - cortafuegos
+    desc: Nota interna con las dos causas
+  - type: ticket_update
+    keywords:
+    - - bgp
+      - asn
+      - '10.40'
+      - '192.168'
+      - firewall
+      - cortafuegos
+      - cpd-router
+      - tomás
+      - tomas
+    not: true
+    desc: Sin jerga en la respuesta a Pagos
+  - type: ticket_resolved
+    desc: Cerrado con nota
+- name: Preguntas de la semana
+  validator: quiz
+  points: 20
+  checks:
+  - type: quiz
+    ratio: 0.75
+    desc: Preguntas de la semana
+tutor:
+- match: routers get-status
+  title: BGP y anuncios
+  why: Sesión arriba, pero 10.40.3.0/24 no está en los anuncios.
+- match: --add-advertisement-ranges=10.40.3.0/24
+  title: Ruta de vuelta
+  why: El CPD ya sabe volver a la subred nueva.
+- match: allow-core-to-conciliacion
+  title: Entrada mínima
+  why: Solo el core, solo el 80, solo esa etiqueta.
+en:
+  title: Week 9 test · The new reconciliation can't talk to the core
+  summary: 'No tutor: a new VM in a new subnet can''t reach core banking and the core can''t send back the results. Two causes in two directions. Diagnose layer by layer, fix with a change and communicate.'
+  story: |-
+    > 🎯 **Week 9 test.** No tutor: apply the week. Two directions, two causes.
+
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31080 · P2** · Payments: *"conciliacion-v2 (new conciliacion subnet) can't connect to the core (192.168.20.10:443) and the core can't send it the results on port 80. pagos-batch, the old version, works."*
+
+    Diagnose layer by layer (tunnel, BGP, routes both ways, firewall), fix with the **minimum scope** and an **approved change**, check **both directions**, communicate and close. Finish with the week's questions.
+  objectives:
+  - Layer by layer
+  - Route back for the new subnet
+  - Inbound only from the core to port 80
+  - Both directions, communication and close
+  hints:
+  - Compare pagos-batch (10.40.1.0/24) with conciliacion-v2 (10.40.3.0/24) in what cpd-router advertises.
+  ticket:
+    summary: Today we launch conciliacion-v2 (new conciliacion subnet). It can't connect to the core (192.168.20.10:443) and the core says it can't send it the results over HTTP (port 80) either. pagos-batch, the old version, works.
+  text:
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tomás Vidal (Arquitecto de red): Tomás Vidal (Network architect)
+    Dueño de la VPC, la VPN y el Interconnect con el CPD.: Owner of the VPC, the VPN and the Interconnect with the data centre.
+    'Primero mira el túnel y luego la sesión BGP: que el túnel esté arriba no significa que haya rutas.': 'Check the tunnel first, then the BGP session: a tunnel being up doesn''t mean there are routes.'
+    ? cpd-router está en modo de anuncio personalizado con la lista antigua (10.40.1.0/24 y 10.40.2.0/24). Lo nuevo no se anuncia solo. Puedes añadir la subred o pasar a all_subnets.
+    : cpd-router is in custom advertisement mode with the old list (10.40.1.0/24 and 10.40.2.0/24). New things aren't advertised automatically. You can add the subnet or switch to all_subnets.
+    Tech lead de Pagos.: Payments tech lead.
+    Tiene que estar hoy.: It has to be today.
+    El core envía los resultados desde 192.168.20.10 al puerto 80 de conciliacion-v2 (etiqueta conciliacion). Solo eso.: The core sends results from 192.168.20.10 to port 80 of conciliacion-v2 (tag conciliacion). Only that.
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7795). Anótalo en el ticket con lo que cambias y cómo se vuelve atrás.: Approved as an emergency change (CHG-7795). Note it in the ticket with what you change and how to roll back.
+    El túnel y BGP están bien, pero una subred nueva no llega al CPD. ¿Qué miras?: The tunnel and BGP are fine, but a new subnet can't reach the data centre. What do you check?
+    Qué anuncia el Cloud Router (modo personalizado): What the Cloud Router advertises (custom mode)
+    La cuota de CPU: The CPU quota
+    El DNS público: Public DNS
+    La versión de la imagen: The image version
+    «Request is prohibited by organization's policy» significa…: '"Request is prohibited by organization''s policy" means…'
+    Un perímetro de VPC Service Controls: A VPC Service Controls perimeter
+    Falta un rol IAM: An IAM role is missing
+    La API está desactivada: The API is disabled
+    Cuota agotada: Quota exhausted
+    Con CMEK en un bucket, ¿quién necesita el rol de cifrado en la clave?: With CMEK on a bucket, who needs the encryption role on the key?
+    El agente de servicio de Cloud Storage: The Cloud Storage service agent
+    La cuenta de servicio de la aplicación: The application's service account
+    Todos los usuarios: Every user
+    Nadie: Nobody
+    Una política de denegación y un rol Owner chocan. ¿Qué gana?: A deny policy and an Owner role clash. Which wins?
+    La denegación: The deny
+    Owner: Owner
+    El más reciente: The most recent
+    Ninguno: Neither
+    Los dos sentidos: Both directions
+    conciliacion-v2 llega al core: conciliacion-v2 reaches the core
+    El core llega a conciliacion-v2 por el 80: The core reaches conciliacion-v2 on 80
+    pagos-batch sigue funcionando: pagos-batch still works
+    Mínimo alcance: Minimum scope
+    Sin abrir todo el CPD: Not opening the whole data centre
+    Nada abierto a internet: Nothing open to the internet
+    Cambio y comunicación: Change and communication
+    Cambio aprobado: Change approved
+    Nota interna con las dos causas: Internal note with both causes
+    Sin jerga en la respuesta a Pagos: No jargon in the reply to Payments
+    Cerrado con nota: Closed with a note
+    Preguntas de la semana: Week questions
+    BGP y anuncios: BGP and advertisements
+    Sesión arriba, pero 10.40.3.0/24 no está en los anuncios.: Session up, but 10.40.3.0/24 isn't in the advertisements.
+    Ruta de vuelta: Route back
+    El CPD ya sabe volver a la subred nueva.: The data centre now knows the way back to the new subnet.
+    Entrada mínima: Minimal inbound
+    Solo el core, solo el 80, solo esa etiqueta.: Only the core, only port 80, only that tag.
