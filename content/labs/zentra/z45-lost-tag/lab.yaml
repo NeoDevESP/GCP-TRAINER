@@ -154,7 +154,7 @@ tutor:
 - match: get-health
   title: El backend
   why: 'UNHEALTHY: las sondas no reciben respuesta.'
-- match: value(tags.items)
+- match: instances describe tarifas-web
   title: Las etiquetas de red
   why: La VM ya no tiene tarifas-web, así que la regla de sondas no se le aplica.
 - match: add-tags
