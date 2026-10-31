@@ -1,0 +1,908 @@
+# Zentra: the fictional European digital bank of the "zentra" route.
+# Every text is a [es, en] pair.
+id: zentra
+name: Zentra
+track: zentra
+tagline:
+- El banco digital europeo que vive entero en Google Cloud. Tu nuevo trabajo.
+- The European digital bank that runs entirely on Google Cloud. Your new job.
+intro:
+- |-
+  Acabas de entrar en el equipo de **Soporte de Plataforma GCP** de Zentra. Este manual es lo que te darían el primer día: quiénes somos, cómo se organizan los equipos, cómo están montados la identidad y Google Cloud, cómo funciona la app por dentro y las normas que nunca se saltan. Los casos de la ruta Zentra ocurren aquí, con estas personas y estos sistemas: cuanto mejor conozcas la empresa, antes resolverás los tickets.
+
+  Zentra es una empresa ficticia creada para aprender; cualquier parecido con un banco real es casualidad.
+- |-
+  You've just joined Zentra's **GCP Platform Support** team. This handbook is what you'd get on day one: who we are, how the teams are organized, how identity and Google Cloud are laid out, how the app works inside and the rules that are never bent. The Zentra route's cases happen here, with these people and these systems: the better you know the company, the faster you'll solve the tickets.
+
+  Zentra is a fictional company made for learning; any resemblance to a real bank is coincidental.
+facts:
+- value:
+  - 4,2 M
+  - 4.2 M
+  label:
+  - clientes en 12 países de la UE
+  - customers in 12 EU countries
+- value:
+  - '900'
+  - '900'
+  label:
+  - empleados, 380 en tecnología
+  - employees, 380 in technology
+- value:
+  - 100 %
+  - 100%
+  label:
+  - en Google Cloud desde 2021
+  - on Google Cloud since 2021
+- value:
+  - 38 M
+  - 38 M
+  label:
+  - operaciones al mes
+  - transactions a month
+- value:
+  - 99,95 %
+  - 99.95%
+  label:
+  - disponibilidad objetivo de pagos
+  - payments availability target
+- value:
+  - '2'
+  - '2'
+  label:
+  - 'regiones: europe-west1 y europe-west4'
+  - 'regions: europe-west1 and europe-west4'
+sections:
+- id: quienes
+  title:
+  - Zentra en un minuto
+  - Zentra in one minute
+  body:
+  - |-
+    Zentra nació en 2019 como una app para pagar sin comisiones en el extranjero y hoy es un **banco digital con licencia bancaria europea**: cuentas con IBAN propio, tarjetas, pagos instantáneos, cambio de divisas, ahorro y préstamos. No tiene oficinas: todo pasa en la app, y la app vive en Google Cloud.
+
+    Que seamos un banco lo cambia todo en soporte: estamos **regulados** (supervisión bancaria, normativa europea de resiliencia operativa DORA, PCI DSS para tarjetas, protección de datos), auditan lo que hacemos y cada caída sale en las redes en minutos. Por eso hay normas que parecen lentas y no se saltan nunca.
+  - |-
+    Zentra was born in 2019 as an app to pay abroad without fees and is now a **digital bank with a European banking licence**: accounts with their own IBAN, cards, instant payments, currency exchange, savings and loans. It has no branches: everything happens in the app, and the app lives on Google Cloud.
+
+    Being a bank changes everything in support: we're **regulated** (banking supervision, the EU's DORA operational resilience rules, PCI DSS for cards, data protection), what we do gets audited and every outage hits social media within minutes. That's why some rules look slow and are never bent.
+  cards:
+  - title:
+    - Cuentas
+    - Accounts
+    text:
+    - IBAN europeo, multidivisa y saldos en tiempo real. El libro mayor (ledger) es la fuente de verdad del dinero.
+    - EU IBAN, multi-currency, real-time balances. The ledger is the source of truth for money.
+    meta:
+    - Equipo Cuentas · cuentas-api
+    - Accounts team · cuentas-api
+  - title:
+    - Tarjetas
+    - Cards
+    text:
+    - Tarjetas físicas y virtuales. Datos de tarjeta bajo PCI DSS, en proyectos y redes separados.
+    - Physical and virtual cards. Card data under PCI DSS, in separate projects and networks.
+    meta:
+    - Equipo Tarjetas · tarjetas-gke
+    - Cards team · tarjetas-gke
+  - title:
+    - Pagos
+    - Payments
+    text:
+    - 'Transferencias SEPA e instantáneas en menos de 10 segundos. Es el servicio más crítico: un P1 aquí es portada.'
+    - 'SEPA and instant transfers in under 10 seconds. The most critical service: a P1 here makes headlines.'
+    meta:
+    - Equipo Pagos · pagos-api
+    - Payments team · pagos-api
+  - title:
+    - Divisas
+    - FX
+    text:
+    - Cambio entre 30 divisas con el precio de un proveedor externo que se consulta por internet.
+    - Exchange between 30 currencies, priced by an external provider called over the internet.
+    meta:
+    - Equipo Divisas · divisas-api
+    - FX team · divisas-api
+  - title:
+    - Antifraude
+    - Anti-fraud
+    text:
+    - Un modelo de Vertex AI puntúa cada operación en milisegundos y bloquea las sospechosas.
+    - A Vertex AI model scores every transaction in milliseconds and blocks suspicious ones.
+    meta:
+    - Datos e IA · fraude-model
+    - Data & AI · fraude-model
+  - title:
+    - Datos
+    - Data
+    text:
+    - Todas las operaciones fluyen por Pub/Sub y Dataflow hasta BigQuery para informes, riesgo y regulador.
+    - Every transaction flows through Pub/Sub and Dataflow into BigQuery for reports, risk and the regulator.
+    meta:
+    - Plataforma de datos · zentra-datos-prod
+    - Data platform · zentra-datos-prod
+- id: equipos
+  title:
+  - Equipos y organigrama
+  - Teams and org chart
+  body:
+  - 'La tecnología depende de la CTO y se organiza en cuatro grandes áreas. **Tú estás en Operaciones, en Soporte de Plataforma GCP (nivel 2)**: recibes lo que el Service Desk (nivel 1) no puede resolver, lo resuelves tú o lo pasas al equipo dueño (nivel 3) con todo bien explicado.'
+  - 'Technology reports to the CTO and is organized in four big areas. **You''re in Operations, in GCP Platform Support (level 2)**: you get what the Service Desk (level 1) can''t solve, and you solve it or hand it to the owning team (level 3) with everything clearly explained.'
+  diagram:
+  - |-
+    flowchart TD
+      CTO[CTO] --> PLAT[Plataforma Cloud]
+      CTO --> PROD[Producto]
+      CTO --> DATA[Datos e IA]
+      CTO --> OPS[Operaciones]
+      PLAT --> SRE[SRE]
+      PLAT --> RED[Red]
+      PLAT --> SEGC[Seguridad cloud]
+      PROD --> PAG[Pagos]
+      PROD --> TAR[Tarjetas]
+      PROD --> CUE[Cuentas]
+      PROD --> DIV[Divisas]
+      DATA --> DPLAT[Plataforma de datos]
+      DATA --> FRA[Antifraude ML]
+      OPS --> SD[Service Desk N1]
+      OPS --> SOP[Soporte GCP N2 - tú]
+      OPS --> NOC[NOC 24x7]
+      CISO[CISO y Cumplimiento] -.-> SEGC
+      FIN[Finanzas] --> FINOPS[FinOps]
+  - |-
+    flowchart TD
+      CTO[CTO] --> PLAT[Cloud Platform]
+      CTO --> PROD[Product]
+      CTO --> DATA[Data and AI]
+      CTO --> OPS[Operations]
+      PLAT --> SRE[SRE]
+      PLAT --> RED[Network]
+      PLAT --> SEGC[Cloud security]
+      PROD --> PAG[Payments]
+      PROD --> TAR[Cards]
+      PROD --> CUE[Accounts]
+      PROD --> DIV[FX]
+      DATA --> DPLAT[Data platform]
+      DATA --> FRA[Anti-fraud ML]
+      OPS --> SD[Service Desk L1]
+      OPS --> SOP[GCP Support L2 - you]
+      OPS --> NOC[NOC 24x7]
+      CISO[CISO and Compliance] -.-> SEGC
+      FIN[Finance] --> FINOPS[FinOps]
+  cards:
+  - title:
+    - Plataforma Cloud
+    - Cloud Platform
+    text:
+    - Diseña y mantiene la organización de GCP, la VPC compartida, las políticas, los pipelines y la observabilidad. Son tu nivel 3 para casi todo.
+    - Designs and runs the GCP organization, Shared VPC, policies, pipelines and observability. Your level 3 for almost everything.
+    meta:
+    - gcp-plataforma@zentra.dev
+    - gcp-plataforma@zentra.dev
+  - title:
+    - SRE
+    - SRE
+    text:
+    - Guardia de producción, SLO, incidentes graves y post-mortems.
+    - Production on-call, SLOs, major incidents and post-mortems.
+    meta:
+    - gcp-sre@zentra.dev
+    - gcp-sre@zentra.dev
+  - title:
+    - Seguridad cloud
+    - Cloud security
+    text:
+    - Revisión de permisos, Security Command Center, claves y respuesta a incidentes junto al CSIRT.
+    - Permission reviews, Security Command Center, keys and incident response with the CSIRT.
+    meta:
+    - gcp-seguridad@zentra.dev
+    - gcp-seguridad@zentra.dev
+  - title:
+    - Equipos de producto
+    - Product teams
+    text:
+    - Pagos, Tarjetas, Cuentas y Divisas desarrollan y despliegan sus microservicios. Tienen permisos de lectura en producción; los cambios van por pipeline.
+    - Payments, Cards, Accounts and FX build and deploy their microservices. They have read access in production; changes go through the pipeline.
+    meta:
+    - gcp-pagos-dev@, gcp-tarjetas-dev@ …
+    - gcp-pagos-dev@, gcp-tarjetas-dev@ …
+  - title:
+    - Datos e IA
+    - Data and AI
+    text:
+    - Plataforma de datos (BigQuery, Dataflow) y el modelo antifraude en Vertex AI.
+    - Data platform (BigQuery, Dataflow) and the anti-fraud model on Vertex AI.
+    meta:
+    - gcp-datos@zentra.dev
+    - gcp-datos@zentra.dev
+  - title:
+    - Operaciones
+    - Operations
+    text:
+    - Service Desk (N1) recoge tickets; Soporte GCP (N2, tú) diagnostica y resuelve; el NOC vigila 24x7 y abre los P1.
+    - Service Desk (L1) takes tickets; GCP Support (L2, you) diagnoses and resolves; the NOC watches 24x7 and opens P1s.
+    meta:
+    - gcp-soporte@zentra.dev
+    - gcp-soporte@zentra.dev
+  - title:
+    - CISO y Cumplimiento
+    - CISO and Compliance
+    text:
+    - Normas, auditorías y regulador. Aprueban excepciones (casi nunca).
+    - Rules, audits and the regulator. They approve exceptions (almost never).
+    meta:
+    - cumplimiento@zentra.dev
+    - cumplimiento@zentra.dev
+  - title:
+    - FinOps
+    - FinOps
+    text:
+    - Presupuestos, etiquetas, reparto de costes y descuentos por compromiso.
+    - Budgets, labels, cost allocation and committed-use discounts.
+    meta:
+    - gcp-finops@zentra.dev
+    - gcp-finops@zentra.dev
+- id: identidad
+  title:
+  - 'Identidad: Google Workspace y Cloud Identity'
+  - 'Identity: Google Workspace and Cloud Identity'
+  body:
+  - |-
+    Todo empleado tiene una cuenta **@zentra.dev** en Google Workspace: es su correo y también su identidad en Google Cloud. Las cuentas se organizan en **unidades organizativas (OU)** y los permisos de GCP **nunca se dan a personas: se dan a grupos de Google**. Para dar acceso a alguien se le mete en el grupo de su equipo; para quitárselo, se le saca.
+
+    Convención de grupos: `gcp-EQUIPO[-ROL]@zentra.dev` (p. ej. `gcp-pagos-dev`, `gcp-sre`, `gcp-auditores`). Los grupos de acceso a GCP son **grupos de seguridad** y **no admiten miembros externos**; los consultores externos van en la OU `/Externos` y su acceso caduca.
+
+    Herramientas que usarás: `gcloud identity groups …` para los grupos y `gam` para consultar usuarios, grupos, OU y el informe de auditoría de administración (`gam report admin`).
+  - |-
+    Every employee has a **@zentra.dev** Google Workspace account: it's their email and also their Google Cloud identity. Accounts are organized in **organizational units (OUs)** and GCP permissions are **never granted to people: they're granted to Google groups**. To give someone access you add them to their team's group; to remove it, you take them out.
+
+    Group naming: `gcp-TEAM[-ROLE]@zentra.dev` (e.g. `gcp-pagos-dev`, `gcp-sre`, `gcp-auditores`). GCP access groups are **security groups** and **don't accept external members**; external consultants live in the `/Externos` OU and their access expires.
+
+    Tools you'll use: `gcloud identity groups …` for groups and `gam` to look up users, groups, OUs and the admin audit report (`gam report admin`).
+  diagram:
+  - |-
+    flowchart LR
+      U[Persona ana@zentra.dev] -->|miembro de| G[Grupo gcp-pagos-dev]
+      G -->|miembro de| G2[Grupo gcp-producto]
+      G -->|rol IAM| P[Proyecto zentra-pagos-prod]
+      G2 -->|rol IAM| F[Carpeta Producción]
+      OU[OU /Ingenieria/Producto] -.contiene.-> U
+  - |-
+    flowchart LR
+      U[Person ana@zentra.dev] -->|member of| G[Group gcp-pagos-dev]
+      G -->|member of| G2[Group gcp-producto]
+      G -->|IAM role| P[Project zentra-pagos-prod]
+      G2 -->|IAM role| F[Production folder]
+      OU[OU /Ingenieria/Producto] -.contains.-> U
+  cards:
+  - title:
+    - Alta (joiner)
+    - Joiner
+    text:
+    - RR. HH. crea la cuenta; el responsable pide por ticket los grupos del puesto; soporte los añade. Nunca se copian los permisos de otra persona.
+    - HR creates the account; the manager requests the role's groups by ticket; support adds them. Never copy someone else's permissions.
+    meta:
+    - REQ · P3
+    - REQ · P3
+  - title:
+    - Cambio de puesto (mover)
+    - Mover
+    text:
+    - Se quitan los grupos del puesto anterior y se ponen los del nuevo. El fallo típico es dejar los viejos.
+    - Remove the old role's groups and add the new ones. The classic mistake is leaving the old ones.
+    meta:
+    - REQ · P3
+    - REQ · P3
+  - title:
+    - Baja (leaver)
+    - Leaver
+    text:
+    - Suspender la cuenta en Workspace, cerrar sesiones, sacarla de los grupos y revisar permisos directos que alguien dejara en GCP.
+    - Suspend the Workspace account, sign out sessions, remove it from groups and check for direct GCP permissions someone left.
+    meta:
+    - REQ · P2 si es urgente
+    - REQ · P2 if urgent
+  - title:
+    - Externos
+    - Externals
+    text:
+    - OU /Externos, grupo propio con acceso acotado y fecha de fin. Nada de añadir correos externos a grupos internos.
+    - OU /Externos, their own group with scoped access and an end date. Never add external addresses to internal groups.
+    meta:
+    - Aprobación de Seguridad
+    - Security approval
+- id: gcp
+  title:
+  - La organización de Google Cloud
+  - The Google Cloud organization
+  body:
+  - |-
+    Una sola organización, **zentra.dev**, con carpetas por función y entorno. Cada servicio tiene su proyecto por entorno, con nombre `zentra-SERVICIO-ENTORNO`. Todos los proyectos llevan las etiquetas `equipo`, `entorno`, `coste` y `datos` (`pci`, `personales` o `ninguno`).
+
+    En los casos prácticos trabajarás dentro de uno de estos proyectos (su ID real cambia en cada partida, pero el papel es el del proyecto que diga el ticket).
+  - |-
+    A single organization, **zentra.dev**, with folders by function and environment. Each service has a project per environment, named `zentra-SERVICE-ENV`. Every project carries the labels `equipo`, `entorno`, `coste` and `datos` (`pci`, `personales` or `ninguno`).
+
+    In the practice cases you'll work inside one of these projects (its real ID changes every run, but its role is the project the ticket names).
+  diagram:
+  - |-
+    flowchart TD
+      ORG[Organización zentra.dev] --> FP[plataforma]
+      ORG --> FPR[produccion]
+      ORG --> FPP[preproduccion]
+      ORG --> FD[datos]
+      ORG --> FS[sandbox]
+      FP --> RH[zentra-red-host - VPC compartida]
+      FP --> LOG[zentra-logging - auditoría]
+      FP --> SEG[zentra-seguridad - SCC y claves]
+      FPR --> PAG[zentra-pagos-prod]
+      FPR --> TAR[zentra-tarjetas-prod - PCI]
+      FPR --> CUE[zentra-cuentas-prod]
+      FPR --> APP[zentra-app-prod]
+      FD --> DAT[zentra-datos-prod]
+      FD --> ML[zentra-ml-prod]
+      FPP --> PRE[zentra-*-pre]
+      FS --> SB[zentra-sandbox-NOMBRE]
+  - |-
+    flowchart TD
+      ORG[Organization zentra.dev] --> FP[plataforma]
+      ORG --> FPR[produccion]
+      ORG --> FPP[preproduccion]
+      ORG --> FD[datos]
+      ORG --> FS[sandbox]
+      FP --> RH[zentra-red-host - Shared VPC]
+      FP --> LOG[zentra-logging - audit]
+      FP --> SEG[zentra-seguridad - SCC and keys]
+      FPR --> PAG[zentra-pagos-prod]
+      FPR --> TAR[zentra-tarjetas-prod - PCI]
+      FPR --> CUE[zentra-cuentas-prod]
+      FPR --> APP[zentra-app-prod]
+      FD --> DAT[zentra-datos-prod]
+      FD --> ML[zentra-ml-prod]
+      FPP --> PRE[zentra-*-pre]
+      FS --> SB[zentra-sandbox-NAME]
+  cards:
+  - title:
+    - Políticas de organización
+    - Organization policies
+    text:
+    - Solo ubicaciones de la UE · sin IP públicas en VMs ni Cloud SQL · sin claves de cuentas de servicio · buckets con acceso uniforme y sin acceso público · solo identidades de zentra.dev.
+    - EU locations only · no public IPs on VMs or Cloud SQL · no service account keys · buckets with uniform access and no public access · zentra.dev identities only.
+    meta:
+    - Heredadas de la organización
+    - Inherited from the organization
+  - title:
+    - Permisos por entorno
+    - Permissions per environment
+    text:
+    - 'Producción: los equipos solo leen; despliega el pipeline con su cuenta de servicio. Preproducción: los equipos despliegan. Sandbox: libertad con presupuesto.'
+    - 'Production: teams read only; the pipeline deploys with its service account. Pre-production: teams deploy. Sandbox: freedom with a budget.'
+    meta:
+    - Roles a grupos, nunca a personas
+    - Roles to groups, never to people
+  - title:
+    - Registro centralizado
+    - Central logging
+    text:
+    - Un sink de organización envía la auditoría a zentra-logging (bucket UE con retención de 5 años).
+    - An organization sink ships audit logs to zentra-logging (EU bucket with 5-year retention).
+    meta:
+    - Cumplimiento
+    - Compliance
+- id: arquitectura
+  title:
+  - Cómo funciona la app por dentro
+  - How the app works inside
+  body:
+  - 'Cuando un cliente abre la app y envía dinero, la petición cruza estas piezas. Aprende el camino: cada ticket es una de estas flechas que se ha roto.'
+  - 'When a customer opens the app and sends money, the request crosses these pieces. Learn the path: every ticket is one of these arrows breaking.'
+  diagram:
+  - |-
+    flowchart LR
+      APPM[App móvil] --> ARM[Cloud Armor]
+      ARM --> LB[Balanceador HTTPS global]
+      LB --> GW[app-gateway Cloud Run]
+      GW --> CU[cuentas-api Cloud Run]
+      GW --> PA[pagos-api Cloud Run]
+      GW --> TA[tarjetas GKE]
+      GW --> DI[divisas-api Cloud Run]
+      CU --> SQL[(Cloud SQL ledger)]
+      PA --> SP[(Spanner pagos)]
+      PA --> SM[Secret Manager]
+      PA --> PS[[Pub/Sub transacciones]]
+      PS --> FR[fraude Vertex AI]
+      PS --> NO[notificaciones]
+      PS --> DF[Dataflow] --> BQ[(BigQuery)]
+      DI --> NAT[Cloud NAT] --> FX[Proveedor de divisas]
+      GW --> RE[(Memorystore sesiones)]
+  - |-
+    flowchart LR
+      APPM[Mobile app] --> ARM[Cloud Armor]
+      ARM --> LB[Global HTTPS load balancer]
+      LB --> GW[app-gateway Cloud Run]
+      GW --> CU[cuentas-api Cloud Run]
+      GW --> PA[pagos-api Cloud Run]
+      GW --> TA[cards GKE]
+      GW --> DI[divisas-api Cloud Run]
+      CU --> SQL[(Cloud SQL ledger)]
+      PA --> SP[(Spanner payments)]
+      PA --> SM[Secret Manager]
+      PA --> PS[[Pub/Sub transactions]]
+      PS --> FR[fraud Vertex AI]
+      PS --> NO[notifications]
+      PS --> DF[Dataflow] --> BQ[(BigQuery)]
+      DI --> NAT[Cloud NAT] --> FX[FX provider]
+      GW --> RE[(Memorystore sessions)]
+  cards:
+  - title:
+    - Entrada
+    - Front door
+    text:
+    - Cloud Armor filtra ataques y bots; el balanceador global termina TLS con un certificado gestionado y reparte a app-gateway.
+    - Cloud Armor filters attacks and bots; the global load balancer terminates TLS with a managed certificate and routes to app-gateway.
+    meta:
+    - zentra-app-prod
+    - zentra-app-prod
+  - title:
+    - Microservicios
+    - Microservices
+    text:
+    - Cloud Run para casi todo, privado (solo lo invoca app-gateway con su cuenta de servicio). Tarjetas en GKE por requisitos PCI.
+    - Cloud Run for almost everything, private (only app-gateway invokes it with its service account). Cards on GKE for PCI requirements.
+    meta:
+    - Una cuenta de servicio por servicio
+    - One service account per service
+  - title:
+    - Datos del dinero
+    - Money data
+    text:
+    - El ledger de cuentas en Cloud SQL PostgreSQL con IP privada y alta disponibilidad; los pagos en Spanner; sesiones en Memorystore.
+    - The accounts ledger on Cloud SQL PostgreSQL with private IP and HA; payments on Spanner; sessions in Memorystore.
+    meta:
+    - CMEK con Cloud KMS
+    - CMEK with Cloud KMS
+  - title:
+    - Eventos
+    - Events
+    text:
+    - Cada operación publica un evento en el tema transacciones; antifraude, notificaciones y analítica lo consumen por separado.
+    - Each transaction publishes an event to the transacciones topic; anti-fraud, notifications and analytics consume it separately.
+    meta:
+    - Pub/Sub
+    - Pub/Sub
+  - title:
+    - Entrega
+    - Delivery
+    text:
+    - Cloud Build construye, Artifact Registry guarda las imágenes y Cloud Deploy promociona de preproducción a producción.
+    - Cloud Build builds, Artifact Registry stores images and Cloud Deploy promotes from pre-production to production.
+    meta:
+    - Pipeline con aprobación
+    - Pipeline with approval
+  - title:
+    - Observabilidad
+    - Observability
+    text:
+    - Logging y Monitoring con SLO por servicio; alertas al NOC; Error Reporting y Trace para los desarrolladores.
+    - Logging and Monitoring with per-service SLOs; alerts to the NOC; Error Reporting and Trace for developers.
+    meta:
+    - SRE
+    - SRE
+- id: red
+  title:
+  - La red
+  - The network
+  body:
+  - 'Una **VPC compartida** (`zentra-vpc`, en el proyecto host `zentra-red-host`) da red a todos los proyectos de servicio. Nada tiene IP pública: se entra a las VMs por **IAP** y se sale a internet por **Cloud NAT**. Cloud SQL y Memorystore se alcanzan por IP privada (acceso a servicios privados) y Cloud Run sale a la VPC con *Direct VPC egress*. El CPD antiguo, donde sigue el conector con la red de pagos europea, se une por **Interconnect** con BGP.'
+  - 'A **Shared VPC** (`zentra-vpc`, in the host project `zentra-red-host`) gives networking to every service project. Nothing has a public IP: you reach VMs through **IAP** and go out to the internet through **Cloud NAT**. Cloud SQL and Memorystore are reached by private IP (private services access) and Cloud Run reaches the VPC with *Direct VPC egress*. The old data centre, where the connector to the European payments network still lives, joins over **Interconnect** with BGP.'
+  cards:
+  - title:
+    - Subredes
+    - Subnets
+    text:
+    - apps 10.40.1.0/24 · datos 10.40.2.0/24 · gke 10.40.8.0/22 (europe-west1); réplica en europe-west4 para recuperación.
+    - apps 10.40.1.0/24 · data 10.40.2.0/24 · gke 10.40.8.0/22 (europe-west1); mirror in europe-west4 for recovery.
+    meta:
+    - zentra-vpc
+    - zentra-vpc
+  - title:
+    - Cortafuegos
+    - Firewall
+    text:
+    - Denegar por defecto. Se permite por etiquetas de red y por cuenta de servicio; IAP (35.235.240.0/20) a tcp:22; sondas de salud (35.191.0.0/16, 130.211.0.0/22).
+    - Deny by default. Allowed by network tags and service account; IAP (35.235.240.0/20) to tcp:22; health probes (35.191.0.0/16, 130.211.0.0/22).
+    meta:
+    - Equipo de Red
+    - Network team
+  - title:
+    - Salida
+    - Egress
+    text:
+    - Cloud NAT zentra-nat con IP fijas que el proveedor de divisas tiene en su lista de permitidas.
+    - Cloud NAT zentra-nat with fixed IPs the FX provider has allow-listed.
+    meta:
+    - Si cambian, el proveedor bloquea
+    - If they change, the provider blocks us
+- id: normas
+  title:
+  - Las normas de la casa
+  - House rules
+  body:
+  - 'Diez normas que en Zentra no se discuten. Muchos tickets te pedirán saltarte alguna «solo esta vez»: tu trabajo es resolver el problema **sin** romperlas, y explicar por qué.'
+  - 'Ten rules that aren''t up for debate at Zentra. Many tickets will ask you to bend one "just this once": your job is to solve the problem **without** breaking them, and explain why.'
+  cards:
+  - title:
+    - 1 · Datos en la UE
+    - 1 · Data in the EU
+    text:
+    - Ningún recurso fuera de regiones europeas.
+    - No resource outside European regions.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 2 · Sin IP públicas
+    - 2 · No public IPs
+    text:
+    - Se entra por IAP y se sale por NAT.
+    - In through IAP, out through NAT.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 3 · Accesos por grupos
+    - 3 · Access through groups
+    text:
+    - Ni un rol a una persona; y nunca roles básicos (Owner, Editor) en producción.
+    - Not one role to a person; and never basic roles (Owner, Editor) in production.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 4 · Sin claves de cuentas de servicio
+    - 4 · No service account keys
+    text:
+    - Suplantación o Workload Identity.
+    - Impersonation or Workload Identity.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 5 · Secretos en Secret Manager
+    - 5 · Secrets in Secret Manager
+    text:
+    - Nunca en variables, código ni tickets.
+    - Never in variables, code or tickets.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 6 · Cambios por pipeline y CAB
+    - 6 · Changes through pipeline and CAB
+    text:
+    - En producción, a mano solo en emergencia, documentado y llevado luego al código.
+    - In production, by hand only in an emergency, documented and then put into code.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 7 · Lo mínimo para resolver
+    - 7 · The minimum to resolve
+    text:
+    - El cambio más pequeño que arregla la causa, no el que tapa el síntoma.
+    - The smallest change that fixes the cause, not the one that hides the symptom.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 8 · Nunca destruir evidencias
+    - 8 · Never destroy evidence
+    text:
+    - 'En seguridad: contener, conservar y escalar al CSIRT.'
+    - 'In security: contain, preserve and escalate to the CSIRT.'
+    meta:
+    - ''
+    - ''
+  - title:
+    - 9 · Datos PCI aparte
+    - 9 · PCI data apart
+    text:
+    - El entorno de tarjetas no se mezcla con nada.
+    - The cards environment doesn't mix with anything.
+    meta:
+    - ''
+    - ''
+  - title:
+    - 10 · Todo queda en el ticket
+    - 10 · Everything goes in the ticket
+    text:
+    - Qué pasaba, qué hiciste, cómo lo comprobaste.
+    - What was happening, what you did, how you verified it.
+    meta:
+    - ''
+    - ''
+- id: soporte
+  title:
+  - Cómo trabaja Soporte GCP
+  - How GCP Support works
+  body:
+  - |-
+    Los tickets entran por el Service Desk o los abre el NOC desde una alerta. Tú los recibes con prioridad y SLA, investigas con `gcloud`, `kubectl`, `gam` y los registros, hablas con quien haga falta (`ask PERSONA "…"`) y respondes en el ticket. Si la causa es de otro equipo, lo escalas con todo lo averiguado (`ticket escalate EQUIPO "…"`); si es de Google, abres caso con soporte **Premium** (tenemos TAM).
+
+    **Prioridades en Zentra:** P1 pagos o app caídos (respuesta 15 min, guardia y puente de crisis) · P2 servicio degradado o un producto caído para un grupo (1 h) · P3 un usuario o equipo afectado, hay alternativa (8 h) · P4 peticiones y dudas (3 días).
+
+    **El método de cada ticket:** impacto → evidencia → identidad real → cambios recientes → una hipótesis → validar desde el origen → documentar.
+  - |-
+    Tickets come in through the Service Desk or are opened by the NOC from an alert. You get them with priority and SLA, investigate with `gcloud`, `kubectl`, `gam` and the logs, talk to whoever you need (`ask PERSON "…"`) and reply on the ticket. If the cause belongs to another team, escalate with everything you found (`ticket escalate TEAM "…"`); if it's Google's, open a case with **Premium** support (we have a TAM).
+
+    **Priorities at Zentra:** P1 payments or app down (15 min response, on-call and crisis bridge) · P2 degraded service or a product down for a group (1 h) · P3 one user or team affected, a workaround exists (8 h) · P4 requests and questions (3 days).
+
+    **The method for every ticket:** impact → evidence → real identity → recent changes → one hypothesis → validate from the source → document.
+  cards:
+  - title:
+    - Semana 1 · Tutoriales
+    - Week 1 · Tutorials
+    text:
+    - Casos guiados paso a paso para aprender la consola, la identidad, los registros y los servicios de Zentra.
+    - Step-by-step guided cases to learn the console, identity, logs and Zentra's services.
+    meta:
+    - Nivel básico
+    - Basic level
+  - title:
+    - Semanas 2 y 3 · Tickets
+    - Weeks 2 and 3 · Tickets
+    text:
+    - Peticiones e incidencias reales de cada equipo, con prioridad y SLA.
+    - Real requests and incidents from every team, with priority and SLA.
+    meta:
+    - Nivel intermedio
+    - Intermediate level
+  - title:
+    - Semana 4 · Guardia
+    - Week 4 · On call
+    text:
+    - 'Incidentes graves de producción y el gran final: el día de la nómina.'
+    - 'Major production incidents and the grand finale: payday.'
+    meta:
+    - Nivel avanzado
+    - Advanced level
+people:
+- name: Marta Ibáñez
+  email: marta.ibanez@zentra.dev
+  role:
+  - Responsable de Plataforma Cloud
+  - Head of Cloud Platform
+  team:
+  - Plataforma
+  - Platform
+  about:
+  - Tu responsable. Te pedirá que no asumas riesgos sin avisar y que todo quede en el ticket.
+  - Your manager. She'll ask you not to take risks without telling her and to put everything in the ticket.
+- name: Diego Ferrer
+  email: diego.ferrer@zentra.dev
+  role:
+  - SRE de guardia
+  - On-call SRE
+  team:
+  - SRE
+  - SRE
+  about:
+  - Vive en los paneles. Primero quiere saber qué ha cambiado.
+  - Lives in the dashboards. First he wants to know what changed.
+- name: Nadia Kowalski
+  email: nadia.kowalski@zentra.dev
+  role:
+  - Ingeniera de seguridad cloud
+  - Cloud security engineer
+  team:
+  - Seguridad cloud
+  - Cloud security
+  about:
+  - Aprueba (o no) cualquier excepción. Odia los roles básicos y las claves JSON.
+  - Approves (or not) any exception. Hates basic roles and JSON keys.
+- name: Tomás Vidal
+  email: tomas.vidal@zentra.dev
+  role:
+  - Arquitecto de red
+  - Network architect
+  team:
+  - Red
+  - Network
+  about:
+  - Dueño de la VPC compartida, el NAT y el Interconnect.
+  - Owner of the Shared VPC, NAT and Interconnect.
+- name: Lucía Navarro
+  email: lucia.navarro@zentra.dev
+  role:
+  - Tech lead de Pagos
+  - Payments tech lead
+  team:
+  - Pagos
+  - Payments
+  about:
+  - Sabe todo de pagos-api y siempre tiene prisa.
+  - Knows everything about pagos-api and is always in a hurry.
+- name: Hugo Martín
+  email: hugo.martin@zentra.dev
+  role:
+  - Desarrollador de Tarjetas
+  - Cards developer
+  team:
+  - Tarjetas
+  - Cards
+  about:
+  - Mantiene los servicios de tarjetas en GKE.
+  - Maintains the cards services on GKE.
+- name: Sara Benítez
+  email: sara.benitez@zentra.dev
+  role:
+  - Ingeniera de datos
+  - Data engineer
+  team:
+  - Plataforma de datos
+  - Data platform
+  about:
+  - Pipelines de Dataflow y BigQuery.
+  - Dataflow pipelines and BigQuery.
+- name: Omar Haddad
+  email: omar.haddad@zentra.dev
+  role:
+  - Científico de datos
+  - Data scientist
+  team:
+  - Antifraude ML
+  - Anti-fraud ML
+  about:
+  - Entrena el modelo de fraude y pide GPU a todas horas.
+  - Trains the fraud model and asks for GPUs all the time.
+- name: Elena Ríos
+  email: elena.rios@zentra.dev
+  role:
+  - Analista FinOps
+  - FinOps analyst
+  team:
+  - Finanzas
+  - Finance
+  about:
+  - Quiere etiquetas en todo y ninguna sorpresa en la factura.
+  - Wants labels on everything and no surprises on the bill.
+- name: Pablo Costa
+  email: pablo.costa@zentra.dev
+  role:
+  - Agente del Service Desk
+  - Service Desk agent
+  team:
+  - Operaciones N1
+  - Operations L1
+  about:
+  - Te pasa los tickets; a veces les falta información.
+  - Passes you tickets; sometimes they lack information.
+- name: Irene Soler
+  email: irene.soler@zentra.dev
+  role:
+  - Responsable de Cumplimiento
+  - Compliance lead
+  team:
+  - CISO y Cumplimiento
+  - CISO and Compliance
+  about:
+  - Pide evidencias, retención y trazabilidad de todo.
+  - Asks for evidence, retention and traceability of everything.
+- name: Javier Luna
+  email: javier.luna@zentra.dev
+  role:
+  - Gestor de cambios (CAB)
+  - Change manager (CAB)
+  team:
+  - Operaciones
+  - Operations
+  about:
+  - Ningún cambio en producción sin su visto bueno, salvo emergencias documentadas.
+  - No production change without his approval, except documented emergencies.
+- name: Carla Méndez
+  email: carla.mendez@zentra.dev
+  role:
+  - Product owner de la app
+  - App product owner
+  team:
+  - Producto
+  - Product
+  about:
+  - La voz del cliente. Cuando algo falla, lo sabe antes que nadie por las redes.
+  - The customer's voice. When something fails, she knows first from social media.
+- name: Andrés Paredes
+  email: andres.paredes@consultora-norte.com
+  role:
+  - Consultor externo
+  - External consultant
+  team:
+  - Consultora Norte
+  - Consultora Norte
+  about:
+  - Ayuda con la migración del CPD. Su acceso es temporal y acotado.
+  - Helps with the data-centre migration. His access is temporary and scoped.
+glossary:
+- term:
+  - Ledger (libro mayor)
+  - Ledger
+  def:
+  - Registro contable de cada movimiento de dinero. Si discrepa, es un incidente grave.
+  - Accounting record of every money movement. If it diverges, it's a major incident.
+- term:
+  - SEPA Instant
+  - SEPA Instant
+  def:
+  - Transferencias europeas en menos de 10 segundos, 24x7.
+  - European transfers in under 10 seconds, 24x7.
+- term:
+  - PCI DSS
+  - PCI DSS
+  def:
+  - Estándar de seguridad para datos de tarjetas. Obliga a aislar y auditar ese entorno.
+  - Security standard for card data. Requires isolating and auditing that environment.
+- term:
+  - DORA
+  - DORA
+  def:
+  - 'Reglamento europeo de resiliencia operativa digital: gestión de incidentes TIC, pruebas y proveedores.'
+  - 'EU Digital Operational Resilience Act: ICT incident management, testing and third parties.'
+- term:
+  - KYC
+  - KYC
+  def:
+  - 'Conoce a tu cliente: verificación de identidad al abrir la cuenta.'
+  - 'Know your customer: identity checks when opening an account.'
+- term:
+  - AML
+  - AML
+  def:
+  - Prevención del blanqueo de capitales; el antifraude alimenta sus alertas.
+  - Anti-money laundering; anti-fraud feeds its alerts.
+- term:
+  - SCA
+  - SCA
+  def:
+  - Autenticación reforzada del cliente exigida por PSD2 para pagar.
+  - Strong customer authentication required by PSD2 for payments.
+- term:
+  - CAB
+  - CAB
+  def:
+  - Comité que aprueba los cambios en producción.
+  - Board that approves production changes.
+- term:
+  - RTO / RPO
+  - RTO / RPO
+  def:
+  - Tiempo máximo de caída y datos máximos que se pueden perder en un desastre.
+  - Maximum downtime and maximum data loss allowed in a disaster.
+- term:
+  - SLO
+  - SLO
+  def:
+  - Objetivo de fiabilidad de un servicio (p. ej. 99,95 % de pagos correctos al mes).
+  - A service's reliability target (e.g. 99.95% successful payments a month).
+- term:
+  - CSIRT
+  - CSIRT
+  def:
+  - Equipo de respuesta a incidentes de seguridad.
+  - Security incident response team.
+- term:
+  - CMEK
+  - CMEK
+  def:
+  - Claves de cifrado gestionadas por el cliente en Cloud KMS.
+  - Customer-managed encryption keys in Cloud KMS.
+- term:
+  - OU
+  - OU
+  def:
+  - 'Unidad organizativa de Workspace: agrupa cuentas y les aplica políticas.'
+  - 'Workspace organizational unit: groups accounts and applies policies to them.'
+- term:
+  - Grupo de seguridad
+  - Security group
+  def:
+  - Grupo de Google marcado para dar accesos; no admite miembros externos.
+  - A Google group flagged for granting access; doesn't accept external members.

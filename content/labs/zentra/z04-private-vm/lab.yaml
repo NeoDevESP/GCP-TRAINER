@@ -1,0 +1,173 @@
+id: zentra-z04-private-vm
+title: Tutorial 4 · Tu primera VM privada, con etiquetas y entrada por IAP
+summary: 'Crea una VM como se hace en un banco: sin IP pública, en la subred correcta, con etiquetas de coste y arranque seguro, y entra por IAP.'
+track: zentra
+day: 4
+level: basic
+branch: compute
+type: guided
+mode: production
+skills:
+- compute.vm
+- networking.firewall
+- finops.visibility
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 20
+baseline:
+- zentra-core
+ticket:
+  id: REQ-20004
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Diego Ferrer (SRE)
+  summary: 'Necesitamos una VM pequeña, ops-consola, en la subred apps para lanzar scripts de mantenimiento. Etiquetas: equipo=sre, entorno=prod. Comprueba que se entra por IAP.'
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: 'Lo más pequeño que valga: e2-small sobra.'
+  facts: []
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  **Paso 1 · Crea la VM.** Fíjate en cada opción:
+  ```
+  gcloud compute instances create ops-consola --zone={{.zone}} \
+    --machine-type=e2-small --subnet=apps --no-address \
+    --shielded-secure-boot --labels=equipo=sre,entorno=prod
+  ```
+  - `--subnet=apps`: la subred de aplicaciones de zentra-vpc.
+  - `--no-address`: sin IP pública (la política de la organización no te dejaría otra cosa).
+  - `--shielded-secure-boot`: arranque verificado.
+  - `--labels`: así FinOps sabe de quién es el gasto.
+
+  **Paso 2 · Compruébala.** `gcloud compute instances describe ops-consola --zone={{.zone}}`: busca `networkIP` (privada) y que no haya `natIP`.
+
+  **Paso 3 · Entra por IAP.** `gcloud compute ssh ops-consola --zone={{.zone}} --tunnel-through-iap --command='hostname'`. IAP te autentica con tu cuenta y te lleva por dentro, sin abrir nada a internet.
+
+  **Paso 4 · Responde a Diego** con el nombre y la IP privada y cierra.
+objectives:
+- Crea la VM privada en la subred apps
+- Con arranque seguro y etiquetas
+- Entra por IAP
+- Responde y cierra
+hints:
+- text: Copia el comando del paso 1 tal cual.
+- text: '`--tunnel-through-iap` en el SSH.'
+solution: |
+  ticket
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --shielded-secure-boot --labels=equipo=sre,entorno=prod
+  gcloud compute instances describe ops-consola --zone={{.zone}}
+  gcloud compute ssh ops-consola --zone={{.zone}} --tunnel-through-iap --command='hostname'
+  ticket update "Hola Diego: ops-consola está creada en la subred apps, sin IP pública, con arranque seguro y etiquetas equipo=sre y entorno=prod. Se entra con gcloud compute ssh ops-consola --zone={{.zone}} --tunnel-through-iap."
+  ticket resolve "Creada ops-consola privada en apps con arranque seguro y etiquetas; acceso por IAP comprobado."
+shortcuts:
+- name: no labels, no check
+  run: |
+    gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-standard-8 --subnet=apps --no-address
+    ticket resolve "VM creada para el equipo de SRE."
+rubric:
+- name: VM bien creada
+  validator: state
+  points: 50
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: instances["ops-consola"]
+    expect:
+      labels:
+        regex: equipo.{0,4}sre
+      subnetwork:
+        regex: apps
+    desc: En la subred apps y con etiqueta de equipo
+  - type: absent
+    path: instances["ops-consola"].natIP
+    desc: Sin IP pública
+  - type: exists
+    path: instances["ops-consola"]
+    expect:
+      machineType:
+        regex: e2-(micro|small|medium)
+    desc: Tamaño ajustado
+- name: Acceso por IAP
+  validator: functional
+  points: 30
+  checks:
+  - type: command
+    regex: compute ssh ops-consola .*tunnel-through-iap
+    min: 1
+    desc: Entrada por IAP probada
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - ops-consola
+    - - iap
+    desc: Respuesta con cómo entrar
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: instances create ops-consola
+  title: Crea la VM
+  why: 'Cada opción es una norma: sin IP pública, subred correcta, arranque seguro y etiquetas para el coste.'
+- match: compute ssh ops-consola
+  title: ''
+  why: 'IAP te autentica y te lleva por dentro de Google: la VM sigue sin estar expuesta.'
+en:
+  title: Tutorial 4 · Your first private VM, with labels and IAP access
+  summary: 'Create a VM the bank way: no public IP, in the right subnet, with cost labels and secure boot, and get in through IAP.'
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    **Step 1 · Create the VM.** Notice each option:
+    ```
+    gcloud compute instances create ops-consola --zone={{.zone}} \
+      --machine-type=e2-small --subnet=apps --no-address \
+      --shielded-secure-boot --labels=equipo=sre,entorno=prod
+    ```
+    - `--subnet=apps`: zentra-vpc's application subnet.
+    - `--no-address`: no public IP (the organization policy wouldn't let you anyway).
+    - `--shielded-secure-boot`: verified boot.
+    - `--labels`: so FinOps knows whose spend it is.
+
+    **Step 2 · Check it.** `gcloud compute instances describe ops-consola --zone={{.zone}}`: look for `networkIP` (private) and no `natIP`.
+
+    **Step 3 · Get in through IAP.** `gcloud compute ssh ops-consola --zone={{.zone}} --tunnel-through-iap --command='hostname'`. IAP authenticates you with your account and takes you in privately, opening nothing to the internet.
+
+    **Step 4 · Reply to Diego** with the name and private IP and close.
+  objectives:
+  - Create the private VM in the apps subnet
+  - With secure boot and labels
+  - Get in through IAP
+  - Reply and close
+  hints:
+  - Copy the step 1 command as is.
+  - '`--tunnel-through-iap` on SSH.'
+  ticket:
+    summary: 'We need a small VM, ops-consola, in the apps subnet to run maintenance scripts. Labels: equipo=sre, entorno=prod. Check you can get in through IAP.'
+  text:
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    'Lo más pequeño que valga: e2-small sobra.': 'The smallest that works: e2-small is plenty.'
+    VM bien creada: VM properly created
+    En la subred apps y con etiqueta de equipo: In the apps subnet with the team label
+    Sin IP pública: No public IP
+    Tamaño ajustado: Right-sized
+    Acceso por IAP: IAP access
+    Entrada por IAP probada: IAP access tested
+    Respuesta: Reply
+    Respuesta con cómo entrar: Reply with how to get in
+    Ticket cerrado: Ticket closed
+    Crea la VM: Create the VM
+    'Cada opción es una norma: sin IP pública, subred correcta, arranque seguro y etiquetas para el coste.': 'Each option is a rule: no public IP, right subnet, secure boot and labels for cost.'
+    'IAP te autentica y te lleva por dentro de Google: la VM sigue sin estar expuesta.': 'IAP authenticates you and carries you through Google: the VM stays unexposed.'

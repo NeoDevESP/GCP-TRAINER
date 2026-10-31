@@ -1,0 +1,207 @@
+id: zentra-z03-log-detective
+title: 'Tutorial 3 · Detective de registros: ¿quién ha roto el SSH?'
+summary: Usa los registros de auditoría para saber quién cambió qué y cuándo, y restaura el acceso sin abrirlo a internet.
+track: zentra
+day: 3
+level: basic
+branch: observability
+type: guided
+mode: production
+skills:
+- observability.logging
+- security.audit
+- networking.firewall
+wellArchitected:
+- operations
+- security
+certs:
+- ACE
+difficulty: 2
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create ops-herramientas --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --labels=equipo=soporte,entorno=prod
+faults:
+- type: firewall_delete
+  rule: allow-iap-ssh
+  actor: tomas.vidal@zentra.dev
+ticket:
+  id: INC-30311
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Diego Ferrer (SRE)
+  summary: 'Desde esta mañana nadie puede entrar por SSH a ops-herramientas: «Error while connecting [4003: failed to connect to backend]». Ayer funcionaba.'
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red, dueño de los cortafuegos.
+  fallback: Esta mañana he hecho limpieza de reglas antiguas…
+  facts:
+  - keywords:
+    - - borr
+      - delete
+      - allow-iap
+      - regla
+      - rule
+    answer: '¡Uy! Borré allow-iap-ssh pensando que era de una prueba. Restaúrala igual: tcp:22 solo desde 35.235.240.0/20.'
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  El error **4003** de IAP significa que IAP no consigue llegar al puerto 22 de la VM: casi siempre es el cortafuegos.
+
+  **Paso 1 · Reproduce.** `gcloud compute ssh ops-herramientas --zone={{.zone}} --tunnel-through-iap` y lee el error completo.
+
+  **Paso 2 · Mira las reglas.** `gcloud compute firewall-rules list`: ¿hay alguna que deje entrar a 35.235.240.0/20 (IAP) por tcp:22?
+
+  **Paso 3 · Busca quién y cuándo.** Los registros de auditoría guardan cada cambio. Prueba:
+  `gcloud logging read 'protoPayload.methodName:"firewalls.delete"' --limit=5`
+  Fíjate en `authenticationInfo.principalEmail` (quién) y `timestamp` (cuándo).
+
+  **Paso 4 · Habla con esa persona** (`ask network "…"`) antes de deshacer nada: puede haber un motivo.
+
+  **Paso 5 · Restaura** la regla tal como era (tcp:22 solo desde 35.235.240.0/20, nunca 0.0.0.0/0) y vuelve a probar el SSH.
+
+  **Paso 6 · Deja una nota interna** con quién, cuándo y qué (`ticket comment "…"`), responde a Diego y cierra.
+objectives:
+- Reproduce el error
+- Encuentra en auditoría quién borró qué
+- Restaura la regla sin abrir a internet
+- Documenta y cierra
+hints:
+- text: '`gcloud logging read ''protoPayload.methodName:"firewalls.delete"'' --limit=5`.'
+- text: '`gcloud compute firewall-rules create allow-iap-ssh --network=zentra-vpc --allow=tcp:22 --source-ranges=35.235.240.0/20`.'
+solution: |
+  ticket
+  gcloud compute firewall-rules list
+  gcloud logging read 'protoPayload.methodName:"firewalls.delete"' --limit=5
+  ask network "¿borraste tú la regla allow-iap-ssh esta mañana?"
+  gcloud compute firewall-rules create allow-iap-ssh --network=zentra-vpc --allow=tcp:22 --source-ranges=35.235.240.0/20
+  gcloud compute ssh ops-herramientas --zone={{.zone}} --tunnel-through-iap --command='hostname'
+  ticket comment "Causa: tomas.vidal@zentra.dev borró la regla allow-iap-ssh en una limpieza (registro de auditoría firewalls.delete). Restaurada igual: tcp:22 solo desde 35.235.240.0/20."
+  ticket update "Hola Diego: ya se puede entrar por SSH a ops-herramientas. Se había borrado por error la regla que deja pasar a IAP; está restaurada."
+  ticket resolve "Restaurada allow-iap-ssh (tcp:22 desde 35.235.240.0/20) tras localizar el borrado en auditoría; SSH por IAP comprobado."
+shortcuts:
+- name: open ssh to the world
+  run: |
+    gcloud compute firewall-rules create ssh-temporal --network=zentra-vpc --allow=tcp:22 --source-ranges=0.0.0.0/0
+    ticket resolve "Abierto el puerto 22 para que funcione el SSH."
+rubric:
+- name: SSH restaurado de forma segura
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 35.235.240.0/20
+      rules:
+        regex: '"22"'
+    min: 1
+    desc: Regla de IAP a tcp:22
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+      rules:
+        regex: '"22"'
+    max: 0
+    desc: El 22 no está abierto a internet
+- name: Investigación en auditoría
+  validator: diagnosis
+  points: 30
+  all: true
+  checks:
+  - type: command
+    regex: logging read
+    min: 1
+    desc: Registros de auditoría consultados
+  - type: asked
+    actor: network
+    min: 1
+    desc: Hablado con quien hizo el cambio
+- name: Nota y cierre
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - tomas
+    - - allow-iap-ssh
+      - regla
+      - rule
+    desc: Nota interna con quién y qué
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: compute ssh ops-herramientas
+  title: Reproduce el fallo
+  why: 4003 = IAP no alcanza el puerto 22. Lo primero, el cortafuegos.
+- match: logging read
+  title: Pregunta a la auditoría
+  why: Cada cambio en GCP deja quién, qué y cuándo. Es tu máquina del tiempo.
+- match: ^ask network
+  title: ''
+  why: 'Antes de deshacer el cambio de otro, pregúntale: puede haber una razón que no ves.'
+- match: firewall-rules create allow-iap-ssh
+  title: ''
+  why: 'Solo 35.235.240.0/20: es el rango de IAP. Abrir a 0.0.0.0/0 «para que funcione» es un incidente de seguridad.'
+en:
+  title: 'Tutorial 3 · Log detective: who broke SSH?'
+  summary: Use audit logs to find who changed what and when, and restore access without opening it to the internet.
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    IAP error **4003** means IAP can't reach the VM's port 22: almost always the firewall.
+
+    **Step 1 · Reproduce.** `gcloud compute ssh ops-herramientas --zone={{.zone}} --tunnel-through-iap` and read the full error.
+
+    **Step 2 · Look at the rules.** `gcloud compute firewall-rules list`: is there one letting 35.235.240.0/20 (IAP) in on tcp:22?
+
+    **Step 3 · Find who and when.** Audit logs keep every change. Try:
+    `gcloud logging read 'protoPayload.methodName:"firewalls.delete"' --limit=5`
+    Look at `authenticationInfo.principalEmail` (who) and `timestamp` (when).
+
+    **Step 4 · Talk to that person** (`ask network "…"`) before undoing anything: there may be a reason.
+
+    **Step 5 · Restore** the rule as it was (tcp:22 only from 35.235.240.0/20, never 0.0.0.0/0) and test SSH again.
+
+    **Step 6 · Leave an internal note** with who, when and what (`ticket comment "…"`), reply to Diego and close.
+  objectives:
+  - Reproduce the error
+  - Find in the audit logs who deleted what
+  - Restore the rule without opening to the internet
+  - Document and close
+  hints:
+  - '`gcloud logging read ''protoPayload.methodName:"firewalls.delete"'' --limit=5`.'
+  - '`gcloud compute firewall-rules create allow-iap-ssh --network=zentra-vpc --allow=tcp:22 --source-ranges=35.235.240.0/20`.'
+  ticket:
+    summary: 'Since this morning nobody can SSH into ops-herramientas: "Error while connecting [4003: failed to connect to backend]". It worked yesterday.'
+  text:
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red, dueño de los cortafuegos.: Network architect, owns the firewall rules.
+    Esta mañana he hecho limpieza de reglas antiguas…: This morning I cleaned up some old rules…
+    '¡Uy! Borré allow-iap-ssh pensando que era de una prueba. Restaúrala igual: tcp:22 solo desde 35.235.240.0/20.': 'Oops! I deleted allow-iap-ssh thinking it was from a test. Restore it the same: tcp:22 only from 35.235.240.0/20.'
+    SSH restaurado de forma segura: SSH safely restored
+    Regla de IAP a tcp:22: IAP rule to tcp:22
+    El 22 no está abierto a internet: Port 22 isn't open to the internet
+    Investigación en auditoría: Audit investigation
+    Registros de auditoría consultados: Audit logs queried
+    Hablado con quien hizo el cambio: Talked to whoever made the change
+    Nota y cierre: Note and closure
+    Nota interna con quién y qué: Internal note with who and what
+    Ticket cerrado: Ticket closed
+    Reproduce el fallo: Reproduce the failure
+    4003 = IAP no alcanza el puerto 22. Lo primero, el cortafuegos.: '4003 = IAP can''t reach port 22. First suspect: the firewall.'
+    Pregunta a la auditoría: Ask the audit log
+    Cada cambio en GCP deja quién, qué y cuándo. Es tu máquina del tiempo.: Every GCP change records who, what and when. It's your time machine.
+    'Antes de deshacer el cambio de otro, pregúntale: puede haber una razón que no ves.': 'Before undoing someone else''s change, ask them: there may be a reason you can''t see.'
+    'Solo 35.235.240.0/20: es el rango de IAP. Abrir a 0.0.0.0/0 «para que funcione» es un incidente de seguridad.': 'Only 35.235.240.0/20: it''s IAP''s range. Opening 0.0.0.0/0 "to make it work" is a security incident.'

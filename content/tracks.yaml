@@ -119,6 +119,16 @@ tracks:
     en:
       title: Data & databases
       description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
+  - id: zentra
+    title: 'Zentra: tu primer mes en un banco digital'
+    description: 'Entras en Soporte GCP de Zentra, un banco digital europeo que vive entero en Google Cloud. Primera semana de tutoriales guiados desde cero; después, peticiones e incidencias reales de cada equipo y, al final, la guardia del día de la nómina.'
+    level: associate
+    certs: [ACE, PCSE]
+    phase: V3
+    labs: [zentra-z01-first-day, zentra-z02-who-is-who, zentra-z03-log-detective, zentra-z04-private-vm, zentra-z05-private-run, zentra-z06-secrets, zentra-z07-noc-alert, zentra-z08-finops-basics]
+    en:
+      title: 'Zentra: your first month at a digital bank'
+      description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. A first week of guided tutorials from scratch; then real requests and incidents from every team and, at the end, the payday on-call shift.'
   - id: support-bank
     title: Soporte GCP en banca
     description: 'El día a día de soporte de plataforma GCP en un banco regulado: peticiones de acceso, políticas de organización, redes privadas, permisos entre servicios, secretos, incidentes de seguridad, GKE, Cloud SQL, costes, auditoría, rotación de secretos, discos llenos, tickets mal dirigidos y caídas de Google. Tickets reales, preguntas al solicitante, respuestas escritas y escalados, sin saltarse las normas.'

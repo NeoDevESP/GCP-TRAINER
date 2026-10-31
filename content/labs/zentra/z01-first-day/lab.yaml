@@ -1,0 +1,207 @@
+id: zentra-z01-first-day
+title: 'Tutorial 1 · Tu primer día en Zentra: dónde está cada cosa'
+summary: Reconoce el proyecto, sus políticas de organización y la red privada del banco antes de tocar nada.
+track: zentra
+day: 1
+level: basic
+branch: foundations
+type: guided
+mode: production
+skills:
+- foundations.hierarchy
+- foundations.cli
+- iam.orgpolicy
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 20
+baseline:
+- zentra-core
+ticket:
+  id: REQ-20001
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Marta Ibáñez (responsable de Plataforma)
+  summary: ¡Bienvenido/a a Soporte GCP! Antes de tu primer ticket real, haz el recorrido por el proyecto de pagos y contesta las preguntas de orientación.
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Tómatelo con calma: hoy toca aprender dónde está cada cosa. Pregunta lo que necesites.'
+  facts: []
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  **Proyecto: `{{.project}}`** (en Zentra lo llamamos *zentra-pagos-prod*).
+
+  **Paso 1 · ¿Dónde estoy?** `gcloud config list` te dice con qué cuenta y en qué proyecto trabaja tu terminal. `gcloud projects describe {{.project}}` muestra el nombre, el ID y el número del proyecto.
+
+  **Paso 2 · Las reglas que no se pueden saltar.** `gcloud resource-manager org-policies list --project={{.project}}` lista las políticas de organización. Mira cuáles hay: son las «normas de la casa» convertidas en código.
+
+  **Paso 3 · La red.** `gcloud compute networks list` y `gcloud compute networks subnets list` muestran la VPC del banco y sus subredes. `gcloud compute routers nats list --router=zentra-router --region={{.region}}` te enseña por dónde salen a internet las máquinas privadas.
+
+  **Paso 4 · Responde** a las preguntas de orientación y cierra el ticket con `ticket resolve "…"` contando lo que has visto.
+objectives:
+- Identifica cuenta, proyecto e ID
+- Lista las políticas de organización
+- Explora la red y la salida a internet
+- Responde las preguntas y cierra
+hints:
+- text: Empieza por `gcloud config list`.
+- text: 'Las políticas: `gcloud resource-manager org-policies list --project={{.project}}`.'
+quiz:
+- id: q1
+  question: ¿Cómo se llama la red VPC de Zentra en este proyecto?
+  options:
+  - zentra-vpc
+  - default
+  - apps
+  - zentra-router
+  answer:
+  - 0
+- id: q2
+  question: ¿Qué política impide crear una VM con IP pública?
+  options:
+  - compute.vmExternalIpAccess
+  - gcp.resourceLocations
+  - storage.publicAccessPrevention
+  - iam.allowedPolicyMemberDomains
+  answer:
+  - 0
+- id: q3
+  question: ¿Por dónde sale a internet una VM sin IP pública?
+  options:
+  - Por Cloud NAT (zentra-nat)
+  - Por IAP
+  - Por el balanceador de carga
+  - No puede salir nunca
+  answer:
+  - 0
+- id: q4
+  question: ¿En qué regiones se pueden crear recursos?
+  options:
+  - Solo en la Unión Europea
+  - En cualquier región
+  - Solo en EE. UU.
+  - Solo en europe-west1
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud config list
+  gcloud projects describe {{.project}}
+  gcloud resource-manager org-policies list --project={{.project}}
+  gcloud compute networks list
+  gcloud compute networks subnets list
+  gcloud compute routers nats list --router=zentra-router --region={{.region}}
+  ticket resolve "He revisado el proyecto: red zentra-vpc con subredes apps, datos y gke, salida por zentra-nat, y políticas de UE, sin IP públicas y sin claves."
+shortcuts:
+- name: close without looking
+  run: |
+    ticket resolve "Visto todo, gracias por la bienvenida a Zentra."
+rubric:
+- name: Orientación
+  validator: diagnosis
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: command
+    regex: config list|projects describe
+    min: 1
+    desc: Sabe dónde está trabajando
+  - type: command
+    regex: org-policies (list|describe)
+    min: 1
+    desc: Políticas de organización revisadas
+  - type: command
+    regex: networks (list|subnets list)|nats list
+    min: 2
+    desc: Red y salida a internet exploradas
+- name: Preguntas de orientación
+  validator: quiz
+  points: 40
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Todas correctas
+- name: Ticket
+  validator: evidence
+  points: 20
+  checks:
+  - type: ticket_resolved
+    desc: Ticket cerrado con lo visto
+tutor:
+- match: ^gcloud config list
+  title: Tu punto de partida
+  why: 'Antes de cualquier comando, confirma cuenta y proyecto: es la causa n.º 1 de «no encuentro el recurso».'
+- match: org-policies list
+  title: ''
+  why: 'Cada política es una norma de la casa aplicada por Google: aunque tengas Owner, no podrás saltártela.'
+- match: nats list
+  title: ''
+  why: zentra-nat da salida a internet a todo lo privado; sus IP están en la lista blanca del proveedor de divisas.
+en:
+  title: 'Tutorial 1 · Your first day at Zentra: where everything is'
+  summary: Get to know the project, its organization policies and the bank's private network before touching anything.
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    **Project: `{{.project}}`** (at Zentra we call it *zentra-pagos-prod*).
+
+    **Step 1 · Where am I?** `gcloud config list` tells you which account and project your terminal uses. `gcloud projects describe {{.project}}` shows the project's name, ID and number.
+
+    **Step 2 · The rules you can't bend.** `gcloud resource-manager org-policies list --project={{.project}}` lists the organization policies. See which ones exist: they're the "house rules" turned into code.
+
+    **Step 3 · The network.** `gcloud compute networks list` and `gcloud compute networks subnets list` show the bank's VPC and its subnets. `gcloud compute routers nats list --router=zentra-router --region={{.region}}` shows how private machines reach the internet.
+
+    **Step 4 · Answer** the orientation questions and close the ticket with `ticket resolve "…"` describing what you saw.
+  objectives:
+  - Identify account, project and ID
+  - List the organization policies
+  - Explore the network and internet egress
+  - Answer the questions and close
+  hints:
+  - Start with `gcloud config list`.
+  - 'Policies: `gcloud resource-manager org-policies list --project={{.project}}`.'
+  ticket:
+    summary: Welcome to GCP Support! Before your first real ticket, take the tour of the payments project and answer the orientation questions.
+  text:
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Head of Platform)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Tómatelo con calma: hoy toca aprender dónde está cada cosa. Pregunta lo que necesites.': 'Take it easy: today is about learning where everything is. Ask whatever you need.'
+    ¿Cómo se llama la red VPC de Zentra en este proyecto?: What's the name of Zentra's VPC network in this project?
+    zentra-vpc: zentra-vpc
+    default: default
+    apps: apps
+    zentra-router: zentra-router
+    ¿Qué política impide crear una VM con IP pública?: Which policy prevents creating a VM with a public IP?
+    compute.vmExternalIpAccess: compute.vmExternalIpAccess
+    gcp.resourceLocations: gcp.resourceLocations
+    storage.publicAccessPrevention: storage.publicAccessPrevention
+    iam.allowedPolicyMemberDomains: iam.allowedPolicyMemberDomains
+    ¿Por dónde sale a internet una VM sin IP pública?: How does a VM without a public IP reach the internet?
+    Por Cloud NAT (zentra-nat): Through Cloud NAT (zentra-nat)
+    Por IAP: Through IAP
+    Por el balanceador de carga: Through the load balancer
+    No puede salir nunca: It can never get out
+    ¿En qué regiones se pueden crear recursos?: In which regions can resources be created?
+    Solo en la Unión Europea: Only in the European Union
+    En cualquier región: In any region
+    Solo en EE. UU.: Only in the US
+    Solo en europe-west1: Only in europe-west1
+    Orientación: Orientation
+    Sabe dónde está trabajando: Knows where they're working
+    Políticas de organización revisadas: Organization policies reviewed
+    Red y salida a internet exploradas: Network and egress explored
+    Preguntas de orientación: Orientation questions
+    Todas correctas: All correct
+    Ticket: Ticket
+    Ticket cerrado con lo visto: Ticket closed with what you saw
+    Tu punto de partida: Your starting point
+    'Antes de cualquier comando, confirma cuenta y proyecto: es la causa n.º 1 de «no encuentro el recurso».': 'Before any command, confirm account and project: it''s the no. 1 cause of "I can''t find the resource".'
+    'Cada política es una norma de la casa aplicada por Google: aunque tengas Owner, no podrás saltártela.': 'Each policy is a house rule enforced by Google: even with Owner you can''t bypass it.'
+    zentra-nat da salida a internet a todo lo privado; sus IP están en la lista blanca del proveedor de divisas.: zentra-nat gives internet egress to everything private; its IPs are on the FX provider's allow-list.

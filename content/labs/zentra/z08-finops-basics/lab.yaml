@@ -1,0 +1,169 @@
+id: zentra-z08-finops-basics
+title: 'Tutorial 8 · Etiquetas y presupuesto: que nadie se lleve sorpresas'
+summary: Etiqueta las VMs para repartir el coste y crea un presupuesto con avisos al 50, 90 y 100 %.
+track: zentra
+day: 8
+level: basic
+branch: finops
+type: guided
+mode: production
+skills:
+- finops.visibility
+- foundations.billing
+wellArchitected:
+- cost
+certs:
+- ACE
+difficulty: 1
+minutes: 20
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create batch-extractos --zone={{.zone}} --machine-type=e2-standard-2 --subnet=apps --no-address
+  gcloud compute instances create batch-conciliacion --zone={{.zone}} --machine-type=e2-standard-2 --subnet=apps --no-address
+ticket:
+  id: REQ-20008
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Elena Ríos (FinOps)
+  summary: 'Las VMs batch-extractos y batch-conciliacion no tienen etiquetas y no sé a quién cargarlas (son del equipo de Cuentas, entorno prod). Y el proyecto no tiene presupuesto: 400 EUR al mes con avisos al 50, 90 y 100 %.'
+actors:
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: Analista FinOps.
+  fallback: 'Etiquetas: equipo=cuentas, entorno=prod, coste=cc-cuentas.'
+  facts: []
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  **Paso 1 · Mira cómo están.** `gcloud compute instances list --format='table(name,labels)'`.
+
+  **Paso 2 · Etiqueta.** Pregunta a Elena las etiquetas exactas (`ask finops "…"`) y aplícalas a las dos VMs:
+  `gcloud compute instances add-labels batch-extractos --zone={{.zone}} --labels=equipo=cuentas,entorno=prod,coste=cc-cuentas`
+
+  **Paso 3 · Presupuesto con avisos.**
+  ```
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=pagos-prod \
+    --budget-amount=400EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+  ```
+  Un presupuesto **avisa**; no apaga nada.
+
+  **Paso 4 · Responde a Elena** y cierra.
+objectives:
+- Revisa las etiquetas actuales
+- Etiqueta las dos VMs
+- Crea el presupuesto con tres avisos
+- Responde y cierra
+hints:
+- text: '`gcloud compute instances add-labels VM --zone={{.zone}} --labels=...`.'
+- text: El presupuesto usa `--threshold-rule=percent=0.5` tres veces.
+solution: |
+  ticket
+  gcloud compute instances list --format='table(name,labels)'
+  ask finops "¿qué etiquetas exactas les pongo?"
+  gcloud compute instances add-labels batch-extractos --zone={{.zone}} --labels=equipo=cuentas,entorno=prod,coste=cc-cuentas
+  gcloud compute instances add-labels batch-conciliacion --zone={{.zone}} --labels=equipo=cuentas,entorno=prod,coste=cc-cuentas
+  gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=pagos-prod --budget-amount=400EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+  ticket update "Hola Elena: las dos VMs batch tienen ya las etiquetas equipo=cuentas, entorno=prod y coste=cc-cuentas, y el proyecto tiene un presupuesto de 400 EUR con avisos al 50, 90 y 100 %."
+  ticket resolve "Etiquetadas batch-extractos y batch-conciliacion; presupuesto de 400 EUR con tres umbrales."
+shortcuts:
+- name: budget only
+  run: |
+    gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=pagos-prod --budget-amount=400EUR
+    ticket resolve "Presupuesto creado para el proyecto de pagos."
+rubric:
+- name: Coste repartible
+  validator: cost
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: instances["batch-extractos"]
+    expect:
+      labels:
+        regex: cc-cuentas
+    desc: batch-extractos etiquetada
+  - type: exists
+    path: instances["batch-conciliacion"]
+    expect:
+      labels:
+        regex: cc-cuentas
+    desc: batch-conciliacion etiquetada
+- name: Presupuesto con avisos
+  validator: cost
+  points: 40
+  checks:
+  - type: exists
+    path: budgets["pagos-prod"]
+    expect:
+      amount: 400
+      thresholds:
+        len: 3
+    desc: 400 EUR con tres umbrales
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - etiqueta
+      - label
+    - - presupuesto
+      - budget
+    desc: Respuesta con lo hecho
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: add-labels
+  title: Etiqueta para repartir
+  why: 'Las etiquetas aparecen en la factura: así cada euro tiene dueño.'
+- match: budgets create
+  title: ''
+  why: Tres avisos dan tiempo a reaccionar; el presupuesto no apaga nada por sí solo.
+en:
+  title: 'Tutorial 8 · Labels and budget: no surprises for anyone'
+  summary: Label the VMs to split the cost and create a budget with alerts at 50, 90 and 100%.
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    **Step 1 · See how they are.** `gcloud compute instances list --format='table(name,labels)'`.
+
+    **Step 2 · Label them.** Ask Elena for the exact labels (`ask finops "…"`) and apply them to both VMs:
+    `gcloud compute instances add-labels batch-extractos --zone={{.zone}} --labels=equipo=cuentas,entorno=prod,coste=cc-cuentas`
+
+    **Step 3 · Budget with alerts.**
+    ```
+    gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X --display-name=pagos-prod \
+      --budget-amount=400EUR --threshold-rule=percent=0.5 --threshold-rule=percent=0.9 --threshold-rule=percent=1.0
+    ```
+    A budget **alerts**; it doesn't shut anything down.
+
+    **Step 4 · Reply to Elena** and close.
+  objectives:
+  - Review current labels
+  - Label both VMs
+  - Create the budget with three alerts
+  - Reply and close
+  hints:
+  - '`gcloud compute instances add-labels VM --zone={{.zone}} --labels=...`.'
+  - The budget uses `--threshold-rule=percent=0.5` three times.
+  ticket:
+    summary: 'The batch-extractos and batch-conciliacion VMs have no labels and I can''t charge them to anyone (they belong to the Accounts team, prod environment). And the project has no budget: 400 EUR a month with alerts at 50, 90 and 100%.'
+  text:
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    Analista FinOps.: FinOps analyst.
+    'Etiquetas: equipo=cuentas, entorno=prod, coste=cc-cuentas.': 'Labels: equipo=cuentas, entorno=prod, coste=cc-cuentas.'
+    Coste repartible: Cost attributable
+    batch-extractos etiquetada: batch-extractos labelled
+    batch-conciliacion etiquetada: batch-conciliacion labelled
+    Presupuesto con avisos: Budget with alerts
+    400 EUR con tres umbrales: 400 EUR with three thresholds
+    Respuesta: Reply
+    Respuesta con lo hecho: Reply with what was done
+    Ticket cerrado: Ticket closed
+    Etiqueta para repartir: Label to allocate
+    'Las etiquetas aparecen en la factura: así cada euro tiene dueño.': 'Labels appear on the bill: that way every euro has an owner.'
+    Tres avisos dan tiempo a reaccionar; el presupuesto no apaga nada por sí solo.: Three alerts give time to react; the budget doesn't shut anything down by itself.

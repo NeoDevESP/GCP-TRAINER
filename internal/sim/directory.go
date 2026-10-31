@@ -160,3 +160,14 @@ func (s *State) directoryView() *Directory {
 	}
 	return &d
 }
+
+// PermittedDomain reports whether a member belongs to the organization's
+// customer for iam.allowedPolicyMemberDomains: the platform domain or the
+// company's Workspace domain.
+func (s *State) PermittedDomain(member string) bool {
+	email := strings.ToLower(member[strings.Index(member, ":")+1:])
+	if strings.HasSuffix(email, "@gcplab.dev") || strings.HasSuffix(email, ".gserviceaccount.com") {
+		return true
+	}
+	return s.Directory != nil && s.Directory.Domain != "" && !s.Directory.External(email)
+}

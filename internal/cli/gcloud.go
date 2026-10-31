@@ -563,7 +563,7 @@ func init() {
 		if (m == "allUsers" || m == "allAuthenticatedUsers") && c.S.State.OrgPolicyEnforced(id, "iam.allowedPolicyMemberDomains") {
 			return nil, fmt.Errorf("FAILED_PRECONDITION: One or more users named in the policy do not belong to a permitted customer (constraints/iam.allowedPolicyMemberDomains).")
 		}
-		if strings.HasPrefix(m, "user:") && !strings.HasSuffix(m, "@gcplab.dev") && c.S.State.OrgPolicyEnforced(id, "iam.allowedPolicyMemberDomains") {
+		if strings.HasPrefix(m, "user:") && !c.S.State.PermittedDomain(m) && c.S.State.OrgPolicyEnforced(id, "iam.allowedPolicyMemberDomains") {
 			return nil, fmt.Errorf("FAILED_PRECONDITION: One or more users named in the policy do not belong to a permitted customer.")
 		}
 		p.IAM.AddBinding(role, m, cond)

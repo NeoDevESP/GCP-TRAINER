@@ -1,0 +1,180 @@
+id: zentra-z06-secrets
+title: Tutorial 6 · La clave del proveedor de tarjetas, bien guardada
+summary: Guarda una clave en Secret Manager, da acceso solo a la cuenta del servicio y móntala en Cloud Run sin que aparezca en ninguna variable en claro.
+track: zentra
+day: 6
+level: basic
+branch: security
+type: guided
+mode: production
+skills:
+- security.secrets
+- compute.serverless
+- iam.leastprivilege
+wellArchitected:
+- security
+certs:
+- ACE
+difficulty: 2
+minutes: 25
+baseline:
+- zentra-core
+ticket:
+  id: REQ-20006
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Lucía Navarro (Pagos)
+  summary: 'pagos-api (imagen payments-api:1.0) necesita la clave del proveedor de pagos: psp_live_zentra_7Q2. Ponedla como os parezca, pero que funcione hoy.'
+actors:
+- role: dev
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: La app lee la clave de la variable API_KEY.
+  facts: []
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  Una clave en una variable de entorno en claro la ve cualquiera que pueda describir el servicio. Se guarda en **Secret Manager** y se *monta* en el servicio.
+
+  **Paso 1 · Crea el secreto.** `echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-`
+
+  **Paso 2 · Permiso solo a quien lo usa.**
+  `gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor`
+  (sobre el **secreto**, no sobre el proyecto: el proyecto tiene secretos de otros).
+
+  **Paso 3 · Despliega montándolo.**
+  ```
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 \
+    --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com \
+    --set-secrets=API_KEY=proveedor-psp:latest --no-allow-unauthenticated
+  ```
+
+  **Paso 4 · Deja que app-gateway lo llame** (`roles/run.invoker` para app-gateway-sa) y responde a Lucía. **No pegues la clave en el ticket.**
+objectives:
+- Guarda la clave en Secret Manager
+- Acceso solo para pagos-sa sobre ese secreto
+- Despliega pagos-api montando el secreto
+- Responde sin revelar la clave
+hints:
+- text: '`--set-secrets=API_KEY=proveedor-psp:latest`.'
+- text: El permiso va con `gcloud secrets add-iam-policy-binding`.
+solution: |
+  ticket
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  ticket update "Hola Lucía: pagos-api ya funciona. La clave está en Secret Manager (proveedor-psp), montada como API_KEY; solo pagos-sa puede leerla y solo app-gateway puede invocar el servicio."
+  ticket resolve "Clave en Secret Manager con acceso solo para pagos-sa; pagos-api desplegado montando el secreto."
+shortcuts:
+- name: plain env var
+  run: |
+    gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=API_KEY=psp_live_zentra_7Q2 --no-allow-unauthenticated
+    gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+    ticket resolve "Desplegado pagos-api con la clave."
+rubric:
+- name: Pagos funciona
+  validator: functional
+  points: 30
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: pagos-api responde a app-gateway
+- name: Clave protegida
+  validator: security
+  points: 50
+  critical: true
+  all: true
+  checks:
+  - type: policy
+    package: gcplab.security
+    ids:
+    - SECRET_IN_ENV
+    desc: Ningún secreto en variables en claro
+  - type: iam
+    principal: serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: secretmanager.versions.access
+    resource: secret:proveedor-psp
+    desc: pagos-sa puede leer el secreto
+  - type: iam
+    principal: serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: secretmanager.versions.access
+    resource: project
+    expect: false
+    desc: Pero no todos los secretos del proyecto
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - secret manager
+      - secreto
+      - secret
+    desc: Explica dónde está la clave
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: secrets create proveedor-psp
+  title: Guarda la clave
+  why: Secret Manager cifra, versiona y audita cada lectura.
+- match: secrets add-iam-policy-binding
+  title: ''
+  why: 'Sobre el secreto concreto: pagos-sa no podrá leer los secretos de otros equipos.'
+- match: set-secrets=API_KEY
+  title: ''
+  why: La app sigue leyendo API_KEY, pero el valor viene de Secret Manager y no se ve al describir el servicio.
+en:
+  title: Tutorial 6 · The card provider's key, properly stored
+  summary: Store a key in Secret Manager, grant access only to the service's account and mount it in Cloud Run without it appearing in any plain variable.
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    A key in a plain environment variable is visible to anyone who can describe the service. It goes in **Secret Manager** and is *mounted* into the service.
+
+    **Step 1 · Create the secret.** `echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-`
+
+    **Step 2 · Permission only for who uses it.**
+    `gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor`
+    (on the **secret**, not the project: the project holds others' secrets).
+
+    **Step 3 · Deploy mounting it.**
+    ```
+    gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 \
+      --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com \
+      --set-secrets=API_KEY=proveedor-psp:latest --no-allow-unauthenticated
+    ```
+
+    **Step 4 · Let app-gateway call it** (`roles/run.invoker` for app-gateway-sa) and reply to Lucía. **Don't paste the key in the ticket.**
+  objectives:
+  - Store the key in Secret Manager
+  - Access only for pagos-sa on that secret
+  - Deploy pagos-api mounting the secret
+  - Reply without revealing the key
+  hints:
+  - '`--set-secrets=API_KEY=proveedor-psp:latest`.'
+  - The permission goes with `gcloud secrets add-iam-policy-binding`.
+  ticket:
+    summary: 'pagos-api (image payments-api:1.0) needs the payment provider key: psp_live_zentra_7Q2. Set it however you like, but it has to work today.'
+  text:
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tech lead de Pagos.: Payments tech lead.
+    La app lee la clave de la variable API_KEY.: The app reads the key from the API_KEY variable.
+    Pagos funciona: Payments works
+    pagos-api responde a app-gateway: pagos-api answers app-gateway
+    Clave protegida: Key protected
+    Ningún secreto en variables en claro: No secret in plain variables
+    pagos-sa puede leer el secreto: pagos-sa can read the secret
+    Pero no todos los secretos del proyecto: But not every secret in the project
+    Respuesta: Reply
+    Explica dónde está la clave: Explains where the key is
+    Ticket cerrado: Ticket closed
+    Guarda la clave: Store the key
+    Secret Manager cifra, versiona y audita cada lectura.: Secret Manager encrypts, versions and audits every read.
+    'Sobre el secreto concreto: pagos-sa no podrá leer los secretos de otros equipos.': 'On the specific secret: pagos-sa won''t be able to read other teams'' secrets.'
+    La app sigue leyendo API_KEY, pero el valor viene de Secret Manager y no se ve al describir el servicio.: The app still reads API_KEY, but the value comes from Secret Manager and isn't visible when describing the service.

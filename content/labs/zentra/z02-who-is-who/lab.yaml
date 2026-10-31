@@ -1,0 +1,241 @@
+id: zentra-z02-who-is-who
+title: 'Tutorial 2 · Quién es quién: Workspace, grupos y permisos'
+summary: Descubre cómo llegan los permisos de GCP a cada persona a través de los grupos de Google y da tu primer acceso como se hace en Zentra.
+track: zentra
+day: 2
+level: basic
+branch: iam
+type: guided
+mode: production
+skills:
+- iam.roles
+- iam.leastprivilege
+- foundations.hierarchy
+wellArchitected:
+- security
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gam create user rocio.perez@zentra.dev firstname Rocio lastname Perez org /Operaciones title "Service Desk"
+ticket:
+  id: REQ-20002
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Marta Ibáñez (responsable de Plataforma)
+  summary: Rocío Pérez entra hoy en el Service Desk. Necesita ver los proyectos de GCP igual que el resto del equipo de Pablo. Ya tiene cuenta en Workspace.
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Tómatelo con calma: hoy toca aprender dónde está cada cosa. Pregunta lo que necesites.'
+  facts: []
+- role: desk
+  name: Pablo Costa (Service Desk)
+  persona: Compañero de Rocío en el Service Desk.
+  fallback: Yo veo los proyectos y poco más; nunca me han dado permisos sueltos.
+  facts:
+  - keywords:
+    - - grupo
+      - group
+      - como
+      - how
+    answer: Creo que estoy en un grupo de soporte, gcp-algo.
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  En Zentra **los permisos de Google Cloud nunca se dan a personas, sino a grupos de Google**. Vamos a verlo con datos reales.
+
+  **Paso 1 · Mira a un compañero.** `gam info user pablo.costa@zentra.dev` muestra su ficha de Workspace: unidad organizativa, cargo y **grupos** a los que pertenece.
+
+  **Paso 2 · Mira qué da cada grupo en GCP.** `gcloud projects get-iam-policy {{.project}}` lista los permisos del proyecto. Busca `group:gcp-soporte@zentra.dev`: ese rol es lo que ve Pablo.
+
+  **Paso 3 · Grupos dentro de grupos.** `gcloud identity groups memberships list --group-email=gcp-producto@zentra.dev`: verás que contiene *otros grupos*. Quien esté en `gcp-pagos-dev` hereda lo de `gcp-producto`.
+
+  **Paso 4 · Da el acceso a Rocío** metiéndola en el grupo correcto:
+  `gcloud identity groups memberships add --group-email=gcp-soporte@zentra.dev --member-email=rocio.perez@zentra.dev`
+  y compruébalo con `gcloud identity groups memberships check-transitive-membership --group-email=gcp-soporte@zentra.dev --member-email=rocio.perez@zentra.dev`.
+
+  **Paso 5 · Responde** las preguntas y cierra el ticket.
+objectives:
+- Averigua de qué grupos es Pablo y qué le dan en GCP
+- Entiende los grupos anidados
+- Da acceso a Rocío por grupo, sin permisos directos
+- Responde y cierra
+hints:
+- text: '`gam info user pablo.costa@zentra.dev`.'
+- text: El grupo de soporte es `gcp-soporte@zentra.dev`.
+quiz:
+- id: q1
+  question: ¿Por qué Lucía (de Pagos) puede ver los servicios de Cloud Run?
+  options:
+  - Está en gcp-pagos-dev, que es miembro de gcp-producto, que tiene run.viewer
+  - Tiene un rol directo en el proyecto
+  - Es Owner de la organización
+  - Cloud Run es público
+  answer:
+  - 0
+- id: q2
+  question: Si alguien deja el equipo de soporte, ¿cómo se le quita el acceso?
+  options:
+  - Sacándolo del grupo gcp-soporte
+  - Borrando el proyecto
+  - Quitando el rol al grupo
+  - No se puede quitar
+  answer:
+  - 0
+- id: q3
+  question: ¿Qué rol da el grupo gcp-soporte en este proyecto?
+  options:
+  - roles/browser
+  - roles/owner
+  - roles/editor
+  - roles/run.admin
+  answer:
+  - 0
+solution: |
+  ticket
+  gam info user pablo.costa@zentra.dev
+  gcloud projects get-iam-policy {{.project}}
+  gcloud identity groups memberships list --group-email=gcp-producto@zentra.dev
+  gcloud identity groups memberships add --group-email=gcp-soporte@zentra.dev --member-email=rocio.perez@zentra.dev
+  gcloud identity groups memberships check-transitive-membership --group-email=gcp-soporte@zentra.dev --member-email=rocio.perez@zentra.dev
+  ticket update "Hola Marta: Rocío ya está en el grupo gcp-soporte, el mismo que Pablo, así que ve los proyectos igual que el resto del Service Desk. Sin permisos directos."
+  ticket resolve "Añadida rocio.perez al grupo gcp-soporte; hereda roles/browser del grupo, sin permisos directos."
+shortcuts:
+- name: direct IAM grant
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:rocio.perez@zentra.dev --role=roles/browser
+    ticket resolve "Dado roles/browser a Rocío en el proyecto."
+rubric:
+- name: Acceso por grupo
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: directory.groups["gcp-soporte@zentra.dev"]
+    expect:
+      allMembers:
+        regex: rocio.perez@zentra.dev
+    desc: Rocío está en gcp-soporte
+  - type: iam
+    principal: user:rocio.perez@zentra.dev
+    permission: resourcemanager.projects.get
+    resource: project
+    desc: Puede ver el proyecto
+  - type: command
+    regex: add-iam-policy-binding .*rocio
+    max: 0
+    desc: Ningún permiso directo
+- name: Exploración
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: gam info user|gam print groups
+    min: 1
+    desc: Ficha de un compañero revisada
+  - type: command
+    regex: get-iam-policy|memberships list
+    min: 1
+    desc: Permisos y grupos revisados
+- name: Preguntas
+  validator: quiz
+  points: 30
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Todas correctas
+- name: Ticket
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_resolved
+    keywords:
+    - - grupo
+      - group
+    desc: Cerrado explicando el grupo
+tutor:
+- match: gam info user
+  title: La ficha de Workspace
+  why: 'Tu cuenta de Workspace es tu identidad en GCP: los grupos que ves aquí son los que te dan permisos.'
+- match: memberships list --group-email=gcp-producto
+  title: ''
+  why: 'Un grupo puede contener grupos: así un permiso se da una vez y llega a todos los equipos de producto.'
+- match: memberships add
+  title: ''
+  why: Meter a alguien en el grupo es dar acceso; sacarlo, quitarlo. Y queda en el registro de auditoría.
+en:
+  title: 'Tutorial 2 · Who''s who: Workspace, groups and permissions'
+  summary: Discover how GCP permissions reach each person through Google groups and grant your first access the Zentra way.
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    At Zentra **Google Cloud permissions are never granted to people, but to Google groups**. Let's see it with real data.
+
+    **Step 1 · Look at a colleague.** `gam info user pablo.costa@zentra.dev` shows his Workspace record: organizational unit, title and the **groups** he belongs to.
+
+    **Step 2 · See what each group grants in GCP.** `gcloud projects get-iam-policy {{.project}}` lists the project's permissions. Look for `group:gcp-soporte@zentra.dev`: that role is what Pablo sees.
+
+    **Step 3 · Groups inside groups.** `gcloud identity groups memberships list --group-email=gcp-producto@zentra.dev`: you'll see it contains *other groups*. Whoever is in `gcp-pagos-dev` inherits what `gcp-producto` has.
+
+    **Step 4 · Give Rocío access** by adding her to the right group:
+    `gcloud identity groups memberships add --group-email=gcp-soporte@zentra.dev --member-email=rocio.perez@zentra.dev`
+    and check it with `gcloud identity groups memberships check-transitive-membership --group-email=gcp-soporte@zentra.dev --member-email=rocio.perez@zentra.dev`.
+
+    **Step 5 · Answer** the questions and close the ticket.
+  objectives:
+  - Find out Pablo's groups and what they grant in GCP
+  - Understand nested groups
+  - Grant Rocío access through the group, no direct permissions
+  - Answer and close
+  hints:
+  - '`gam info user pablo.costa@zentra.dev`.'
+  - The support group is `gcp-soporte@zentra.dev`.
+  ticket:
+    summary: Rocío Pérez joins the Service Desk today. She needs to see the GCP projects like the rest of Pablo's team. She already has a Workspace account.
+  text:
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Head of Platform)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Tómatelo con calma: hoy toca aprender dónde está cada cosa. Pregunta lo que necesites.': 'Take it easy: today is about learning where everything is. Ask whatever you need.'
+    Pablo Costa (Service Desk): Pablo Costa (Service Desk)
+    Compañero de Rocío en el Service Desk.: Rocío's teammate at the Service Desk.
+    Yo veo los proyectos y poco más; nunca me han dado permisos sueltos.: I can see the projects and not much else; I've never been given loose permissions.
+    Creo que estoy en un grupo de soporte, gcp-algo.: I think I'm in a support group, gcp-something.
+    ¿Por qué Lucía (de Pagos) puede ver los servicios de Cloud Run?: Why can Lucía (Payments) see the Cloud Run services?
+    Está en gcp-pagos-dev, que es miembro de gcp-producto, que tiene run.viewer: She's in gcp-pagos-dev, which is a member of gcp-producto, which has run.viewer
+    Tiene un rol directo en el proyecto: She has a direct role on the project
+    Es Owner de la organización: She's organization Owner
+    Cloud Run es público: Cloud Run is public
+    Si alguien deja el equipo de soporte, ¿cómo se le quita el acceso?: If someone leaves the support team, how is their access removed?
+    Sacándolo del grupo gcp-soporte: Removing them from the gcp-soporte group
+    Borrando el proyecto: Deleting the project
+    Quitando el rol al grupo: Removing the role from the group
+    No se puede quitar: It can't be removed
+    ¿Qué rol da el grupo gcp-soporte en este proyecto?: Which role does gcp-soporte grant on this project?
+    roles/browser: roles/browser
+    roles/owner: roles/owner
+    roles/editor: roles/editor
+    roles/run.admin: roles/run.admin
+    Acceso por grupo: Access through the group
+    Rocío está en gcp-soporte: Rocío is in gcp-soporte
+    Puede ver el proyecto: She can see the project
+    Ningún permiso directo: No direct permission
+    Exploración: Exploration
+    Ficha de un compañero revisada: A colleague's record reviewed
+    Permisos y grupos revisados: Permissions and groups reviewed
+    Preguntas: Questions
+    Todas correctas: All correct
+    Ticket: Ticket
+    Cerrado explicando el grupo: Closed explaining the group
+    La ficha de Workspace: The Workspace record
+    'Tu cuenta de Workspace es tu identidad en GCP: los grupos que ves aquí son los que te dan permisos.': 'Your Workspace account is your GCP identity: the groups you see here are what grant you permissions.'
+    'Un grupo puede contener grupos: así un permiso se da una vez y llega a todos los equipos de producto.': 'A group can contain groups: a permission is granted once and reaches every product team.'
+    Meter a alguien en el grupo es dar acceso; sacarlo, quitarlo. Y queda en el registro de auditoría.: Adding someone to the group grants access; removing them takes it away. And it's in the audit log.

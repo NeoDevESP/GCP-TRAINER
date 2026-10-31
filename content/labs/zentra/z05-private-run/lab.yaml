@@ -1,0 +1,183 @@
+id: zentra-z05-private-run
+title: Tutorial 5 · Despliega un microservicio privado en Cloud Run
+summary: Despliega un servicio con su propia cuenta de servicio, privado, y deja que solo app-gateway lo invoque.
+track: zentra
+day: 5
+level: basic
+branch: compute
+type: guided
+mode: production
+skills:
+- compute.serverless
+- iam.serviceaccounts
+- iam.leastprivilege
+wellArchitected:
+- security
+certs:
+- ACE
+difficulty: 2
+minutes: 25
+baseline:
+- zentra-core
+ticket:
+  id: REQ-20005
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Lucía Navarro (Pagos)
+  summary: Desplegad estado-api (imagen europe-docker.pkg.dev/gcplab-public/apps/hello:1.0). Solo tiene que llamarlo app-gateway; no debe ser público.
+actors:
+- role: dev
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: Lo llama app-gateway con su cuenta app-gateway-sa.
+  facts: []
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  En Zentra cada microservicio tiene **su propia cuenta de servicio** y es **privado**: solo lo pueden llamar quienes tengan `roles/run.invoker` sobre él.
+
+  **Paso 1 · Identidad del servicio.** `gcloud iam service-accounts create estado-sa --display-name="estado-api"`.
+
+  **Paso 2 · Despliega privado.**
+  ```
+  gcloud run deploy estado-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 \
+    --region={{.region}} --service-account=estado-sa@{{.project}}.iam.gserviceaccount.com \
+    --no-allow-unauthenticated
+  ```
+
+  **Paso 3 · Deja pasar solo a app-gateway.**
+  ```
+  gcloud run services add-iam-policy-binding estado-api --region={{.region}} \
+    --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  ```
+
+  **Paso 4 · Compruébalo.** `gcloud run services describe estado-api --region={{.region}}` (cuenta, URL) y `curl` a la URL: sin identidad debe dar **403**.
+
+  **Paso 5 · Responde a Lucía** y cierra.
+objectives:
+- Crea la cuenta de servicio del servicio
+- Despliega privado con esa identidad
+- Solo app-gateway puede invocarlo
+- Comprueba y cierra
+hints:
+- text: Los pasos traen los comandos completos.
+- text: '`--no-allow-unauthenticated` hace el servicio privado.'
+solution: |
+  ticket
+  gcloud iam service-accounts create estado-sa --display-name="estado-api"
+  gcloud run deploy estado-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --service-account=estado-sa@{{.project}}.iam.gserviceaccount.com --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding estado-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud run services describe estado-api --region={{.region}}
+  curl -s $(gcloud run services describe estado-api --region={{.region}} --format='value(status.url)')
+  ticket update "Hola Lucía: estado-api está desplegado en {{.region}} con su cuenta estado-sa, privado; solo app-gateway-sa tiene permiso de invocarlo (sin identidad devuelve 403)."
+  ticket resolve "Desplegado estado-api privado con estado-sa; run.invoker solo para app-gateway-sa."
+shortcuts:
+- name: default identity and no invoker
+  run: |
+    gcloud run deploy estado-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --no-allow-unauthenticated
+    ticket resolve "Desplegado estado-api en Cloud Run hoy."
+rubric:
+- name: app-gateway puede llamarlo
+  validator: functional
+  points: 30
+  checks:
+  - type: http
+    target: run:estado-api
+    path: /
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: app-gateway recibe 200
+- name: Privado y con identidad propia
+  validator: security
+  points: 50
+  critical: true
+  all: true
+  checks:
+  - type: http
+    target: run:estado-api
+    path: /
+    status: 403
+    desc: 'Sin identidad: 403'
+  - type: exists
+    path: runServices["estado-api"]
+    expect:
+      serviceAccount:
+        regex: ^estado-sa@
+    desc: Se ejecuta como estado-sa
+- name: Cierre
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - privado
+      - private
+      - '403'
+    - - app-gateway
+    desc: Respuesta con quién puede llamarlo
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: service-accounts create estado-sa
+  title: Una identidad por servicio
+  why: Si cada servicio tiene su cuenta, cada permiso se da solo a quien lo necesita.
+- match: run deploy estado-api
+  title: ''
+  why: '--no-allow-unauthenticated: nadie entra sin run.invoker. Sin --service-account usaría la cuenta por defecto de Compute.'
+- match: add-iam-policy-binding estado-api
+  title: ''
+  why: 'El permiso de invocar se da sobre el servicio, no sobre el proyecto: app-gateway solo puede llamar a este.'
+en:
+  title: Tutorial 5 · Deploy a private microservice on Cloud Run
+  summary: Deploy a service with its own service account, private, and let only app-gateway invoke it.
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    At Zentra each microservice has **its own service account** and is **private**: only those with `roles/run.invoker` on it can call it.
+
+    **Step 1 · Service identity.** `gcloud iam service-accounts create estado-sa --display-name="estado-api"`.
+
+    **Step 2 · Deploy privately.**
+    ```
+    gcloud run deploy estado-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 \
+      --region={{.region}} --service-account=estado-sa@{{.project}}.iam.gserviceaccount.com \
+      --no-allow-unauthenticated
+    ```
+
+    **Step 3 · Let only app-gateway in.**
+    ```
+    gcloud run services add-iam-policy-binding estado-api --region={{.region}} \
+      --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+    ```
+
+    **Step 4 · Check it.** `gcloud run services describe estado-api --region={{.region}}` (account, URL) and `curl` the URL: with no identity it must return **403**.
+
+    **Step 5 · Reply to Lucía** and close.
+  objectives:
+  - Create the service's service account
+  - Deploy privately with that identity
+  - Only app-gateway can invoke it
+  - Check and close
+  hints:
+  - The steps include the full commands.
+  - '`--no-allow-unauthenticated` makes the service private.'
+  ticket:
+    summary: Deploy estado-api (image europe-docker.pkg.dev/gcplab-public/apps/hello:1.0). Only app-gateway must call it; it mustn't be public.
+  text:
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tech lead de Pagos.: Payments tech lead.
+    Lo llama app-gateway con su cuenta app-gateway-sa.: app-gateway calls it with its app-gateway-sa account.
+    app-gateway puede llamarlo: app-gateway can call it
+    app-gateway recibe 200: app-gateway gets 200
+    Privado y con identidad propia: Private with its own identity
+    'Sin identidad: 403': 'No identity: 403'
+    Se ejecuta como estado-sa: Runs as estado-sa
+    Cierre: Closure
+    Respuesta con quién puede llamarlo: Reply with who can call it
+    Ticket cerrado: Ticket closed
+    Una identidad por servicio: One identity per service
+    Si cada servicio tiene su cuenta, cada permiso se da solo a quien lo necesita.: If each service has its own account, each permission goes only to who needs it.
+    '--no-allow-unauthenticated: nadie entra sin run.invoker. Sin --service-account usaría la cuenta por defecto de Compute.': '--no-allow-unauthenticated: nobody gets in without run.invoker. Without --service-account it would use the default Compute account.'
+    'El permiso de invocar se da sobre el servicio, no sobre el proyecto: app-gateway solo puede llamar a este.': 'The invoke permission goes on the service, not the project: app-gateway can only call this one.'

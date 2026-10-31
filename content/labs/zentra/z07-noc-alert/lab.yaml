@@ -1,0 +1,176 @@
+id: zentra-z07-noc-alert
+title: Tutorial 7 · Que el NOC se entere antes que los clientes
+summary: Crea una métrica a partir de los registros de errores de pagos-api y una alerta que avise al NOC por correo.
+track: zentra
+day: 7
+level: basic
+branch: observability
+type: guided
+mode: production
+skills:
+- observability.monitoring
+- observability.logging
+- observability.incident
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+difficulty: 2
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --no-allow-unauthenticated
+ticket:
+  id: REQ-20007
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Diego Ferrer (SRE)
+  summary: Ayer pagos-api dio errores 5xx durante 20 minutos y nos enteramos por Twitter. Quiero una alerta al NOC (noc@zentra.dev) cuando haya más de 5 errores 5xx en un minuto.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: Que la alerta llegue al NOC, que está 24x7.
+  facts: []
+story: |-
+  > 📘 **Tutorial guiado.** Sigue los pasos en orden; cada comando trae su explicación. Si te pierdes, pulsa **Tutor** y te acompaña paso a paso.
+
+  Una alerta útil tiene tres piezas: **qué medir**, **cuándo avisar** y **a quién**.
+
+  **Paso 1 · Qué medir: una métrica basada en registros.**
+  ```
+  gcloud logging metrics create pagos_5xx --description="5xx de pagos-api" \
+    --log-filter='resource.type="cloud_run_revision" resource.labels.service_name="pagos-api" httpRequest.status>=500'
+  ```
+
+  **Paso 2 · A quién: un canal de notificación.**
+  `gcloud beta monitoring channels create --display-name="NOC" --type=email --channel-labels=email_address=noc@zentra.dev`
+  Apunta el nombre que devuelve (`projects/…/notificationChannels/NÚMERO`) o búscalo con `gcloud beta monitoring channels list`.
+
+  **Paso 3 · Cuándo: la política de alerta.**
+  ```
+  gcloud alpha monitoring policies create --display-name="pagos-api 5xx" \
+    --condition-display-name="más de 5 errores 5xx" \
+    --condition-filter='metric.type="logging.googleapis.com/user/pagos_5xx"' --if='> 5' --duration=60s \
+    --notification-channels=CANAL
+  ```
+
+  **Paso 4 · Responde a Diego** y cierra.
+objectives:
+- Crea la métrica de 5xx de pagos-api
+- Crea el canal de correo del NOC
+- Crea la alerta con umbral y canal
+- Responde y cierra
+hints:
+- text: 'El canal: `gcloud beta monitoring channels list --format=''value(name)''`.'
+- text: El filtro de la alerta apunta a `logging.googleapis.com/user/pagos_5xx`.
+solution: |
+  ticket
+  gcloud logging metrics create pagos_5xx --description="5xx de pagos-api" --log-filter='resource.type="cloud_run_revision" resource.labels.service_name="pagos-api" httpRequest.status>=500'
+  gcloud beta monitoring channels create --display-name="NOC" --type=email --channel-labels=email_address=noc@zentra.dev
+  gcloud alpha monitoring policies create --display-name="pagos-api 5xx" --condition-display-name="mas de 5 errores 5xx" --condition-filter='metric.type="logging.googleapis.com/user/pagos_5xx"' --if='> 5' --duration=60s --notification-channels=$(gcloud beta monitoring channels list --format='value(name)')
+  ticket update "Hola Diego: hay una métrica pagos_5xx con los errores 5xx de pagos-api y una alerta que avisa a noc@zentra.dev cuando hay más de 5 en un minuto."
+  ticket resolve "Creada métrica basada en registros pagos_5xx y alerta con canal de correo del NOC."
+shortcuts:
+- name: alert without channel on cpu
+  run: |
+    gcloud alpha monitoring policies create --display-name="cpu" --condition-display-name=cpu --condition-filter='metric.type="run.googleapis.com/container/cpu/utilizations"' --if='> 0.9' --duration=60s
+    ticket resolve "Creada una alerta de CPU para pagos."
+rubric:
+- name: Métrica de errores
+  validator: state
+  points: 30
+  checks:
+  - type: log_metric
+    name: pagos_5xx
+    filterContains: pagos-api
+    desc: Métrica de 5xx de pagos-api
+- name: Alerta al NOC
+  validator: functional
+  points: 50
+  critical: true
+  checks:
+  - type: alert_policy
+    filterContains: pagos_5xx
+    channel: true
+    desc: Alerta sobre pagos_5xx con canal de notificación
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - noc
+    - - 5xx
+      - alerta
+      - alert
+    desc: Respuesta con lo creado
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: logging metrics create
+  title: Qué medir
+  why: 'Una métrica basada en registros cuenta cuántas líneas cumplen el filtro: aquí, respuestas 5xx de pagos-api.'
+- match: channels create
+  title: A quién avisar
+  why: Sin canal, la alerta salta pero nadie se entera.
+- match: policies create
+  title: ''
+  why: 'Umbral y duración evitan falsas alarmas: más de 5 errores durante un minuto.'
+en:
+  title: Tutorial 7 · Let the NOC know before customers do
+  summary: Create a metric from pagos-api's error logs and an alert that emails the NOC.
+  story: |-
+    > 📘 **Guided tutorial.** Follow the steps in order; every command comes with its explanation. If you get lost, press **Tutor** and it walks you through.
+
+    A useful alert has three parts: **what to measure**, **when to alert** and **who to tell**.
+
+    **Step 1 · What: a log-based metric.**
+    ```
+    gcloud logging metrics create pagos_5xx --description="pagos-api 5xx" \
+      --log-filter='resource.type="cloud_run_revision" resource.labels.service_name="pagos-api" httpRequest.status>=500'
+    ```
+
+    **Step 2 · Who: a notification channel.**
+    `gcloud beta monitoring channels create --display-name="NOC" --type=email --channel-labels=email_address=noc@zentra.dev`
+    Note the name it returns (`projects/…/notificationChannels/NUMBER`) or find it with `gcloud beta monitoring channels list`.
+
+    **Step 3 · When: the alert policy.**
+    ```
+    gcloud alpha monitoring policies create --display-name="pagos-api 5xx" \
+      --condition-display-name="more than 5 5xx errors" \
+      --condition-filter='metric.type="logging.googleapis.com/user/pagos_5xx"' --if='> 5' --duration=60s \
+      --notification-channels=CHANNEL
+    ```
+
+    **Step 4 · Reply to Diego** and close.
+  objectives:
+  - Create the pagos-api 5xx metric
+  - Create the NOC email channel
+  - Create the alert with threshold and channel
+  - Reply and close
+  hints:
+  - 'The channel: `gcloud beta monitoring channels list --format=''value(name)''`.'
+  - The alert filter points to `logging.googleapis.com/user/pagos_5xx`.
+  ticket:
+    summary: Yesterday pagos-api returned 5xx errors for 20 minutes and we found out on Twitter. I want an alert to the NOC (noc@zentra.dev) when there are more than 5 5xx errors in a minute.
+  text:
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    Que la alerta llegue al NOC, que está 24x7.: The alert must reach the NOC, which is 24x7.
+    Métrica de errores: Error metric
+    Métrica de 5xx de pagos-api: pagos-api 5xx metric
+    Alerta al NOC: Alert to the NOC
+    Alerta sobre pagos_5xx con canal de notificación: Alert on pagos_5xx with a notification channel
+    Respuesta: Reply
+    Respuesta con lo creado: Reply with what was created
+    Ticket cerrado: Ticket closed
+    Qué medir: What to measure
+    'Una métrica basada en registros cuenta cuántas líneas cumplen el filtro: aquí, respuestas 5xx de pagos-api.': 'A log-based metric counts how many lines match the filter: here, pagos-api 5xx responses.'
+    A quién avisar: Who to notify
+    Sin canal, la alerta salta pero nadie se entera.: Without a channel the alert fires but nobody finds out.
+    'Umbral y duración evitan falsas alarmas: más de 5 errores durante un minuto.': 'Threshold and duration avoid false alarms: more than 5 errors for a minute.'

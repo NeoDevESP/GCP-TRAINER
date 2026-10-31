@@ -213,6 +213,15 @@ func (s *Server) Handler() http.Handler {
 	h("GET /api/learn", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		return map[string]any{"topics": s.Cat.StudyView(s.lang(r)), "exams": s.Cat.ExamView(s.lang(r))}, nil
 	})
+	h("GET /api/worlds", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return s.Cat.WorldList(s.lang(r)), nil
+	})
+	h("GET /api/worlds/{id}", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		if v := s.Cat.WorldView(r.PathValue("id"), s.lang(r)); v != nil {
+			return v, nil
+		}
+		return nil, httpErr{404, i18n.P(s.lang(r), "empresa no encontrada", "company not found")}
+	})
 	h("GET /api/labs/{id}", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		l := s.cat(r).Lab(r.PathValue("id"))
 		if l == nil {
