@@ -61,13 +61,19 @@ Importante:
 1. En Render: **New + → Blueprint**.
 2. Elige el repositorio `neodevesp/gcp-trainer`. Render lee `render.yaml` y
    propone un servicio web llamado **cloud-mastery**.
-3. Te pedirá el valor de **`DATABASE_URL`**: pega la cadena del paso 1.5.
+3. Te pedirá dos valores:
+   - **`DATABASE_URL`**: pega la cadena del paso 1.5.
+   - **`INVITE_CODE`** (recomendado): una palabra o frase que solo conozcas tú,
+     por ejemplo `zentra-2026`. Con ella, solo puede crearse una cuenta quien
+     sepa el código; déjalo vacío si quieres que cualquiera pueda registrarse.
+
    `JWT_SECRET` se genera solo y `PORT` ya viene configurado.
 4. Pulsa **Apply**. La primera construcción tarda unos 5–10 minutos: instala
-   la web, compila el servidor y valida los 54 laboratorios.
+   la web, compila el servidor y valida todos los laboratorios.
 5. Cuando el estado sea **Live**, abre la URL que muestra Render (algo como
-   `https://cloud-mastery.onrender.com`), crea tu cuenta y empieza por el
-   catálogo.
+   `https://cloud-mastery.onrender.com`) y **crea tu cuenta enseguida**: la
+   primera cuenta que se registra es la de administrador. Si pusiste
+   `INVITE_CODE`, el formulario de registro te lo pedirá.
 
 `render.yaml` apunta a la rama `claude/bold-turing-acsitj`. Cuando la fusiones
 con `main`, cambia `branch: main` en el archivo (o en *Settings → Branch* del
@@ -76,7 +82,8 @@ servicio). Cada `git push` a esa rama vuelve a desplegar automáticamente.
 ## 4. Comprobar que todo funciona
 
 - `https://TU-SERVICIO.onrender.com/api/health` debe responder
-  `{"labs":54,"ok":true,...}`.
+  `{"invite":true,"labs":157,"ok":true,...}` (`invite` es `true` si
+  configuraste `INVITE_CODE`; el número de laboratorios crece con cada versión).
 - En Supabase, *Table Editor → documents* muestra filas cuando creas la cuenta
   y empiezas un laboratorio.
 - Tu progreso sobrevive a los reinicios: los laboratorios en curso se guardan
@@ -100,6 +107,8 @@ Mientras el servicio duerme no se pierde nada: los datos están en Supabase.
 | `network is unreachable` o conexión a una dirección IPv6 | Estás usando *Direct connection*. Usa la de *Session pooler*. |
 | Tras un despliegue hay que volver a iniciar sesión | Ha cambiado `JWT_SECRET`. No lo regeneres; si lo haces, basta con volver a entrar. |
 | La web tarda en cargar la primera vez | El plan gratuito estaba dormido. Espera unos segundos y recarga. |
+| «código de invitación incorrecto» al registrarse | El código no coincide con `INVITE_CODE` (mayúsculas incluidas). Cámbialo o consúltalo en *Environment*. |
+| Los vídeos de las lecciones no se ven | Necesitan acceso a YouTube desde el navegador; algunas redes corporativas lo bloquean. |
 
 ## Opcional
 

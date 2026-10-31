@@ -3,6 +3,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -103,7 +104,7 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 	h("GET /api/health", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		return map[string]any{"ok": true, "labs": len(s.Cat.Labs), "time": time.Now().UTC()}, nil
+		return map[string]any{"ok": true, "labs": len(s.Cat.Labs), "time": time.Now().UTC(), "invite": os.Getenv("INVITE_CODE") != ""}, nil
 	})
 	// ---- auth -----------------------------------------------------------------
 	h("POST /api/auth/register", s.register)
@@ -588,9 +589,14 @@ func (s *Server) userByEmail(email string) (*learning.User, error) {
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) (any, error) {
-	var req struct{ Email, Name, Password string }
+	var req struct{ Email, Name, Password, Invite string }
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return nil, err
+	}
+	// INVITE_CODE closes sign-up on a public deployment: only people who
+	// know the code can create an account.
+	if code := os.Getenv("INVITE_CODE"); code != "" && subtle.ConstantTimeCompare([]byte(strings.TrimSpace(req.Invite)), []byte(code)) != 1 {
+		return nil, httpErr{403, i18n.P(s.lang(r), "código de invitación incorrecto", "wrong invitation code")}
 	}
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	if !strings.Contains(req.Email, "@") || req.Name == "" {

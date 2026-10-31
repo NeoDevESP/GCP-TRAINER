@@ -240,3 +240,21 @@ func TestLanguageSelection(t *testing.T) {
 		t.Fatalf("session language: %d %q", code, info.Lang)
 	}
 }
+
+func TestInviteCode(t *testing.T) {
+	t.Setenv("INVITE_CODE", "zentra-2026")
+	ts, _ := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+	var auth map[string]any
+	if code := c.do("POST", "/api/auth/register", map[string]string{"email": "nocode@example.com", "name": "N", "password": "correct horse battery"}, &auth); code != 403 {
+		t.Fatalf("sign-up without the code should be refused, got %d", code)
+	}
+	if code := c.do("POST", "/api/auth/register", map[string]string{"email": "code@example.com", "name": "C", "password": "correct horse battery", "invite": "zentra-2026"}, &auth); code != 200 {
+		t.Fatalf("sign-up with the code should work, got %d", code)
+	}
+	var h map[string]any
+	c.do("GET", "/api/health", nil, &h)
+	if h["invite"] != true {
+		t.Fatal("health should say an invitation code is required")
+	}
+}

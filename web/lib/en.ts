@@ -2226,4 +2226,5 @@ export const en: Record<string, string> = {
   "Examen final de Zentra: la certificación interna de Soporte N2": "Zentra final exam: the internal L2 Support certification",
   "Modo examen: este caso forma parte de tu examen final. Sin profesor ni pistas; trabaja como en una guardia real.": "Exam mode: this case is part of your final exam. No tutor or hints; work as on a real on-call shift.",
   "Empezar el caso del examen": "Start the exam case",
+  "Código de invitación": "Invitation code",
 };

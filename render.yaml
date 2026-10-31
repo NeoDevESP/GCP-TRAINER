@@ -21,3 +21,5 @@ services:
         generateValue: true
       - key: PORT
         value: "8080"
+      - key: INVITE_CODE            # optional: only people with this code can sign up
+        sync: false

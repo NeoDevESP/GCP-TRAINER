@@ -11,6 +11,8 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [invite, setInvite] = useState("");
+  const [needInvite, setNeedInvite] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -23,6 +25,8 @@ export default function Home() {
       return;
     }
     if (getToken()) window.location.replace("/dashboard");
+    // A public deployment may require an invitation code to sign up.
+    api<{ invite?: boolean }>("/api/health").then((h) => setNeedInvite(!!h.invite)).catch(() => {});
   }, []);
 
   const submit = async (e: React.FormEvent) => {
@@ -30,7 +34,7 @@ export default function Home() {
     setErr("");
     setBusy(true);
     try {
-      const body = mode === "login" ? { email, password } : { email, name, password };
+      const body = mode === "login" ? { email, password } : { email, name, password, invite };
       const res = await api<{ token: string }>(`/api/auth/${mode}`, { body });
       setToken(res.token);
       window.location.href = "/dashboard";
@@ -101,6 +105,12 @@ export default function Home() {
               required
             />
           </div>
+          {mode === "register" && needInvite && (
+            <div>
+              <label htmlFor="invite">{t("Código de invitación")}</label>
+              <input id="invite" value={invite} onChange={(e) => setInvite(e.target.value)} autoComplete="off" required />
+            </div>
+          )}
           {err && <p className="error small">{err}</p>}
           <button className="btn" disabled={busy}>
             {mode === "login" ? t("Iniciar sesión") : t("Crear cuenta")}
