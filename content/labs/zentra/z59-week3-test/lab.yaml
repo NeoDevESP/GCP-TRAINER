@@ -1,5 +1,5 @@
 id: zentra-z59-week3-test
-title: Prueba de la semana 3 · Lanzamiento de la tarjeta virtual
+title: Prueba de la semana 4 · Lanzamiento de la tarjeta virtual
 summary: 'Dos problemas a la vez: una versión que no arranca y, debajo, un permiso de secreto perdido. Arreglar uno no basta.'
 track: zentra
 day: 59
@@ -88,7 +88,7 @@ story: |-
 
   > **INC-31059 · P1** · *«Hoy lanzamos la tarjeta virtual y los pagos fallan desde el despliegue de las 08:00. Marketing tiene la campaña en marcha. ¡Urgente!»*
 
-  **Prueba de la semana 3.** Tiene trampa: cuando arregles lo evidente, comprueba que el servicio **de verdad** funciona. Revisa revisiones, registros y auditoría; el rollback es un cambio de emergencia (pide aprobación). Comunica al negocio pronto y escala a Pagos lo que sea suyo.
+  **Prueba de la semana 4.** Tiene trampa: cuando arregles lo evidente, comprueba que el servicio **de verdad** funciona. Revisa revisiones, registros y auditoría; el rollback es un cambio de emergencia (pide aprobación). Comunica al negocio pronto y escala a Pagos lo que sea suyo.
 objectives:
 - Comunica y revisa las revisiones
 - Vuelve a la versión buena (con aprobación)
@@ -190,14 +190,14 @@ tutor:
   title: El segundo problema
   why: pagos-sa ya no está en la política del secreto.
 en:
-  title: Week 3 test · Virtual card launch
+  title: Week 4 test · Virtual card launch
   summary: 'Two problems at once: a release that won''t start and, underneath, a lost secret permission. Fixing one isn''t enough.'
   story: |-
     **Project `{{.project}}`** (*zentra-pagos-prod*).
 
     > **INC-31059 · P1** · *"We launch the virtual card today and payments have failed since the 08:00 deployment. Marketing's campaign is live. Urgent!"*
 
-    **Week 3 test.** There's a catch: once you fix the obvious, check the service **really** works. Review revisions, logs and the audit log; the rollback is an emergency change (ask for approval). Tell the business early and escalate to Payments whatever is theirs.
+    **Week 4 test.** There's a catch: once you fix the obvious, check the service **really** works. Review revisions, logs and the audit log; the rollback is an emergency change (ask for approval). Tell the business early and escalate to Payments whatever is theirs.
   objectives:
   - Communicate and review revisions
   - Roll back to the good version (with approval)

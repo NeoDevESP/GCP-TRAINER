@@ -1,0 +1,317 @@
+id: zentra-s01-triage
+title: 'Oficio 1 · Leer la cola: tipos de ticket, prioridad y SLA'
+summary: 'Cinco tickets a primera hora: clasifícalos por impacto y urgencia, confirma el P1 con datos y avisa a la guardia. Triar no es arreglar.'
+track: zentra
+day: 71
+level: basic
+branch: observability
+type: guided
+mode: production
+skills:
+- observability.incident
+- observability.logging
+- compute.serverless
+wellArchitected:
+- operations
+- reliability
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --max-instances=5 --tag=estable --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: run_image
+  service: pagos-api
+  image: europe-docker.pkg.dev/gcplab-public/apps/payments-api:3.0-bad
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: FOR-0101
+  kind: REQ
+  priority: P4
+  sla: 1d
+  reporter: Formación Zentra
+  summary: Son las 08:00 y te toca revisar la cola de Soporte GCP. Prioriza los cinco tickets (A-E) en triage.md, confirma el más grave con datos y avisa a quien corresponda.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE de guardia)
+  persona: SRE de guardia.
+  fallback: 'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.'
+  facts:
+  - keywords:
+    - - p1
+      - pagos
+      - pago
+      - payment
+      - '503'
+      - caido
+      - caído
+      - down
+      - error
+      - cae
+    answer: 'Recibido, lo cojo yo como P1. Tú sigue con la cola: el resto también tiene su SLA.'
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Esta semana es para aprender el oficio: pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  **Qué es un ticket.** Cada petición o problema entra como un ticket con un **tipo**:
+  - **INC** (incidente): algo que funcionaba ha dejado de funcionar.
+  - **REQ** (petición): algo nuevo que alguien necesita (un acceso, un bucket…).
+  - **CHG** (cambio): una modificación planificada en producción.
+  - **SEC** (seguridad): un riesgo de seguridad. **PRB** (problema): la causa de fondo de incidentes repetidos.
+
+  **La prioridad = impacto × urgencia.** En Zentra:
+
+  | Prioridad | Cuándo | Primera respuesta |
+  |---|---|---|
+  | **P1** | Un servicio crítico caído para todos los clientes, o un riesgo de seguridad activo (credencial o datos expuestos) | 15 min, actualizaciones cada 30 min |
+  | **P2** | Un servicio crítico degradado (lento, o falla para parte de los clientes) | 1 h |
+  | **P3** | Afecta a una persona o a un entorno que no es producción; hay alternativa | 8 h laborables |
+  | **P4** | Petición planificada o consulta | 3 días |
+
+  El **SLA** es el plazo comprometido: el de **respuesta** (cuándo contestas por primera vez) no es el de **resolución** (cuándo queda arreglado).
+
+  **La cola de las 08:00:**
+  - **A** · INC · Atención al cliente: *«Ningún cliente puede pagar con tarjeta en la app desde las 07:50.»*
+  - **B** · INC · Transferencias: *«Algunas transferencias SEPA tardan 20-30 segundos; acaban bien.»*
+  - **C** · INC · Hugo (Tarjetas): *«No veo los registros de mi servicio de pruebas tarjetas-dev.»*
+  - **D** · REQ · RR. HH.: *«Alta en GCP para una analista que empieza el lunes.»*
+  - **E** · SEC · Seguridad: *«GitHub nos avisa de una clave de cuenta de servicio publicada en un repositorio público.»*
+
+  **Pasos:**
+  1. **Confirma el impacto** del ticket A con datos antes de declarar nada: `gcloud run services describe pagos-api --region={{.region}}` y `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+  2. **Avisa a la guardia**: `ask sre "…"` con servicio, desde cuándo, error y a quién afecta. **Triar no es arreglar**: quien tria reparte, y el P1 lo coge la guardia.
+  3. **Escribe tu triaje** en `triage.md`, una línea por ticket con el formato `A: P1 - motivo`. Por ejemplo: `cat > triage.md` y escribes las líneas (o varios `echo "…" >> triage.md`).
+  4. Responde las preguntas y cierra con `ticket resolve "…"`.
+objectives:
+- Confirma el impacto del ticket A
+- Avisa a la guardia con datos
+- Prioriza A-E en triage.md
+- Responde y cierra
+hints:
+- text: 'Una credencial publicada en internet es un riesgo activo: mira la tabla.'
+- text: '`echo "A: P1 - nadie puede pagar" > triage.md` y luego `>>` para las demás.'
+quiz:
+- id: q1
+  question: La prioridad de un ticket se decide por…
+  options:
+  - Impacto × urgencia
+  - Quién lo abre
+  - Lo enfadado que está el cliente
+  - El orden de llegada
+  answer:
+  - 0
+- id: q2
+  question: El SLA de respuesta de un P1 en Zentra es…
+  options:
+  - 15 minutos
+  - 1 hora
+  - 8 horas laborables
+  - 5 días
+  answer:
+  - 0
+- id: q3
+  question: 'Llega un SEC: una clave de cuenta de servicio está en un repositorio público. ¿Prioridad?'
+  options:
+  - 'P1: riesgo de seguridad activo'
+  - 'P3: no hay clientes quejándose'
+  - 'P4: es una consulta'
+  - Depende de quién la publicó
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud run services describe pagos-api --region={{.region}}
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  ask sre "Diego, P1 en pagos-api: devuelve 503 a todos los pagos desde las 07:50 (la revisión nueva no arranca). ¿Lo coges tú?"
+  cat > triage.md <<'EOF'
+  A: P1 - nadie puede pagar; confirmado en los registros (503, la revisión nueva no arranca). Avisado Diego (guardia).
+  B: P2 - servicio crítico degradado para parte de los clientes; acaba bien.
+  C: P3 - una persona y entorno de pruebas; hay alternativa.
+  D: P4 - petición planificada para el lunes.
+  E: P1 - credencial expuesta en internet: riesgo de seguridad activo.
+  EOF
+  cat triage.md
+  ticket resolve "Cola triada: A y E son P1 (A confirmado en registros y pasado a la guardia), B P2, C P3 y D P4."
+shortcuts:
+- name: everything is P1
+  run: |
+    cat > triage.md <<'EOF'
+    A: P1
+    B: P1
+    C: P1
+    D: P1
+    E: P1
+    EOF
+    ticket resolve "Todo urgente, todo P1 para que nadie se queje."
+rubric:
+- name: Impacto confirmado y guardia avisada
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: logging read|revisions list|services describe pagos-api
+    min: 1
+    desc: Impacto del ticket A comprobado con datos
+  - type: asked
+    actor: sre
+    min: 1
+    desc: Guardia avisada con los datos
+- name: Triaje correcto
+  validator: functional
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: file_contains
+    file: triage.md
+    regex: (?im)^\W*A\W+.*\bP1\b
+    desc: A es P1
+  - type: file_contains
+    file: triage.md
+    regex: (?im)^\W*B\W+.*\bP2\b
+    desc: B es P2
+  - type: file_contains
+    file: triage.md
+    regex: (?im)^\W*C\W+.*\bP3\b
+    desc: C es P3
+  - type: file_contains
+    file: triage.md
+    regex: (?im)^\W*D\W+.*\bP4\b
+    desc: D es P4
+  - type: file_contains
+    file: triage.md
+    regex: (?im)^\W*E\W+.*\bP1\b
+    desc: E es P1
+- name: Lo has entendido
+  validator: quiz
+  points: 25
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_resolved
+    desc: Ticket cerrado con una nota
+tutor:
+- match: services describe pagos-api
+  title: Antes de declarar, datos
+  why: Mira qué revisión sirve el tráfico y si está lista.
+- match: logging read
+  title: Los registros
+  why: '«failed to start and listen on the port»: la versión nueva no arranca. Impacto: todos los pagos.'
+- match: ask sre
+  title: Pasar el P1
+  why: 'Servicio, desde cuándo, error y a quién afecta: con eso la guardia no tiene que preguntarte nada.'
+- match: triage.md
+  title: Tu triaje
+  why: 'Una línea por ticket: letra, prioridad y el motivo en pocas palabras.'
+en:
+  title: 'Craft 1 · Reading the queue: ticket types, priority and SLA'
+  summary: 'Five tickets first thing in the morning: rank them by impact and urgency, confirm the P1 with data and page on-call. Triage isn''t fixing.'
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    **What a ticket is.** Every request or problem comes in as a ticket with a **type**:
+    - **INC** (incident): something that worked has stopped working.
+    - **REQ** (request): something new someone needs (access, a bucket…).
+    - **CHG** (change): a planned modification in production.
+    - **SEC** (security): a security risk. **PRB** (problem): the underlying cause of repeated incidents.
+
+    **Priority = impact × urgency.** At Zentra:
+
+    | Priority | When | First response |
+    |---|---|---|
+    | **P1** | A critical service down for every customer, or an active security risk (exposed credential or data) | 15 min, updates every 30 min |
+    | **P2** | A critical service degraded (slow, or failing for some customers) | 1 h |
+    | **P3** | Affects one person or a non-production environment; there's a workaround | 8 business hours |
+    | **P4** | Planned request or question | 3 days |
+
+    The **SLA** is the committed deadline: the **response** one (when you first reply) is not the **resolution** one (when it's fixed).
+
+    **The 08:00 queue:**
+    - **A** · INC · Customer service: *"No customer can pay by card in the app since 07:50."*
+    - **B** · INC · Transfers: *"Some SEPA transfers take 20-30 seconds; they complete fine."*
+    - **C** · INC · Hugo (Cards): *"I can't see the logs of my test service tarjetas-dev."*
+    - **D** · REQ · HR: *"GCP onboarding for an analyst who starts on Monday."*
+    - **E** · SEC · Security: *"GitHub warns us about a service account key published in a public repository."*
+
+    **Steps:**
+    1. **Confirm the impact** of ticket A with data before declaring anything: `gcloud run services describe pagos-api --region={{.region}}` and `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+    2. **Page on-call**: `ask sre "…"` with the service, since when, the error and who is affected. **Triage isn't fixing**: whoever triages hands out the work, and on-call takes the P1.
+    3. **Write your triage** in `triage.md`, one line per ticket with the format `A: P1 - reason`. For example `cat > triage.md` and type the lines (or several `echo "…" >> triage.md`).
+    4. Answer the questions and close with `ticket resolve "…"`.
+  objectives:
+  - Confirm ticket A's impact
+  - Page on-call with facts
+  - Prioritise A-E in triage.md
+  - Answer and close
+  hints:
+  - 'A credential published on the internet is an active risk: check the table.'
+  - '`echo "A: P1 - nobody can pay" > triage.md` then `>>` for the rest.'
+  ticket:
+    summary: It's 08:00 and it's your turn to review the GCP Support queue. Prioritise the five tickets (A-E) in triage.md, confirm the most serious one with data and page whoever needs to know.
+  text:
+    Formación Zentra: Zentra training
+    Diego Ferrer (SRE de guardia): Diego Ferrer (on-call SRE)
+    SRE de guardia.: On-call SRE.
+    'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.': 'Give me facts: which service, since when, what error and how many are affected.'
+    'Recibido, lo cojo yo como P1. Tú sigue con la cola: el resto también tiene su SLA.': 'Got it, I''ll take it as a P1. You carry on with the queue: the rest have their SLA too.'
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Esta semana es para aprender el oficio: pregunta todo lo que necesites.': 'This week is for learning the craft: ask anything you need.'
+    La prioridad de un ticket se decide por…: A ticket's priority is decided by…
+    Impacto × urgencia: Impact × urgency
+    Quién lo abre: Who opens it
+    Lo enfadado que está el cliente: How angry the customer is
+    El orden de llegada: Arrival order
+    El SLA de respuesta de un P1 en Zentra es…: A P1's response SLA at Zentra is…
+    15 minutos: 15 minutes
+    1 hora: 1 hour
+    8 horas laborables: 8 business hours
+    5 días: 5 days
+    'Llega un SEC: una clave de cuenta de servicio está en un repositorio público. ¿Prioridad?': 'A SEC comes in: a service account key is in a public repository. Priority?'
+    'P1: riesgo de seguridad activo': 'P1: active security risk'
+    'P3: no hay clientes quejándose': 'P3: no customers are complaining'
+    'P4: es una consulta': 'P4: it''s a question'
+    Depende de quién la publicó: Depends on who published it
+    Impacto confirmado y guardia avisada: Impact confirmed and on-call paged
+    Impacto del ticket A comprobado con datos: Ticket A's impact checked with data
+    Guardia avisada con los datos: On-call paged with the facts
+    Triaje correcto: Correct triage
+    A es P1: A is P1
+    B es P2: B is P2
+    C es P3: C is P3
+    D es P4: D is P4
+    E es P1: E is P1
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Ticket cerrado con una nota: Ticket closed with a note
+    Antes de declarar, datos: Before declaring, data
+    Mira qué revisión sirve el tráfico y si está lista.: See which revision serves traffic and whether it's ready.
+    Los registros: The logs
+    '«failed to start and listen on the port»: la versión nueva no arranca. Impacto: todos los pagos.': '"failed to start and listen on the port": the new version doesn''t start. Impact: every payment.'
+    Pasar el P1: Handing over the P1
+    'Servicio, desde cuándo, error y a quién afecta: con eso la guardia no tiene que preguntarte nada.': 'Service, since when, error and who''s affected: with that on-call doesn''t need to ask you anything.'
+    Tu triaje: Your triage
+    'Una línea por ticket: letra, prioridad y el motivo en pocas palabras.': 'One line per ticket: letter, priority and the reason in a few words.'

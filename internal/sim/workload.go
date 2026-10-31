@@ -62,6 +62,8 @@ func DefaultImages() map[string]*Behavior {
 		"catalog-api:2.4":          {Name: "catalog-api", Port: 8080, Mode: "crash", Public: true, Description: "Release 2.4: exits on start-up (missing FEATURE_FLAGS_URL)"},
 		"payments-api":             {Name: "payments-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/pay"}, Deps: []Dep{{Kind: "secret", Env: "API_KEY"}}, Public: true},
 		"payments-api:3.0-bad":     {Name: "payments-api", Port: 8080, Mode: "crash", Public: true},
+		"cards-api":                {Name: "cards-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/cards", "/limits"}, Public: true, CPUPerRPS: 0.005},
+		"cards-api:2.1":            {Name: "cards-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/cards", "/limits"}, ErrorPaths: []string{"/limits"}, Public: true, CPUPerRPS: 0.005},
 		"inventory-api":            {Name: "inventory-api", Port: 8080, Health: "/healthz", Paths: []string{"/", "/healthz", "/stock"}, Deps: pg, PoolEnv: "DB_POOL_SIZE", Public: true},
 		"admin-portal":             {Name: "admin-portal", Port: 8080, Health: "/", Paths: []string{"/", "/admin", "/healthz"}, Public: true},
 		"model-server":             {Name: "model-server", Port: 8080, Health: "/health", Paths: []string{"/health", "/predict"}, Public: true},

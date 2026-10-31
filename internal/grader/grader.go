@@ -22,6 +22,7 @@ import (
 	"unicode"
 
 	"github.com/neodevesp/gcp-trainer/internal/cli"
+	"github.com/neodevesp/gcp-trainer/internal/desk"
 	"github.com/neodevesp/gcp-trainer/internal/i18n"
 	"github.com/neodevesp/gcp-trainer/internal/scenario"
 	"github.com/neodevesp/gcp-trainer/internal/sim"
@@ -1501,14 +1502,23 @@ func (c *Context) deskCheck(typ string, ch scenario.Check) (bool, string) {
 	}
 	switch typ {
 	case "ticket_update":
+		// public (default true): only customer-visible updates count;
+		// internal: only internal notes count; public:false: either.
+		ok := func(cm desk.Comment) bool {
+			vis := cm.Public || !boolean(ch, "public", true)
+			if boolean(ch, "internal", false) {
+				vis = !cm.Public
+			}
+			return vis && len(strings.Fields(cm.Text)) >= 6 && match(cm.Text)
+		}
 		n := 0
 		for _, cm := range d.StudentComments(c.Session.Account) {
-			if (cm.Public || !boolean(ch, "public", true)) && len(strings.Fields(cm.Text)) >= 6 && match(cm.Text) {
+			if ok(cm) {
 				n++
 			}
 		}
 		for _, cm := range d.StudentComments("student") {
-			if (cm.Public || !boolean(ch, "public", true)) && len(strings.Fields(cm.Text)) >= 6 && match(cm.Text) {
+			if ok(cm) {
 				n++
 			}
 		}

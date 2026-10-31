@@ -1,5 +1,5 @@
 id: zentra-z54-week1-test
-title: Prueba de la semana 1 · El portal de informes no carga
+title: Prueba de la semana 2 · El portal de informes no carga
 summary: 'Sin tutorial: registros, entrar por IAP, revisar el servicio, arreglar, responder y cerrar. Más unas preguntas rápidas de lo visto en la semana.'
 track: zentra
 day: 54
@@ -59,7 +59,7 @@ story: |-
 
   > **INC-30054 · P3** · *«El portal interno de informes (informes-web) no carga desde esta mañana. La VM aparece encendida en la consola.»*
 
-  **Prueba de la semana 1.** Esta vez no hay tutor paso a paso: aplica el método. Qué ha cambiado, entra en la VM por IAP, mira el servicio (`systemctl status`), arréglalo, comprueba que el portal responde, responde al equipo y cierra. Al final responde las preguntas rápidas (`quiz`).
+  **Prueba de la semana 2.** Esta vez no hay tutor paso a paso: aplica el método. Qué ha cambiado, entra en la VM por IAP, mira el servicio (`systemctl status`), arréglalo, comprueba que el portal responde, responde al equipo y cierra. Al final responde las preguntas rápidas (`quiz`).
 objectives:
 - Averigua qué ha cambiado
 - Revisa el servicio en la VM
@@ -156,14 +156,14 @@ tutor:
   title: El servicio
   why: 'nginx parado: la VM está encendida pero el servicio no.'
 en:
-  title: Week 1 test · The reports portal won't load
+  title: Week 2 test · The reports portal won't load
   summary: 'No tutorial: logs, IAP access, check the service, fix it, reply and close. Plus a few quick questions on the week.'
   story: |-
     **Project `{{.project}}`** (*zentra-riesgos-prod*).
 
     > **INC-30054 · P3** · *"The internal reports portal (informes-web) hasn't loaded since this morning. The VM shows as running in the console."*
 
-    **Week 1 test.** No step-by-step tutor this time: apply the method. What changed, get into the VM through IAP, check the service (`systemctl status`), fix it, check the portal responds, reply to the team and close. Finally answer the quick questions (`quiz`).
+    **Week 2 test.** No step-by-step tutor this time: apply the method. What changed, get into the VM through IAP, check the service (`systemctl status`), fix it, check the portal responds, reply to the team and close. Finally answer the quick questions (`quiz`).
   objectives:
   - Find out what changed
   - Check the service on the VM

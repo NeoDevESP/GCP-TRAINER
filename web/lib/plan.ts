@@ -15,17 +15,17 @@ export interface Day {
 const L = (...ids: string[]) => ids.map((lab) => ({ lab }));
 
 const Z = (...n: string[]) => n.map((x) => ({ lab: "zentra-" + x }));
-const T = Z; // week 0 workshops share the zentra- prefix
+const T = Z; // week 0 and week 1 workshops share the zentra- prefix
 
 export const DAYS: Day[] = [
   { title: k("Día 1 · Desde cero"), goal: k("Si nunca has tocado la nube: qué es Google Cloud, la terminal, redes, permisos, almacenamiento, registros y Linux, con un taller guiado para cada cosa."),
     items: [{ topic: "gcp-console" }, ...T("t01-what-is-cloud", "t02-terminal", "t03-gcloud-read", "t04-networks", "t05-firewall", "t06-permissions", "t07-storage", "t08-logs", "t09-linux", "t10-week0-test")] },
-  { title: k("Día 2 · Bienvenida a Zentra: el proyecto, los registros y las VMs privadas"), goal: k("Conocer el banco en el que trabajas, saber quién cambió qué y entrar a una VM sin exponerla."),
-    items: [{ topic: "support-method" }, { task: "d1-handbook", text: k("Lee el manual de Zentra"), href: "/zentra" }, ...Z("z01-first-day", "z02-who-is-who", "z53-first-ticket", "z03-log-detective", "z04-private-vm", "z36-disk-grow", "z44-listen-localhost", "z48-key-permissions", "z54-week1-test")] },
-  { title: k("Día 3 · Cloud Run, secretos y alertas"), goal: k("Microservicios privados, claves bien guardadas y avisos al NOC."),
-    items: [{ topic: "security" }, ...Z("z05-private-run", "z06-secrets", "z07-noc-alert"), ...L("ace-d06-cloud-run", "ace-d07-cloud-sql", "ace-d08-logs-alert")] },
+  { title: k("Día 2 · El oficio de soporte"), goal: k("Cómo se trabaja un ticket en un banco: prioridades, primer contacto, escribir al cliente, escalar a otro equipo y a Google, un P1, cambios, decir que no y el postmortem."),
+    items: [{ topic: "support" }, { topic: "support-craft" }, ...T("s01-triage", "s02-first-contact", "s03-writing", "s04-escalate-team", "s05-google-case", "s06-p1-incident", "s07-change", "s08-say-no", "s09-postmortem", "s10-week1-test")] },
+  { title: k("Día 3 · Bienvenida a Zentra: el proyecto, los registros y las VMs privadas"), goal: k("Conocer el banco en el que trabajas, saber quién cambió qué y entrar a una VM sin exponerla."),
+    items: [{ topic: "support-method" }, { task: "d1-handbook", text: k("Lee el manual de Zentra"), href: "/zentra" }, { topic: "security" }, ...Z("z01-first-day", "z02-who-is-who", "z53-first-ticket", "z03-log-detective", "z04-private-vm", "z05-private-run", "z06-secrets", "z07-noc-alert", "z54-week1-test")] },
   { title: k("Día 4 · Accesos: altas, cambios y bajas"), goal: k("Dar y quitar permisos como en un banco: siempre por grupos."),
-    items: [{ topic: "support-identity" }, { topic: "support" }, ...Z("z08-finops-basics", "z09-joiner", "z10-mover", "z11-urgent-leaver", "z55-service-account"), ...L("bank-b01-access-request", "bank-b12-leaver-joiner")] },
+    items: [{ topic: "support-identity" }, ...Z("z08-finops-basics", "z09-joiner", "z10-mover", "z11-urgent-leaver", "z55-service-account"), ...L("bank-b01-access-request", "bank-b12-leaver-joiner")] },
   { title: k("Día 5 · Externos, APIs y auditoría"), goal: k("Peticiones delicadas: consultores, APIs nuevas, auditores y grupos abiertos."),
     items: [{ topic: "support-google" }, ...Z("z12-external-consultant", "z13-enable-api", "z14-auditors", "z15-external-member", "z40-api-disabled", "z49-temporary-access", "z56-access-review"), ...L("ace-d13-lb-dns", "ace-d14-terraform", "bank-b15-sa-key-request"),
       { task: "d5-repeat", text: k("Repite z01, z02 y z03 sin tutor ni pistas") }] },
@@ -36,7 +36,7 @@ export const DAYS: Day[] = [
   { title: k("Día 8 · Seguridad e incidentes graves"), goal: k("Despliegues rotos, claves filtradas y respuesta a incidentes."),
     items: [{ topic: "support-governance" }, ...Z("z21-bad-release", "z22-leaked-key", "z32-sql-ha", "z47-public-kyc-bucket", "z50-retention-lock", "z59-week3-test"), ...L("ace-d19-secret-env", "ace-d25-public-exposure", "ace-d27-deploy-rollback", "bank-b07-public-bucket", "bank-b13-audit-sink")] },
   { title: k("Día 9 · Guardia"), goal: k("Incidentes de producción con el reloj corriendo y varios tickets a la vez."),
-    items: [...Z("z23-push-endpoint", "z24-healthcheck-path", "z25-fx-no-egress", "z26-secret-version", "z28-nat-ports", "z29-zone-stockout", "z30-cpu-quota", "z38-firewall-priority", "z39-private-dns", "z43-default-route", "z45-lost-tag", "z46-named-port", "z67-week5-test"), ...L("bank-b08-region-outage", "bank-b18-not-gcp"), { shift: 1 }, { shift: 2 }] },
+    items: [...Z("z23-push-endpoint", "z24-healthcheck-path", "z36-disk-grow", "z44-listen-localhost", "z48-key-permissions", "z25-fx-no-egress", "z26-secret-version", "z28-nat-ports", "z29-zone-stockout", "z30-cpu-quota", "z38-firewall-priority", "z39-private-dns", "z43-default-route", "z45-lost-tag", "z46-named-port", "z67-week5-test"), ...L("bank-b08-region-outage", "bank-b18-not-gcp"), { shift: 1 }, { shift: 2 }] },
   { title: k("Día 10 · Día de la nómina y examen"), goal: k("El jefe final, el simulacro del ACE y un último turno."),
     items: [...Z("z27-payday-boss", "z42-month-end-costs", "z69-week6-test", "z70-canary", "z52-zone-outage"), { exam: "ACE" }, { shift: 3 }, { task: "d10-review", text: k("Repasa los temas con las preguntas que fallaste en el simulacro") }, { task: "d10-final", text: k("Examen final de Zentra: la certificación interna de Soporte N2"), href: "/final" }] },
 ];

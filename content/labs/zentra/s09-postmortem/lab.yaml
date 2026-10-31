@@ -1,0 +1,333 @@
+id: zentra-s09-postmortem
+title: Oficio 9 · El postmortem sin culpables
+summary: El P1 de pagos ya pasó. Reconstruye la cronología con la auditoría, encuentra la causa raíz (no la persona) y propone acciones con responsable y fecha para que no vuelva a pasar.
+track: zentra
+day: 79
+level: basic
+branch: observability
+type: guided
+mode: production
+skills:
+- observability.postmortem
+- observability.incident
+- devops.delivery
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --max-instances=5 --tag=estable --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: run_image
+  service: pagos-api
+  image: europe-docker.pkg.dev/gcplab-public/apps/payments-api:3.0-bad
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+- type: command
+  run: |
+    gcloud run services update-traffic pagos-api --region={{.region}} --to-tags=estable=100
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: PRB-40109
+  kind: PRB
+  priority: P3
+  sla: 5d
+  reporter: Marta Ibáñez (Plataforma)
+  summary: 'Postmortem del P1 de pagos (INC-40106). Sin culpables: resumen, impacto, cronología, causa raíz, qué funcionó y qué no, y acciones con responsable y fecha. Entrégalo en postmortem.md.'
+actors:
+- role: payments
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: Queremos que no vuelva a pasar, no buscar culpables.
+  facts:
+  - keywords:
+    - - por que
+      - por qué
+      - why
+      - causa
+      - cause
+      - arranc
+      - start
+      - pipeline
+      - prueba
+      - test
+      - canari
+      - que fallo
+      - qué falló
+      - what failed
+    answer: La 3.0 necesitaba una variable nueva (PSP_REGION) que no se añadió al servicio, así que no arrancaba. El pipeline no tiene prueba de arranque y publica directamente al 100 %, sin canario. El merge lo aprobaron en la revisión de código, pero nadie podía verlo sin esa prueba.
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Esta semana es para aprender el oficio: pregunta todo lo que necesites.'
+  facts:
+  - keywords:
+    - - impacto
+      - impact
+      - pagos fallidos
+      - failed payments
+      - cuantos
+      - cuántos
+      - clientes
+      - customers
+      - duracion
+      - duración
+      - minutos
+      - minutes
+    answer: Unos 3.200 pagos fallidos en 22 minutos (07:50-08:12). Ningún cobro duplicado. Atención al cliente recibió 140 llamadas.
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **PRB-40109** · Marta: *«Postmortem del P1 de pagos (INC-40106). Sin culpables. Entrégalo en postmortem.md.»*
+
+  Ayer, a las 07:50, una versión nueva de `pagos-api` dejó a todos los clientes sin poder pagar; a las 08:12 se volvió a la versión estable. El cambio lo desplegó el pipeline después de que Hugo aprobara el *merge*. Hoy toca el **postmortem**.
+
+  **Sin culpables (*blameless*)** no significa «sin responsables»: significa que **la causa nunca es una persona**. Si una persona pudo romper producción con un clic, la causa es **el sistema que lo permitió** (falta una prueba, un canario, una alarma). Por eso en el documento **no aparecen nombres de quien se equivocó**: aparecen procesos y sistemas.
+
+  **Estructura** de `postmortem.md`:
+  1. **Resumen** (2-3 líneas).
+  2. **Impacto**: a quién, cuánto y cuánto tiempo (`ask manager "…"`).
+  3. **Cronología** con horas: sácala de la **auditoría** (`gcloud logging read 'protoPayload.serviceName="run.googleapis.com"' --limit=10`) y de las revisiones (`gcloud run revisions list --service=pagos-api --region={{.region}}`).
+  4. **Causa raíz**: pregunta «¿por qué?» hasta llegar al sistema (`ask payments "…"`).
+  5. **Qué funcionó y qué no**.
+  6. **Acciones**: cada una con **responsable** (un equipo) y **fecha**. Que eviten que vuelva a pasar o que lo detecten antes.
+
+  Escríbelo con `cat > postmortem.md`, revísalo con `cat postmortem.md` y cierra.
+objectives:
+- Reconstruye la cronología
+- Encuentra la causa en el sistema
+- Acciones con responsable y fecha
+- Sin culpables
+hints:
+- text: 'Causa raíz: faltaba una variable (PSP_REGION) y el pipeline no tiene prueba de arranque ni canario.'
+- text: 'Acción tipo: «Añadir prueba de arranque y despliegue canario al pipeline de pagos · Responsable: Pagos · Fecha: 15/11».'
+quiz:
+- id: q1
+  question: En un postmortem sin culpables, la causa raíz es…
+  options:
+  - El fallo del sistema o del proceso que lo permitió
+  - La persona que aprobó el cambio
+  - Mala suerte
+  - Google
+  answer:
+  - 0
+- id: q2
+  question: Una buena acción de postmortem tiene…
+  options:
+  - Responsable y fecha
+  - Solo una idea
+  - El nombre de quien falló
+  - 'Nada: el postmortem es para contar'
+  answer:
+  - 0
+- id: q3
+  question: ¿De dónde sacas las horas exactas de los cambios?
+  options:
+  - De la auditoría y las revisiones
+  - De la memoria del equipo
+  - Del chat
+  - Te las inventas
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud logging read 'protoPayload.serviceName="run.googleapis.com"' --limit=10
+  gcloud run revisions list --service=pagos-api --region={{.region}}
+  ask manager "¿Cuál fue el impacto: cuántos pagos fallidos, cuánto tiempo y cuántas llamadas?"
+  ask payments "¿Por qué no arrancaba la 3.0 y por qué llegó a producción sin detectarse?"
+  cat > postmortem.md <<'EOF'
+  # Postmortem INC-40106 · Pagos con tarjeta caídos 22 minutos
+  ## Resumen
+  Una versión nueva de pagos-api (3.0) no arrancaba y dejó a todos los clientes sin poder pagar. Se volvió a la revisión estable.
+  ## Impacto
+  Unos 3.200 pagos fallidos en 22 minutos (07:50-08:12). Sin cobros duplicados. 140 llamadas a Atención al cliente.
+  ## Cronología
+  07:50 el pipeline (deploy-sa) despliega payments-api:3.0-bad al 100 %; los pagos dan 503.
+  07:58 P1 declarado; IC de Plataforma.
+  08:10 rollback a la revisión estable con cambio de emergencia.
+  08:12 pagos verificados.
+  ## Causa raíz
+  La 3.0 necesitaba una variable nueva (PSP_REGION) que no se añadió al servicio. El pipeline no tiene prueba de arranque y publica al 100 % sin canario, así que nada podía detectarlo antes de producción.
+  ## Qué funcionó y qué no
+  Funcionó: la alerta del NOC y el rollback en un comando gracias a la etiqueta estable. No funcionó: no hay prueba de arranque ni canario, y las variables nuevas no se revisan en el cambio.
+  ## Acciones
+  - Añadir prueba de arranque al pipeline de pagos. Responsable: Pagos. Fecha: 15/11.
+  - Desplegar en canario (10 %) antes del 100 %. Responsable: Plataforma. Fecha: 30/11.
+  - Lista de variables nuevas en la plantilla de cambio. Responsable: Gestión de cambios. Fecha: 22/11.
+  EOF
+  cat postmortem.md
+  ticket resolve "Postmortem entregado en postmortem.md: causa raíz en el pipeline (sin prueba de arranque ni canario) y tres acciones con responsable y fecha."
+shortcuts:
+- name: blame the person
+  run: |
+    cat > postmortem.md <<'EOF'
+    # Postmortem
+    Hugo aprobó un merge malo y rompió los pagos. La culpa es suya; que tenga más cuidado.
+    EOF
+    ticket resolve "Postmortem hecho: fue culpa de Hugo."
+rubric:
+- name: Cronología con datos
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: logging read|revisions list
+    min: 1
+    desc: Auditoría o revisiones consultadas
+  - type: asked
+    min: 2
+    desc: Impacto y causa preguntados
+- name: Documento completo
+  validator: evidence
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: file_contains
+    file: postmortem.md
+    regex: (?i)impacto|impact
+    desc: Impacto
+  - type: file_contains
+    file: postmortem.md
+    regex: (?i)(cronolog|timeline)(?s:.*)\d{1,2}[:.]\d{2}
+    desc: Cronología con horas
+  - type: file_contains
+    file: postmortem.md
+    regex: (?i)causa|root cause
+    desc: Causa raíz
+  - type: file_contains
+    file: postmortem.md
+    regex: (?i)prueba de arranque|startup test|start-up test|smoke|canari|psp_region
+    desc: La causa está en el sistema (prueba, canario, variable)
+  - type: file_contains
+    file: postmortem.md
+    regex: (?i)(acci|action)(?s:.*)(responsable|owner)
+    desc: Acciones con responsable
+- name: Sin culpables
+  validator: security
+  points: 20
+  checks:
+  - type: file_contains
+    file: postmortem.md
+    regex: (?i)hugo|culpa|blame
+    not: true
+    desc: Sin nombres de quien se equivocó ni culpas
+- name: Lo has entendido
+  validator: quiz
+  points: 15
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_resolved
+    desc: Ticket cerrado con una nota
+tutor:
+- match: run.googleapis.com
+  title: La cronología
+  why: Cada despliegue y cambio de tráfico, con hora y cuenta. deploy-sa es el pipeline.
+- match: ask payments
+  title: Los porqués
+  why: ¿Por qué no arrancó? Faltaba una variable. ¿Por qué llegó? No hay prueba de arranque ni canario.
+- match: postmortem.md
+  title: El documento
+  why: Resumen, impacto, cronología, causa, qué funcionó y acciones con responsable y fecha.
+- match: Responsable
+  title: Acciones
+  why: 'Un equipo y una fecha: si no, no se hace.'
+en:
+  title: Craft 9 · The blameless postmortem
+  summary: The payments P1 is over. Rebuild the timeline from the audit log, find the root cause (not the person) and propose actions with an owner and a date so it doesn't happen again.
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **PRB-40109** · Marta: *"Postmortem of the payments P1 (INC-40106). Blameless. Deliver it in postmortem.md."*
+
+    Yesterday at 07:50 a new version of `pagos-api` left every customer unable to pay; at 08:12 it was rolled back to the stable version. The pipeline deployed it after Hugo approved the *merge*. Today it's **postmortem** time.
+
+    **Blameless** doesn't mean "no one is accountable": it means **the cause is never a person**. If one person could break production with a click, the cause is **the system that allowed it** (a missing test, canary, alert). That's why the document **contains no names of whoever made the mistake**: it has processes and systems.
+
+    **Structure** of `postmortem.md`:
+    1. **Summary** (2-3 lines).
+    2. **Impact**: who, how much and for how long (`ask manager "…"`).
+    3. **Timeline** with times: take it from the **audit log** (`gcloud logging read 'protoPayload.serviceName="run.googleapis.com"' --limit=10`) and the revisions (`gcloud run revisions list --service=pagos-api --region={{.region}}`).
+    4. **Root cause**: ask "why?" until you reach the system (`ask payments "…"`).
+    5. **What worked and what didn't**.
+    6. **Actions**: each with an **owner** (a team) and a **date**. They should prevent a repeat or detect it sooner.
+
+    Write it with `cat > postmortem.md`, review it with `cat postmortem.md` and close.
+  objectives:
+  - Rebuild the timeline
+  - Find the cause in the system
+  - Actions with owner and date
+  - Blameless
+  hints:
+  - 'Root cause: a variable was missing (PSP_REGION) and the pipeline has no start-up test or canary.'
+  - 'Typical action: "Add a start-up test and canary deployment to the payments pipeline · Owner: Payments · Date: 15/11".'
+  ticket:
+    summary: 'Postmortem of the payments P1 (INC-40106). Blameless: summary, impact, timeline, root cause, what worked and what didn''t, and actions with an owner and a date. Deliver it in postmortem.md.'
+  text:
+    Marta Ibáñez (Plataforma): Marta Ibáñez (Platform)
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tech lead de Pagos.: Payments tech lead.
+    Queremos que no vuelva a pasar, no buscar culpables.: We want it not to happen again, not to find someone to blame.
+    ? La 3.0 necesitaba una variable nueva (PSP_REGION) que no se añadió al servicio, así que no arrancaba. El pipeline no tiene prueba de arranque y publica directamente al 100 %, sin canario. El merge lo aprobaron en la revisión de código, pero nadie podía verlo sin esa prueba.
+    : 3.0 needed a new variable (PSP_REGION) that wasn't added to the service, so it didn't start. The pipeline has no start-up test and publishes straight to 100%, with no canary. The merge was approved in code review, but nobody could have seen it without that test.
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Esta semana es para aprender el oficio: pregunta todo lo que necesites.': 'This week is for learning the craft: ask anything you need.'
+    Unos 3.200 pagos fallidos en 22 minutos (07:50-08:12). Ningún cobro duplicado. Atención al cliente recibió 140 llamadas.: About 3,200 failed payments in 22 minutes (07:50-08:12). No double charges. Customer service received 140 calls.
+    En un postmortem sin culpables, la causa raíz es…: In a blameless postmortem, the root cause is…
+    El fallo del sistema o del proceso que lo permitió: The system or process failure that allowed it
+    La persona que aprobó el cambio: The person who approved the change
+    Mala suerte: Bad luck
+    Google: Google
+    Una buena acción de postmortem tiene…: A good postmortem action has…
+    Responsable y fecha: An owner and a date
+    Solo una idea: Just an idea
+    El nombre de quien falló: The name of whoever failed
+    'Nada: el postmortem es para contar': 'Nothing: the postmortem is just a story'
+    ¿De dónde sacas las horas exactas de los cambios?: Where do you get the exact times of the changes?
+    De la auditoría y las revisiones: From the audit log and the revisions
+    De la memoria del equipo: From the team's memory
+    Del chat: From the chat
+    Te las inventas: You make them up
+    Cronología con datos: Timeline with data
+    Auditoría o revisiones consultadas: Audit log or revisions checked
+    Impacto y causa preguntados: Impact and cause asked
+    Documento completo: Complete document
+    Impacto: Impact
+    Cronología con horas: Timeline with times
+    Causa raíz: Root cause
+    La causa está en el sistema (prueba, canario, variable): The cause is in the system (test, canary, variable)
+    Acciones con responsable: Actions with an owner
+    Sin culpables: Blameless
+    Sin nombres de quien se equivocó ni culpas: No names of who erred and no blame
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Ticket cerrado con una nota: Ticket closed with a note
+    La cronología: The timeline
+    Cada despliegue y cambio de tráfico, con hora y cuenta. deploy-sa es el pipeline.: Each deployment and traffic change, with time and account. deploy-sa is the pipeline.
+    Los porqués: The whys
+    ¿Por qué no arrancó? Faltaba una variable. ¿Por qué llegó? No hay prueba de arranque ni canario.: Why didn't it start? A variable was missing. Why did it get through? No start-up test or canary.
+    El documento: The document
+    Resumen, impacto, cronología, causa, qué funcionó y acciones con responsable y fecha.: Summary, impact, timeline, cause, what worked and actions with owner and date.
+    Acciones: Actions
+    'Un equipo y una fecha: si no, no se hace.': 'A team and a date: otherwise it doesn''t get done.'

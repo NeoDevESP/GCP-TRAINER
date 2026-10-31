@@ -1,5 +1,5 @@
 id: zentra-z67-week5-test
-title: 'Prueba de la semana 5 · Campaña de cashback: todo va mal a la vez'
+title: 'Prueba de la semana 6 · Campaña de cashback: todo va mal a la vez'
 summary: 'Dos problemas de capacidad sin relación, en el mismo ticket: el cotizador se queda sin puertos de NAT y la base de datos de Cuentas sin conexiones.'
 track: zentra
 day: 67
@@ -104,7 +104,7 @@ story: |-
 
   > **INC-31067 · P1** · *«¡Arranca la campaña de cashback y la app va fatal! Los saldos no cargan y el cambio de divisas falla a ratos. Marketing ya ha enviado 2 millones de notificaciones.»*
 
-  **Prueba de la semana 5.** Un ticket, **dos síntomas** que pueden tener causas distintas: sepáralos y diagnostica cada uno con su evidencia (registros de NAT, registros de Cloud SQL). Prioriza el que más clientes afecta, pide los cambios y comunica a menudo.
+  **Prueba de la semana 6.** Un ticket, **dos síntomas** que pueden tener causas distintas: sepáralos y diagnostica cada uno con su evidencia (registros de NAT, registros de Cloud SQL). Prioriza el que más clientes afecta, pide los cambios y comunica a menudo.
 objectives:
 - Separa los dos síntomas
 - Diagnostica cada uno con evidencia
@@ -211,14 +211,14 @@ tutor:
   title: Síntoma 2
   why: 'OUT_OF_RESOURCES: el NAT se queda sin puertos para el cotizador.'
 en:
-  title: 'Week 5 test · Cashback campaign: everything breaks at once'
+  title: 'Week 6 test · Cashback campaign: everything breaks at once'
   summary: 'Two unrelated capacity problems in the same ticket: the pricer runs out of NAT ports and the Accounts database runs out of connections.'
   story: |-
     **Project `{{.project}}`** (*zentra-campanas-prod*).
 
     > **INC-31067 · P1** · *"The cashback campaign starts and the app is a mess! Balances won't load and currency exchange fails now and then. Marketing has already sent 2 million notifications."*
 
-    **Week 5 test.** One ticket, **two symptoms** that may have different causes: separate them and diagnose each with its evidence (NAT logs, Cloud SQL logs). Prioritise whatever affects most customers, request the changes and communicate often.
+    **Week 6 test.** One ticket, **two symptoms** that may have different causes: separate them and diagnose each with its evidence (NAT logs, Cloud SQL logs). Prioritise whatever affects most customers, request the changes and communicate often.
   objectives:
   - Separate the two symptoms
   - Diagnose each with evidence

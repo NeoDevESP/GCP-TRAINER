@@ -1,0 +1,379 @@
+id: zentra-s10-week1-test
+title: 'Prueba de la semana 1 · Tu turno: un incidente de principio a fin'
+summary: 'Sin profesor: prioriza bien, acusa recibo, pregunta el alcance, encuentra qué cambió, arregla con cambio de emergencia, comunica sin jerga y deja el traspaso al siguiente turno.'
+track: zentra
+day: 80
+level: basic
+branch: iam
+type: challenge
+mode: production
+skills:
+- observability.incident
+- iam.serviceaccounts
+- security.audit
+wellArchitected:
+- operations
+- reliability
+certs:
+- ACE
+difficulty: 2
+minutes: 40
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --max-instances=5 --tag=estable --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: iam_remove
+  resource: run:pagos-api
+  role: roles/run.invoker
+  member: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+  actor: terraform-pagos@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-40110
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Raquel Soto (Atención al cliente)
+  summary: Desde las 16:40 bastantes clientes llaman diciendo que el pago con tarjeta en la app les da error. El Service Desk lo ha abierto como P3.
+actors:
+- role: cs
+  name: Raquel Soto (Atención al cliente)
+  persona: Coordinadora de Atención al cliente.
+  fallback: Los clientes están muy molestos.
+  facts:
+  - keywords:
+    - - todos
+      - all
+      - algunos
+      - some
+      - cuantos
+      - cuántos
+      - how many
+      - alcance
+      - scope
+      - afecta
+      - affect
+      - todo el mundo
+      - everyone
+    answer: 'No es «algunos»: todos los que intentan pagar con tarjeta desde las 16:40. Transferencias y consultas de saldo sí funcionan.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si es urgente y hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - rollback
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - revert
+      - permiso
+      - binding
+      - vuelta
+    answer: Aprobado como cambio de emergencia (CHG-7790). Anótalo en el ticket y hazlo con el mínimo alcance.
+- role: sre
+  name: Diego Ferrer (SRE de guardia)
+  persona: SRE de guardia.
+  fallback: 'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.'
+  facts: []
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Esta semana es para aprender el oficio: pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🎯 **Prueba de la semana 1.** Sin profesor ni pasos: aplica el oficio de toda la semana.
+
+  > **INC-40110 · P3** · Atención al cliente: *«Desde las 16:40 bastantes clientes dicen que el pago con tarjeta en la app les da error.»*
+
+  Son las 17:00 y tu turno termina a las 18:00. Lo que se espera de ti:
+
+  1. **Prioridad correcta.** Confirma el alcance (`ask cs`) y los datos; si la prioridad está mal, corrígela y déjalo **anotado** en una nota interna.
+  2. **Acuse de recibo** al negocio con la **próxima actualización**.
+  3. **Diagnóstico**: qué falla y **qué cambió** (registros y auditoría).
+  4. **Arreglo mínimo** con **cambio de emergencia** aprobado (`ask change`).
+  5. **Comunicación**: actualización al negocio **sin jerga**; nota interna técnica con la causa y lo pendiente.
+  6. **Traspaso** para el turno de noche en `traspaso.md`: el ticket, su estado, qué queda pendiente (y de quién) y qué vigilar.
+  7. Responde las preguntas y cierra.
+objectives:
+- Prioridad correcta y acuse
+- Qué cambió
+- Arreglo con cambio de emergencia
+- Comunicación y traspaso
+hints:
+- text: Repasa los oficios 1, 2, 6 y 3.
+- text: La auditoría de Cloud Run dice quién tocó los permisos del servicio.
+quiz:
+- id: q1
+  question: El Service Desk lo abrió como P3, pero todos los pagos con tarjeta fallan. ¿Qué haces?
+  options:
+  - Lo tratas como P1 y lo dejas anotado
+  - 'Respetas el P3: lo puso el Service Desk'
+  - Esperas a que haya más quejas
+  - Lo pasas a P4
+  answer:
+  - 0
+- id: q2
+  question: Arreglas a mano un permiso que Terraform quitó. ¿Qué queda pendiente?
+  options:
+  - Que el equipo dueño corrija su código de Terraform, o lo volverá a quitar
+  - Nada
+  - Borrar Terraform
+  - Dar Owner al pipeline
+  answer:
+  - 0
+- id: q3
+  question: Un buen traspaso de turno incluye…
+  options:
+  - Qué está abierto, en qué estado, qué falta y qué vigilar
+  - Solo «todo bien»
+  - Las contraseñas del turno
+  - 'Nada: el siguiente lo leerá todo'
+  answer:
+  - 0
+solution: |
+  ticket
+  ask cs "¿Les pasa a todos los clientes o solo a algunos? ¿Qué sí funciona?"
+  ticket comment "Repriorizado a P1: fallan todos los pagos con tarjeta desde las 16:40 (confirmado con Atención al cliente)."
+  ticket update "Hola Raquel: recibido y en marcha como incidencia grave. Estamos con ello; próxima actualización a las 17:30 o antes si hay novedades."
+  gcloud logging read 'resource.type=cloud_run_revision' --limit=5
+  gcloud logging read 'protoPayload.serviceName="run.googleapis.com"' --limit=5
+  gcloud run services get-iam-policy pagos-api --region={{.region}}
+  ask change "Necesito restaurar el permiso de invocación de pagos-api para el gateway como cambio de emergencia, ¿lo apruebas?"
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud run services get-iam-policy pagos-api --region={{.region}}
+  ticket comment "Causa: a las 16:40 terraform-pagos quitó roles/run.invoker de app-gateway-sa en pagos-api (403 en /pay). Restaurado a mano con CHG-7790 de emergencia. Pendiente: Pagos debe corregir su código de Terraform o lo volverá a quitar en el próximo apply."
+  ticket update "Hola Raquel: desde las 17:20 los pagos con tarjeta vuelven a funcionar con normalidad. Fue un cambio de configuración interno que ya hemos corregido. Los clientes pueden volver a intentarlo; no se ha cobrado ningún pago fallido."
+  cat > traspaso.md <<'EOF'
+  # Traspaso turno de tarde -> noche
+  - INC-40110 (P1, resuelto): pagos con tarjeta caídos 16:40-17:20 porque terraform-pagos quitó el permiso de invocación del gateway en pagos-api. Restaurado a mano con CHG-7790.
+  - Pendiente: el equipo de Pagos tiene que corregir su código de Terraform (problema PRB abierto); hasta entonces el próximo apply lo volverá a quitar.
+  - Vigilar: errores 403 en pagos-api y cualquier apply de Terraform de Pagos esta noche. Si vuelve, mismo arreglo y avisar a Diego (guardia).
+  EOF
+  ticket resolve "Pagos restaurados: permiso de invocación del gateway devuelto a pagos-api con cambio de emergencia; pendiente que Pagos corrija Terraform, anotado en el traspaso."
+shortcuts:
+- name: quiet fix, nothing written
+  run: |
+    gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+    ticket resolve "Arreglado el permiso, ya funciona."
+rubric:
+- name: Pagos restaurados
+  validator: functional
+  points: 20
+  critical: true
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: Los pagos funcionan (/pay responde 200)
+- name: Prioridad y acuse
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: asked
+    actor: cs
+    min: 1
+    desc: Alcance confirmado
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - p1
+    desc: Repriorizado a P1 y anotado
+  - type: ticket_update
+    keywords:
+    - - proxima actualizacion
+      - próxima actualización
+      - next update
+      - siguiente actualizacion
+      - siguiente actualización
+    desc: Acuse con la próxima actualización
+- name: Qué cambió y cambio de emergencia
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: logging read|get-iam-policy
+    min: 1
+    desc: Registros, auditoría o política revisados
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio de emergencia aprobado
+- name: Comunicación
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - terraform
+    desc: Nota interna con la causa
+  - type: ticket_update
+    keywords:
+    - - pago
+      - payment
+    - - normal
+      - funcionan
+      - working
+      - restaur
+    desc: Negocio informado de que funciona
+  - type: ticket_update
+    keywords:
+    - - max-instances
+      - instancia
+      - instance
+      - revisi
+      - revision
+      - cloud run
+      - iam
+      - binding
+      - '503'
+      - '403'
+      - pagos-sa
+      - app-gateway
+      - terraform
+      - diego
+      - hugo
+    not: true
+    desc: Sin jerga ni nombres al negocio
+- name: Traspaso
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: file_contains
+    file: traspaso.md
+    regex: INC-40110
+    desc: Con el ticket
+  - type: file_contains
+    file: traspaso.md
+    regex: (?i)pendiente|pending
+    desc: Con lo pendiente
+  - type: file_contains
+    file: traspaso.md
+    regex: (?i)terraform
+    desc: Con el riesgo de que vuelva (Terraform)
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 5
+  checks:
+  - type: ticket_resolved
+    desc: Ticket cerrado con una nota
+tutor:
+- match: ask cs
+  title: Alcance
+  why: 'Todos los pagos con tarjeta: es P1, no P3.'
+- match: run.googleapis.com
+  title: Qué cambió
+  why: terraform-pagos quitó el invoker del gateway a las 16:40.
+- match: traspaso.md
+  title: Traspaso
+  why: Ticket, estado, pendiente y qué vigilar.
+en:
+  title: 'Week 1 test · Your shift: an incident from start to finish'
+  summary: 'No tutor: prioritise correctly, acknowledge, ask the scope, find what changed, fix it with an emergency change, communicate without jargon and leave the handover for the next shift.'
+  story: |-
+    > 🎯 **Week 1 test.** No tutor or steps: apply the whole week's craft.
+
+    > **INC-40110 · P3** · Customer service: *"Since 16:40 quite a few customers say card payment in the app fails."*
+
+    It's 17:00 and your shift ends at 18:00. What's expected of you:
+
+    1. **The right priority.** Confirm the scope (`ask cs`) and the data; if the priority is wrong, correct it and **note it** in an internal note.
+    2. **Acknowledge** to the business with the **next update**.
+    3. **Diagnosis**: what fails and **what changed** (logs and audit log).
+    4. **Minimal fix** with an approved **emergency change** (`ask change`).
+    5. **Communication**: an update to the business **without jargon**; a technical internal note with the cause and what's pending.
+    6. **Handover** for the night shift in `traspaso.md`: the ticket, its state, what's pending (and whose) and what to watch.
+    7. Answer the questions and close.
+  objectives:
+  - Right priority and acknowledgement
+  - What changed
+  - Fix with an emergency change
+  - Communication and handover
+  hints:
+  - Review crafts 1, 2, 6 and 3.
+  - Cloud Run's audit log says who touched the service's permissions.
+  ticket:
+    summary: Since 16:40 quite a few customers are calling to say card payment in the app fails. The Service Desk opened it as P3.
+  text:
+    Raquel Soto (Atención al cliente): Raquel Soto (Customer service)
+    Coordinadora de Atención al cliente.: Customer service coordinator.
+    Los clientes están muy molestos.: Customers are very upset.
+    ? 'No es «algunos»: todos los que intentan pagar con tarjeta desde las 16:40. Transferencias y consultas de saldo sí funcionan.'
+    : 'It''s not "some": everyone who tries to pay by card since 16:40. Transfers and balance checks work.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si es urgente y hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If it's urgent and customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7790). Anótalo en el ticket y hazlo con el mínimo alcance.: Approved as an emergency change (CHG-7790). Note it in the ticket and keep the scope minimal.
+    Diego Ferrer (SRE de guardia): Diego Ferrer (on-call SRE)
+    SRE de guardia.: On-call SRE.
+    'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.': 'Give me facts: which service, since when, what error and how many are affected.'
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Esta semana es para aprender el oficio: pregunta todo lo que necesites.': 'This week is for learning the craft: ask anything you need.'
+    El Service Desk lo abrió como P3, pero todos los pagos con tarjeta fallan. ¿Qué haces?: The Service Desk opened it as P3, but every card payment fails. What do you do?
+    Lo tratas como P1 y lo dejas anotado: Treat it as P1 and note it
+    'Respetas el P3: lo puso el Service Desk': 'Keep the P3: the Service Desk set it'
+    Esperas a que haya más quejas: Wait for more complaints
+    Lo pasas a P4: Downgrade it to P4
+    Arreglas a mano un permiso que Terraform quitó. ¿Qué queda pendiente?: You manually fix a permission Terraform removed. What's pending?
+    Que el equipo dueño corrija su código de Terraform, o lo volverá a quitar: The owning team fixes its Terraform code, or it'll remove it again
+    Nada: Nothing
+    Borrar Terraform: Delete Terraform
+    Dar Owner al pipeline: Give the pipeline Owner
+    Un buen traspaso de turno incluye…: A good shift handover includes…
+    Qué está abierto, en qué estado, qué falta y qué vigilar: What's open, its state, what's left and what to watch
+    Solo «todo bien»: Just "all good"
+    Las contraseñas del turno: The shift's passwords
+    'Nada: el siguiente lo leerá todo': 'Nothing: the next one will read everything'
+    Pagos restaurados: Payments restored
+    Los pagos funcionan (/pay responde 200): Payments work (/pay returns 200)
+    Prioridad y acuse: Priority and acknowledgement
+    Alcance confirmado: Scope confirmed
+    Repriorizado a P1 y anotado: Reprioritised to P1 and noted
+    Acuse con la próxima actualización: Acknowledgement with the next update
+    Qué cambió y cambio de emergencia: What changed and emergency change
+    Registros, auditoría o política revisados: Logs, audit log or policy checked
+    Cambio de emergencia aprobado: Emergency change approved
+    Comunicación: Communication
+    Nota interna con la causa: Internal note with the cause
+    Negocio informado de que funciona: Business told it works
+    Sin jerga ni nombres al negocio: No jargon or names to the business
+    Traspaso: Handover
+    Con el ticket: With the ticket
+    Con lo pendiente: With what's pending
+    Con el riesgo de que vuelva (Terraform): With the risk of it coming back (Terraform)
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Ticket cerrado con una nota: Ticket closed with a note
+    Alcance: Scope
+    'Todos los pagos con tarjeta: es P1, no P3.': 'Every card payment: it''s P1, not P3.'
+    Qué cambió: What changed
+    terraform-pagos quitó el invoker del gateway a las 16:40.: terraform-pagos removed the gateway's invoker at 16:40.
+    Ticket, estado, pendiente y qué vigilar.: Ticket, state, pending and what to watch.

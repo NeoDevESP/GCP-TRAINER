@@ -285,6 +285,7 @@ export default function LearnPage() {
                 <div className="row">
                   <button type="button" className="cm-pillbtn ink sm" onClick={() => go("gcp-console")}>{byId["gcp-console"].name}</button>
                   <a className="btn secondary" href="/catalog?track=zentra#w0">{t("Talleres de la Semana 0")}</a>
+                  <a className="btn secondary" href="/catalog?track=zentra#oficio">{t("El oficio de soporte (Semana 1)")}</a>
                 </div>
               </section>
             )}

@@ -1,0 +1,324 @@
+id: zentra-s03-writing
+title: 'Oficio 3 · Escribir: actualización al cliente y nota interna'
+summary: 'Las notificaciones de compra llegaron tarde. La guardia ya lo arregló: tú escribes dos mensajes muy distintos, uno técnico para el equipo y otro claro y sin jerga para el negocio.'
+track: zentra
+day: 73
+level: basic
+branch: observability
+type: guided
+mode: production
+skills:
+- observability.incident
+- compute.serverless
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create notificaciones-sa --display-name="notificaciones-api"
+  gcloud run deploy notificaciones-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --service-account=notificaciones-sa@{{.project}}.iam.gserviceaccount.com --max-instances=1 --no-allow-unauthenticated
+  gcloud run services update notificaciones-api --region={{.region}} --max-instances=10
+ticket:
+  id: INC-40103
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Raquel Soto (Atención al cliente)
+  summary: Muchos clientes se quejan en redes de que las notificaciones de sus compras con tarjeta llegan con 10-15 minutos de retraso. ¿Qué les decimos?
+actors:
+- role: sre
+  name: Diego Ferrer (SRE de guardia)
+  persona: SRE de guardia.
+  fallback: 'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.'
+  facts:
+  - keywords:
+    - - que paso
+      - qué pasó
+      - causa
+      - cause
+      - what happened
+      - arregl
+      - fix
+      - cambio
+      - change
+      - notificaciones
+      - notification
+      - hora
+      - time
+    answer: 'notificaciones-api se quedó con max-instances=1 tras el despliegue de ayer; con el pico de las 09:10 se encolaron los avisos. A las 10:05 lo subí a 10 y la cola se vació a las 10:20. Todos los avisos atrasados se han entregado: no se ha perdido ninguno. Revisaremos el valor en la plantilla de despliegue.'
+- role: cs
+  name: Raquel Soto (Atención al cliente)
+  persona: Coordinadora de Atención al cliente.
+  fallback: Necesito algo que pueda contar a los clientes, sin tecnicismos.
+  facts:
+  - keywords:
+    - - cuantos
+      - cuántos
+      - how many
+      - quejas
+      - complaints
+      - clientes
+      - customers
+      - desde
+      - since
+    answer: Desde las 09:15, unas 300 quejas. Los clientes temen que alguien esté usando su tarjeta.
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **INC-40103 · P2** · Atención al cliente: *«Muchos clientes se quejan de que las notificaciones de sus compras llegan con 10-15 minutos de retraso. ¿Qué les decimos?»*
+
+  La guardia (Diego) **ya lo ha arreglado**. Tu trabajo ahora es **comunicar**, y en soporte se escriben dos mensajes distintos:
+
+  | | **Nota interna** (`ticket comment`) | **Actualización al cliente** (`ticket update`) |
+  |---|---|---|
+  | Para quién | Compañeros técnicos, quien herede el ticket, la auditoría | Quien abrió el ticket (aquí, el negocio) |
+  | Qué lleva | Causa técnica, recursos, horas, qué cambió, quién lo hizo | **Qué pasó** en sus palabras, **impacto**, **qué se ha hecho**, **qué tienen que hacer** ellos, **próxima noticia** si sigue abierto |
+  | Qué no lleva | Opiniones o culpas | Jerga (revisiones, instancias, IAM, códigos HTTP), nombres de compañeros, culpas |
+
+  **Pasos:**
+  1. **Entérate bien** antes de escribir: `ask sre "…"` (qué pasó, horas, si se perdió algo) y `ask cs "…"` (cuántos clientes, qué les preocupa).
+  2. **Comprueba** lo que te cuentan: `gcloud run services describe notificaciones-api --region={{.region}}` y `gcloud run revisions list --service=notificaciones-api --region={{.region}}`.
+  3. **Nota interna** técnica con la causa, las horas y el cambio: `ticket comment "…"`.
+  4. **Actualización al cliente** clara, sin jerga ni nombres: qué notaron los clientes, que ya está normal, que **no se ha perdido ninguna notificación** y que **su tarjeta no está en riesgo**. `ticket update "…"`.
+  5. Responde las preguntas y cierra.
+objectives:
+- Entérate de qué pasó
+- Comprueba el servicio
+- Nota interna técnica
+- Actualización clara al negocio
+hints:
+- text: 'Interna: «max-instances=1 tras el despliegue de ayer; 10:05 subido a 10; cola vacía 10:20».'
+- text: 'Al cliente: «Entre las 09:10 y las 10:20 las notificaciones llegaron con retraso. Ya funcionan con normalidad y no se ha perdido ninguna…»'
+quiz:
+- id: q1
+  question: ¿Qué NO va en una actualización al cliente?
+  options:
+  - «Subimos max-instances de la revisión 3 a 10»
+  - Qué notaron los clientes
+  - Que ya funciona
+  - Qué tienen que hacer ellos
+  answer:
+  - 0
+- id: q2
+  question: La nota interna sirve sobre todo para…
+  options:
+  - Que cualquier compañero o auditor entienda qué pasó y qué se cambió
+  - Echar la culpa a quien desplegó
+  - Sustituir la respuesta al cliente
+  - 'Nada: es opcional'
+  answer:
+  - 0
+- id: q3
+  question: Los clientes temen que usen su tarjeta. ¿Qué incluyes?
+  options:
+  - Que fue un retraso de avisos y la tarjeta no está en riesgo
+  - 'Nada: no es tu tema'
+  - Que bloqueen la tarjeta por si acaso
+  - El nombre del técnico que lo arregló
+  answer:
+  - 0
+solution: |
+  ticket
+  ask sre "¿Qué pasó con las notificaciones, a qué hora se arregló y se perdió alguna?"
+  ask cs "¿Cuántos clientes se han quejado y desde cuándo?"
+  gcloud run services describe notificaciones-api --region={{.region}}
+  gcloud run revisions list --service=notificaciones-api --region={{.region}}
+  ticket comment "Causa: notificaciones-api quedó con max-instances=1 tras el despliegue de ayer; con el pico de las 09:10 se encolaron los avisos. 10:05 Diego lo sube a 10 (nueva revisión); 10:20 cola vacía. Sin pérdida de mensajes. Pendiente: corregir el valor en la plantilla de despliegue."
+  ticket update "Hola Raquel: entre las 09:10 y las 10:20 las notificaciones de compra llegaron con retraso por un problema de capacidad de nuestro sistema de avisos. Desde las 10:20 funcionan con normalidad y no se ha perdido ninguna: todas se han entregado. Las tarjetas no han estado en riesgo y los clientes no tienen que hacer nada."
+  ticket resolve "Retraso de notificaciones de 09:10 a 10:20 por capacidad insuficiente; corregido por la guardia y comunicado al negocio sin pérdida de avisos."
+shortcuts:
+- name: paste the internal note to the customer
+  run: |
+    ticket update "Subido max-instances de notificaciones-api de 1 a 10 (revisión nueva) por Diego, la culpa fue del despliegue de ayer."
+    ticket resolve "Arreglado por la guardia, ya funciona todo bien."
+rubric:
+- name: Te has informado
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: asked
+    actor: sre
+    min: 1
+    desc: Preguntado a la guardia qué pasó
+  - type: command
+    regex: notificaciones-api
+    min: 1
+    desc: Comprobado el servicio
+- name: Nota interna técnica
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - max-instances
+      - max instances
+      - instancias
+      - instances
+      - capacidad
+      - capacity
+    desc: Nota interna con la causa
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - '10:05'
+      - '10.05'
+      - '10:20'
+      - '10.20'
+      - 09:10
+      - '9:10'
+    desc: Con las horas
+- name: Actualización para el negocio
+  validator: evidence
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - notificacion
+      - notification
+      - aviso
+    - - normal
+      - funcionan
+      - working
+      - resuelto
+      - resolved
+      - entregad
+      - delivered
+    - - perdid
+      - lost
+      - ninguna
+      - none
+      - todas
+      - all of them
+    desc: Qué pasó, que ya está normal y que no se perdió nada
+  - type: ticket_update
+    keywords:
+    - - max-instances
+      - instancia
+      - instance
+      - revisi
+      - revision
+      - cloud run
+      - iam
+      - binding
+      - '503'
+      - '403'
+      - pagos-sa
+      - app-gateway
+      - terraform
+      - diego
+      - hugo
+    not: true
+    desc: Sin jerga ni nombres de compañeros
+- name: Lo has entendido
+  validator: quiz
+  points: 15
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_resolved
+    desc: Ticket cerrado con una nota
+tutor:
+- match: ask sre
+  title: Los hechos
+  why: 'Causa, horas y si se perdió algo: es lo que vas a necesitar en los dos mensajes.'
+- match: revisions list
+  title: Comprobar
+  why: 'Dos revisiones: la de max 1 y la nueva con max 10 sirviendo el tráfico.'
+- match: ticket comment
+  title: Interna
+  why: 'Técnica y precisa: recurso, valor, horas y lo pendiente.'
+- match: ticket update "Hola Raquel
+  title: Al negocio
+  why: Lo que vieron los clientes, que ya está bien, que no se perdió nada y que no tienen que hacer nada.
+en:
+  title: 'Craft 3 · Writing: customer update and internal note'
+  summary: 'Purchase notifications arrived late. On-call already fixed it: you write two very different messages, a technical one for the team and a clear, jargon-free one for the business.'
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **INC-40103 · P2** · Customer service: *"Many customers are complaining that notifications for their purchases arrive 10-15 minutes late. What do we tell them?"*
+
+    On-call (Diego) **has already fixed it**. Your job now is to **communicate**, and support writes two different messages:
+
+    | | **Internal note** (`ticket comment`) | **Customer update** (`ticket update`) |
+    |---|---|---|
+    | For whom | Technical colleagues, whoever inherits the ticket, audit | Whoever opened the ticket (here, the business) |
+    | What goes in | Technical cause, resources, times, what changed, who did it | **What happened** in their words, **impact**, **what was done**, **what they need to do**, **next update** if still open |
+    | What stays out | Opinions or blame | Jargon (revisions, instances, IAM, HTTP codes), colleagues' names, blame |
+
+    **Steps:**
+    1. **Get the facts** before writing: `ask sre "…"` (what happened, times, whether anything was lost) and `ask cs "…"` (how many customers, what worries them).
+    2. **Check** what you're told: `gcloud run services describe notificaciones-api --region={{.region}}` and `gcloud run revisions list --service=notificaciones-api --region={{.region}}`.
+    3. A technical **internal note** with the cause, times and change: `ticket comment "…"`.
+    4. A clear **customer update**, no jargon or names: what customers noticed, that it's back to normal, that **no notification was lost** and that **their card is not at risk**. `ticket update "…"`.
+    5. Answer the questions and close.
+  objectives:
+  - Find out what happened
+  - Check the service
+  - Technical internal note
+  - Clear update to the business
+  hints:
+  - 'Internal: "max-instances=1 after yesterday''s deployment; 10:05 raised to 10; queue empty 10:20".'
+  - 'To the customer: "Between 09:10 and 10:20 notifications arrived late. They''re working normally now and none were lost…"'
+  ticket:
+    summary: Many customers are complaining on social media that notifications for their card purchases arrive 10-15 minutes late. What do we tell them?
+  text:
+    Raquel Soto (Atención al cliente): Raquel Soto (Customer service)
+    Diego Ferrer (SRE de guardia): Diego Ferrer (on-call SRE)
+    SRE de guardia.: On-call SRE.
+    'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.': 'Give me facts: which service, since when, what error and how many are affected.'
+    ? 'notificaciones-api se quedó con max-instances=1 tras el despliegue de ayer; con el pico de las 09:10 se encolaron los avisos. A las 10:05 lo subí a 10 y la cola se vació a las 10:20. Todos los avisos atrasados se han entregado: no se ha perdido ninguno. Revisaremos el valor en la plantilla de despliegue.'
+    : 'notificaciones-api was left with max-instances=1 after yesterday''s deployment; with the 09:10 peak the notifications queued up. At 10:05 I raised it to 10 and the queue drained by 10:20. Every late notification has been delivered: none were lost. We''ll review the value in the deployment template.'
+    Coordinadora de Atención al cliente.: Customer service coordinator.
+    Necesito algo que pueda contar a los clientes, sin tecnicismos.: I need something I can tell customers, without technical terms.
+    Desde las 09:15, unas 300 quejas. Los clientes temen que alguien esté usando su tarjeta.: Since 09:15, about 300 complaints. Customers fear someone is using their card.
+    ¿Qué NO va en una actualización al cliente?: What does NOT go in a customer update?
+    «Subimos max-instances de la revisión 3 a 10»: '"We raised revision 3''s max-instances to 10"'
+    Qué notaron los clientes: What customers noticed
+    Que ya funciona: That it works now
+    Qué tienen que hacer ellos: What they need to do
+    La nota interna sirve sobre todo para…: The internal note is mostly for…
+    Que cualquier compañero o auditor entienda qué pasó y qué se cambió: Any colleague or auditor to understand what happened and what changed
+    Echar la culpa a quien desplegó: Blaming whoever deployed
+    Sustituir la respuesta al cliente: Replacing the customer reply
+    'Nada: es opcional': 'Nothing: it''s optional'
+    Los clientes temen que usen su tarjeta. ¿Qué incluyes?: Customers fear their card is being used. What do you include?
+    Que fue un retraso de avisos y la tarjeta no está en riesgo: That it was a notification delay and the card is not at risk
+    'Nada: no es tu tema': 'Nothing: not your topic'
+    Que bloqueen la tarjeta por si acaso: That they block their card just in case
+    El nombre del técnico que lo arregló: The name of the engineer who fixed it
+    Te has informado: You got the facts
+    Preguntado a la guardia qué pasó: Asked on-call what happened
+    Comprobado el servicio: Checked the service
+    Nota interna técnica: Technical internal note
+    Nota interna con la causa: Internal note with the cause
+    Con las horas: With the times
+    Actualización para el negocio: Update for the business
+    Qué pasó, que ya está normal y que no se perdió nada: What happened, that it's normal now and nothing was lost
+    Sin jerga ni nombres de compañeros: No jargon or colleagues' names
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Ticket cerrado con una nota: Ticket closed with a note
+    Los hechos: The facts
+    'Causa, horas y si se perdió algo: es lo que vas a necesitar en los dos mensajes.': 'Cause, times and whether anything was lost: you''ll need it for both messages.'
+    Comprobar: Checking
+    'Dos revisiones: la de max 1 y la nueva con max 10 sirviendo el tráfico.': 'Two revisions: the max-1 one and the new max-10 one serving traffic.'
+    Interna: Internal
+    'Técnica y precisa: recurso, valor, horas y lo pendiente.': 'Technical and precise: resource, value, times and what''s pending.'
+    Al negocio: To the business
+    Lo que vieron los clientes, que ya está bien, que no se perdió nada y que no tienen que hacer nada.: What customers saw, that it's fine now, that nothing was lost and that they don't need to do anything.

@@ -1,5 +1,5 @@
 id: zentra-z56-access-review
-title: Prueba de la semana 2 · Revisión trimestral de accesos
+title: Prueba de la semana 3 · Revisión trimestral de accesos
 summary: 'Auditoría interna: un Editor directo, un externo en un grupo interno y una baja que sigue en los grupos. Arréglalo todo sin dejar a nadie sin trabajar.'
 track: zentra
 day: 56
@@ -70,7 +70,7 @@ story: |-
 
   > **REQ-21056 · P2** · *«Revisión trimestral de accesos al proyecto de producción: corregid las desviaciones respecto a la norma (permisos por grupo, mínimo privilegio, sin externos ni bajas) y enviadme el resumen para el informe al auditor.»*
 
-  **Prueba de la semana 2.** Revisa la política IAM del proyecto (`get-iam-policy`) y los grupos `gcp-*` (`gam print group-members`, `gam info user`). Busca: **roles básicos** dados a personas, **miembros externos** en grupos internos y **cuentas suspendidas** que siguen en grupos. Confirma con Seguridad, corrige y deja un resumen claro para Cumplimiento. Nadie debe quedarse sin lo que necesita para trabajar.
+  **Prueba de la semana 3.** Revisa la política IAM del proyecto (`get-iam-policy`) y los grupos `gcp-*` (`gam print group-members`, `gam info user`). Busca: **roles básicos** dados a personas, **miembros externos** en grupos internos y **cuentas suspendidas** que siguen en grupos. Confirma con Seguridad, corrige y deja un resumen claro para Cumplimiento. Nadie debe quedarse sin lo que necesita para trabajar.
 objectives:
 - Revisa la política IAM y los grupos
 - Quita el rol básico directo
@@ -171,14 +171,14 @@ tutor:
   title: ''
   why: Quitar del grupo retira todos los permisos que daba el grupo.
 en:
-  title: Week 2 test · Quarterly access review
+  title: Week 3 test · Quarterly access review
   summary: 'Internal audit: a direct Editor, an outsider in an internal group and a leaver still in the groups. Fix it all without leaving anyone unable to work.'
   story: |-
     **Project `{{.project}}`** (*zentra-tarjetas-prod*).
 
     > **REQ-21056 · P2** · *"Quarterly access review of the production project: fix deviations from the rule (access through groups, least privilege, no outsiders or leavers) and send me the summary for the auditor's report."*
 
-    **Week 2 test.** Review the project IAM policy (`get-iam-policy`) and the `gcp-*` groups (`gam print group-members`, `gam info user`). Look for: **basic roles** given to people, **outside members** in internal groups and **suspended accounts** still in groups. Confirm with Security, fix and leave a clear summary for Compliance. Nobody should lose what they need to work.
+    **Week 3 test.** Review the project IAM policy (`get-iam-policy`) and the `gcp-*` groups (`gam print group-members`, `gam info user`). Look for: **basic roles** given to people, **outside members** in internal groups and **suspended accounts** still in groups. Confirm with Security, fix and leave a clear summary for Compliance. Nobody should lose what they need to work.
   objectives:
   - Review the IAM policy and groups
   - Remove the direct basic role

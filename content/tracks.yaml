@@ -121,7 +121,7 @@ tracks:
       description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
   - id: zentra
     title: 'Zentra: de cero a Soporte N2 en un banco digital'
-    description: 'Entras en Soporte GCP de Zentra, un banco digital europeo que vive entero en Google Cloud. Una Semana 0 de talleres desde cero y siete semanas de diez casos, de nivel básico a profesional: tutoriales guiados, accesos, incidencias de los equipos, guardia, capacidad y datos, cierre de mes y operaciones. Cada semana termina con una prueba.'
+    description: 'Entras en Soporte GCP de Zentra, un banco digital europeo que vive entero en Google Cloud. Una Semana 0 de talleres desde cero, una Semana 1 con el oficio de soporte (tickets, prioridades, escalados, P1, cambios, postmortem) y siete semanas de diez casos, de nivel básico a profesional: accesos, incidencias de los equipos, guardia, capacidad y datos, cierre de mes y operaciones. Cada semana termina con una prueba.'
     level: associate
     certs: [ACE, PCSE]
     phase: V3
@@ -133,51 +133,57 @@ tracks:
         description: 'Si nunca has tocado la nube, empieza aquí: diez talleres guiados que explican cada concepto antes del comando. Qué es Google Cloud, la terminal, gcloud, redes, cortafuegos, permisos, almacenamiento, registros y Linux. Termina con la prueba de la semana.'
         labs: [zentra-t01-what-is-cloud, zentra-t02-terminal, zentra-t03-gcloud-read, zentra-t04-networks, zentra-t05-firewall, zentra-t06-permissions, zentra-t07-storage, zentra-t08-logs, zentra-t09-linux, zentra-t10-week0-test]
         en: {title: 'Week 0 · From zero', description: 'If you have never touched the cloud, start here: ten guided workshops that explain each concept before the command. What Google Cloud is, the terminal, gcloud, networking, firewalls, permissions, storage, logs and Linux. Ends with the week test.'}
+      - id: oficio
+        title: 'Semana 1 · El oficio de soporte'
+        level: basic
+        description: 'Lo que no enseña ninguna certificación: cómo se trabaja un ticket en un banco. Tipos y prioridades, primer contacto, escribir al cliente y notas internas, escalar a otro equipo y a Google, un P1, gestión de cambios, decir que no con alternativa y el postmortem sin culpables. Termina con un turno completo y su traspaso.'
+        labs: [zentra-s01-triage, zentra-s02-first-contact, zentra-s03-writing, zentra-s04-escalate-team, zentra-s05-google-case, zentra-s06-p1-incident, zentra-s07-change, zentra-s08-say-no, zentra-s09-postmortem, zentra-s10-week1-test]
+        en: {title: 'Week 1 · The support craft', description: 'What no certification teaches: how a ticket is worked at a bank. Types and priorities, first contact, writing to the customer and internal notes, escalating to another team and to Google, a P1, change management, saying no with an alternative and the blameless postmortem. Ends with a full shift and its handover.'}
       - id: w1
-        title: 'Semana 1 · Bienvenida'
+        title: 'Semana 2 · Bienvenida'
         level: basic
         description: 'Tutoriales guiados desde cero: la consola, los registros, VMs privadas, Cloud Run, secretos, alertas, costes y tu primer ticket completo. Termina con la prueba de la semana.'
         labs: [zentra-z01-first-day, zentra-z02-who-is-who, zentra-z03-log-detective, zentra-z04-private-vm, zentra-z05-private-run, zentra-z06-secrets, zentra-z07-noc-alert, zentra-z08-finops-basics, zentra-z53-first-ticket, zentra-z54-week1-test]
-        en: {title: 'Week 1 · Welcome', description: 'Guided tutorials from scratch: the console, logs, private VMs, Cloud Run, secrets, alerts, costs and your first full ticket. Ends with the week test.'}
+        en: {title: 'Week 2 · Welcome', description: 'Guided tutorials from scratch: the console, logs, private VMs, Cloud Run, secrets, alerts, costs and your first full ticket. Ends with the week test.'}
       - id: w2
-        title: 'Semana 2 · Accesos'
+        title: 'Semana 3 · Accesos'
         level: basic
         description: 'Altas, cambios y bajas, externos, APIs, auditores, accesos temporales y cuentas de servicio con mínimo privilegio. Termina con la revisión trimestral de accesos.'
         labs: [zentra-z09-joiner, zentra-z10-mover, zentra-z11-urgent-leaver, zentra-z12-external-consultant, zentra-z13-enable-api, zentra-z14-auditors, zentra-z15-external-member, zentra-z49-temporary-access, zentra-z55-service-account, zentra-z56-access-review]
-        en: {title: 'Week 2 · Access', description: 'Joiners, movers and leavers, outsiders, APIs, auditors, temporary access and least-privilege service accounts. Ends with the quarterly access review.'}
+        en: {title: 'Week 3 · Access', description: 'Joiners, movers and leavers, outsiders, APIs, auditors, temporary access and least-privilege service accounts. Ends with the quarterly access review.'}
       - id: w3
-        title: 'Semana 3 · Incidencias de los equipos'
+        title: 'Semana 4 · Incidencias de los equipos'
         level: intermediate
         description: 'Pagos, BigQuery, GKE, Cloud Armor, despliegues, claves filtradas, Cloud SQL e imágenes. Termina con el lanzamiento de la tarjeta virtual.'
         labs: [zentra-z16-publish-denied, zentra-z17-push-backlog, zentra-z18-bq-denied, zentra-z19-wi-namespace, zentra-z20-armor-blocks-customers, zentra-z21-bad-release, zentra-z22-leaked-key, zentra-z57-sql-client, zentra-z58-image-pull, zentra-z59-week3-test]
-        en: {title: 'Week 3 · Team incidents', description: 'Payments, BigQuery, GKE, Cloud Armor, releases, leaked keys, Cloud SQL and images. Ends with the virtual card launch.'}
+        en: {title: 'Week 4 · Team incidents', description: 'Payments, BigQuery, GKE, Cloud Armor, releases, leaked keys, Cloud SQL and images. Ends with the virtual card launch.'}
       - id: w4
-        title: 'Semana 4 · Guardia'
+        title: 'Semana 5 · Guardia'
         level: intermediate
         description: 'Incidentes de producción con el reloj corriendo: endpoints, sondas, salida a internet, secretos, parámetros, ruido en los registros, apagados y permisos. Termina con el día de la nómina.'
         labs: [zentra-z23-push-endpoint, zentra-z24-healthcheck-path, zentra-z25-fx-no-egress, zentra-z26-secret-version, zentra-z60-sql-flag, zentra-z61-red-herring, zentra-z62-stopped-by-schedule, zentra-z63-scaled-to-zero, zentra-z64-invoker-removed, zentra-z27-payday-boss]
-        en: {title: 'Week 4 · On call', description: 'Production incidents against the clock: endpoints, probes, egress, secrets, flags, noisy logs, shutdowns and permissions. Ends with payday.'}
+        en: {title: 'Week 5 · On call', description: 'Production incidents against the clock: endpoints, probes, egress, secrets, flags, noisy logs, shutdowns and permissions. Ends with payday.'}
       - id: w5
-        title: 'Semana 5 · Capacidad y datos'
+        title: 'Semana 6 · Capacidad y datos'
         level: advanced
         description: 'NAT sin puertos, zonas sin máquinas, cuotas, ubicación y coste de BigQuery, Cloud SQL para DORA, réplicas, Memorystore y autoescalado. Termina con la campaña de cashback.'
         labs: [zentra-z28-nat-ports, zentra-z29-zone-stockout, zentra-z30-cpu-quota, zentra-z31-bq-location, zentra-z32-sql-ha, zentra-z33-redis-network, zentra-z34-hpa-unknown, zentra-z65-bigquery-cost, zentra-z66-read-replica, zentra-z67-week5-test]
-        en: {title: 'Week 5 · Capacity and data', description: 'NAT out of ports, zones without machines, quotas, BigQuery location and cost, Cloud SQL for DORA, replicas, Memorystore and autoscaling. Ends with the cashback campaign.'}
+        en: {title: 'Week 6 · Capacity and data', description: 'NAT out of ports, zones without machines, quotas, BigQuery location and cost, Cloud SQL for DORA, replicas, Memorystore and autoscaling. Ends with the cashback campaign.'}
       - id: w6
-        title: 'Semana 6 · Cierre de mes'
+        title: 'Semana 7 · Cierre de mes'
         level: advanced
         description: 'Conexiones agotadas, discos con evidencia regulatoria, Private Google Access, cortafuegos, DNS, APIs, sondas, costes y restauración de bases de datos. Termina con el informe trimestral al regulador.'
         labs: [zentra-z35-sql-connections, zentra-z36-disk-grow, zentra-z37-private-google-access, zentra-z38-firewall-priority, zentra-z39-private-dns, zentra-z40-api-disabled, zentra-z41-readiness-probe, zentra-z42-month-end-costs, zentra-z68-restore-database, zentra-z69-week6-test]
-        en: {title: 'Week 6 · Month-end close', description: 'Exhausted connections, disks with regulatory evidence, Private Google Access, firewall, DNS, APIs, probes, costs and database restores. Ends with the quarterly regulator report.'}
+        en: {title: 'Week 7 · Month-end close', description: 'Exhausted connections, disks with regulatory evidence, Private Google Access, firewall, DNS, APIs, probes, costs and database restores. Ends with the quarterly regulator report.'}
       - id: w7
-        title: 'Semana 7 · Operaciones'
+        title: 'Semana 8 · Operaciones'
         level: professional
         description: 'Rutas, escucha en localhost, etiquetas y puertos con nombre, exposición de datos, permisos, WORM, consultas lentas y despliegues canario. Termina con la caída de una zona de Google.'
         labs: [zentra-z43-default-route, zentra-z44-listen-localhost, zentra-z45-lost-tag, zentra-z46-named-port, zentra-z47-public-kyc-bucket, zentra-z48-key-permissions, zentra-z50-retention-lock, zentra-z51-slow-query, zentra-z70-canary, zentra-z52-zone-outage]
-        en: {title: 'Week 7 · Operations', description: 'Routes, localhost listeners, tags and named ports, data exposure, permissions, WORM, slow queries and canary releases. Ends with a Google zone outage.'}
+        en: {title: 'Week 8 · Operations', description: 'Routes, localhost listeners, tags and named ports, data exposure, permissions, WORM, slow queries and canary releases. Ends with a Google zone outage.'}
     en:
       title: 'Zentra: from zero to L2 support at a digital bank'
-      description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. A Week 0 of from-zero workshops and seven weeks of ten cases, from basic to professional: guided tutorials, access, team incidents, on call, capacity and data, month-end close and operations. Each week ends with a test.'
+      description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. A Week 0 of from-zero workshops, a Week 1 on the support craft (tickets, priorities, escalations, P1s, changes, postmortems) and seven weeks of ten cases, from basic to professional: access, team incidents, on call, capacity and data, month-end close and operations. Each week ends with a test.'
   - id: support-bank
     title: Soporte GCP en banca
     description: 'El día a día de soporte de plataforma GCP en un banco regulado: peticiones de acceso, políticas de organización, redes privadas, permisos entre servicios, secretos, incidentes de seguridad, GKE, Cloud SQL, costes, auditoría, rotación de secretos, discos llenos, tickets mal dirigidos y caídas de Google. Tickets reales, preguntas al solicitante, respuestas escritas y escalados, sin saltarse las normas.'

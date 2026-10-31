@@ -1,5 +1,5 @@
 id: zentra-z69-week6-test
-title: Prueba de la semana 6 · El informe trimestral al regulador no sale
+title: Prueba de la semana 7 · El informe trimestral al regulador no sale
 summary: 'Dos cambios ajenos se suman: la API de BigQuery desactivada por un script y un worker que lanza sus trabajos en US. Arréglalo sin sacar datos de la UE.'
 track: zentra
 day: 69
@@ -81,7 +81,7 @@ story: |-
 
   > **INC-31069 · P1** · *«El informe trimestral al regulador vence hoy y Datos no puede lanzarlo: BigQuery da errores y las transacciones del trimestre no se están cargando. Necesito una hora estimada.»*
 
-  **Prueba de la semana 6.** Busca **todos** los cambios recientes (auditoría y configuración del worker): puede haber más de uno. Nada de copiar datos a US para salir del paso. Da a Cumplimiento una hora estimada pronto.
+  **Prueba de la semana 7.** Busca **todos** los cambios recientes (auditoría y configuración del worker): puede haber más de uno. Nada de copiar datos a US para salir del paso. Da a Cumplimiento una hora estimada pronto.
 objectives:
 - Da una estimación a Cumplimiento
 - Encuentra los dos cambios
@@ -174,14 +174,14 @@ tutor:
   title: Cambio 2
   why: El worker lanzaba sus trabajos en US; el dataset está en EU.
 en:
-  title: Week 6 test · The quarterly regulator report won't run
+  title: Week 7 test · The quarterly regulator report won't run
   summary: 'Two unrelated changes add up: the BigQuery API disabled by a script and a worker launching its jobs in the US. Fix it without taking data out of the EU.'
   story: |-
     **Project `{{.project}}`** (*zentra-datos-prod*).
 
     > **INC-31069 · P1** · *"The quarterly regulator report is due today and Data can't run it: BigQuery returns errors and the quarter's transactions aren't loading. I need an ETA."*
 
-    **Week 6 test.** Look for **all** recent changes (audit log and the worker's configuration): there may be more than one. No copying data to the US to get by. Give Compliance an ETA early.
+    **Week 7 test.** Look for **all** recent changes (audit log and the worker's configuration): there may be more than one. No copying data to the US to get by. Give Compliance an ETA early.
   objectives:
   - Give Compliance an estimate
   - Find both changes

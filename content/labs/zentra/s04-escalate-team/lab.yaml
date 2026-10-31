@@ -1,0 +1,284 @@
+id: zentra-s04-escalate-team
+title: Oficio 4 · Escalar al equipo dueño con evidencia
+summary: 'La pantalla de límites de tarjeta da error. La plataforma está bien: el fallo está en el código de la versión nueva. Descarta lo tuyo, reúne la evidencia y pásalo a Tarjetas de forma que no tengan que preguntarte nada.'
+track: zentra
+day: 74
+level: basic
+branch: compute
+type: guided
+mode: production
+skills:
+- compute.serverless
+- observability.logging
+- security.audit
+wellArchitected:
+- operations
+- reliability
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create tarjetas-sa --display-name="tarjetas-api"
+  gcloud run deploy tarjetas-api --image=europe-docker.pkg.dev/gcplab-public/apps/cards-api:2.0 --region={{.region}} --service-account=tarjetas-sa@{{.project}}.iam.gserviceaccount.com --tag=estable --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding tarjetas-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: run_image
+  service: tarjetas-api
+  image: europe-docker.pkg.dev/gcplab-public/apps/cards-api:2.1
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: limites
+  target: run:tarjetas-api
+  path: /limits
+  rps: 5
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+- name: tarjetas
+  target: run:tarjetas-api
+  path: /cards
+  rps: 15
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-40104
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Carla Méndez (Producto)
+  summary: En la app, la pantalla «Límites de tarjeta» da error a todos desde esta mañana. El resto de la app va bien. Los clientes pueden cambiar el límite por teléfono mientras tanto.
+actors:
+- role: po
+  name: Carla Méndez (Producto)
+  persona: Product owner de Tarjetas.
+  fallback: Solo falla Límites; ver tarjetas y bloquearlas funciona.
+  facts:
+  - keywords:
+    - - cuando
+      - cuándo
+      - desde
+      - since
+      - when
+      - hora
+      - time
+      - cambio
+      - change
+      - version
+      - versión
+      - release
+    answer: Desde las 09:30 más o menos. Ayer por la tarde Tarjetas sacó la versión 2.1 con los límites nuevos.
+- role: dev
+  name: Hugo Martín (Tarjetas)
+  persona: Desarrollador de Tarjetas.
+  fallback: Pásanos el ticket con lo que tengas y lo miramos.
+  facts: []
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **INC-40104 · P3** · Producto: *«La pantalla Límites de tarjeta da error a todos desde esta mañana. El resto de la app va bien.»*
+
+  En un banco, Soporte GCP es dueño de la **plataforma** (proyectos, red, permisos, Cloud Run, bases de datos…), no del **código** de cada equipo. Escalar no es «pasar la pelota»: es entregar el problema **a quien puede arreglarlo**, con todo lo necesario para que **no tenga que volver a preguntarte**.
+
+  **1 · Descarta lo tuyo.** ¿Está el servicio desplegado y listo? ¿Llegan las peticiones (permisos)? ¿Falla todo o una parte?
+  `gcloud run services describe tarjetas-api --region={{.region}}`
+  `gcloud run revisions list --service=tarjetas-api --region={{.region}}`
+
+  **2 · Busca la evidencia.** Los **registros** dicen qué falla y la **auditoría** qué cambió y quién:
+  `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5`
+  `gcloud logging read 'protoPayload.serviceName="run.googleapis.com"' --limit=5`
+
+  **3 · Escala con una buena nota.** `ticket escalate tarjetas "…"` con: **síntoma** (qué falla y a quién), **desde cuándo**, **el error literal**, **qué cambió** (versión/revisión), **qué has descartado** (plataforma, permisos) y **una propuesta** (por ejemplo, volver a la revisión `estable` si lo aprueban).
+
+  **4 · Avisa a quien abrió el ticket** de quién lo lleva ahora y qué esperar: `ticket update "…"`.
+
+  No cierres el ticket: ahora es de Tarjetas.
+objectives:
+- Descarta la plataforma
+- Reúne el error y qué cambió
+- Escala a Tarjetas con evidencia
+- Avisa a Producto
+hints:
+- text: 'El error dice «panic … handler /limits (release regression)»: es código, no plataforma.'
+- text: '`ticket escalate tarjetas "Desde las 09:30 /limits da 500 (panic…) en la revisión 2.1 desplegada ayer; /cards va bien, plataforma y permisos OK. Propuesta: volver a estable si lo aprobáis."`'
+quiz:
+- id: q1
+  question: Una buena nota de escalado tiene…
+  options:
+  - Síntoma, desde cuándo, error literal, qué cambió y qué has descartado
+  - «No funciona, mirad»
+  - Solo el número de ticket
+  - La captura del cliente
+  answer:
+  - 0
+- id: q2
+  question: /cards responde bien y /limits da un panic tras desplegar la 2.1. ¿De quién es?
+  options:
+  - 'Del equipo de Tarjetas: es su código'
+  - 'De Soporte GCP: es Cloud Run'
+  - De Google
+  - De Seguridad
+  answer:
+  - 0
+- id: q3
+  question: Después de escalar…
+  options:
+  - Avisas a quien abrió el ticket de quién lo lleva ahora
+  - Cierras el ticket
+  - Ya no tienes que hacer nada
+  - Lo reabres cada hora
+  answer:
+  - 0
+solution: |
+  ticket
+  ask po "¿Desde cuándo pasa? ¿Ha habido algún cambio o versión nueva?"
+  gcloud run services describe tarjetas-api --region={{.region}}
+  gcloud run revisions list --service=tarjetas-api --region={{.region}}
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5
+  gcloud logging read 'protoPayload.serviceName="run.googleapis.com"' --limit=5
+  ticket escalate tarjetas "Desde las 09:30 la ruta /limits de tarjetas-api devuelve 500 a todos: panic: runtime error: invalid memory address in handler /limits. Empezó con la revisión 2.1 (cards-api:2.1) que desplegó el pipeline ayer. Descartado plataforma: la revisión está lista, /cards responde 200 y los permisos del gateway están bien. Propuesta: si lo aprobáis, volvemos a la revisión estable (2.0) como cambio de emergencia mientras lo corregís."
+  ticket update "Hola Carla: hemos revisado la plataforma y está bien; el fallo está en la versión nueva de la pantalla de límites. Lo lleva ya el equipo de Tarjetas con toda la información. Mientras tanto los clientes pueden cambiar el límite por teléfono. Te avisarán ellos en este mismo ticket."
+shortcuts:
+- name: bounce it without evidence
+  run: |
+    ticket escalate google "No funciona la app de tarjetas, mirad qué pasa por favor."
+rubric:
+- name: Plataforma descartada y evidencia
+  validator: diagnosis
+  points: 30
+  all: true
+  checks:
+  - type: command
+    regex: revisions list|services describe tarjetas-api
+    min: 1
+    desc: Estado del servicio revisado
+  - type: command
+    regex: logging read
+    min: 1
+    desc: Registros o auditoría leídos
+- name: Escalado útil
+  validator: evidence
+  points: 45
+  critical: true
+  checks:
+  - type: ticket_escalated
+    team: tarjetas|cards
+    keywords:
+    - - /limits
+      - limits
+      - limites
+      - límites
+    - - panic
+      - '500'
+      - invalid memory
+    - - '2.1'
+    - - descart
+      - plataforma
+      - platform
+      - permis
+      - /cards
+      - ruled out
+    desc: A Tarjetas con síntoma, error, versión y lo descartado
+- name: Producto informado
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_update
+    keywords:
+    - - tarjetas
+      - cards
+      - equipo
+      - team
+    desc: Sabe quién lo lleva ahora
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+tutor:
+- match: revisions list
+  title: ¿Plataforma?
+  why: 'La 2.1 está lista y sirviendo: Cloud Run hace su trabajo.'
+- match: severity>=ERROR
+  title: El error
+  why: '«panic … handler /limits (release regression)»: un fallo del código en una ruta.'
+- match: run.googleapis.com
+  title: ¿Qué cambió?
+  why: deploy-sa (el pipeline) desplegó la 2.1. Es la versión de Tarjetas.
+- match: ticket escalate tarjetas
+  title: Escalar bien
+  why: Síntoma, cuándo, error literal, versión, lo descartado y una propuesta.
+en:
+  title: Craft 4 · Escalating to the owning team with evidence
+  summary: 'The card limits screen errors out. The platform is fine: the bug is in the new version''s code. Rule out your part, gather the evidence and hand it to Cards so they don''t need to ask you anything.'
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **INC-40104 · P3** · Product: *"The Card limits screen errors out for everyone since this morning. The rest of the app works."*
+
+    At a bank, GCP Support owns the **platform** (projects, network, permissions, Cloud Run, databases…), not each team's **code**. Escalating isn't "passing the buck": it's handing the problem **to whoever can fix it**, with everything they need so they **never have to come back to ask you**.
+
+    **1 · Rule out your part.** Is the service deployed and ready? Do requests get in (permissions)? Does everything fail or just one part?
+    `gcloud run services describe tarjetas-api --region={{.region}}`
+    `gcloud run revisions list --service=tarjetas-api --region={{.region}}`
+
+    **2 · Find the evidence.** The **logs** say what fails and the **audit log** what changed and who:
+    `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5`
+    `gcloud logging read 'protoPayload.serviceName="run.googleapis.com"' --limit=5`
+
+    **3 · Escalate with a good note.** `ticket escalate tarjetas "…"` with: **symptom** (what fails and for whom), **since when**, **the verbatim error**, **what changed** (version/revision), **what you've ruled out** (platform, permissions) and **a proposal** (e.g. going back to the `estable` revision if they approve).
+
+    **4 · Tell whoever opened the ticket** who owns it now and what to expect: `ticket update "…"`.
+
+    Don't close the ticket: it belongs to Cards now.
+  objectives:
+  - Rule out the platform
+  - Gather the error and what changed
+  - Escalate to Cards with evidence
+  - Tell Product
+  hints:
+  - 'The error says "panic … handler /limits (release regression)": it''s code, not platform.'
+  - '`ticket escalate tarjetas "Since 09:30 /limits returns 500 (panic…) on revision 2.1 deployed yesterday; /cards works, platform and permissions OK. Proposal: go back to estable if you approve."`'
+  ticket:
+    summary: In the app, the "Card limits" screen errors out for everyone since this morning. The rest of the app works. Customers can change their limit by phone meanwhile.
+  text:
+    Carla Méndez (Producto): Carla Méndez (Product)
+    Product owner de Tarjetas.: Cards product owner.
+    Solo falla Límites; ver tarjetas y bloquearlas funciona.: Only Limits fails; viewing and blocking cards works.
+    Desde las 09:30 más o menos. Ayer por la tarde Tarjetas sacó la versión 2.1 con los límites nuevos.: Since about 09:30. Yesterday afternoon Cards shipped version 2.1 with the new limits.
+    Hugo Martín (Tarjetas): Hugo Martín (Cards)
+    Desarrollador de Tarjetas.: Cards developer.
+    Pásanos el ticket con lo que tengas y lo miramos.: Send us the ticket with what you have and we'll look.
+    Una buena nota de escalado tiene…: A good escalation note has…
+    Síntoma, desde cuándo, error literal, qué cambió y qué has descartado: Symptom, since when, verbatim error, what changed and what you ruled out
+    «No funciona, mirad»: '"It doesn''t work, have a look"'
+    Solo el número de ticket: Just the ticket number
+    La captura del cliente: The customer's screenshot
+    /cards responde bien y /limits da un panic tras desplegar la 2.1. ¿De quién es?: /cards works and /limits panics after deploying 2.1. Whose is it?
+    'Del equipo de Tarjetas: es su código': 'The Cards team''s: it''s their code'
+    'De Soporte GCP: es Cloud Run': 'GCP Support''s: it''s Cloud Run'
+    De Google: Google's
+    De Seguridad: Security's
+    Después de escalar…: After escalating…
+    Avisas a quien abrió el ticket de quién lo lleva ahora: You tell whoever opened it who owns it now
+    Cierras el ticket: You close the ticket
+    Ya no tienes que hacer nada: You don't have to do anything
+    Lo reabres cada hora: You reopen it every hour
+    Plataforma descartada y evidencia: Platform ruled out and evidence
+    Estado del servicio revisado: Service state checked
+    Registros o auditoría leídos: Logs or audit log read
+    Escalado útil: Useful escalation
+    A Tarjetas con síntoma, error, versión y lo descartado: To Cards with symptom, error, version and what was ruled out
+    Producto informado: Product informed
+    Sabe quién lo lleva ahora: Knows who owns it now
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    ¿Plataforma?: Platform?
+    'La 2.1 está lista y sirviendo: Cloud Run hace su trabajo.': '2.1 is ready and serving: Cloud Run is doing its job.'
+    El error: The error
+    '«panic … handler /limits (release regression)»: un fallo del código en una ruta.': '"panic … handler /limits (release regression)": a code bug in one route.'
+    ¿Qué cambió?: What changed?
+    deploy-sa (el pipeline) desplegó la 2.1. Es la versión de Tarjetas.: deploy-sa (the pipeline) deployed 2.1. It's Cards' release.
+    Escalar bien: Escalating well
+    Síntoma, cuándo, error literal, versión, lo descartado y una propuesta.: Symptom, when, verbatim error, version, what you ruled out and a proposal.

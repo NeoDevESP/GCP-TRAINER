@@ -1,0 +1,315 @@
+id: zentra-s07-change
+title: 'Oficio 7 · Gestión de cambios: plan, aprobación y vuelta atrás'
+summary: Pagos pide más capacidad para la campaña del viernes. En un banco ningún cambio entra en producción sin plan, riesgo, verificación, vuelta atrás y aprobación. Escríbelo, pide el visto bueno y hazlo.
+track: zentra
+day: 77
+level: basic
+branch: devops
+type: guided
+mode: production
+skills:
+- devops.delivery
+- compute.serverless
+- architecture.governance
+wellArchitected:
+- operations
+- reliability
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --max-instances=5 --tag=estable --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: CHG-40107
+  kind: CHG
+  priority: P3
+  sla: 3d
+  reporter: Lucía Navarro (Pagos)
+  summary: El viernes lanzamos la campaña Black Friday y esperamos 4 veces más pagos. Subid max-instances de pagos-api a 20 y dejad 2 instancias mínimas siempre calientes.
+actors:
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Tráeme el plan con riesgo, verificación y vuelta atrás y lo aprobamos.
+  facts:
+  - keywords:
+    - - plan
+      - cambio
+      - change
+      - aprob
+      - approv
+      - cambio.md
+      - ventana
+      - window
+    answer: 'Visto el plan: cambio normal CHG-7801 aprobado para la ventana de esta noche. Anota el número en el ticket.'
+- role: payments
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: Necesitamos que aguante el pico del viernes.
+  facts:
+  - keywords:
+    - - coste
+      - cost
+      - presupuesto
+      - budget
+      - min-instances
+      - minimas
+      - mínimas
+      - cuanto
+      - cuánto
+      - hasta
+      - until
+      - cuando
+      - cuándo
+      - quitar
+      - remove
+    answer: Las 2 mínimas solo hasta el lunes; el coste está aprobado por FinOps para la campaña. El lunes volvemos a 5 y sin mínimas.
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **CHG-40107 · P3** · Pagos: *«El viernes lanzamos Black Friday. Subid max-instances de pagos-api a 20 y dejad 2 instancias mínimas calientes.»*
+
+  En un banco regulado (DORA, auditoría), **ningún cambio entra en producción sin registro**. Hay tres tipos:
+  - **Estándar**: repetitivo y de bajo riesgo, preaprobado (por ejemplo, un alta de acceso del catálogo).
+  - **Normal**: se planifica, se evalúa el riesgo y lo aprueba el CAB (comité de cambios) para una **ventana**.
+  - **Emergencia**: para arreglar un incidente con clientes afectados; se aprueba rápido y se documenta igual.
+
+  **Un plan de cambio** responde a seis cosas: **qué** se cambia, **por qué**, **riesgo** e impacto, **pasos**, **cómo se verifica** y **cómo se vuelve atrás** (con el valor exacto de antes).
+
+  **Pasos:**
+  1. **Mira el estado actual** y apúntalo: `gcloud run services describe pagos-api --region={{.region}}` (¿cuántas instancias máximas tiene ahora?).
+  2. Aclara con quien pide lo que falta (`ask payments "…"`: ¿hasta cuándo?, ¿coste aprobado?).
+  3. **Escribe el plan** en `cambio.md` con los apartados *Qué, Por qué, Riesgo, Pasos, Verificación, Vuelta atrás*. En *Vuelta atrás* pon el comando con el valor de antes (`--max-instances=…`).
+  4. **Pide aprobación** (`ask change "…"`).
+  5. **Haz el cambio**: `gcloud run services update pagos-api --region={{.region}} --max-instances=20 --min-instances=2`.
+  6. **Verifica** (`describe` otra vez) y **comunica** con el número de cambio y cómo se vuelve atrás: `ticket update "…"`. Cierra.
+objectives:
+- Apunta el estado actual
+- Escribe el plan en cambio.md
+- Pide aprobación
+- Cambia, verifica y comunica
+hints:
+- text: 'Ahora tiene `Max instances: 5`: la vuelta atrás es `--max-instances=5 --min-instances=0`.'
+- text: '`cat > cambio.md` y escribe los seis apartados, uno por línea.'
+quiz:
+- id: q1
+  question: Un rollback durante un incidente con clientes afectados es un cambio…
+  options:
+  - De emergencia
+  - Estándar
+  - Normal
+  - No es un cambio
+  answer:
+  - 0
+- id: q2
+  question: ¿Qué apartado del plan salva la noche si algo sale mal?
+  options:
+  - La vuelta atrás con el valor exacto de antes
+  - El por qué
+  - La firma
+  - El título
+  answer:
+  - 0
+- id: q3
+  question: min-instances=2 significa…
+  options:
+  - Dos instancias siempre encendidas (sin arranque en frío, con coste fijo)
+  - Máximo dos instancias
+  - Dos regiones
+  - Dos revisiones
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud run services describe pagos-api --region={{.region}}
+  ask payments "¿Hasta cuándo dejamos las 2 instancias mínimas y está aprobado el coste?"
+  cat > cambio.md <<'EOF'
+  # CHG-40107 · Capacidad de pagos-api para Black Friday
+  Qué: pagos-api max-instances 5 -> 20 y min-instances 0 -> 2.
+  Por qué: campaña Black Friday, 4 veces más pagos esperados; coste aprobado por FinOps hasta el lunes.
+  Riesgo: bajo; más instancias suben el coste y las conexiones al proveedor de pagos. Sin corte de servicio.
+  Pasos: gcloud run services update pagos-api --region={{.region}} --max-instances=20 --min-instances=2
+  Verificación: describe muestra max 20 y min 2; /pay sigue respondiendo 200.
+  Vuelta atrás: gcloud run services update pagos-api --region={{.region}} --max-instances=5 --min-instances=0
+  EOF
+  ask change "Te paso el plan cambio.md para subir la capacidad de pagos-api, ¿lo apruebas?"
+  gcloud run services update pagos-api --region={{.region}} --max-instances=20 --min-instances=2
+  gcloud run services describe pagos-api --region={{.region}}
+  ticket update "Hola Lucía: hecho con el cambio CHG-7801. pagos-api tiene ahora hasta 20 instancias y 2 siempre calientes, y los pagos siguen respondiendo bien. Vuelta atrás si hiciera falta: volver a 5 máximas y 0 mínimas; el lunes lo hacemos como acordamos."
+  ticket resolve "CHG-7801 aplicado: pagos-api max 20 y min 2 para Black Friday, verificado; vuelta atrás a max 5 y min 0 el lunes."
+shortcuts:
+- name: change straight away, no plan
+  run: |
+    gcloud run services update pagos-api --region={{.region}} --max-instances=20 --min-instances=2
+    ticket resolve "Cambiado lo que pedían, sin más."
+rubric:
+- name: Plan de cambio
+  validator: evidence
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: file_contains
+    file: cambio.md
+    regex: (?i)riesgo|risk
+    desc: Con el riesgo
+  - type: file_contains
+    file: cambio.md
+    regex: (?i)verifica
+    desc: Con la verificación
+  - type: file_contains
+    file: cambio.md
+    regex: (?i)vuelta atr|rollback|marcha atr
+    desc: Con la vuelta atrás
+  - type: file_contains
+    file: cambio.md
+    regex: max-instances[= ]5\b
+    desc: La vuelta atrás tiene el valor de antes (5)
+- name: Aprobado
+  validator: evidence
+  points: 10
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Aprobación del CAB
+- name: Cambio hecho y verificado
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: exists
+    path: runServices["pagos-api"]
+    expect:
+      maxInstances: 20
+      minInstances: 2
+    desc: max 20 y min 2
+  - type: http
+    target: run:pagos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: Los pagos funcionan (/pay responde 200)
+- name: Comunicado
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_update
+    keywords:
+    - - chg-7801
+    - - vuelta atr
+      - rollback
+      - revert
+      - volver a 5
+      - back to 5
+    desc: Con el número de cambio y la vuelta atrás
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+tutor:
+- match: services describe pagos-api
+  title: Antes de tocar
+  why: 'Max instances: 5. Ese valor va en la vuelta atrás.'
+- match: cambio.md
+  title: El plan
+  why: Qué, por qué, riesgo, pasos, verificación y vuelta atrás.
+- match: ask change
+  title: Aprobación
+  why: 'Cambio normal: el CAB lo aprueba para una ventana.'
+- match: --max-instances=20
+  title: El cambio
+  why: Exactamente lo aprobado, ni más ni menos.
+en:
+  title: 'Craft 7 · Change management: plan, approval and rollback'
+  summary: Payments asks for more capacity for Friday's campaign. At a bank no change goes into production without a plan, risk, verification, rollback and approval. Write it, get sign-off and do it.
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **CHG-40107 · P3** · Payments: *"On Friday we launch Black Friday. Raise pagos-api max-instances to 20 and keep 2 minimum instances warm."*
+
+    At a regulated bank (DORA, audit), **no change goes into production without a record**. There are three types:
+    - **Standard**: repetitive and low-risk, pre-approved (e.g. an access request from the catalogue).
+    - **Normal**: planned, risk-assessed and approved by the CAB (change advisory board) for a **window**.
+    - **Emergency**: to fix an incident with customers affected; approved fast and documented all the same.
+
+    **A change plan** answers six things: **what** changes, **why**, **risk** and impact, **steps**, **how it's verified** and **how it's rolled back** (with the exact previous value).
+
+    **Steps:**
+    1. **Look at the current state** and note it: `gcloud run services describe pagos-api --region={{.region}}` (how many max instances does it have now?).
+    2. Clarify what's missing with the requester (`ask payments "…"`: until when? cost approved?).
+    3. **Write the plan** in `cambio.md` with the sections *Qué (what), Por qué (why), Riesgo (risk), Pasos (steps), Verificación (verification), Vuelta atrás (rollback)*. Under rollback put the command with the previous value (`--max-instances=…`).
+    4. **Ask for approval** (`ask change "…"`).
+    5. **Make the change**: `gcloud run services update pagos-api --region={{.region}} --max-instances=20 --min-instances=2`.
+    6. **Verify** (`describe` again) and **communicate** with the change number and how to roll back: `ticket update "…"`. Close.
+  objectives:
+  - Note the current state
+  - Write the plan in cambio.md
+  - Ask for approval
+  - Change, verify and communicate
+  hints:
+  - 'It now has `Max instances: 5`: the rollback is `--max-instances=5 --min-instances=0`.'
+  - '`cat > cambio.md` and type the six sections, one per line.'
+  ticket:
+    summary: On Friday we launch the Black Friday campaign and expect 4 times more payments. Raise pagos-api max-instances to 20 and keep 2 minimum instances always warm.
+  text:
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Tráeme el plan con riesgo, verificación y vuelta atrás y lo aprobamos.: Bring me the plan with risk, verification and rollback and we'll approve it.
+    'Visto el plan: cambio normal CHG-7801 aprobado para la ventana de esta noche. Anota el número en el ticket.': 'Plan reviewed: normal change CHG-7801 approved for tonight''s window. Note the number in the ticket.'
+    Tech lead de Pagos.: Payments tech lead.
+    Necesitamos que aguante el pico del viernes.: We need it to handle Friday's peak.
+    Las 2 mínimas solo hasta el lunes; el coste está aprobado por FinOps para la campaña. El lunes volvemos a 5 y sin mínimas.: The 2 minimum only until Monday; FinOps approved the cost for the campaign. On Monday we go back to 5 and no minimum.
+    Un rollback durante un incidente con clientes afectados es un cambio…: A rollback during an incident with customers affected is a … change
+    De emergencia: Emergency
+    Estándar: Standard
+    Normal: Normal
+    No es un cambio: Not a change
+    ¿Qué apartado del plan salva la noche si algo sale mal?: Which plan section saves the night if something goes wrong?
+    La vuelta atrás con el valor exacto de antes: The rollback with the exact previous value
+    El por qué: The why
+    La firma: The signature
+    El título: The title
+    min-instances=2 significa…: min-instances=2 means…
+    Dos instancias siempre encendidas (sin arranque en frío, con coste fijo): Two instances always on (no cold start, fixed cost)
+    Máximo dos instancias: At most two instances
+    Dos regiones: Two regions
+    Dos revisiones: Two revisions
+    Plan de cambio: Change plan
+    Con el riesgo: With the risk
+    Con la verificación: With verification
+    Con la vuelta atrás: With the rollback
+    La vuelta atrás tiene el valor de antes (5): The rollback has the previous value (5)
+    Aprobado: Approved
+    Aprobación del CAB: CAB approval
+    Cambio hecho y verificado: Change made and verified
+    max 20 y min 2: max 20 and min 2
+    Los pagos funcionan (/pay responde 200): Payments work (/pay returns 200)
+    Comunicado: Communicated
+    Con el número de cambio y la vuelta atrás: With the change number and the rollback
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Antes de tocar: Before touching
+    'Max instances: 5. Ese valor va en la vuelta atrás.': 'Max instances: 5. That value goes in the rollback.'
+    El plan: The plan
+    Qué, por qué, riesgo, pasos, verificación y vuelta atrás.: What, why, risk, steps, verification and rollback.
+    Aprobación: Approval
+    'Cambio normal: el CAB lo aprueba para una ventana.': 'Normal change: the CAB approves it for a window.'
+    El cambio: The change
+    Exactamente lo aprobado, ni más ni menos.: Exactly what was approved, no more and no less.

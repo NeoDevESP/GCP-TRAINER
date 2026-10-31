@@ -1,0 +1,367 @@
+id: zentra-s02-first-contact
+title: 'Oficio 2 · Primer contacto: acuse, preguntas y alcance'
+summary: «No me funciona BigQuery. Es urgente.» Responde rápido, pregunta lo que falta (error exacto, desde cuándo, a cuántos afecta) y arréglalo para el grupo, no para una persona.
+track: zentra
+day: 72
+level: basic
+branch: data
+type: guided
+mode: production
+skills:
+- data.bigquery
+- iam.roles
+- iam.leastprivilege
+wellArchitected:
+- operations
+- security
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  bq mk --dataset --location=EU riesgo
+  bq mk --table --sim_rows=200000 riesgo.exposiciones cliente:STRING:16,importe:NUMERIC:16,fecha:DATE:4
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.dataViewer
+ticket:
+  id: INC-40102
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Omar Haddad (Datos)
+  summary: No me funciona BigQuery. Es urgente.
+actors:
+- role: data
+  name: Omar Haddad (Datos)
+  persona: Científico de datos, con prisa.
+  fallback: Pues eso, que no va. Lo necesito para el informe de riesgos.
+  facts:
+  - keywords:
+    - - error
+      - mensaje
+      - message
+      - dice
+      - pone
+      - captura
+      - screenshot
+      - literal
+      - exact
+    answer: 'Pone: «Access Denied: Project {{.project}}: User does not have bigquery.jobs.create permission in project {{.project}}».'
+  - keywords:
+    - - cuando
+      - cuándo
+      - desde
+      - since
+      - when
+      - antes
+      - before
+      - funcionaba
+      - worked
+      - cambi
+      - change
+    answer: Hoy es la primera vez que lo lanzo en producción; hasta ahora trabajaba en el sandbox, donde sí podía.
+  - keywords:
+    - - quien
+      - quién
+      - otros
+      - compañ
+      - equipo
+      - team
+      - others
+      - who
+      - solo
+      - only
+      - cuantos
+      - cuántos
+      - afecta
+      - affect
+      - sara
+      - mas gente
+      - más gente
+    answer: 'A Sara le pasa lo mismo. Es todo el equipo de Datos: vemos las tablas pero no podemos lanzar consultas.'
+  - keywords:
+    - - proyecto
+      - project
+      - consulta
+      - query
+      - dataset
+      - tabla
+      - table
+      - que haces
+      - qué haces
+      - what are you
+      - donde
+      - dónde
+      - where
+    answer: Lanzo un SELECT sobre riesgo.exposiciones en {{.project}} desde la consola.
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Esta semana es para aprender el oficio: pregunta todo lo que necesites.'
+  facts:
+  - keywords:
+    - - jobuser
+      - job user
+      - consultas
+      - queries
+      - datos
+      - data
+      - permiso
+      - permission
+      - aprob
+      - approv
+    answer: 'Sí: el equipo de Datos tiene que poder lanzar consultas en producción, está en su catálogo de accesos. Dalo al grupo gcp-datos, no a personas.'
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **INC-40102 · P3** · Omar Haddad (Datos): *«No me funciona BigQuery. Es urgente.»*
+
+  Así llegan muchos tickets: sin datos. El **primer contacto** tiene tres partes:
+
+  **1 · Acuse de recibo (rápido).** Antes de investigar, contesta: que lo has recibido, qué vas a mirar y **cuándo darás la siguiente noticia**. Nunca dejes un ticket sin respuesta mientras investigas.
+  `ticket update "Hola Omar, recibido. Lo estoy revisando y te digo algo en 30 minutos. ¿Me pasas el mensaje de error exacto?"`
+
+  **2 · Preguntas que faltan.** Las cinco de siempre: **qué error exacto** (literal), **desde cuándo** y qué cambió, **dónde** (proyecto, recurso), **a cuántos afecta** (¿solo a ti?) y **qué estabas haciendo**. Pregunta con `ask data "…"`. *¿A cuántos afecta?* es la que más cambia la solución: si es todo un equipo, el arreglo es para el grupo.
+
+  **3 · Verifica tú.** No te quedes con lo que te cuentan: mira la política del proyecto (`gcloud projects get-iam-policy {{.project}}`) y los grupos (`gam print group-members gcp-datos@zentra.dev`).
+
+  **4 · Arregla con mínimo privilegio y dentro de la norma.** Lanzar consultas pide `bigquery.jobs.create` (rol `roles/bigquery.jobUser` en el proyecto). Pregunta a tu responsable si el equipo debe tenerlo (`ask manager "…"`) y dalo **al grupo**.
+
+  **5 · Responde** en palabras claras qué pasaba y qué has hecho, y **cierra**.
+objectives:
+- Acuse de recibo con la próxima noticia
+- Pregunta error, cuándo y a cuántos afecta
+- Verifica y arregla para el grupo
+- Responde y cierra
+hints:
+- text: '`ask data "¿Me pasas el mensaje de error exacto?"`, `ask data "¿Le pasa a alguien más del equipo?"`'
+- text: '`gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.jobUser`'
+quiz:
+- id: q1
+  question: Lo primero que haces con un ticket nuevo es…
+  options:
+  - Acusar recibo y decir cuándo darás noticias
+  - Investigar en silencio hasta tener la solución
+  - Cerrarlo si falta información
+  - Escalarlo a Google
+  answer:
+  - 0
+- id: q2
+  question: ¿Qué pregunta cambia más la solución en este caso?
+  options:
+  - ¿A cuántos afecta?
+  - ¿Qué navegador usas?
+  - ¿Has reiniciado?
+  - ¿Es urgente?
+  answer:
+  - 0
+- id: q3
+  question: Todo el equipo de Datos no puede lanzar consultas. ¿Cómo lo arreglas?
+  options:
+  - jobUser al grupo gcp-datos
+  - BigQuery Admin a Omar
+  - Editor del proyecto al grupo
+  - jobUser a cada persona
+  answer:
+  - 0
+solution: |
+  ticket
+  ticket update "Hola Omar, recibido. Lo estoy revisando y te digo algo en 30 minutos. ¿Me pasas el mensaje de error exacto?"
+  ask data "¿Me pasas el mensaje de error exacto?"
+  ask data "¿Desde cuándo te pasa? ¿Antes funcionaba?"
+  ask data "¿Le pasa a alguien más del equipo o solo a ti?"
+  gcloud projects get-iam-policy {{.project}}
+  gam print group-members gcp-datos@zentra.dev
+  ask manager "¿El equipo de Datos debe poder lanzar consultas en producción (jobUser)?"
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.jobUser
+  ticket update "Hola Omar: ya podéis lanzar consultas. El grupo gcp-datos podía ver las tablas pero no ejecutar consultas en producción; lo hemos añadido al grupo, así que vale para todo el equipo de Datos, también para Sara."
+  ticket resolve "Datos veía tablas pero no podía lanzar consultas en producción; jobUser dado al grupo gcp-datos con el visto bueno de Marta."
+shortcuts:
+- name: admin to the requester, no questions
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:omar.haddad@zentra.dev --role=roles/bigquery.admin
+    ticket resolve "Dado BigQuery Admin a Omar para que pueda trabajar."
+rubric:
+- name: Primer contacto
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - recibid
+      - received
+      - mirando
+      - looking
+      - revis
+      - reviso
+      - checking
+    desc: Acuse de recibo
+  - type: ticket_update
+    keywords:
+    - - minutos
+      - minutes
+      - hora
+      - hour
+      - te digo
+      - te aviso
+      - update you
+      - let you know
+      - te cuento
+    desc: Dice cuándo dará la próxima noticia
+- name: Preguntas
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: asked
+    actor: data
+    min: 3
+    desc: Error, cuándo y a cuántos afecta
+  - type: command
+    regex: get-iam-policy|gam print group-members|groups memberships list
+    min: 1
+    desc: Verificado por ti mismo
+- name: Arreglo para el grupo, con mínimo privilegio
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:omar.haddad@zentra.dev
+    permission: bigquery.jobs.create
+    resource: project
+    desc: Omar puede lanzar consultas
+  - type: iam
+    principal: user:sara.benitez@zentra.dev
+    permission: bigquery.jobs.create
+    resource: project
+    desc: Y todo su equipo (Sara)
+  - type: iam
+    principal: user:omar.haddad@zentra.dev
+    permission: bigquery.datasets.delete
+    resource: project
+    expect: false
+    desc: Sin permisos de administrador
+- name: Respuesta clara
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_update
+    keywords:
+    - - grupo
+      - group
+      - gcp-datos
+      - equipo
+      - team
+    desc: Explica que vale para todo el equipo
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_resolved
+    desc: Ticket cerrado con una nota
+tutor:
+- match: ticket update "Hola Omar, recibido
+  title: Acuse
+  why: 'Recibido, qué miras y cuándo vuelves: tranquiliza y te da tiempo.'
+- match: ask data
+  title: Preguntar
+  why: Error literal, desde cuándo y a cuántos afecta. La última cambia el arreglo.
+- match: get-iam-policy
+  title: Verificar
+  why: gcp-datos tiene dataViewer (ver tablas) pero no jobUser (lanzar consultas).
+- match: bigquery.jobUser
+  title: El arreglo
+  why: 'Al grupo y el rol justo: vale para Omar, Sara y quien entre mañana.'
+en:
+  title: 'Craft 2 · First contact: acknowledgement, questions and scope'
+  summary: '"BigQuery doesn''t work for me. It''s urgent." Reply fast, ask what''s missing (exact error, since when, how many are affected) and fix it for the group, not for one person.'
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **INC-40102 · P3** · Omar Haddad (Data): *"BigQuery doesn't work for me. It's urgent."*
+
+    Many tickets arrive like this: with no data. **First contact** has three parts:
+
+    **1 · Acknowledgement (fast).** Before investigating, reply: you got it, what you'll look at and **when you'll next update**. Never leave a ticket unanswered while you investigate.
+    `ticket update "Hi Omar, received. I'm looking into it and will update you within 30 minutes. Can you send me the exact error message?"`
+
+    **2 · The missing questions.** The usual five: **the exact error** (verbatim), **since when** and what changed, **where** (project, resource), **how many are affected** (just you?) and **what you were doing**. Ask with `ask data "…"`. *How many are affected?* changes the fix the most: if it's a whole team, the fix is for the group.
+
+    **3 · Verify yourself.** Don't settle for what you're told: check the project policy (`gcloud projects get-iam-policy {{.project}}`) and the groups (`gam print group-members gcp-datos@zentra.dev`).
+
+    **4 · Fix with least privilege and by the rules.** Running queries needs `bigquery.jobs.create` (role `roles/bigquery.jobUser` on the project). Ask your manager whether the team should have it (`ask manager "…"`) and grant it **to the group**.
+
+    **5 · Reply** in plain words with what was wrong and what you did, and **close**.
+  objectives:
+  - Acknowledge with the next update time
+  - Ask the error, since when and how many
+  - Verify and fix for the group
+  - Reply and close
+  hints:
+  - '`ask data "Can you send me the exact error message?"`, `ask data "Is anyone else on the team affected?"`'
+  - '`gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.jobUser`'
+  ticket:
+    summary: BigQuery doesn't work for me. It's urgent.
+  text:
+    Omar Haddad (Datos): Omar Haddad (Data)
+    Científico de datos, con prisa.: Data scientist, in a hurry.
+    Pues eso, que no va. Lo necesito para el informe de riesgos.: Like I said, it doesn't work. I need it for the risk report.
+    'Pone: «Access Denied: Project {{.project}}: User does not have bigquery.jobs.create permission in project {{.project}}».': 'It says: "Access Denied: Project {{.project}}: User does not have bigquery.jobs.create permission in project {{.project}}".'
+    Hoy es la primera vez que lo lanzo en producción; hasta ahora trabajaba en el sandbox, donde sí podía.: Today is the first time I run it in production; until now I worked in the sandbox, where it did work.
+    'A Sara le pasa lo mismo. Es todo el equipo de Datos: vemos las tablas pero no podemos lanzar consultas.': 'Sara gets the same. It''s the whole Data team: we can see the tables but can''t run queries.'
+    Lanzo un SELECT sobre riesgo.exposiciones en {{.project}} desde la consola.: I run a SELECT on riesgo.exposiciones in {{.project}} from the console.
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Esta semana es para aprender el oficio: pregunta todo lo que necesites.': 'This week is for learning the craft: ask anything you need.'
+    ? 'Sí: el equipo de Datos tiene que poder lanzar consultas en producción, está en su catálogo de accesos. Dalo al grupo gcp-datos, no a personas.'
+    : 'Yes: the Data team must be able to run queries in production, it''s in their access catalogue. Grant it to the gcp-datos group, not to people.'
+    Lo primero que haces con un ticket nuevo es…: The first thing you do with a new ticket is…
+    Acusar recibo y decir cuándo darás noticias: Acknowledge it and say when you'll update
+    Investigar en silencio hasta tener la solución: Investigate silently until you have the fix
+    Cerrarlo si falta información: Close it if information is missing
+    Escalarlo a Google: Escalate it to Google
+    ¿Qué pregunta cambia más la solución en este caso?: Which question changes the fix the most here?
+    ¿A cuántos afecta?: How many are affected?
+    ¿Qué navegador usas?: Which browser do you use?
+    ¿Has reiniciado?: Have you restarted?
+    ¿Es urgente?: Is it urgent?
+    Todo el equipo de Datos no puede lanzar consultas. ¿Cómo lo arreglas?: The whole Data team can't run queries. How do you fix it?
+    jobUser al grupo gcp-datos: jobUser for the gcp-datos group
+    BigQuery Admin a Omar: BigQuery Admin for Omar
+    Editor del proyecto al grupo: Project Editor for the group
+    jobUser a cada persona: jobUser for each person
+    Primer contacto: First contact
+    Acuse de recibo: Acknowledgement
+    Dice cuándo dará la próxima noticia: Says when the next update is
+    Preguntas: Questions
+    Error, cuándo y a cuántos afecta: Error, since when and how many
+    Verificado por ti mismo: Verified yourself
+    Arreglo para el grupo, con mínimo privilegio: Fix for the group, least privilege
+    Omar puede lanzar consultas: Omar can run queries
+    Y todo su equipo (Sara): And the whole team (Sara)
+    Sin permisos de administrador: No admin permissions
+    Respuesta clara: Clear reply
+    Explica que vale para todo el equipo: Explains it works for the whole team
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Ticket cerrado con una nota: Ticket closed with a note
+    Acuse: Acknowledgement
+    'Recibido, qué miras y cuándo vuelves: tranquiliza y te da tiempo.': 'Received, what you''ll check and when you''ll be back: it reassures and buys you time.'
+    Preguntar: Asking
+    Error literal, desde cuándo y a cuántos afecta. La última cambia el arreglo.: Verbatim error, since when and how many. The last one changes the fix.
+    Verificar: Verifying
+    gcp-datos tiene dataViewer (ver tablas) pero no jobUser (lanzar consultas).: gcp-datos has dataViewer (see tables) but not jobUser (run queries).
+    El arreglo: The fix
+    'Al grupo y el rol justo: vale para Omar, Sara y quien entre mañana.': 'To the group and the exact role: it works for Omar, Sara and whoever joins tomorrow.'

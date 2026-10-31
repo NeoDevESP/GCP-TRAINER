@@ -1,7 +1,7 @@
 "use client";
 
 // Zentra final exam (internal L2 certification): six cases drawn at random
-// from weeks 2-7, solved without tutor or hints, plus a theory test. The
+// from weeks 3-8, solved without tutor or hints, plus a theory test. The
 // result is a report by area with strengths, weak spots and what to review
 // (guide symptoms, cases to repeat, study topics), and a printable
 // certificate when passed. The exam lives in the learner's study runs.
@@ -34,7 +34,7 @@ const TOPIC_AREA: Record<string, string> = {
   compute: "compute", "support-compute": "compute",
   storage: "data", databases: "data", data: "data", "support-data": "data",
   gke: "platform",
-  security: "secops", observability: "secops", support: "secops", "support-method": "secops", "support-governance": "secops",
+  security: "secops", observability: "secops", support: "secops", "support-craft": "secops", "support-method": "secops", "support-governance": "secops",
 };
 // Guide (runbook) areas behind each exam area.
 const GUIDE_AREAS: Record<string, string[]> = { access: ["access"], network: ["network"], compute: ["compute"], data: ["data"], platform: ["gke", "serverless"], secops: ["security"] };
@@ -156,8 +156,8 @@ export default function FinalPage() {
   const quiz = useMemo(() => (cur ? cur.quiz.map((it) => rebuild(topics, it)) : []), [cur, topics]);
 
   const start = () => {
-    // one case per week from week 2 (weeks 0 and 1 are tutorials), not the week test
-    const ids = stages.filter((s) => !["w0", "w1"].includes(s.id)).map((s) => shuffle(s.labs.slice(0, -1).filter((id) => labs[id] && labs[id].type !== "guided"))[0]).filter(Boolean);
+    // one case per week from week 3 (weeks 0-2 are workshops and tutorials), not the week test
+    const ids = stages.filter((s) => !["w0", "oficio", "w1"].includes(s.id)).map((s) => shuffle(s.labs.slice(0, -1).filter((id) => labs[id] && labs[id].type !== "guided"))[0]).filter(Boolean);
     const pool = Object.keys(TOPIC_AREA)
       .filter((id) => topics[id])
       .map((id) => shuffle([...topics[id].quiz, ...topics[id].scenarios]));
@@ -216,7 +216,7 @@ export default function FinalPage() {
           <div>
             <h1>{t("Examen final de Zentra")}</h1>
             <p className="muted" style={{ margin: "6px 0 0", maxWidth: 720 }}>
-              {t("La certificación interna de Soporte N2: seis casos al azar de las semanas 2 a 7, sin profesor ni pistas, y un test de teoría. Al terminar recibes un informe por áreas con lo que dominas y lo que debes repasar.")}
+              {t("La certificación interna de Soporte N2: seis casos al azar de las semanas 3 a 8, sin profesor ni pistas, y un test de teoría con preguntas del oficio de soporte. Al terminar recibes un informe por áreas con lo que dominas y lo que debes repasar.")}
             </p>
           </div>
         </header>
@@ -228,7 +228,7 @@ export default function FinalPage() {
             <section className="card fx-rules">
               <h2>{t("Cómo funciona")}</h2>
               <ul>
-                <li>{t("Seis casos, uno de cada semana de la 2 a la 7, elegidos al azar. Se abren en modo examen: sin profesor ni pistas.")}</li>
+                <li>{t("Seis casos, uno de cada semana de la 3 a la 8, elegidos al azar. Se abren en modo examen: sin profesor ni pistas.")}</li>
                 <li>{t("Veinte preguntas de teoría de los temas de soporte y de Google Cloud.")}</li>
                 <li>{t("Nota: 70 % los casos y 30 % el test. Apruebas con {n} o más y ningún caso por debajo de 50.", { n: PASS })}</li>
                 <li>{t("Un caso hecho con el profesor o viendo la solución cuenta como 0. Tiempo orientativo: 4 horas; puedes parar y seguir otro día.")}</li>

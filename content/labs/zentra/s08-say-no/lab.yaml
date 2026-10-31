@@ -1,0 +1,301 @@
+id: zentra-s08-say-no
+title: Oficio 8 · Decir que no (y dar una alternativa)
+summary: «Dame Owner en producción, es urgente, me lo ha dicho mi jefa.» En un banco la respuesta es no. Pero un buen «no» descubre qué necesita de verdad y se lo resuelve.
+track: zentra
+day: 78
+level: basic
+branch: iam
+type: guided
+mode: production
+skills:
+- iam.leastprivilege
+- iam.roles
+- observability.logging
+wellArchitected:
+- security
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create tarjetas-sa --display-name="tarjetas-api"
+  gcloud run deploy tarjetas-api --image=europe-docker.pkg.dev/gcplab-public/apps/cards-api:2.0 --region={{.region}} --service-account=tarjetas-sa@{{.project}}.iam.gserviceaccount.com --no-allow-unauthenticated
+ticket:
+  id: REQ-40108
+  kind: REQ
+  priority: P3
+  sla: 8h
+  reporter: Hugo Martín (Tarjetas)
+  summary: Necesito Owner en el proyecto de producción para depurar lo de los límites. Con lo que tengo no veo nada. Es urgente, me lo ha dicho mi jefa.
+actors:
+- role: dev
+  name: Hugo Martín (Tarjetas)
+  persona: Desarrollador de Tarjetas, con prisa.
+  fallback: Es que con lo que tengo no veo nada.
+  facts:
+  - keywords:
+    - - que necesitas
+      - qué necesitas
+      - what do you need
+      - para que
+      - para qué
+      - what for
+      - exactamente
+      - exactly
+      - hacer
+      - objetivo
+      - goal
+    answer: Solo quiero ver los registros de tarjetas-api en producción y la configuración del servicio.
+  - keywords:
+    - - error
+      - mensaje
+      - message
+      - que ves
+      - qué ves
+      - what do you see
+      - pone
+      - vacio
+      - vacío
+      - empty
+      - proyecto
+      - project
+      - donde
+      - dónde
+      - where
+    answer: En el explorador de registros me sale todo vacío… Ahora que lo dices, arriba pone zentra-tarjetas-dev.
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Esta semana es para aprender el oficio: pregunta todo lo que necesites.'
+  facts:
+  - keywords:
+    - - owner
+      - propietario
+      - hugo
+      - permiso
+      - permission
+      - produccion
+      - producción
+    answer: 'No se da Owner a nadie en producción: ni a Hugo ni a nadie. Si necesita algo concreto, el rol concreto y por su grupo. Y su jefa lo sabe.'
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Seguridad cloud.
+  fallback: Roles básicos en producción, nunca. Mínimo privilegio y por grupos.
+  facts: []
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **REQ-40108 · P3** · Hugo (Tarjetas): *«Necesito Owner en producción para depurar lo de los límites. Con lo que tengo no veo nada. Es urgente, me lo ha dicho mi jefa.»*
+
+  En soporte de banca dirás **que no** a menudo: Owner o Editor en producción, una IP pública, un bucket público, una clave de cuenta de servicio… Hay normas (mínimo privilegio, DORA, auditoría) que **no dependen de la prisa ni del cargo** de quien lo pide. Pero un «no» seco genera escalados y enfado. **Un buen «no» tiene tres partes**:
+
+  1. **Qué necesitas de verdad.** La gente pide la solución que imagina («Owner») en vez del problema («no veo los registros»). Pregunta: `ask dev "¿Qué necesitas hacer exactamente?"` y `ask dev "¿Qué ves cuando lo intentas?"`.
+  2. **Comprueba qué tiene ya.** Muchas veces ya puede: `gcloud projects get-iam-policy {{.project}}` y `gam print group-members gcp-producto@zentra.dev` (los grupos pueden contener grupos).
+  3. **No + motivo + alternativa.** Explica en una frase por qué no (norma, no opinión), y da el camino que **sí** funciona. Si de verdad faltara un permiso, sería el rol concreto, por su grupo, y con ticket.
+
+  Ante la presión («me lo ha dicho mi jefa»), confirma la norma con tu responsable (`ask manager "…"`): no tienes que defenderla tú solo.
+
+  **No concedas nada** que no haga falta. Responde con `ticket update "…"` y cierra.
+objectives:
+- Averigua qué necesita de verdad
+- Comprueba lo que ya tiene
+- No + motivo + alternativa
+- Sin conceder de más
+hints:
+- text: Hugo está en gcp-tarjetas-dev, que está dentro de gcp-producto, que tiene logging.viewer y run.viewer en este proyecto.
+- text: 'Su problema real: mira el proyecto equivocado (zentra-tarjetas-dev).'
+quiz:
+- id: q1
+  question: Un buen «no» tiene…
+  options:
+  - El motivo (la norma) y una alternativa que funciona
+  - Solo «no»
+  - Un «sí» temporal para que no se enfade
+  - Un escalado a su jefa
+  answer:
+  - 0
+- id: q2
+  question: Alguien pide Owner «porque no ve nada». Lo primero es…
+  options:
+  - Preguntar qué necesita y qué ve
+  - Dárselo una hora
+  - Dárselo si lo aprueba su jefa
+  - Cerrar el ticket
+  answer:
+  - 0
+- id: q3
+  question: Si de verdad faltara un permiso, ¿cómo se da?
+  options:
+  - El rol concreto, a su grupo, con ticket
+  - Editor a la persona
+  - Owner temporal
+  - Una clave de cuenta de servicio
+  answer:
+  - 0
+solution: |
+  ticket
+  ask dev "¿Qué necesitas hacer exactamente?"
+  ask dev "¿Qué ves cuando lo intentas? ¿En qué proyecto estás mirando?"
+  gcloud projects get-iam-policy {{.project}}
+  gam print group-members gcp-producto@zentra.dev
+  gam print group-members gcp-tarjetas-dev@zentra.dev
+  ask manager "Hugo pide Owner en producción y dice que lo ha pedido su jefa, ¿confirmas que no se da?"
+  ticket update "Hola Hugo: Owner en producción no podemos darlo: va contra la norma de mínimo privilegio del banco, para todos. Pero no lo necesitas: ya puedes ver los registros y la configuración de tarjetas-api por tu grupo (gcp-tarjetas-dev, dentro de gcp-producto). Lo que pasa es que estabas en el proyecto zentra-tarjetas-dev: cambia arriba al proyecto {{.project}} y filtra por resource.type=cloud_run_revision. Si después te falta algo concreto, dime qué y lo pedimos para tu grupo."
+  ticket resolve "Owner denegado por norma; Hugo ya tenía lectura de registros y Cloud Run por su grupo, miraba el proyecto equivocado."
+shortcuts:
+- name: give him Owner
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:hugo.martin@zentra.dev --role=roles/owner
+    ticket resolve "Dado Owner a Hugo, lo pidió su jefa."
+rubric:
+- name: Nada concedido de más
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Sin roles básicos (Owner/Editor/Viewer) en el proyecto
+  - type: command
+    regex: member=user:hugo
+    max: 0
+    desc: Nada dado a Hugo a título personal
+  - type: iam
+    principal: user:hugo.martin@zentra.dev
+    permission: logging.logEntries.list
+    resource: project
+    desc: Y sí puede ver los registros (ya podía)
+- name: Qué necesitaba y qué tenía
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: asked
+    actor: dev
+    min: 2
+    desc: Preguntado qué necesita y qué ve
+  - type: command
+    regex: get-iam-policy|gam print group-members|groups memberships list
+    min: 1
+    desc: Comprobado lo que ya tiene
+- name: No + motivo + alternativa
+  validator: evidence
+  points: 25
+  checks:
+  - type: ticket_update
+    keywords:
+    - - owner
+      - propietario
+    - - norma
+      - politica
+      - política
+      - minimo privilegio
+      - mínimo privilegio
+      - least privilege
+      - policy
+      - rule
+    - - '{{.project}}'
+      - proyecto
+      - project
+    - - registros
+      - logs
+    desc: Dice que no, por qué y cómo ver los registros
+- name: Lo has entendido
+  validator: quiz
+  points: 15
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+tutor:
+- match: ask dev "¿Qué necesitas
+  title: El problema real
+  why: 'Ver registros y configuración: para eso no hace falta Owner.'
+- match: ¿En qué proyecto
+  title: La pista
+  why: 'zentra-tarjetas-dev: está mirando otro proyecto.'
+- match: get-iam-policy
+  title: Lo que ya tiene
+  why: gcp-producto tiene logging.viewer y run.viewer, y Hugo está dentro por gcp-tarjetas-dev.
+- match: ticket update "Hola Hugo
+  title: El buen no
+  why: No, la norma, y el camino que sí funciona.
+en:
+  title: Craft 8 · Saying no (and offering an alternative)
+  summary: '"Give me Owner in production, it''s urgent, my manager said so." At a bank the answer is no. But a good "no" finds out what they really need and solves it.'
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **REQ-40108 · P3** · Hugo (Cards): *"I need Owner in production to debug the limits issue. With what I have I can't see anything. It's urgent, my manager said so."*
+
+    In banking support you'll say **no** often: Owner or Editor in production, a public IP, a public bucket, a service account key… There are rules (least privilege, DORA, audit) that **don't depend on the hurry or the rank** of whoever asks. But a blunt "no" creates escalations and anger. **A good "no" has three parts**:
+
+    1. **What they really need.** People ask for the solution they imagine ("Owner") instead of the problem ("I can't see the logs"). Ask: `ask dev "What exactly do you need to do?"` and `ask dev "What do you see when you try?"`.
+    2. **Check what they already have.** Often they already can: `gcloud projects get-iam-policy {{.project}}` and `gam print group-members gcp-producto@zentra.dev` (groups can contain groups).
+    3. **No + reason + alternative.** Explain in one sentence why not (a rule, not an opinion), and give the path that **does** work. If a permission were really missing, it'd be the specific role, through their group, with a ticket.
+
+    Under pressure ("my manager said so"), confirm the rule with your manager (`ask manager "…"`): you don't have to defend it alone.
+
+    **Don't grant anything** that isn't needed. Reply with `ticket update "…"` and close.
+  objectives:
+  - Find out what he really needs
+  - Check what he already has
+  - No + reason + alternative
+  - Without over-granting
+  hints:
+  - Hugo is in gcp-tarjetas-dev, which is inside gcp-producto, which has logging.viewer and run.viewer on this project.
+  - 'His real problem: he''s looking at the wrong project (zentra-tarjetas-dev).'
+  ticket:
+    summary: I need Owner on the production project to debug the limits issue. With what I have I can't see anything. It's urgent, my manager said so.
+  text:
+    Hugo Martín (Tarjetas): Hugo Martín (Cards)
+    Desarrollador de Tarjetas, con prisa.: Cards developer, in a hurry.
+    Es que con lo que tengo no veo nada.: It's just that with what I have I can't see anything.
+    Solo quiero ver los registros de tarjetas-api en producción y la configuración del servicio.: I just want to see tarjetas-api's logs in production and the service configuration.
+    En el explorador de registros me sale todo vacío… Ahora que lo dices, arriba pone zentra-tarjetas-dev.: In the log explorer everything is empty… Now that you mention it, it says zentra-tarjetas-dev at the top.
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Esta semana es para aprender el oficio: pregunta todo lo que necesites.': 'This week is for learning the craft: ask anything you need.'
+    ? 'No se da Owner a nadie en producción: ni a Hugo ni a nadie. Si necesita algo concreto, el rol concreto y por su grupo. Y su jefa lo sabe.'
+    : 'Nobody gets Owner in production: not Hugo, not anyone. If he needs something specific, the specific role and through his group. His manager knows that.'
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Seguridad cloud.: Cloud security.
+    Roles básicos en producción, nunca. Mínimo privilegio y por grupos.: Basic roles in production, never. Least privilege and through groups.
+    Un buen «no» tiene…: A good "no" has…
+    El motivo (la norma) y una alternativa que funciona: The reason (the rule) and an alternative that works
+    Solo «no»: Just "no"
+    Un «sí» temporal para que no se enfade: A temporary "yes" so they don't get upset
+    Un escalado a su jefa: An escalation to their manager
+    Alguien pide Owner «porque no ve nada». Lo primero es…: Someone asks for Owner "because they can't see anything". The first thing is…
+    Preguntar qué necesita y qué ve: Ask what they need and what they see
+    Dárselo una hora: Give it for an hour
+    Dárselo si lo aprueba su jefa: Give it if their manager approves
+    Cerrar el ticket: Close the ticket
+    Si de verdad faltara un permiso, ¿cómo se da?: If a permission were really missing, how is it granted?
+    El rol concreto, a su grupo, con ticket: The specific role, to their group, with a ticket
+    Editor a la persona: Editor to the person
+    Owner temporal: Temporary Owner
+    Una clave de cuenta de servicio: A service account key
+    Nada concedido de más: Nothing over-granted
+    Sin roles básicos (Owner/Editor/Viewer) en el proyecto: No basic roles (Owner/Editor/Viewer) on the project
+    Nada dado a Hugo a título personal: Nothing granted to Hugo personally
+    Y sí puede ver los registros (ya podía): And he can see the logs (he already could)
+    Qué necesitaba y qué tenía: What he needed and what he had
+    Preguntado qué necesita y qué ve: Asked what he needs and what he sees
+    Comprobado lo que ya tiene: Checked what he already has
+    No + motivo + alternativa: No + reason + alternative
+    Dice que no, por qué y cómo ver los registros: Says no, why and how to see the logs
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    El problema real: The real problem
+    'Ver registros y configuración: para eso no hace falta Owner.': 'Seeing logs and configuration: that doesn''t need Owner.'
+    La pista: The clue
+    'zentra-tarjetas-dev: está mirando otro proyecto.': 'zentra-tarjetas-dev: he''s looking at another project.'
+    Lo que ya tiene: What he already has
+    gcp-producto tiene logging.viewer y run.viewer, y Hugo está dentro por gcp-tarjetas-dev.: gcp-producto has logging.viewer and run.viewer, and Hugo is in it through gcp-tarjetas-dev.
+    El buen no: The good no
+    No, la norma, y el camino que sí funciona.: No, the rule, and the path that does work.

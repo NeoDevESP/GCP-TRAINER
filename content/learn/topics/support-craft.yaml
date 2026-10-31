@@ -1,0 +1,100 @@
+id: support-craft
+branch: observability
+name: ["El oficio de soporte: incidentes, cambios y comunicación", "The support craft: incidents, changes and communication"]
+intro: ["Lo que se practica en la Semana 1 de Zentra y no viene en ninguna certificación: cómo se lleva un P1, cómo se comunica mientras dura, cómo entra un cambio en producción, cómo se dice que no, cómo se pasa el turno y cómo se aprende de un fallo sin buscar culpables.", "What Zentra's Week 1 practises and no certification covers: how a P1 is run, how to communicate while it lasts, how a change gets into production, how to say no, how to hand over a shift and how to learn from a failure without looking for someone to blame."]
+concepts:
+  - id: p1
+    term: [Gestionar un P1, Running a P1]
+    what: ["Un incidente grave se trabaja con roles claros y con un objetivo: que los clientes vuelvan a operar cuanto antes.", "A major incident is worked with clear roles and one goal: customers operating again as soon as possible."]
+    points:
+      - ["Responsable del incidente (IC): coordina, decide y no se pone a teclear. Alguien opera (mitiga) y alguien comunica.", "Incident commander (IC): coordinates, decides and doesn't start typing. Someone operates (mitigates) and someone communicates."]
+      - ["Mitigar antes que arreglar: volver a la versión anterior, mover la carga a otra zona, devolver un permiso. La causa se estudia después.", "Mitigate before fixing: roll back to the previous version, move the workload to another zone, restore a permission. The cause is studied later."]
+      - ["Una sola persona habla con el negocio y un solo canal (el ticket) guarda la verdad.", "One person talks to the business and one channel (the ticket) holds the truth."]
+      - ["El P1 termina cuando el servicio está restaurado y comprobado, no cuando se entiende la causa.", "The P1 ends when the service is restored and verified, not when the cause is understood."]
+    tip: ["Si una caída empieza justo después de un despliegue, la primera hipótesis es el despliegue y la primera mitigación, deshacerlo.", "If an outage starts right after a deployment, the first hypothesis is the deployment and the first mitigation is undoing it."]
+  - id: comms
+    term: [Comunicar durante un incidente, Communicating during an incident]
+    what: ["El silencio en un incidente genera más tickets, más llamadas y más presión que el propio fallo.", "Silence during an incident creates more tickets, calls and pressure than the failure itself."]
+    points:
+      - ["Primera actualización en los primeros 15 minutos, aunque solo digas que estáis en ello.", "First update within the first 15 minutes, even if you only say you're on it."]
+      - ["Cadencia fija (cada 30 minutos en un P1) y siempre con la hora de la próxima actualización.", "A fixed cadence (every 30 minutes in a P1) and always with the time of the next update."]
+      - ["Para el negocio: qué notan los clientes, qué se está haciendo, qué deben hacer ellos y cuándo habrá noticias. Sin jerga ni nombres.", "For the business: what customers notice, what's being done, what they should do and when there'll be news. No jargon or names."]
+      - ["Nota interna aparte: horas, recursos, comandos, quién hizo qué. Es la base del postmortem y de la auditoría.", "A separate internal note: times, resources, commands, who did what. It's the basis of the postmortem and the audit."]
+    tip: ["Plantilla rápida: «Estado · Impacto · Qué hacemos · Qué tenéis que hacer · Próxima actualización».", "Quick template: \"Status · Impact · What we're doing · What you need to do · Next update\"."]
+  - id: change
+    term: [Gestión de cambios, Change management]
+    what: ["En un banco regulado nada entra en producción sin registro, plan y aprobación.", "At a regulated bank nothing goes into production without a record, a plan and approval."]
+    points:
+      - ["Estándar: repetitivo, de bajo riesgo y preaprobado (un alta de acceso del catálogo).", "Standard: repetitive, low-risk and pre-approved (an access request from the catalogue)."]
+      - ["Normal: se planifica, se evalúa el riesgo y lo aprueba el CAB para una ventana.", "Normal: planned, risk-assessed and approved by the CAB for a window."]
+      - ["Emergencia: para arreglar un incidente con clientes afectados; se aprueba rápido y se documenta igual.", "Emergency: to fix an incident with customers affected; approved fast and documented all the same."]
+      - ["El plan responde a: qué, por qué, riesgo, pasos, verificación y vuelta atrás con el valor exacto de antes.", "The plan answers: what, why, risk, steps, verification and rollback with the exact previous value."]
+    tip: ["Antes de tocar nada, apunta el estado actual (describe): sin él no hay vuelta atrás posible.", "Before touching anything, note the current state (describe): without it there's no possible rollback."]
+  - id: say-no
+    term: [Decir que no con alternativa, Saying no with an alternative]
+    what: ["Las normas del banco no dependen de la prisa ni del cargo de quien pide, pero un «no» seco solo genera escalados.", "The bank's rules don't depend on the hurry or rank of whoever asks, but a blunt \"no\" only creates escalations."]
+    points:
+      - ["Pregunta qué necesita de verdad: la gente pide la solución que imagina (Owner, IP pública) en vez del problema.", "Ask what they really need: people ask for the solution they imagine (Owner, a public IP) instead of the problem."]
+      - ["Comprueba lo que ya tiene: muchas veces ya puede, por un grupo dentro de otro grupo.", "Check what they already have: often they already can, through a group inside another group."]
+      - ["No + motivo (la norma, no tu opinión) + el camino que sí funciona (IAP, el rol concreto por su grupo, una URL firmada).", "No + reason (the rule, not your opinion) + the path that does work (IAP, the specific role through their group, a signed URL)."]
+      - ["Ante la presión, apóyate en tu responsable o en Seguridad: no defiendes la norma tú solo.", "Under pressure, lean on your manager or Security: you don't defend the rule alone."]
+    tip: ["Un «no» bien explicado hoy evita diez tickets de excepción mañana.", "A well-explained \"no\" today avoids ten exception tickets tomorrow."]
+  - id: handover
+    term: [El traspaso de turno, The shift handover]
+    what: ["Lo que no queda escrito al acabar el turno se pierde, y quien entra no puede adivinarlo.", "Whatever isn't written down at the end of a shift is lost, and whoever comes in can't guess it."]
+    points:
+      - ["Cada ticket abierto: identificador, estado, qué se ha hecho y cuál es el siguiente paso.", "Each open ticket: ID, state, what's been done and what the next step is."]
+      - ["Lo pendiente de otros equipos: quién lo tiene y para cuándo.", "What's pending from other teams: who has it and by when."]
+      - ["Qué vigilar: un arreglo provisional que puede revertirse, una ventana de cambio, un caso abierto con Google.", "What to watch: a temporary fix that may be reverted, a change window, an open case with Google."]
+    tip: ["Escríbelo pensando en alguien que no sabe nada de tu turno y no puede llamarte a las 3 de la mañana.", "Write it for someone who knows nothing about your shift and can't call you at 3 a.m."]
+  - id: postmortem
+    term: [Postmortem sin culpables, Blameless postmortem]
+    what: ["Después de un incidente grave se escribe qué pasó y qué se cambia para que no vuelva a pasar, sin buscar a quién culpar.", "After a major incident you write what happened and what changes so it doesn't happen again, without looking for someone to blame."]
+    points:
+      - ["Resumen, impacto (a quién, cuánto, cuánto tiempo), cronología con horas, causa raíz, qué funcionó y qué no, y acciones.", "Summary, impact (who, how much, how long), timeline with times, root cause, what worked and what didn't, and actions."]
+      - ["La causa nunca es una persona: si alguien pudo romper producción, falta una prueba, un canario o una alarma.", "The cause is never a person: if someone could break production, a test, a canary or an alert is missing."]
+      - ["Las horas salen de la auditoría y del ticket, no de la memoria.", "Times come from the audit log and the ticket, not from memory."]
+      - ["Cada acción con responsable (un equipo) y fecha; si no, no se hace.", "Each action with an owner (a team) and a date; otherwise it doesn't get done."]
+    tip: ["Publica el postmortem para todos los equipos: lo que aprende uno, lo aprenden todos.", "Share the postmortem with every team: what one learns, everyone learns."]
+scenarios:
+  - q: ["Nadie puede pagar desde hace 5 minutos, justo después de un despliegue. ¿Qué haces primero?", "Nobody has been able to pay for 5 minutes, right after a deployment. What do you do first?"]
+    options: [["Dar la primera actualización y volver a la versión anterior con un cambio de emergencia", "Give the first update and roll back to the previous version with an emergency change"], ["Buscar en el código qué línea falla", "Look in the code for the failing line"], ["Esperar a que el equipo de Pagos se conecte", "Wait for the Payments team to log on"], ["Escribir el postmortem", "Write the postmortem"]]
+    answer: 0
+    why: ["Comunicar y mitigar: la causa se estudia cuando los clientes ya pueden pagar.", "Communicate and mitigate: the cause is studied once customers can pay again."]
+  - q: ["Llevas 40 minutos en un P1 sin novedades y no has escrito nada desde el principio.", "You're 40 minutes into a P1 with no news and haven't written anything since the start."]
+    options: [["Actualizar ya: qué se ha descartado, qué se prueba y la hora de la próxima actualización", "Update now: what's been ruled out, what's being tried and the next update time"], ["Esperar a tener la solución para no dar malas noticias", "Wait until you have the fix so as not to give bad news"], ["Cerrar el ticket y abrir otro", "Close the ticket and open another"], ["Escribir solo en el chat del equipo", "Write only in the team chat"]]
+    answer: 0
+    why: ["La cadencia se cumple aunque no haya novedades: el negocio necesita saber que se sigue trabajando.", "The cadence is kept even with no news: the business needs to know work is ongoing."]
+  - q: ["Un responsable de producto exige «Editor ya» en producción para su equipo porque «es urgente».", "A product owner demands \"Editor now\" in production for their team because \"it's urgent\"."]
+    options: [["Preguntar qué tienen que hacer, comprobar lo que ya tienen y ofrecer el rol concreto por su grupo", "Ask what they need to do, check what they already have and offer the specific role through their group"], ["Dárselo un día y quitarlo después", "Grant it for a day and remove it afterwards"], ["Negarse sin más explicación", "Refuse with no further explanation"], ["Dárselo si lo pide por escrito", "Grant it if they ask in writing"]]
+    answer: 0
+    why: ["No a los roles básicos, pero resolviendo la necesidad real con mínimo privilegio.", "No to basic roles, but solving the real need with least privilege."]
+  - q: ["Has restaurado a mano un permiso que un Terraform de otro equipo quitó. Acaba tu turno.", "You manually restored a permission another team's Terraform removed. Your shift ends."]
+    options: [["Dejar en el traspaso que el próximo apply lo volverá a quitar y que el equipo dueño debe corregir su código", "Leave in the handover that the next apply will remove it again and the owning team must fix its code"], ["Nada: ya funciona", "Nothing: it works now"], ["Borrar el Terraform del otro equipo", "Delete the other team's Terraform"], ["Dar Owner a la cuenta de Terraform", "Give the Terraform account Owner"]]
+    answer: 0
+    why: ["Un arreglo provisional que puede revertirse es justo lo que el siguiente turno tiene que vigilar.", "A temporary fix that may be reverted is exactly what the next shift must watch."]
+quiz:
+  - q: ["En un P1, el responsable del incidente (IC)…", "In a P1, the incident commander (IC)…"]
+    options: [["Coordina y decide; otros operan y comunican", "Coordinates and decides; others operate and communicate"], ["Es quien escribe todos los comandos", "Is whoever types all the commands"], ["Es siempre alguien de Google", "Is always someone from Google"], ["Solo aparece en el postmortem", "Only appears in the postmortem"]]
+    answer: 0
+    why: ["Separar coordinar de operar evita que nadie mire el conjunto.", "Separating coordination from operation stops nobody from looking at the whole."]
+  - q: ["¿Qué debe llevar siempre una actualización durante un incidente abierto?", "What must an update always include during an open incident?"]
+    options: [["La hora de la próxima actualización", "The time of the next update"], ["El nombre de quien lo rompió", "The name of whoever broke it"], ["Los comandos ejecutados", "The commands run"], ["Una disculpa formal", "A formal apology"]]
+    answer: 0
+    why: ["Fija la expectativa y reduce las llamadas preguntando cómo va.", "It sets expectations and reduces calls asking how it's going."]
+  - q: ["Un rollback de producción durante un incidente con clientes afectados es un cambio…", "A production rollback during an incident with customers affected is a … change"]
+    options: [["De emergencia", "Emergency"], ["Estándar", "Standard"], ["Normal para el próximo CAB", "Normal for the next CAB"], ["No es un cambio", "Not a change"]]
+    answer: 0
+    why: ["Se aprueba rápido porque hay clientes afectados, pero se registra como cualquier cambio.", "It's approved fast because customers are affected, but recorded like any change."]
+  - q: ["¿Qué apartado de un plan de cambio necesita el valor exacto de antes?", "Which part of a change plan needs the exact previous value?"]
+    options: [["La vuelta atrás", "The rollback"], ["El por qué", "The why"], ["El riesgo", "The risk"], ["El título", "The title"]]
+    answer: 0
+    why: ["Sin el valor de antes no se puede deshacer el cambio con seguridad.", "Without the previous value the change can't be safely undone."]
+  - q: ["En un postmortem sin culpables, la causa raíz es…", "In a blameless postmortem, the root cause is…"]
+    options: [["El fallo del sistema o del proceso que permitió el error", "The system or process failure that allowed the error"], ["La persona que aprobó el cambio", "The person who approved the change"], ["La mala suerte", "Bad luck"], ["El cliente que lo notó primero", "The customer who noticed first"]]
+    answer: 0
+    why: ["Si una persona pudo romperlo, el sistema necesita una prueba, un canario o una alarma.", "If a person could break it, the system needs a test, a canary or an alert."]
+  - q: ["Un buen traspaso de turno incluye… (Elige 2)", "A good shift handover includes… (Choose 2)"]
+    options: [["Cada ticket abierto con su estado y siguiente paso", "Each open ticket with its state and next step"], ["Lo que hay que vigilar esta noche", "What to watch tonight"], ["Las contraseñas del turno", "The shift's passwords"], ["«Todo bien» y nada más", "\"All good\" and nothing else"]]
+    answers: [0, 1]
+    why: ["Estado, siguiente paso y riesgos: lo que el siguiente turno no puede adivinar.", "State, next step and risks: what the next shift can't guess."]

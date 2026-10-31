@@ -1,0 +1,330 @@
+id: zentra-s06-p1-incident
+title: 'Oficio 6 · Un P1: roles, mitigar primero y comunicar con cadencia'
+summary: Nadie puede pagar. Declara el P1, mitiga antes de buscar la causa (volver a la revisión estable), con cambio de emergencia, y mantén informado al negocio cada poco tiempo.
+track: zentra
+day: 76
+level: basic
+branch: observability
+type: guided
+mode: production
+skills:
+- observability.incident
+- compute.serverless
+- devops.delivery
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --max-instances=5 --tag=estable --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: run_image
+  service: pagos-api
+  image: europe-docker.pkg.dev/gcplab-public/apps/payments-api:3.0-bad
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-40106
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: 'ALERTA: tasa de error del 100 % en pagos-api desde las 07:50. Atención al cliente confirma que nadie puede pagar con tarjeta.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Esta semana es para aprender el oficio: pregunta todo lo que necesites.'
+  facts:
+  - keywords:
+    - - p1
+      - incidente
+      - incident
+      - declar
+      - comandante
+      - commander
+      - pagos
+      - ic
+      - responsable
+    answer: 'Declarado P1. Yo hago de responsable del incidente (IC): coordino y decido. Tú mitigas y comunicas. Primera actualización ya y luego cada 30 minutos aunque no haya novedades. Mitiga primero: la causa la buscamos después, en el postmortem.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: Ningún cambio en producción sin registro. Si es urgente y hay clientes afectados, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - rollback
+      - emergencia
+      - emergency
+      - aprob
+      - approv
+      - revert
+      - permiso
+      - binding
+      - vuelta
+    answer: Aprobado como cambio de emergencia (CHG-7790). Anótalo en el ticket y hazlo con el mínimo alcance.
+- role: sre
+  name: Diego Ferrer (SRE de guardia)
+  persona: SRE de guardia.
+  fallback: 'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.'
+  facts: []
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **INC-40106 · P1** · NOC: *«Tasa de error del 100 % en pagos-api desde las 07:50. Nadie puede pagar con tarjeta.»*
+
+  Un **P1** se trabaja de otra manera:
+
+  **Roles.** Hay un **responsable del incidente** (IC, *incident commander*) que coordina y decide; alguien que **opera** (mitiga) y alguien que **comunica**. Hoy Marta es la IC; tú operas y comunicas.
+
+  **Mitigar antes que arreglar.** El objetivo es que los clientes vuelvan a pagar **cuanto antes**, no entender la causa. Si algo se rompió tras un despliegue, la mitigación casi siempre es **volver a la versión anterior**. La causa se estudia después, en el **postmortem**.
+
+  **Comunicar con cadencia.** Primera actualización en los **primeros 15 minutos** (aunque solo digas «lo estamos investigando») y luego **cada 30 minutos**, siempre con **la hora de la próxima actualización**. El silencio en un P1 genera más tickets y más presión.
+
+  **Pasos:**
+  1. `ask manager "…"`: declara el P1 y confirma los roles.
+  2. **Primera actualización** al negocio: qué está pasando, que estáis en ello y la **próxima actualización**. `ticket update "…"`.
+  3. Diagnóstico rápido: `gcloud run revisions list --service=pagos-api --region={{.region}}` (¿qué se desplegó?) y `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+  4. `ask change "…"`: el rollback en producción es un **cambio de emergencia**.
+  5. **Mitiga**: devuelve el tráfico a la revisión etiquetada `estable`: `gcloud run services update-traffic pagos-api --region={{.region}} --to-tags=estable=100`.
+  6. Comprueba (`gcloud run services describe pagos-api --region={{.region}}`), deja una **nota interna** con la cronología y da la actualización de **mitigado**.
+  7. Cierra con una nota que diga que habrá **postmortem**.
+objectives:
+- Declara el P1 y los roles
+- Primera actualización con la próxima hora
+- Mitiga con cambio de emergencia
+- Actualiza, documenta y cierra
+hints:
+- text: '`ticket update "Estamos investigando un fallo que impide pagar con tarjeta. Próxima actualización a las 08:30."`'
+- text: '`gcloud run services update-traffic pagos-api --region={{.region}} --to-tags=estable=100`'
+quiz:
+- id: q1
+  question: En un P1, lo primero es…
+  options:
+  - Mitigar para que los clientes vuelvan a operar
+  - Encontrar la causa raíz
+  - Buscar quién lo rompió
+  - Esperar a que Desarrollo lo arregle
+  answer:
+  - 0
+- id: q2
+  question: ¿Cada cuánto actualizas en un P1 en Zentra?
+  options:
+  - Cada 30 minutos, aunque no haya novedades
+  - Solo cuando esté arreglado
+  - Cada 4 horas
+  - Cuando pregunten
+  answer:
+  - 0
+- id: q3
+  question: El rollback de producción durante el P1 es…
+  options:
+  - Un cambio de emergencia, aprobado y anotado
+  - Algo que no hace falta registrar
+  - Un cambio normal para el próximo CAB
+  - Prohibido
+  answer:
+  - 0
+solution: |
+  ticket
+  ask manager "Declaro P1 en pagos-api: nadie puede pagar desde las 07:50. ¿Haces tú de IC?"
+  ticket update "Estamos investigando un fallo que impide pagar con tarjeta desde las 07:50. Todo el equipo está con ello. Próxima actualización a las 08:30 o antes si hay novedades."
+  gcloud run revisions list --service=pagos-api --region={{.region}}
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  ask change "Necesito hacer rollback de pagos-api a la revisión estable como cambio de emergencia, ¿lo apruebas?"
+  gcloud run services update-traffic pagos-api --region={{.region}} --to-tags=estable=100
+  gcloud run services describe pagos-api --region={{.region}}
+  ticket comment "Cronología: 07:50 la revisión con payments-api:3.0-bad (desplegada por deploy-sa) no arranca y pagos-api da 503. 07:58 P1 declarado, IC Marta. 08:10 rollback a la revisión estable (1.0) con CHG-7790 de emergencia. 08:12 pagos verificados."
+  ticket update "Mitigado: desde las 08:12 los pagos con tarjeta vuelven a funcionar con normalidad. Seguimos vigilando y analizaremos la causa. Próxima actualización a las 09:00 con el cierre."
+  ticket resolve "P1 mitigado con rollback de pagos-api a la revisión estable (CHG-7790). Haremos postmortem de la versión 3.0."
+shortcuts:
+- name: fix it quietly without telling anyone
+  run: |
+    gcloud run services update-traffic pagos-api --region={{.region}} --to-tags=estable=100
+    ticket resolve "Vuelto a la versión anterior y ya va, cerrado."
+rubric:
+- name: Pagos restaurados
+  validator: functional
+  points: 25
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: Los pagos funcionan (/pay responde 200)
+- name: Roles y cambio de emergencia
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: asked
+    actor: manager
+    min: 1
+    desc: P1 declarado con IC
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio de emergencia aprobado
+- name: Comunicación con cadencia
+  validator: evidence
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: ticket_update
+    min: 2
+    desc: Al menos inicio y mitigado
+  - type: ticket_update
+    keywords:
+    - - proxima actualizacion
+      - próxima actualización
+      - next update
+      - siguiente actualizacion
+      - siguiente actualización
+    desc: Con la hora de la próxima actualización
+  - type: ticket_update
+    internal: true
+    keywords:
+    - - '3.0'
+    - - estable
+      - rollback
+      - '1.0'
+    desc: Nota interna con la cronología
+- name: Cierre con postmortem
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_resolved
+    keywords:
+    - - postmortem
+      - post-mortem
+      - revision posterior
+      - revisión posterior
+      - analisis
+      - análisis
+    desc: Cierre que anuncia el postmortem
+- name: Lo has entendido
+  validator: quiz
+  points: 15
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+tutor:
+- match: ask manager
+  title: Declarar
+  why: 'Marta hace de IC: tú mitigas y comunicas.'
+- match: ticket update "Estamos investigando
+  title: Los primeros 15 minutos
+  why: 'Aunque no sepas nada: que estáis en ello y cuándo vuelves.'
+- match: revisions list
+  title: ¿Qué cambió?
+  why: 'Una revisión nueva con la 3.0 al 100 %: candidata clara.'
+- match: --to-tags=estable=100
+  title: Mitigar
+  why: Un comando y el tráfico vuelve a la versión buena.
+- match: ticket comment
+  title: Cronología
+  why: 'Hora por hora: será la base del postmortem.'
+en:
+  title: 'Craft 6 · A P1: roles, mitigate first and communicate on a cadence'
+  summary: Nobody can pay. Declare the P1, mitigate before looking for the cause (back to the stable revision), with an emergency change, and keep the business informed at short intervals.
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **INC-40106 · P1** · NOC: *"100% error rate on pagos-api since 07:50. Nobody can pay by card."*
+
+    A **P1** is worked differently:
+
+    **Roles.** There's an **incident commander** (IC) who coordinates and decides; someone who **operates** (mitigates) and someone who **communicates**. Today Marta is the IC; you operate and communicate.
+
+    **Mitigate before fixing.** The goal is for customers to pay again **as soon as possible**, not to understand the cause. If something broke after a deployment, the mitigation is almost always **going back to the previous version**. The cause is studied later, in the **postmortem**.
+
+    **Communicate on a cadence.** First update within the **first 15 minutes** (even if you only say "we're investigating") and then **every 30 minutes**, always with **the time of the next update**. Silence in a P1 creates more tickets and more pressure.
+
+    **Steps:**
+    1. `ask manager "…"`: declare the P1 and confirm the roles.
+    2. **First update** to the business: what's happening, that you're on it and the **next update**. `ticket update "…"`.
+    3. Quick diagnosis: `gcloud run revisions list --service=pagos-api --region={{.region}}` (what was deployed?) and `gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3`.
+    4. `ask change "…"`: a production rollback is an **emergency change**.
+    5. **Mitigate**: send traffic back to the revision tagged `estable`: `gcloud run services update-traffic pagos-api --region={{.region}} --to-tags=estable=100`.
+    6. Check (`gcloud run services describe pagos-api --region={{.region}}`), leave an **internal note** with the timeline and give the **mitigated** update.
+    7. Close with a note saying there will be a **postmortem**.
+  objectives:
+  - Declare the P1 and the roles
+  - First update with the next time
+  - Mitigate with an emergency change
+  - Update, document and close
+  hints:
+  - '`ticket update "We''re investigating a failure that prevents card payments. Next update at 08:30."`'
+  - '`gcloud run services update-traffic pagos-api --region={{.region}} --to-tags=estable=100`'
+  ticket:
+    summary: 'ALERT: 100% error rate on pagos-api since 07:50. Customer service confirms nobody can pay by card.'
+  text:
+    NOC 24x7: NOC 24x7
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Esta semana es para aprender el oficio: pregunta todo lo que necesites.': 'This week is for learning the craft: ask anything you need.'
+    ? 'Declarado P1. Yo hago de responsable del incidente (IC): coordino y decido. Tú mitigas y comunicas. Primera actualización ya y luego cada 30 minutos aunque no haya novedades. Mitiga primero: la causa la buscamos después, en el postmortem.'
+    : 'P1 declared. I''m the incident commander (IC): I coordinate and decide. You mitigate and communicate. First update now and then every 30 minutes even with no news. Mitigate first: we look for the cause later, in the postmortem.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    Ningún cambio en producción sin registro. Si es urgente y hay clientes afectados, lo apruebo como emergencia.: No production change without a record. If it's urgent and customers are affected, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7790). Anótalo en el ticket y hazlo con el mínimo alcance.: Approved as an emergency change (CHG-7790). Note it in the ticket and keep the scope minimal.
+    Diego Ferrer (SRE de guardia): Diego Ferrer (on-call SRE)
+    SRE de guardia.: On-call SRE.
+    'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.': 'Give me facts: which service, since when, what error and how many are affected.'
+    En un P1, lo primero es…: In a P1, the first thing is…
+    Mitigar para que los clientes vuelvan a operar: Mitigate so customers can operate again
+    Encontrar la causa raíz: Find the root cause
+    Buscar quién lo rompió: Find who broke it
+    Esperar a que Desarrollo lo arregle: Wait for Development to fix it
+    ¿Cada cuánto actualizas en un P1 en Zentra?: How often do you update in a P1 at Zentra?
+    Cada 30 minutos, aunque no haya novedades: Every 30 minutes, even with no news
+    Solo cuando esté arreglado: Only when it's fixed
+    Cada 4 horas: Every 4 hours
+    Cuando pregunten: When asked
+    El rollback de producción durante el P1 es…: The production rollback during the P1 is…
+    Un cambio de emergencia, aprobado y anotado: An emergency change, approved and recorded
+    Algo que no hace falta registrar: Something that needn't be recorded
+    Un cambio normal para el próximo CAB: A normal change for the next CAB
+    Prohibido: Forbidden
+    Pagos restaurados: Payments restored
+    Los pagos funcionan (/pay responde 200): Payments work (/pay returns 200)
+    Roles y cambio de emergencia: Roles and emergency change
+    P1 declarado con IC: P1 declared with an IC
+    Cambio de emergencia aprobado: Emergency change approved
+    Comunicación con cadencia: Communication on a cadence
+    Al menos inicio y mitigado: At least start and mitigated
+    Con la hora de la próxima actualización: With the next update time
+    Nota interna con la cronología: Internal note with the timeline
+    Cierre con postmortem: Closed with a postmortem
+    Cierre que anuncia el postmortem: Close announcing the postmortem
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Declarar: Declaring
+    'Marta hace de IC: tú mitigas y comunicas.': 'Marta is IC: you mitigate and communicate.'
+    Los primeros 15 minutos: The first 15 minutes
+    'Aunque no sepas nada: que estáis en ello y cuándo vuelves.': 'Even if you know nothing: that you''re on it and when you''ll be back.'
+    ¿Qué cambió?: What changed?
+    'Una revisión nueva con la 3.0 al 100 %: candidata clara.': 'A new revision with 3.0 at 100%: a clear suspect.'
+    Mitigar: Mitigating
+    Un comando y el tráfico vuelve a la versión buena.: One command and traffic goes back to the good version.
+    Cronología: Timeline
+    'Hora por hora: será la base del postmortem.': 'Hour by hour: it will be the basis of the postmortem.'

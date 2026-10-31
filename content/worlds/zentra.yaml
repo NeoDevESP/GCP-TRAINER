@@ -631,86 +631,99 @@ sections:
 
     **Prioridades en Zentra:** P1 pagos o app caídos (respuesta 15 min, guardia y puente de crisis) · P2 servicio degradado o un producto caído para un grupo (1 h) · P3 un usuario o equipo afectado, hay alternativa (8 h) · P4 peticiones y dudas (3 días).
 
+    **El oficio** (prioridades, primer contacto, escribir, escalar, P1, cambios, postmortem) se aprende en la **Semana 1**.
+
     **El método de cada ticket:** impacto → evidencia → identidad real → cambios recientes → una hipótesis → validar desde el origen → documentar.
   - |-
     Tickets come in through the Service Desk or are opened by the NOC from an alert. You get them with priority and SLA, investigate with `gcloud`, `kubectl`, `gam` and the logs, talk to whoever you need (`ask PERSON "…"`) and reply on the ticket. If the cause belongs to another team, escalate with everything you found (`ticket escalate TEAM "…"`); if it's Google's, open a case with **Premium** support (we have a TAM).
 
     **Priorities at Zentra:** P1 payments or app down (15 min response, on-call and crisis bridge) · P2 degraded service or a product down for a group (1 h) · P3 one user or team affected, a workaround exists (8 h) · P4 requests and questions (3 days).
 
+    **The craft** (priorities, first contact, writing, escalating, P1s, changes, postmortems) is learned in **Week 1**.
+
     **The method for every ticket:** impact → evidence → real identity → recent changes → one hypothesis → validate from the source → document.
   cards:
   - title:
-    - 'Semana 0 · Desde cero'
-    - 'Week 0 · From zero'
+    - Semana 0 · Desde cero
+    - Week 0 · From zero
     text:
     - 'Diez talleres guiados para quien nunca ha tocado la nube: cada concepto explicado antes del comando.'
     - 'Ten guided workshops for someone who has never touched the cloud: each concept explained before the command.'
     meta:
-    - 'Nivel inicial · 10 talleres'
-    - 'Starter level · 10 workshops'
+    - Nivel inicial · 10 talleres
+    - Starter level · 10 workshops
   - title:
-    - 'Semana 1 · Bienvenida'
-    - 'Week 1 · Welcome'
+    - Semana 1 · El oficio de soporte
+    - Week 1 · The support craft
+    text:
+    - 'Lo que no enseña ninguna certificación: cómo se trabaja un ticket en un banco. Tipos y prioridades, primer contacto, escribir al cliente y notas internas, escalar a otro equipo y a Google, un P1, gestión de cambios, decir que no con alternativa y el postmortem sin culpables. Termina con un turno completo y su traspaso.'
+    - 'What no certification teaches: how a ticket is worked at a bank. Types and priorities, first contact, writing to the customer and internal notes, escalating to another team and to Google, a P1, change management, saying no with an alternative and the blameless postmortem. Ends with a full shift and its handover.'
+    meta:
+    - Nivel básico · 10 talleres
+    - Basic level · 10 workshops
+  - title:
+    - Semana 2 · Bienvenida
+    - Week 2 · Welcome
     text:
     - 'Tutoriales guiados desde cero: la consola, los registros, VMs privadas, Cloud Run, secretos, alertas, costes y tu primer ticket completo. Termina con la prueba de la semana.'
     - 'Guided tutorials from scratch: the console, logs, private VMs, Cloud Run, secrets, alerts, costs and your first full ticket. Ends with the week test.'
     meta:
-    - 'Nivel básico · 10 casos'
-    - 'Basic level · 10 cases'
+    - Nivel básico · 10 casos
+    - Basic level · 10 cases
   - title:
-    - 'Semana 2 · Accesos'
-    - 'Week 2 · Access'
+    - Semana 3 · Accesos
+    - Week 3 · Access
     text:
-    - 'Altas, cambios y bajas, externos, APIs, auditores, accesos temporales y cuentas de servicio con mínimo privilegio. Termina con la revisión trimestral de accesos.'
-    - 'Joiners, movers and leavers, outsiders, APIs, auditors, temporary access and least-privilege service accounts. Ends with the quarterly access review.'
+    - Altas, cambios y bajas, externos, APIs, auditores, accesos temporales y cuentas de servicio con mínimo privilegio. Termina con la revisión trimestral de accesos.
+    - Joiners, movers and leavers, outsiders, APIs, auditors, temporary access and least-privilege service accounts. Ends with the quarterly access review.
     meta:
-    - 'Nivel básico · 10 casos'
-    - 'Basic level · 10 cases'
+    - Nivel básico · 10 casos
+    - Basic level · 10 cases
   - title:
-    - 'Semana 3 · Incidencias de los equipos'
-    - 'Week 3 · Team incidents'
+    - Semana 4 · Incidencias de los equipos
+    - Week 4 · Team incidents
     text:
-    - 'Pagos, BigQuery, GKE, Cloud Armor, despliegues, claves filtradas, Cloud SQL e imágenes. Termina con el lanzamiento de la tarjeta virtual.'
-    - 'Payments, BigQuery, GKE, Cloud Armor, releases, leaked keys, Cloud SQL and images. Ends with the virtual card launch.'
+    - Pagos, BigQuery, GKE, Cloud Armor, despliegues, claves filtradas, Cloud SQL e imágenes. Termina con el lanzamiento de la tarjeta virtual.
+    - Payments, BigQuery, GKE, Cloud Armor, releases, leaked keys, Cloud SQL and images. Ends with the virtual card launch.
     meta:
-    - 'Nivel intermedio · 10 casos'
-    - 'Intermediate level · 10 cases'
+    - Nivel intermedio · 10 casos
+    - Intermediate level · 10 cases
   - title:
-    - 'Semana 4 · Guardia'
-    - 'Week 4 · On call'
+    - Semana 5 · Guardia
+    - Week 5 · On call
     text:
     - 'Incidentes de producción con el reloj corriendo: endpoints, sondas, salida a internet, secretos, parámetros, ruido en los registros, apagados y permisos. Termina con el día de la nómina.'
     - 'Production incidents against the clock: endpoints, probes, egress, secrets, flags, noisy logs, shutdowns and permissions. Ends with payday.'
     meta:
-    - 'Nivel intermedio · 10 casos'
-    - 'Intermediate level · 10 cases'
+    - Nivel intermedio · 10 casos
+    - Intermediate level · 10 cases
   - title:
-    - 'Semana 5 · Capacidad y datos'
-    - 'Week 5 · Capacity and data'
+    - Semana 6 · Capacidad y datos
+    - Week 6 · Capacity and data
     text:
-    - 'NAT sin puertos, zonas sin máquinas, cuotas, ubicación y coste de BigQuery, Cloud SQL para DORA, réplicas, Memorystore y autoescalado. Termina con la campaña de cashback.'
-    - 'NAT out of ports, zones without machines, quotas, BigQuery location and cost, Cloud SQL for DORA, replicas, Memorystore and autoscaling. Ends with the cashback campaign.'
+    - NAT sin puertos, zonas sin máquinas, cuotas, ubicación y coste de BigQuery, Cloud SQL para DORA, réplicas, Memorystore y autoescalado. Termina con la campaña de cashback.
+    - NAT out of ports, zones without machines, quotas, BigQuery location and cost, Cloud SQL for DORA, replicas, Memorystore and autoscaling. Ends with the cashback campaign.
     meta:
-    - 'Nivel avanzado · 10 casos'
-    - 'Advanced level · 10 cases'
+    - Nivel avanzado · 10 casos
+    - Advanced level · 10 cases
   - title:
-    - 'Semana 6 · Cierre de mes'
-    - 'Week 6 · Month-end close'
+    - Semana 7 · Cierre de mes
+    - Week 7 · Month-end close
     text:
-    - 'Conexiones agotadas, discos con evidencia regulatoria, Private Google Access, cortafuegos, DNS, APIs, sondas, costes y restauración de bases de datos. Termina con el informe trimestral al regulador.'
-    - 'Exhausted connections, disks with regulatory evidence, Private Google Access, firewall, DNS, APIs, probes, costs and database restores. Ends with the quarterly regulator report.'
+    - Conexiones agotadas, discos con evidencia regulatoria, Private Google Access, cortafuegos, DNS, APIs, sondas, costes y restauración de bases de datos. Termina con el informe trimestral al regulador.
+    - Exhausted connections, disks with regulatory evidence, Private Google Access, firewall, DNS, APIs, probes, costs and database restores. Ends with the quarterly regulator report.
     meta:
-    - 'Nivel avanzado · 10 casos'
-    - 'Advanced level · 10 cases'
+    - Nivel avanzado · 10 casos
+    - Advanced level · 10 cases
   - title:
-    - 'Semana 7 · Operaciones'
-    - 'Week 7 · Operations'
+    - Semana 8 · Operaciones
+    - Week 8 · Operations
     text:
-    - 'Rutas, escucha en localhost, etiquetas y puertos con nombre, exposición de datos, permisos, WORM, consultas lentas y despliegues canario. Termina con la caída de una zona de Google.'
-    - 'Routes, localhost listeners, tags and named ports, data exposure, permissions, WORM, slow queries and canary releases. Ends with a Google zone outage.'
+    - Rutas, escucha en localhost, etiquetas y puertos con nombre, exposición de datos, permisos, WORM, consultas lentas y despliegues canario. Termina con la caída de una zona de Google.
+    - Routes, localhost listeners, tags and named ports, data exposure, permissions, WORM, slow queries and canary releases. Ends with a Google zone outage.
     meta:
-    - 'Nivel profesional · 10 casos'
-    - 'Professional level · 10 cases'
+    - Nivel profesional · 10 casos
+    - Professional level · 10 cases
 people:
 - name: Marta Ibáñez
   email: marta.ibanez@zentra.dev

@@ -1,0 +1,273 @@
+id: zentra-s05-google-case
+title: Oficio 5 · Abrir un caso a Google (y mitigar mientras)
+summary: 'No se pueden crear VMs en una zona. No es tuyo ni de ningún equipo: es Google. Confírmalo, mitiga en otra zona y abre el caso con lo que Google necesita para no perder horas.'
+track: zentra
+day: 75
+level: basic
+branch: architecture
+type: guided
+mode: production
+skills:
+- architecture.reliability
+- compute.vm
+- observability.incident
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create extractos-batch --zone={{.zone}} --machine-type=e2-standard-2 --subnet=datos --no-address --labels=equipo=operaciones,uso=extractos
+faults:
+- type: zone_outage
+  zone: '{{.zone}}'
+ticket:
+  id: INC-40105
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: NOC 24x7
+  summary: extractos-batch (genera los extractos mensuales de los clientes) no responde. Al intentar crear otra VM en {{.zone}} da error. Los extractos tienen que salir hoy.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE de guardia)
+  persona: SRE de guardia.
+  fallback: 'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.'
+  facts:
+  - keywords:
+    - - google
+      - zona
+      - zone
+      - estado
+      - status
+      - caso
+      - case
+      - soporte
+    answer: 'Si el panel de estado de Google confirma la zona, no es nuestro: abre caso a Google con todos los datos y levanta extractos en otra zona de {{.region}}. Es sin estado: se puede crear de cero.'
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Esta semana es para aprender el oficio: pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🎧 **Taller del oficio.** Aquí no aprendes un producto nuevo: aprendes a **trabajar un ticket** como lo hace un buen técnico de Soporte N2 en un banco. Lee la explicación, sigue los pasos en el terminal y, si te pierdes, abre la pestaña **Profesor**.
+
+  > **INC-40105 · P2** · NOC: *«extractos-batch no responde y al crear otra VM en {{.zone}} da error. Los extractos tienen que salir hoy.»*
+
+  Algunos problemas son **de Google**: una zona caída, un fallo de un servicio gestionado, un error interno de la API. Entonces se abre un **caso de soporte a Google** (en la consola: *Soporte → Casos → Crear caso*). Google responde según la **prioridad** que elijas (P1 = impacto crítico en producción) y según la **calidad del caso**: un caso con datos se resuelve en horas; uno sin datos, en días de idas y venidas.
+
+  **1 · Reproduce y copia el error literal.** Intenta crear la VM: `gcloud compute instances create extractos-batch-2 --zone={{.zone}} --machine-type=e2-standard-2 --subnet=datos --no-address`.
+
+  **2 · Confirma que es de Google.** Panel de estado: `gcloud logging read 'logName:cloud-status' --limit=3`. Si Google confirma la incidencia, **no intentes arreglar la zona**.
+
+  **3 · Mitiga mientras Google trabaja.** La VM es sin estado: créala en **otra zona** de la región, por ejemplo `{{.region}}-c`, y comprueba con `gcloud compute instances list`.
+
+  **4 · Abre el caso** (aquí, `ticket escalate google "…"`). Lo que Google necesita: **ID del proyecto** (`{{.project}}`), **producto y zona**, **error literal**, **desde cuándo** (hora con zona horaria, idealmente UTC), **impacto** en el negocio, **qué has probado** y **la mitigación** aplicada.
+
+  **5 · Informa al NOC** de que es de Google, qué has hecho y cuál es la siguiente noticia: `ticket update "…"`.
+objectives:
+- Reproduce el error
+- Confirma que es de Google
+- Mitiga en otra zona
+- Abre el caso con todos los datos
+hints:
+- text: '`gcloud compute instances create extractos-batch-c --zone={{.region}}-c --machine-type=e2-standard-2 --subnet=datos --no-address --labels=equipo=operaciones,uso=extractos`'
+- text: 'Caso: proyecto, Compute Engine en {{.zone}}, «currently unavailable (zonal outage)», desde las 08:40 UTC, extractos mensuales retrasados, mitigado en {{.region}}-c.'
+quiz:
+- id: q1
+  question: ¿Qué hace que Google resuelva antes un caso?
+  options:
+  - Proyecto, zona, error literal, hora, impacto y lo probado
+  - Escribir en mayúsculas
+  - Abrir tres casos iguales
+  - Poner siempre P1
+  answer:
+  - 0
+- id: q2
+  question: Google confirma una caída zonal. Mientras tanto…
+  options:
+  - Mueves la carga a otra zona de la región
+  - Esperas sin hacer nada
+  - Reinicias la VM en la misma zona hasta que vaya
+  - Mueves todo a EE. UU.
+  answer:
+  - 0
+- id: q3
+  question: ¿Qué hora pones en el caso?
+  options:
+  - Con zona horaria, idealmente UTC
+  - «Esta mañana»
+  - Ninguna
+  - La hora a la que abres el caso
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud compute instances list
+  gcloud logging read 'logName:cloud-status' --limit=3
+  ask sre "El panel de estado confirma problemas en {{.zone}}; ¿abro caso a Google y muevo extractos a otra zona?"
+  gcloud compute instances create extractos-batch-c --zone={{.region}}-c --machine-type=e2-standard-2 --subnet=datos --no-address --labels=equipo=operaciones,uso=extractos
+  gcloud compute instances list
+  ticket escalate google "Proyecto {{.project}}. Compute Engine en la zona {{.zone}}: no responde extractos-batch y crear instancias falla con «The zone is currently unavailable (zonal outage)». Desde las 08:40 UTC. Impacto: retrasa los extractos mensuales de los clientes, que deben salir hoy. Probado: crear una VM nueva en la misma zona (mismo error). Mitigación: levantada extractos-batch-c en {{.region}}-c. Pedimos confirmación y hora estimada de recuperación."
+  ticket update "Hola NOC: es una incidencia de Google en la zona {{.zone}}, confirmada en su panel de estado. Hemos levantado los extractos en otra zona ({{.region}}-c) y siguen su curso. Caso abierto con Google; os doy la siguiente actualización en 1 hora o antes si hay novedades."
+shortcuts:
+- name: an empty case and no mitigation
+  run: |
+    ticket escalate google "No funcionan las VMs, revisadlo urgente."
+rubric:
+- name: Confirmado que es de Google
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: cloud-status
+    min: 1
+    desc: Panel de estado consultado
+- name: Mitigado en otra zona
+  validator: functional
+  points: 30
+  checks:
+  - type: count
+    collection: instances
+    where:
+      name:
+        regex: ^extractos
+      zone:
+        ne: '{{.zone}}'
+      status: RUNNING
+    min: 1
+    desc: Extractos en marcha en otra zona
+- name: Un caso que Google puede trabajar
+  validator: evidence
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: ticket_escalated
+    team: google
+    keywords:
+    - - '{{.project}}'
+    - - '{{.zone}}'
+    - - unavailable
+      - zonal outage
+      - no disponible
+      - error
+    - - utc
+      - cet
+      - desde las
+      - since
+    - - impact
+      - extractos
+      - statements
+      - clientes
+      - customers
+    - - mitig
+      - otra zona
+      - another zone
+      - '{{.region}}-c'
+      - workaround
+    desc: Proyecto, zona, error, hora, impacto y mitigación
+  - type: ticket_update
+    keywords:
+    - - google
+    - - otra zona
+      - another zone
+      - '{{.region}}-c'
+      - mitig
+    desc: NOC informado
+- name: Lo has entendido
+  validator: quiz
+  points: 15
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+tutor:
+- match: instances list
+  title: Lo que hay
+  why: 'extractos-batch figura en {{.zone}}, pero la zona no responde. Si intentas crear otra VM allí verás el error literal: cópialo tal cual para el caso.'
+- match: cloud-status
+  title: ¿Es Google?
+  why: 'El panel de estado confirma la zona: no se arregla, se sale de ella.'
+- match: extractos-batch-c
+  title: Mitigar
+  why: 'Sin estado: se crea de cero en una zona sana.'
+- match: ticket escalate google
+  title: El caso
+  why: Proyecto, zona, error, hora UTC, impacto, lo probado y la mitigación.
+en:
+  title: Craft 5 · Opening a case with Google (and mitigating meanwhile)
+  summary: 'VMs can''t be created in one zone. It''s not yours or any team''s: it''s Google. Confirm it, mitigate in another zone and open the case with what Google needs to not lose hours.'
+  story: |-
+    > 🎧 **Craft workshop.** You won't learn a new product here: you'll learn to **work a ticket** the way a good L2 Support engineer at a bank does. Read the explanation, follow the steps in the terminal and, if you get lost, open the **Tutor** tab.
+
+    > **INC-40105 · P2** · NOC: *"extractos-batch isn't responding and creating another VM in {{.zone}} fails. The statements must go out today."*
+
+    Some problems are **Google's**: a zone down, a managed service failure, an internal API error. Then you open a **support case with Google** (in the console: *Support → Cases → Create case*). Google responds according to the **priority** you choose (P1 = critical production impact) and the **quality of the case**: a case with data gets solved in hours; one without, in days of back-and-forth.
+
+    **1 · Reproduce and copy the verbatim error.** Try to create the VM: `gcloud compute instances create extractos-batch-2 --zone={{.zone}} --machine-type=e2-standard-2 --subnet=datos --no-address`.
+
+    **2 · Confirm it's Google's.** Status dashboard: `gcloud logging read 'logName:cloud-status' --limit=3`. If Google confirms the incident, **don't try to fix the zone**.
+
+    **3 · Mitigate while Google works.** The VM is stateless: create it in **another zone** of the region, e.g. `{{.region}}-c`, and check with `gcloud compute instances list`.
+
+    **4 · Open the case** (here, `ticket escalate google "…"`). What Google needs: **project ID** (`{{.project}}`), **product and zone**, **verbatim error**, **since when** (time with time zone, ideally UTC), **business impact**, **what you tried** and **the mitigation** applied.
+
+    **5 · Tell the NOC** it's Google's, what you did and when the next update is: `ticket update "…"`.
+  objectives:
+  - Reproduce the error
+  - Confirm it's Google's
+  - Mitigate in another zone
+  - Open the case with all the details
+  hints:
+  - '`gcloud compute instances create extractos-batch-c --zone={{.region}}-c --machine-type=e2-standard-2 --subnet=datos --no-address --labels=equipo=operaciones,uso=extractos`'
+  - 'Case: project, Compute Engine in {{.zone}}, "currently unavailable (zonal outage)", since 08:40 UTC, monthly statements delayed, mitigated in {{.region}}-c.'
+  ticket:
+    summary: extractos-batch (generates customers' monthly statements) isn't responding. Trying to create another VM in {{.zone}} fails. The statements must go out today.
+  text:
+    NOC 24x7: NOC 24x7
+    Diego Ferrer (SRE de guardia): Diego Ferrer (on-call SRE)
+    SRE de guardia.: On-call SRE.
+    'Dame hechos: qué servicio, desde cuándo, qué error y a cuántos afecta.': 'Give me facts: which service, since when, what error and how many are affected.'
+    ? 'Si el panel de estado de Google confirma la zona, no es nuestro: abre caso a Google con todos los datos y levanta extractos en otra zona de {{.region}}. Es sin estado: se puede crear de cero.'
+    : 'If Google''s status dashboard confirms the zone, it''s not ours: open a case with Google with all the details and bring up extractos in another zone of {{.region}}. It''s stateless: it can be created from scratch.'
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Esta semana es para aprender el oficio: pregunta todo lo que necesites.': 'This week is for learning the craft: ask anything you need.'
+    ¿Qué hace que Google resuelva antes un caso?: What makes Google solve a case faster?
+    Proyecto, zona, error literal, hora, impacto y lo probado: Project, zone, verbatim error, time, impact and what you tried
+    Escribir en mayúsculas: Writing in capitals
+    Abrir tres casos iguales: Opening three identical cases
+    Poner siempre P1: Always choosing P1
+    Google confirma una caída zonal. Mientras tanto…: Google confirms a zonal outage. Meanwhile…
+    Mueves la carga a otra zona de la región: You move the workload to another zone in the region
+    Esperas sin hacer nada: You wait doing nothing
+    Reinicias la VM en la misma zona hasta que vaya: You restart the VM in the same zone until it works
+    Mueves todo a EE. UU.: You move everything to the US
+    ¿Qué hora pones en el caso?: Which time do you put in the case?
+    Con zona horaria, idealmente UTC: With a time zone, ideally UTC
+    «Esta mañana»: '"This morning"'
+    Ninguna: None
+    La hora a la que abres el caso: The time you open the case
+    Confirmado que es de Google: Confirmed it's Google's
+    Panel de estado consultado: Status dashboard checked
+    Mitigado en otra zona: Mitigated in another zone
+    Extractos en marcha en otra zona: Statements running in another zone
+    Un caso que Google puede trabajar: A case Google can work on
+    Proyecto, zona, error, hora, impacto y mitigación: Project, zone, error, time, impact and mitigation
+    NOC informado: NOC informed
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Lo que hay: What's there
+    ? 'extractos-batch figura en {{.zone}}, pero la zona no responde. Si intentas crear otra VM allí verás el error literal: cópialo tal cual para el caso.'
+    : 'extractos-batch shows in {{.zone}}, but the zone doesn''t respond. If you try to create another VM there you''ll see the verbatim error: copy it as is for the case.'
+    ¿Es Google?: Is it Google?
+    'El panel de estado confirma la zona: no se arregla, se sale de ella.': 'The status dashboard confirms the zone: you don''t fix it, you move out of it.'
+    Mitigar: Mitigating
+    'Sin estado: se crea de cero en una zona sana.': 'Stateless: created from scratch in a healthy zone.'
+    El caso: The case
+    Proyecto, zona, error, hora UTC, impacto, lo probado y la mitigación.: Project, zone, error, UTC time, impact, what you tried and the mitigation.
