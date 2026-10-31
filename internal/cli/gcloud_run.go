@@ -483,6 +483,34 @@ func init() {
 			}
 			target[k] = n
 		}
+		if tags := c.KV("to-tags"); len(tags) > 0 {
+			// --to-tags=canary=10: the tagged revision gets its share and the
+			// rest stays on the revision serving most traffic now.
+			cur, curPct := "", -1
+			for _, r := range svc.Revisions {
+				if r.Traffic > curPct && r.Tag != "FAILED" {
+					cur, curPct = r.Name, r.Traffic
+				}
+			}
+			given := 0
+			for tag, v := range tags {
+				var n int
+				fmt.Sscanf(v, "%d", &n)
+				found := false
+				for _, r := range svc.Revisions {
+					if r.Tag == tag {
+						target[r.Name], found = n, true
+					}
+				}
+				if !found {
+					return nil, fmt.Errorf("There is no revision tagged [%s] in service [%s].", tag, svc.Name)
+				}
+				given += n
+			}
+			if _, ok := target[cur]; !ok && cur != "" && len(c.KV("to-revisions")) == 0 {
+				target[cur] = 100 - given
+			}
+		}
 		sum := 0
 		for _, v := range target {
 			sum += v

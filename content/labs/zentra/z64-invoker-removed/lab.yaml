@@ -1,0 +1,194 @@
+id: zentra-z64-invoker-removed
+title: 'INC P1 · La app no puede pagar: 403 entre app-gateway y pagos-api'
+summary: Un cambio de Terraform reescribió los invocadores de pagos-api y dejó fuera a app-gateway. Se arregla en el servicio, no abriéndolo.
+track: zentra
+day: 64
+level: intermediate
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.leastprivilege
+- compute.serverless
+- security.audit
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create analitica-sa --display-name="worker de analitica"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql users create pagos --instance=ledger-db --password=pw-ledger-1
+  gcloud pubsub topics create transacciones
+  gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:ledger-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:ledger-db,DB_USER=pagos,DB_PASSWORD=pw-ledger-1,DB_NAME=ledger,DB_POOL_SIZE=5,TOPIC=transacciones --max-instances=5 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: iam_remove
+  resource: run:pagos-api
+  role: roles/run.invoker
+  member: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+  actor: terraform-pagos@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /orders
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31064
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: NOC 24x7
+  summary: Todos los pagos desde la app fallan desde las 14:05. app-gateway registra «403 Forbidden» al llamar a pagos-api.
+actors:
+- role: dev
+  name: Equipo de Pagos
+  persona: Mantienen pagos-api.
+  fallback: A las 14:00 aplicamos un Terraform de pagos-api.
+  facts:
+  - keywords:
+    - - invoker
+      - terraform
+      - iam
+      - app-gateway
+      - permiso
+    answer: El Terraform nuevo define los invocadores de forma autoritativa y no incluía app-gateway-sa. Devolvédselo y lo añadimos al código.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31064 · P1** · *«Todos los pagos desde la app fallan desde las 14:05. app-gateway registra «403 Forbidden» al llamar a pagos-api.»*
+
+  Un **403** de Cloud Run significa que quien llama no tiene `roles/run.invoker` **en ese servicio**. Mira la política del servicio y la auditoría. Ojo con Terraform: los recursos *autoritativos* (`google_cloud_run_service_iam_policy`) **borran** lo que no esté en el código.
+objectives:
+- Mira quién puede invocar el servicio
+- Encuentra el cambio
+- Devuelve el invocador solo en el servicio
+- Valida y pide el arreglo en Terraform
+hints:
+- text: '`gcloud run services get-iam-policy pagos-api --region={{.region}}`'
+solution: |
+  ticket
+  ticket update "Estamos con el fallo de pagos desde la app. Próxima actualización en 15 minutos."
+  gcloud run services get-iam-policy pagos-api --region={{.region}}
+  gcloud logging read 'protoPayload.methodName:SetIamPolicy' --limit=3
+  ask dev "¿qué cambió a las 14:00 en los permisos de pagos-api?"
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  ticket comment "Causa: el Terraform de pagos-api aplicado a las 14:00 (terraform-pagos) define los invocadores de forma autoritativa y no incluía app-gateway-sa; 403 desde la app. Devuelto run.invoker solo en pagos-api. Pagos añade app-gateway-sa a su código."
+  ticket update "Resuelto: los pagos desde la app vuelven a funcionar. Un cambio de configuración quitó un permiso entre dos servicios; está restaurado."
+  ticket resolve "Devuelto run.invoker a app-gateway-sa en pagos-api tras el Terraform; pagos desde la app funcionando."
+shortcuts:
+- name: invoker on the whole project
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+    ticket resolve "Dado run.invoker a app-gateway en todo el proyecto para que pueda pagar."
+rubric:
+- name: Pagos desde la app
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /orders
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: app-gateway invoca pagos-api
+- name: Sin abrirlo
+  validator: security
+  points: 25
+  all: true
+  checks:
+  - type: iam
+    principal: allUsers
+    permission: run.routes.invoke
+    resource: run:pagos-api
+    expect: false
+    desc: pagos-api no es público
+  - type: command
+    regex: projects add-iam-policy-binding .*run.invoker
+    max: 0
+    desc: No en todo el proyecto
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: get-iam-policy|logging read
+    min: 1
+    desc: Política o auditoría revisadas
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - invoker
+    - - terraform
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: get-iam-policy
+  title: Quién puede invocar
+  why: app-gateway-sa ya no está en la política del servicio.
+- match: add-iam-policy-binding pagos-api
+  title: ''
+  why: En el servicio, no en el proyecto, y nunca allUsers.
+en:
+  title: 'INC P1 · The app can''t pay: 403 between app-gateway and pagos-api'
+  summary: A Terraform change rewrote pagos-api's invokers and left app-gateway out. Fix it on the service, not by opening it.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31064 · P1** · *"All payments from the app have failed since 14:05. app-gateway logs "403 Forbidden" calling pagos-api."*
+
+    A Cloud Run **403** means the caller lacks `roles/run.invoker` **on that service**. Check the service's policy and the audit log. Careful with Terraform: *authoritative* resources (`google_cloud_run_service_iam_policy`) **delete** whatever isn't in the code.
+  objectives:
+  - See who can invoke the service
+  - Find the change
+  - Restore the invoker only on the service
+  - Validate and ask for the Terraform fix
+  hints:
+  - '`gcloud run services get-iam-policy pagos-api --region={{.region}}`'
+  ticket:
+    summary: All payments from the app have failed since 14:05. app-gateway logs "403 Forbidden" calling pagos-api.
+  text:
+    NOC 24x7: NOC 24x7
+    Equipo de Pagos: Payments team
+    Mantienen pagos-api.: They maintain pagos-api.
+    A las 14:00 aplicamos un Terraform de pagos-api.: At 14:00 we applied a Terraform for pagos-api.
+    ? El Terraform nuevo define los invocadores de forma autoritativa y no incluía app-gateway-sa. Devolvédselo y lo añadimos al código.
+    : The new Terraform sets the invokers authoritatively and didn't include app-gateway-sa. Give it back and we'll add it to the code.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Pagos desde la app: Payments from the app
+    app-gateway invoca pagos-api: app-gateway invokes pagos-api
+    Sin abrirlo: Not opened up
+    pagos-api no es público: pagos-api isn't public
+    No en todo el proyecto: Not on the whole project
+    Diagnóstico: Diagnosis
+    Política o auditoría revisadas: Policy or audit checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Quién puede invocar: Who can invoke
+    app-gateway-sa ya no está en la política del servicio.: app-gateway-sa is no longer in the service's policy.
+    En el servicio, no en el proyecto, y nunca allUsers.: On the service, not the project, and never allUsers.

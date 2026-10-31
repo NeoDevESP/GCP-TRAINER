@@ -1,0 +1,222 @@
+id: zentra-z56-access-review
+title: Prueba de la semana 2 · Revisión trimestral de accesos
+summary: 'Auditoría interna: un Editor directo, un externo en un grupo interno y una baja que sigue en los grupos. Arréglalo todo sin dejar a nadie sin trabajar.'
+track: zentra
+day: 56
+level: basic
+branch: iam
+type: boss
+mode: production
+skills:
+- iam.leastprivilege
+- iam.roles
+- security.audit
+wellArchitected:
+- security
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 40
+baseline:
+- zentra-core
+setup: |
+  gcloud projects add-iam-policy-binding {{.project}} --member=user:hugo.martin@zentra.dev --role=roles/editor
+  gam update group gcp-datos@zentra.dev allowexternalmembers true
+  gcloud identity groups memberships add --group-email=gcp-datos@zentra.dev --member-email=analista.temporal@gmail.com
+  gam update user carla.mendez@zentra.dev suspended on
+ticket:
+  id: REQ-21056
+  kind: REQ
+  priority: P2
+  sla: 2d
+  reporter: Irene Soler (Cumplimiento)
+  summary: 'Revisión trimestral de accesos al proyecto de producción: corregid las desviaciones respecto a la norma (permisos por grupo, mínimo privilegio, sin externos ni bajas) y enviadme el resumen para el informe al auditor.'
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Accesos siempre por grupos, mínimo privilegio y nada de externos en grupos internos.
+  facts:
+  - keywords:
+    - - revisi
+      - review
+      - editor
+      - externo
+      - external
+      - gmail
+      - suspend
+      - carla
+    answer: 'Adelante con todo: fuera el Editor directo de Hugo (ya tiene lo suyo por grupo), fuera el externo y cierra gcp-datos a externos, y saca a Carla de los grupos. Déjalo documentado para el informe.'
+- role: compliance
+  name: Irene Soler (Cumplimiento)
+  persona: Cumplimiento normativo.
+  fallback: Quiero cada desviación, qué habéis hecho y quién lo aprobó.
+  facts: []
+- role: dev
+  name: Hugo Martín (Tarjetas)
+  persona: Desarrollador de Tarjetas.
+  fallback: Me dieron Editor para una prueba hace meses.
+  facts:
+  - keywords:
+    - - editor
+      - necesit
+      - need
+      - usas
+      - use
+    answer: Ya no lo uso; con lo de mi grupo me sobra.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-tarjetas-prod*).
+
+  > **REQ-21056 · P2** · *«Revisión trimestral de accesos al proyecto de producción: corregid las desviaciones respecto a la norma (permisos por grupo, mínimo privilegio, sin externos ni bajas) y enviadme el resumen para el informe al auditor.»*
+
+  **Prueba de la semana 2.** Revisa la política IAM del proyecto (`get-iam-policy`) y los grupos `gcp-*` (`gam print group-members`, `gam info user`). Busca: **roles básicos** dados a personas, **miembros externos** en grupos internos y **cuentas suspendidas** que siguen en grupos. Confirma con Seguridad, corrige y deja un resumen claro para Cumplimiento. Nadie debe quedarse sin lo que necesita para trabajar.
+objectives:
+- Revisa la política IAM y los grupos
+- Quita el rol básico directo
+- Saca al externo y cierra el grupo
+- Saca la baja de los grupos y resume
+hints:
+- text: '`gcloud projects get-iam-policy {{.project}}` y `gam print group-members group gcp-datos@zentra.dev`'
+- text: '`gcloud identity groups memberships delete --group-email=GRUPO --member-email=EMAIL`'
+solution: |
+  ticket
+  gcloud projects get-iam-policy {{.project}}
+  gam print group-members group gcp-datos@zentra.dev
+  gam print group-members group gcp-producto@zentra.dev
+  gam info user carla.mendez@zentra.dev
+  ask dev "¿sigues necesitando el rol Editor en el proyecto?"
+  ask security "¿apruebas quitar el Editor de Hugo, el externo de gcp-datos y a Carla de los grupos?"
+  gcloud projects remove-iam-policy-binding {{.project}} --member=user:hugo.martin@zentra.dev --role=roles/editor
+  gcloud identity groups memberships delete --group-email=gcp-datos@zentra.dev --member-email=analista.temporal@gmail.com
+  gam update group gcp-datos@zentra.dev allowexternalmembers false
+  gcloud identity groups memberships delete --group-email=gcp-producto@zentra.dev --member-email=carla.mendez@zentra.dev
+  ticket update "Revisión trimestral hecha con el OK de Seguridad (Nadia Kowalski). Desviaciones: 1) Hugo Martín tenía Editor directo en el proyecto: retirado; conserva su acceso por el grupo gcp-tarjetas-dev. 2) analista.temporal@gmail.com (externo) estaba en gcp-datos: retirado y el grupo ya no admite externos. 3) Carla Méndez (cuenta suspendida) seguía en gcp-producto: retirada. Sin roles básicos asignados a personas."
+  ticket resolve "Revisión de accesos: retirado Editor directo, externo de gcp-datos (cerrado a externos) y baja de gcp-producto."
+shortcuts:
+- name: remove only the Editor
+  run: |
+    gcloud projects remove-iam-policy-binding {{.project}} --member=user:hugo.martin@zentra.dev --role=roles/editor
+    ticket resolve "Quitado el rol Editor de Hugo; resto correcto."
+rubric:
+- name: Sin roles básicos
+  validator: security
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Nadie tiene Owner/Editor/Viewer directo
+  - type: iam
+    principal: user:hugo.martin@zentra.dev
+    permission: run.services.list
+    resource: project
+    desc: Hugo sigue pudiendo trabajar por su grupo
+- name: Grupos limpios
+  validator: security
+  points: 30
+  all: true
+  checks:
+  - type: absent
+    path: directory.groups["gcp-datos@zentra.dev"].members["analista.temporal@gmail.com"]
+    desc: Externo fuera de gcp-datos
+  - type: exists
+    path: directory.groups["gcp-datos@zentra.dev"]
+    expect:
+      allowExternalMembers: false
+    desc: gcp-datos cerrado a externos
+  - type: absent
+    path: directory.groups["gcp-producto@zentra.dev"].members["carla.mendez@zentra.dev"]
+    desc: La baja fuera de los grupos
+- name: Revisión y aprobación
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: get-iam-policy
+    min: 1
+    desc: Política revisada
+  - type: asked
+    actor: security
+    min: 1
+    desc: Aprobado por Seguridad
+- name: Informe para Cumplimiento
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - editor
+    - - extern
+      - gmail
+    - - suspend
+      - carla
+      - baja
+      - leaver
+    desc: Las tres desviaciones y qué se hizo
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: get-iam-policy
+  title: La foto de accesos
+  why: 'roles/editor a user:hugo.martin: un rol básico directo, la desviación más grave.'
+- match: print group-members
+  title: Los grupos
+  why: Un gmail.com dentro de un grupo de seguridad interno.
+- match: memberships delete
+  title: ''
+  why: Quitar del grupo retira todos los permisos que daba el grupo.
+en:
+  title: Week 2 test · Quarterly access review
+  summary: 'Internal audit: a direct Editor, an outsider in an internal group and a leaver still in the groups. Fix it all without leaving anyone unable to work.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-tarjetas-prod*).
+
+    > **REQ-21056 · P2** · *"Quarterly access review of the production project: fix deviations from the rule (access through groups, least privilege, no outsiders or leavers) and send me the summary for the auditor's report."*
+
+    **Week 2 test.** Review the project IAM policy (`get-iam-policy`) and the `gcp-*` groups (`gam print group-members`, `gam info user`). Look for: **basic roles** given to people, **outside members** in internal groups and **suspended accounts** still in groups. Confirm with Security, fix and leave a clear summary for Compliance. Nobody should lose what they need to work.
+  objectives:
+  - Review the IAM policy and groups
+  - Remove the direct basic role
+  - Remove the outsider and close the group
+  - Remove the leaver from groups and summarise
+  hints:
+  - '`gcloud projects get-iam-policy {{.project}}` and `gam print group-members group gcp-datos@zentra.dev`'
+  - '`gcloud identity groups memberships delete --group-email=GROUP --member-email=EMAIL`'
+  ticket:
+    summary: 'Quarterly access review of the production project: fix deviations from the rule (access through groups, least privilege, no outsiders or leavers) and send me the summary for the auditor''s report.'
+  text:
+    Irene Soler (Cumplimiento): Irene Soler (Compliance)
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Accesos siempre por grupos, mínimo privilegio y nada de externos en grupos internos.: Access always through groups, least privilege and no outsiders in internal groups.
+    ? 'Adelante con todo: fuera el Editor directo de Hugo (ya tiene lo suyo por grupo), fuera el externo y cierra gcp-datos a externos, y saca a Carla de los grupos. Déjalo documentado para el informe.'
+    : 'Go ahead with all of it: remove Hugo''s direct Editor (he has what he needs through his group), remove the outsider and close gcp-datos to outsiders, and take Carla out of the groups. Document it for the report.'
+    Cumplimiento normativo.: Regulatory compliance.
+    Quiero cada desviación, qué habéis hecho y quién lo aprobó.: I want each deviation, what you did and who approved it.
+    Hugo Martín (Tarjetas): Hugo Martín (Cards)
+    Desarrollador de Tarjetas.: Cards developer.
+    Me dieron Editor para una prueba hace meses.: I was given Editor for a test months ago.
+    Ya no lo uso; con lo de mi grupo me sobra.: I don't use it any more; my group's access is enough.
+    Sin roles básicos: No basic roles
+    Nadie tiene Owner/Editor/Viewer directo: Nobody has direct Owner/Editor/Viewer
+    Hugo sigue pudiendo trabajar por su grupo: Hugo can still work through his group
+    Grupos limpios: Clean groups
+    Externo fuera de gcp-datos: Outsider out of gcp-datos
+    gcp-datos cerrado a externos: gcp-datos closed to outsiders
+    La baja fuera de los grupos: The leaver out of the groups
+    Revisión y aprobación: Review and approval
+    Política revisada: Policy reviewed
+    Aprobado por Seguridad: Approved by Security
+    Informe para Cumplimiento: Report for Compliance
+    Las tres desviaciones y qué se hizo: The three deviations and what was done
+    Ticket cerrado: Ticket closed
+    La foto de accesos: The access picture
+    'roles/editor a user:hugo.martin: un rol básico directo, la desviación más grave.': 'roles/editor to user:hugo.martin: a direct basic role, the most serious deviation.'
+    Los grupos: The groups
+    Un gmail.com dentro de un grupo de seguridad interno.: A gmail.com inside an internal security group.
+    Quitar del grupo retira todos los permisos que daba el grupo.: Removing from the group withdraws every permission the group gave.

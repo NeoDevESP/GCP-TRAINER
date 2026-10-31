@@ -1,0 +1,211 @@
+id: zentra-z60-sql-flag
+title: INC P2 · Un parámetro de la base de datos tumba Cuentas
+summary: 'Alguien bajó max_connections a 20 «para ahorrar memoria». La instancia es grande de sobra: el problema es el parámetro.'
+track: zentra
+day: 60
+level: intermediate
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.cloudsql
+- databases.performance
+- observability.logging
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:cuentas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create cuentas-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create cuentas --instance=cuentas-db
+  gcloud sql users create app --instance=cuentas-db --password=pw-cuentas-1
+  gcloud run deploy cuentas-api --image=europe-docker.pkg.dev/gcplab-public/apps/inventory-api:1.0 --region={{.region}} --service-account=cuentas-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:cuentas-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:cuentas-db,DB_USER=app,DB_PASSWORD=pw-cuentas-1,DB_NAME=cuentas,DB_POOL_SIZE=10 --max-instances=4 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding cuentas-api --region={{.region}} --member=user:carla.mendez@zentra.dev --role=roles/run.invoker
+faults:
+- type: sql_flag
+  instance: cuentas-db
+  key: max_connections
+  value: '20'
+traffic:
+- name: saldos
+  target: run:cuentas-api
+  path: /stock
+  rps: 40
+  principal: user:carla.mendez@zentra.dev
+ticket:
+  id: INC-31060
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: NOC 24x7
+  summary: cuentas-api con errores 503 intermitentes desde la ventana de mantenimiento de anoche. La CPU de cuentas-db está baja.
+actors:
+- role: dba
+  name: Equipo de bases de datos
+  persona: DBA de Zentra.
+  fallback: Anoche ajustamos parámetros en varias instancias.
+  facts:
+  - keywords:
+    - - max_connections
+      - parametro
+      - parámetro
+      - flag
+      - '20'
+      - conexiones
+      - connections
+    answer: ¡Ups! El valor de 20 era para una instancia de pruebas. cuentas-db (db-custom-2-7680) va bien con su valor por defecto, 200.
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Un cambio en producción necesita registro; si es urgente, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - rollback
+      - emergencia
+      - emergency
+      - flag
+      - parametro
+    answer: Aprobado como cambio de emergencia (CHG-7790). Déjalo anotado en el ticket.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **INC-31060 · P2** · *«cuentas-api con errores 503 intermitentes desde la ventana de mantenimiento de anoche. La CPU de cuentas-db está baja.»*
+
+  CPU baja y errores de conexión: no falta máquina. Los **parámetros** de Cloud SQL (*database flags*) cambian el comportamiento del motor; `max_connections` limita cuántos clientes caben. Compara las conexiones que necesita el servicio (instancias × pool) con el límite configurado. Cambiar parámetros puede reiniciar la instancia: pide el cambio.
+objectives:
+- Lee el error de la base de datos
+- Revisa los parámetros de la instancia
+- Corrige el parámetro con un cambio aprobado
+- Valida y documenta
+hints:
+- text: '`gcloud sql instances describe cuentas-db --format=''value(settings.databaseFlags)''`'
+- text: '`gcloud sql instances patch cuentas-db --clear-database-flags` (vuelve al valor por defecto)'
+solution: |
+  ticket
+  gcloud logging read 'resource.type="cloudsql_database" severity>=ERROR' --limit=3 --format='value(textPayload)'
+  gcloud sql instances describe cuentas-db
+  ask dba "¿qué parámetros cambiasteis anoche en cuentas-db?"
+  ask change "¿apruebas quitar el parámetro max_connections de cuentas-db?"
+  gcloud sql instances patch cuentas-db --clear-database-flags --quiet
+  sleep 120
+  gcloud sql instances describe cuentas-db
+  ticket comment "Causa: en el mantenimiento de anoche se puso max_connections=20 en cuentas-db (valor pensado para pruebas); cuentas-api necesita hasta 40 conexiones. Quitado el parámetro con CHG-7790; vuelve al valor por defecto del tier (200)."
+  ticket update "Resuelto: cuentas-api vuelve a funcionar sin errores. Un ajuste de la base de datos de anoche limitaba demasiado las conexiones; está corregido."
+  ticket resolve "Retirado max_connections=20 de cuentas-db; conexiones por debajo del límite y sin 503."
+shortcuts:
+- name: upsize the instance
+  run: |
+    gcloud sql instances patch cuentas-db --tier=db-custom-4-15360 --quiet
+    ticket resolve "Ampliada cuentas-db para soportar más conexiones."
+rubric:
+- name: Servicio recuperado
+  validator: functional
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: sql_healthy
+    instance: cuentas-db
+    settle: 2
+    desc: Conexiones por debajo del límite
+  - type: http
+    target: run:cuentas-api
+    path: /stock
+    principal: user:carla.mendez@zentra.dev
+    status: 200
+    desc: cuentas-api responde
+- name: Arreglo en la causa
+  validator: security
+  points: 15
+  checks:
+  - type: command
+    regex: sql instances patch .*--tier
+    max: 0
+    desc: Sin ampliar la máquina
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: sql instances describe cuentas-db
+    min: 1
+    desc: Parámetros revisados
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio aprobado
+- name: Documentado
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - max_connections
+    - - '20'
+      - parámetro
+      - flag
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: sql instances describe
+  title: Los parámetros
+  why: max_connections=20 en una instancia que admite 200.
+- match: --clear-database-flags
+  title: ''
+  why: Vuelve a los valores por defecto del tier.
+en:
+  title: INC P2 · A database parameter takes Accounts down
+  summary: 'Someone lowered max_connections to 20 "to save memory". The instance is big enough: the problem is the parameter.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **INC-31060 · P2** · *"cuentas-api with intermittent 503s since last night's maintenance window. cuentas-db CPU is low."*
+
+    Low CPU and connection errors: the machine isn't short. Cloud SQL **parameters** (*database flags*) change how the engine behaves; `max_connections` limits how many clients fit. Compare the connections the service needs (instances × pool) with the configured limit. Changing flags can restart the instance: request the change.
+  objectives:
+  - Read the database error
+  - Check the instance's flags
+  - Fix the flag with an approved change
+  - Validate and document
+  hints:
+  - '`gcloud sql instances describe cuentas-db --format=''value(settings.databaseFlags)''`'
+  - '`gcloud sql instances patch cuentas-db --clear-database-flags` (back to the default)'
+  ticket:
+    summary: cuentas-api with intermittent 503s since last night's maintenance window. cuentas-db CPU is low.
+  text:
+    NOC 24x7: NOC 24x7
+    Equipo de bases de datos: Database team
+    DBA de Zentra.: Zentra's DBAs.
+    Anoche ajustamos parámetros en varias instancias.: Last night we tuned parameters on several instances.
+    ? ¡Ups! El valor de 20 era para una instancia de pruebas. cuentas-db (db-custom-2-7680) va bien con su valor por defecto, 200.
+    : Oops! The value 20 was meant for a test instance. cuentas-db (db-custom-2-7680) is fine with its default, 200.
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Un cambio en producción necesita registro; si es urgente, lo apruebo como emergencia.: A production change needs a record; if urgent, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7790). Déjalo anotado en el ticket.: Approved as an emergency change (CHG-7790). Note it in the ticket.
+    Servicio recuperado: Service back
+    Conexiones por debajo del límite: Connections under the limit
+    cuentas-api responde: cuentas-api responds
+    Arreglo en la causa: Fix at the cause
+    Sin ampliar la máquina: Without upsizing
+    Diagnóstico: Diagnosis
+    Parámetros revisados: Flags checked
+    Cambio aprobado: Change approved
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Los parámetros: The flags
+    max_connections=20 en una instancia que admite 200.: max_connections=20 on an instance that allows 200.
+    Vuelve a los valores por defecto del tier.: Back to the tier's defaults.

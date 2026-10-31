@@ -1,0 +1,182 @@
+id: zentra-z62-stopped-by-schedule
+title: INC P1 · La pasarela con los bancos corresponsales se apagó a las 22:00
+summary: El apagado nocturno de FinOps para entornos de desarrollo apagó una VM de producción sin etiquetar. Arráncala y etiquétala bien.
+track: zentra
+day: 62
+level: intermediate
+branch: compute
+type: incident
+mode: production
+skills:
+- compute.vm
+- finops.optimization
+- security.audit
+wellArchitected:
+- cost
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create pasarela-corresponsales --zone={{.zone}} --machine-type=e2-standard-2 --subnet=apps --no-address --tags=pasarela --labels=equipo=pagos --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-pasarela --network=zentra-vpc --allow=tcp:80 --source-tags=ops --target-tags=pasarela
+faults:
+- type: vm_stop
+  vm: pasarela-corresponsales
+  actor: finops-apagado-nocturno@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31062
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: NOC 24x7
+  summary: pasarela-corresponsales no responde desde las 22:00 y las transferencias internacionales se están acumulando. La VM aparece como TERMINATED.
+actors:
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: FinOps.
+  fallback: A las 22:00 apagamos todo lo que no lleve entorno=prod.
+  facts:
+  - keywords:
+    - - etiqueta
+      - label
+      - entorno
+      - prod
+      - apagado
+      - shutdown
+      - pasarela
+    answer: Si no tiene entorno=prod, el apagado nocturno la para. Ponle entorno=prod y no volverá a pasar.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31062 · P1** · *«pasarela-corresponsales no responde desde las 22:00 y las transferencias internacionales se están acumulando. La VM aparece como TERMINATED.»*
+
+  Una VM no se para sola: busca **quién la paró** en la auditoría (`instances.stop`). En Zentra, FinOps apaga cada noche lo que no esté etiquetado como producción. Primero el servicio (arrancar), luego la causa (la **etiqueta** que falta).
+objectives:
+- Encuentra quién la paró
+- Arráncala
+- Etiquétala como producción
+- Valida y comunica
+hints:
+- text: '`gcloud logging read ''protoPayload.methodName:"instances.stop"'' --limit=3`'
+- text: '`gcloud compute instances add-labels pasarela-corresponsales --zone={{.zone}} --labels=entorno=prod`'
+solution: |
+  ticket
+  ticket update "Estamos recuperando la pasarela con los bancos corresponsales. Próxima actualización en 15 minutos."
+  gcloud compute instances describe pasarela-corresponsales --zone={{.zone}}
+  gcloud logging read 'protoPayload.methodName:"instances.stop"' --limit=3
+  gcloud compute instances start pasarela-corresponsales --zone={{.zone}}
+  ask finops "¿por qué paró el apagado nocturno la pasarela?"
+  gcloud compute instances add-labels pasarela-corresponsales --zone={{.zone}} --labels=entorno=prod
+  ticket comment "Causa: el apagado nocturno de FinOps (finops-apagado-nocturno) paró pasarela-corresponsales porque no tenía la etiqueta entorno=prod. Arrancada y etiquetada; las transferencias acumuladas se están enviando."
+  ticket update "Resuelto: la pasarela con los bancos corresponsales funciona y las transferencias pendientes se están enviando. Un apagado automático de ahorro la paró por error; no volverá a pasar."
+  ticket resolve "Arrancada pasarela-corresponsales y etiquetada entorno=prod para excluirla del apagado nocturno."
+shortcuts:
+- name: just start it
+  run: |
+    gcloud compute instances start pasarela-corresponsales --zone={{.zone}}
+    ticket resolve "Arrancada la VM de la pasarela."
+rubric:
+- name: Pasarela en marcha
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:pasarela-corresponsales:80
+    path: /
+    status: 200
+    desc: La pasarela responde
+- name: Que no se repita
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: exists
+    path: instances["pasarela-corresponsales"]
+    expect:
+      labels:
+        regex: prod
+    desc: Etiquetada como producción
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: logging read
+    min: 1
+    desc: Auditoría revisada
+- name: Comunicación
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - etiqueta
+      - label
+      - entorno
+    - - apagado
+      - shutdown
+      - finops
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: instances.stop
+  title: Quién la paró
+  why: finops-apagado-nocturno a las 22:00.
+- match: add-labels
+  title: ''
+  why: Con entorno=prod el apagado nocturno la respeta.
+en:
+  title: INC P1 · The correspondent banks gateway shut down at 22:00
+  summary: FinOps' nightly shutdown for development environments stopped an unlabelled production VM. Start it and label it properly.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31062 · P1** · *"pasarela-corresponsales hasn't responded since 22:00 and international transfers are piling up. The VM shows as TERMINATED."*
+
+    A VM doesn't stop by itself: find **who stopped it** in the audit log (`instances.stop`). At Zentra, FinOps shuts down every night whatever isn't labelled as production. Service first (start it), then the cause (the missing **label**).
+  objectives:
+  - Find who stopped it
+  - Start it
+  - Label it as production
+  - Validate and communicate
+  hints:
+  - '`gcloud logging read ''protoPayload.methodName:"instances.stop"'' --limit=3`'
+  - '`gcloud compute instances add-labels pasarela-corresponsales --zone={{.zone}} --labels=entorno=prod`'
+  ticket:
+    summary: pasarela-corresponsales hasn't responded since 22:00 and international transfers are piling up. The VM shows as TERMINATED.
+  text:
+    NOC 24x7: NOC 24x7
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    FinOps.: FinOps.
+    A las 22:00 apagamos todo lo que no lleve entorno=prod.: At 22:00 we shut down everything without entorno=prod.
+    Si no tiene entorno=prod, el apagado nocturno la para. Ponle entorno=prod y no volverá a pasar.: If it lacks entorno=prod, the nightly shutdown stops it. Add entorno=prod and it won't happen again.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Pasarela en marcha: Gateway running
+    La pasarela responde: The gateway responds
+    Que no se repita: Won't happen again
+    Etiquetada como producción: Labelled as production
+    Diagnóstico: Diagnosis
+    Auditoría revisada: Audit checked
+    Comunicación: Communication
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Quién la paró: Who stopped it
+    finops-apagado-nocturno a las 22:00.: finops-apagado-nocturno at 22:00.
+    Con entorno=prod el apagado nocturno la respeta.: With entorno=prod the nightly shutdown leaves it alone.

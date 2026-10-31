@@ -1,0 +1,209 @@
+id: zentra-z63-scaled-to-zero
+title: 'INC P2 · Notificaciones sin pods: alguien escaló a cero'
+summary: No hay errores porque no hay nada corriendo. El despliegue tiene 0 réplicas tras una prueba que se olvidó deshacer.
+track: zentra
+day: 63
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.workloads
+- gke.troubleshooting
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud container clusters create apps-gke --zone={{.zone}} --num-nodes=2 --machine-type=e2-standard-2 --network=zentra-vpc --subnetwork=gke --enable-private-nodes
+  cat > notificaciones.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: notificaciones}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: notificaciones}}
+    template:
+      metadata: {labels: {app: notificaciones}}
+      spec:
+        containers:
+        - name: notificaciones
+          image: europe-docker.pkg.dev/gcplab-public/apps/hello:1.0
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /, port: 8080}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: notificaciones
+    annotations: {networking.gke.io/load-balancer-type: "Internal"}
+  spec:
+    type: LoadBalancer
+    selector: {app: notificaciones}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl apply -f notificaciones.yaml
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+faults:
+- type: k8s_scale
+  cluster: apps-gke
+  deployment: notificaciones
+  replicas: 0
+ticket:
+  id: INC-31063
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Carla Méndez (producto)
+  summary: Desde esta mañana no llega ninguna notificación push. No hay errores en ningún sitio.
+actors:
+- role: dev
+  name: Equipo de Notificaciones
+  persona: Mantienen notificaciones.
+  fallback: Normalmente corren 2 réplicas.
+  facts:
+  - keywords:
+    - - replica
+      - réplica
+      - scale
+      - escal
+      - cero
+      - zero
+      - prueba
+      - test
+    answer: ¡Era la prueba de carga de ayer! Escalamos a 0 para medir y no lo devolvimos. Son 2 réplicas.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-apps-prod*).
+
+  > **INC-31063 · P2** · *«Desde esta mañana no llega ninguna notificación push. No hay errores en ningún sitio.»*
+
+  «No hay errores» también es una pista: **puede que no haya nada corriendo**. Mira cuántas réplicas tiene el despliegue y cuántos pods hay.
+objectives:
+- Mira el despliegue y los pods
+- Confirma el número de réplicas
+- Escala de vuelta
+- Valida y documenta
+hints:
+- text: '`kubectl get deployment notificaciones` y `kubectl scale deployment notificaciones --replicas=2`'
+solution: |
+  ticket
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl get deployment notificaciones
+  kubectl get pods
+  ask dev "¿cuántas réplicas debe tener notificaciones?"
+  kubectl scale deployment notificaciones --replicas=2
+  kubectl get pods
+  ticket comment "Causa: notificaciones estaba escalado a 0 réplicas desde la prueba de carga de ayer; sin pods no había errores. Devuelto a 2 réplicas. Propuesta: un HPA con mínimo 2 y una alerta de réplicas disponibles = 0."
+  ticket update "Resuelto: las notificaciones push vuelven a salir. El servicio se quedó apagado tras una prueba de ayer; ya está en marcha."
+  ticket resolve "notificaciones escalado de 0 a 2 réplicas; el servicio responde."
+shortcuts:
+- name: restart
+  run: |
+    gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+    kubectl rollout restart deployment/notificaciones
+    ticket resolve "Reiniciado el despliegue de notificaciones para recuperar el servicio."
+rubric:
+- name: Notificaciones en marcha
+  validator: functional
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: k8s:apps-gke/notificaciones
+    path: /
+    status: 200
+    desc: El servicio responde
+  - type: exists
+    path: clusters["apps-gke"].k8s.namespaces.default.deployments.notificaciones
+    expect:
+      replicas:
+        gte: 2
+    desc: Al menos 2 réplicas
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  checks:
+  - type: command
+    regex: get deployment|get pods|describe deployment
+    min: 1
+    desc: Réplicas revisadas
+- name: Documentado
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - réplica
+      - replica
+      - '0'
+      - cero
+    - - alerta
+      - alert
+      - hpa
+      - prueba
+      - test
+    desc: Causa y prevención
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: get deployment
+  title: Las réplicas
+  why: 'READY 0/0: nada corriendo, nada fallando.'
+- match: scale deployment
+  title: ''
+  why: De vuelta a 2 réplicas.
+en:
+  title: 'INC P2 · Notifications without pods: someone scaled to zero'
+  summary: There are no errors because nothing is running. The deployment has 0 replicas after a test someone forgot to undo.
+  story: |-
+    **Project `{{.project}}`** (*zentra-apps-prod*).
+
+    > **INC-31063 · P2** · *"Since this morning no push notification arrives. There are no errors anywhere."*
+
+    "No errors" is a clue too: **maybe nothing is running**. Check how many replicas the deployment has and how many pods there are.
+  objectives:
+  - Check the deployment and pods
+  - Confirm the replica count
+  - Scale back
+  - Validate and document
+  hints:
+  - '`kubectl get deployment notificaciones` and `kubectl scale deployment notificaciones --replicas=2`'
+  ticket:
+    summary: Since this morning no push notification arrives. There are no errors anywhere.
+  text:
+    Carla Méndez (producto): Carla Méndez (product)
+    Equipo de Notificaciones: Notifications team
+    Mantienen notificaciones.: They maintain notifications.
+    Normalmente corren 2 réplicas.: It normally runs 2 replicas.
+    ¡Era la prueba de carga de ayer! Escalamos a 0 para medir y no lo devolvimos. Son 2 réplicas.: It was yesterday's load test! We scaled to 0 to measure and didn't put it back. It's 2 replicas.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Notificaciones en marcha: Notifications running
+    El servicio responde: The service responds
+    Al menos 2 réplicas: At least 2 replicas
+    Diagnóstico: Diagnosis
+    Réplicas revisadas: Replicas checked
+    Documentado: Documented
+    Causa y prevención: Cause and prevention
+    Ticket cerrado: Ticket closed
+    Las réplicas: The replicas
+    'READY 0/0: nada corriendo, nada fallando.': 'READY 0/0: nothing running, nothing failing.'
+    De vuelta a 2 réplicas.: Back to 2 replicas.

@@ -1,0 +1,204 @@
+id: zentra-z58-image-pull
+title: 'INC P2 · Notificaciones: pods en ImagePullBackOff tras el despliegue'
+summary: 'El despliegue apunta a una imagen que no existe. Los pods antiguos se mantienen un rato, pero la versión nueva nunca arranca: vuelve atrás y avisa al equipo.'
+track: zentra
+day: 58
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.troubleshooting
+- gke.workloads
+- devops.artifacts
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud container clusters create apps-gke --zone={{.zone}} --num-nodes=2 --machine-type=e2-standard-2 --network=zentra-vpc --subnetwork=gke --enable-private-nodes
+  cat > notificaciones.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: notificaciones}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: notificaciones}}
+    template:
+      metadata: {labels: {app: notificaciones}}
+      spec:
+        containers:
+        - name: notificaciones
+          image: europe-docker.pkg.dev/gcplab-public/apps/hello:1.0
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /, port: 8080}
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: notificaciones
+    annotations: {networking.gke.io/load-balancer-type: "Internal"}
+  spec:
+    type: LoadBalancer
+    selector: {app: notificaciones}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl apply -f notificaciones.yaml
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+faults:
+- type: k8s_image
+  cluster: apps-gke
+  deployment: notificaciones
+  image: europe-docker.pkg.dev/zentra-apps/notificaciones/notificaciones:2.0
+ticket:
+  id: INC-31058
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo de Notificaciones
+  summary: Hemos desplegado la 2.0 de notificaciones y los pods se quedan en ImagePullBackOff. Las notificaciones push no salen.
+actors:
+- role: dev
+  name: Equipo de Notificaciones
+  persona: Mantienen notificaciones.
+  fallback: La 2.0 la subió el pipeline… o eso creíamos.
+  facts:
+  - keywords:
+    - - imagen
+      - image
+      - registry
+      - artifact
+      - pipeline
+      - tag
+      - '2.0'
+    answer: 'Revisando: el pipeline falló al subir la imagen 2.0 al registro. Volved a la anterior y la publicamos con calma.'
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-apps-prod*).
+
+  > **INC-31058 · P2** · *«Hemos desplegado la 2.0 de notificaciones y los pods se quedan en ImagePullBackOff. Las notificaciones push no salen.»*
+
+  `ImagePullBackOff` significa que el nodo **no puede descargar la imagen**: no existe, la etiqueta está mal o los nodos no tienen permiso en el registro. Los eventos del pod (`kubectl describe pod`) dicen cuál. Lo rápido y seguro es volver a la versión anterior; la imagen la arregla el equipo.
+objectives:
+- Mira el estado y los eventos de los pods
+- Identifica la imagen que falla
+- Vuelve a la versión anterior
+- Escala la imagen al equipo
+hints:
+- text: '`kubectl describe pod -l app=notificaciones`'
+- text: '`kubectl rollout undo deployment/notificaciones`'
+solution: |
+  ticket
+  gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+  kubectl get pods
+  kubectl describe pod -l app=notificaciones
+  kubectl rollout history deployment/notificaciones
+  ask dev "¿la imagen 2.0 está publicada en el registro?"
+  kubectl rollout undo deployment/notificaciones
+  kubectl get pods
+  ticket comment "Causa: la 2.0 apunta a europe-docker.pkg.dev/zentra-apps/notificaciones/notificaciones:2.0, que no existe en el registro (el pipeline falló al publicarla). Rollout undo a la revisión anterior."
+  ticket escalate notificaciones "La imagen notificaciones:2.0 no está en Artifact Registry (el pipeline falló al publicarla). Hemos vuelto a la versión anterior; publicadla y volved a desplegar."
+  ticket update "Resuelto: las notificaciones push vuelven a salir con la versión anterior. La versión nueva no estaba publicada; el equipo la publicará antes de volver a desplegar."
+shortcuts:
+- name: restart the deployment
+  run: |
+    gcloud container clusters get-credentials apps-gke --zone={{.zone}}
+    kubectl rollout restart deployment/notificaciones
+    ticket resolve "Reiniciado el despliegue de notificaciones."
+rubric:
+- name: Notificaciones en marcha
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: k8s:apps-gke/notificaciones
+    path: /
+    status: 200
+    desc: El servicio responde
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  checks:
+  - type: command
+    regex: describe pod|get events
+    min: 1
+    desc: Eventos del pod revisados
+- name: Escalado al equipo
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_escalated
+    team: notific
+    keywords:
+    - - imagen
+      - image
+      - '2.0'
+    - - registro
+      - registry
+      - publica
+      - publish
+    desc: El equipo sabe qué arreglar
+  - type: ticket_update
+    public: true
+    keywords:
+    - - notificaciones
+      - notifications
+    desc: Aviso al negocio
+tutor:
+- match: describe pod
+  title: Los eventos
+  why: 'Failed to pull image …:2.0: not found.'
+- match: rollout undo
+  title: ''
+  why: La plantilla anterior usa una imagen que sí existe.
+en:
+  title: 'INC P2 · Notifications: pods in ImagePullBackOff after the deployment'
+  summary: 'The deployment points to an image that doesn''t exist. Old pods hang on for a while, but the new release never starts: roll back and tell the team.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-apps-prod*).
+
+    > **INC-31058 · P2** · *"We deployed notifications 2.0 and the pods stay in ImagePullBackOff. Push notifications aren't going out."*
+
+    `ImagePullBackOff` means the node **can't download the image**: it doesn't exist, the tag is wrong or the nodes lack registry permission. The pod events (`kubectl describe pod`) tell you which. The fast, safe move is rolling back; the team fixes the image.
+  objectives:
+  - Check pod status and events
+  - Identify the failing image
+  - Roll back
+  - Escalate the image to the team
+  hints:
+  - '`kubectl describe pod -l app=notificaciones`'
+  - '`kubectl rollout undo deployment/notificaciones`'
+  ticket:
+    summary: We deployed notifications 2.0 and the pods stay in ImagePullBackOff. Push notifications aren't going out.
+  text:
+    Equipo de Notificaciones: Notifications team
+    Mantienen notificaciones.: They maintain notifications.
+    La 2.0 la subió el pipeline… o eso creíamos.: The pipeline pushed 2.0… or so we thought.
+    'Revisando: el pipeline falló al subir la imagen 2.0 al registro. Volved a la anterior y la publicamos con calma.': 'Checking: the pipeline failed to push the 2.0 image to the registry. Roll back and we''ll publish it calmly.'
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Notificaciones en marcha: Notifications running
+    El servicio responde: The service responds
+    Diagnóstico: Diagnosis
+    Eventos del pod revisados: Pod events checked
+    Escalado al equipo: Escalated to the team
+    El equipo sabe qué arreglar: The team knows what to fix
+    Aviso al negocio: Business notice
+    Los eventos: The events
+    'Failed to pull image …:2.0: not found.': 'Failed to pull image …:2.0: not found.'
+    La plantilla anterior usa una imagen que sí existe.: The previous template uses an image that exists.

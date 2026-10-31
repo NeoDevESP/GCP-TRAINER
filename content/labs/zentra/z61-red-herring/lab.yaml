@@ -1,0 +1,196 @@
+id: zentra-z61-red-herring
+title: INC P2 · Los registros están llenos de errores… y casi ninguno importa
+summary: 'Mucho ruido de otros sistemas. Filtra por el recurso que falla y encontrarás la causa real: una variable de entorno que desapareció.'
+track: zentra
+day: 61
+level: intermediate
+branch: observability
+type: incident
+mode: production
+skills:
+- observability.logging
+- compute.serverless
+- observability.incident
+wellArchitected:
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create analitica-sa --display-name="worker de analitica"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql users create pagos --instance=ledger-db --password=pw-ledger-1
+  gcloud pubsub topics create transacciones
+  gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:ledger-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:ledger-db,DB_USER=pagos,DB_PASSWORD=pw-ledger-1,DB_NAME=ledger,DB_POOL_SIZE=5,TOPIC=transacciones --max-instances=5 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: log_noise
+  severity: ERROR
+  resourceType: gce_instance
+  lines:
+  - 'kernel: TCP: out of memory -- consider tuning tcp_mem'
+  - 'sshd[2211]: error: kex_exchange_identification: Connection closed by remote host'
+  - 'google_guest_agent: ERROR non_windows_accounts.go: Error updating SSH keys'
+  - 'nginx: [crit] SSL_do_handshake() failed (SSL: error:0A00010B:SSL routines::wrong version number)'
+- type: run_env
+  service: pagos-api
+  key: TOPIC
+  value: ''
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /orders
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31061
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: NOC 24x7
+  summary: 'Los pedidos de pago fallan (500) desde las 11:00 y Logging está lleno de errores: TCP out of memory, SSH, certificados… No sabemos por dónde empezar.'
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts:
+  - keywords:
+    - - kernel
+      - tcp
+      - ssh
+      - ssl
+      - ruido
+      - noise
+      - vm
+    answer: Esos errores de las VMs salen todos los días; no tienen que ver con pagos-api, que es Cloud Run.
+- role: dev
+  name: Equipo de Pagos
+  persona: Mantienen pagos-api.
+  fallback: A las 11:00 el pipeline aplicó una configuración nueva.
+  facts:
+  - keywords:
+    - - topic
+      - variable
+      - env
+      - config
+    answer: TOPIC debe valer transacciones; la plantilla nueva no la llevaba.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31061 · P2** · *«Los pedidos de pago fallan (500) desde las 11:00 y Logging está lleno de errores: TCP out of memory, SSH, certificados… No sabemos por dónde empezar.»*
+
+  En un incidente, los registros de **todo** el proyecto son ruido. **Filtra por el recurso** que falla (`resource.type=cloud_run_revision`, el servicio concreto) y por la hora. Lo que no sea de ese recurso, a un lado: puede ser normal.
+objectives:
+- Filtra los registros por el servicio que falla
+- Descarta el ruido
+- Encuentra y corrige la configuración
+- Valida y documenta
+hints:
+- text: '`gcloud logging read ''resource.type=cloud_run_revision resource.labels.service_name="pagos-api" severity>=ERROR'' --limit=3`'
+solution: |
+  ticket
+  gcloud logging read 'severity>=ERROR' --limit=5
+  gcloud logging read 'resource.type=cloud_run_revision resource.labels.service_name="pagos-api" severity>=ERROR' --limit=3
+  gcloud run services describe pagos-api --region={{.region}}
+  ask dev "¿qué valor debe tener la variable TOPIC?"
+  gcloud run services update pagos-api --region={{.region}} --update-env-vars=TOPIC=transacciones
+  ticket comment "Causa: la configuración aplicada a las 11:00 dejó pagos-api sin la variable TOPIC (configuration error: TOPIC is not set). Los errores de kernel, SSH y SSL son de VMs y ajenos al incidente. Restaurado TOPIC=transacciones."
+  ticket update "Resuelto: los pedidos de pago vuelven a funcionar. Faltaba un dato de configuración tras el despliegue de las 11:00; está corregido."
+  ticket resolve "Restaurada TOPIC=transacciones en pagos-api; /orders responde 200."
+shortcuts:
+- name: restart and hope
+  run: |
+    gcloud run services update pagos-api --region={{.region}} --update-env-vars=REDEPLOY=1
+    ticket resolve "Redesplegado pagos-api para limpiar los errores de los registros."
+rubric:
+- name: Pagos funcionando
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /orders
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: /orders responde
+- name: Filtrar bien
+  validator: diagnosis
+  points: 30
+  checks:
+  - type: command
+    regex: cloud_run_revision
+    min: 1
+    desc: Registros filtrados por el recurso
+- name: Documentado
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - topic
+    - - ruido
+      - noise
+      - ajeno
+      - unrelated
+      - kernel
+      - vm
+    desc: Causa y ruido descartado
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: cloud_run_revision
+  title: Filtrar
+  why: 'Solo los errores de pagos-api: «TOPIC is not set».'
+- match: update-env-vars=TOPIC
+  title: ''
+  why: La variable vuelve y los pedidos también.
+en:
+  title: INC P2 · The logs are full of errors… and almost none matter
+  summary: 'Lots of noise from other systems. Filter by the failing resource and you''ll find the real cause: an environment variable that disappeared.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31061 · P2** · *"Payment orders have failed (500) since 11:00 and Logging is full of errors: TCP out of memory, SSH, certificates… We don't know where to start."*
+
+    During an incident, logs from the **whole** project are noise. **Filter by the failing resource** (`resource.type=cloud_run_revision`, the specific service) and by time. Anything not from that resource goes aside: it may be normal.
+  objectives:
+  - Filter logs by the failing service
+  - Discard the noise
+  - Find and fix the configuration
+  - Validate and document
+  hints:
+  - '`gcloud logging read ''resource.type=cloud_run_revision resource.labels.service_name="pagos-api" severity>=ERROR'' --limit=3`'
+  ticket:
+    summary: 'Payment orders have failed (500) since 11:00 and Logging is full of errors: TCP out of memory, SSH, certificates… We don''t know where to start.'
+  text:
+    NOC 24x7: NOC 24x7
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Esos errores de las VMs salen todos los días; no tienen que ver con pagos-api, que es Cloud Run.: Those VM errors show up every day; they have nothing to do with pagos-api, which is Cloud Run.
+    Equipo de Pagos: Payments team
+    Mantienen pagos-api.: They maintain pagos-api.
+    A las 11:00 el pipeline aplicó una configuración nueva.: At 11:00 the pipeline applied a new configuration.
+    TOPIC debe valer transacciones; la plantilla nueva no la llevaba.: TOPIC must be transacciones; the new template didn't include it.
+    Pagos funcionando: Payments working
+    /orders responde: /orders responds
+    Filtrar bien: Filter well
+    Registros filtrados por el recurso: Logs filtered by resource
+    Documentado: Documented
+    Causa y ruido descartado: Cause and noise ruled out
+    Ticket cerrado: Ticket closed
+    Filtrar: Filter
+    'Solo los errores de pagos-api: «TOPIC is not set».': 'Only pagos-api''s errors: "TOPIC is not set".'
+    La variable vuelve y los pedidos también.: The variable is back and so are the orders.

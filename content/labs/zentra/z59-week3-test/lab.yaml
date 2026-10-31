@@ -1,0 +1,238 @@
+id: zentra-z59-week3-test
+title: Prueba de la semana 3 · Lanzamiento de la tarjeta virtual
+summary: 'Dos problemas a la vez: una versión que no arranca y, debajo, un permiso de secreto perdido. Arreglar uno no basta.'
+track: zentra
+day: 59
+level: intermediate
+branch: compute
+type: boss
+mode: production
+skills:
+- compute.serverless
+- security.secrets
+- devops.delivery
+wellArchitected:
+- reliability
+- security
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 45
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: iam_remove
+  resource: secret:proveedor-psp
+  role: roles/secretmanager.secretAccessor
+  member: serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com
+  actor: seg-rotacion@{{.project}}.iam.gserviceaccount.com
+- type: run_image
+  service: pagos-api
+  image: europe-docker.pkg.dev/gcplab-public/apps/payments-api:3.0-bad
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31059
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: Carla Méndez (producto)
+  summary: Hoy lanzamos la tarjeta virtual y los pagos fallan desde el despliegue de las 08:00. Marketing tiene la campaña en marcha. ¡Urgente!
+actors:
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Un cambio en producción necesita registro; si es urgente, lo apruebo como emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - rollback
+      - emergencia
+      - emergency
+      - flag
+      - parametro
+    answer: Aprobado como cambio de emergencia (CHG-7790). Déjalo anotado en el ticket.
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Seguridad cloud.
+  fallback: Anoche rotamos los secretos de proveedores.
+  facts:
+  - keywords:
+    - - secreto
+      - secret
+      - proveedor-psp
+      - rotac
+      - rotat
+      - accessor
+      - permiso
+    answer: El proceso de rotación recreó la política del secreto y se dejó a pagos-sa. Devuélvele secretAccessor solo en proveedor-psp.
+- role: product
+  name: Carla Méndez (producto)
+  persona: Product owner.
+  fallback: Necesito saber cuándo vuelve el pago con tarjeta virtual.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31059 · P1** · *«Hoy lanzamos la tarjeta virtual y los pagos fallan desde el despliegue de las 08:00. Marketing tiene la campaña en marcha. ¡Urgente!»*
+
+  **Prueba de la semana 3.** Tiene trampa: cuando arregles lo evidente, comprueba que el servicio **de verdad** funciona. Revisa revisiones, registros y auditoría; el rollback es un cambio de emergencia (pide aprobación). Comunica al negocio pronto y escala a Pagos lo que sea suyo.
+objectives:
+- Comunica y revisa las revisiones
+- Vuelve a la versión buena (con aprobación)
+- Encuentra el segundo problema
+- Arregla, valida y escala
+hints:
+- text: 'Tras el rollback, mira los registros otra vez: ¿puede el servicio leer su secreto?'
+solution: |
+  ticket
+  ticket update "Estamos con el fallo de pagos de la tarjeta virtual. Próxima actualización en 15 minutos."
+  gcloud run revisions list --service=pagos-api --region={{.region}}
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  gcloud secrets get-iam-policy proveedor-psp
+  gcloud logging read 'protoPayload.methodName:SetIamPolicy' --limit=3
+  ask security "¿qué ha pasado con los permisos del secreto proveedor-psp?"
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  ask change "¿apruebas el rollback de pagos-api como cambio de emergencia?"
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --no-allow-unauthenticated
+  ticket comment "Dos causas: 1) la 3.0 de pagos-api no arranca (failed to start and listen on the port): rollback a payments-api:1.0 con CHG-7790; 2) la rotación de anoche (seg-rotacion) dejó a pagos-sa sin secretAccessor en proveedor-psp: devuelto solo en ese secreto. pagos-api vuelve a cobrar."
+  ticket escalate pagos "La 3.0 de pagos-api no arranca en producción; estamos en la 1.0. Revisad la 3.0 y añadid una prueba de arranque al pipeline antes de volver a desplegar."
+  ticket update "Resuelto: los pagos con tarjeta virtual funcionan. Había un fallo en la versión nueva y un permiso perdido en la rotación de claves de anoche; ambos corregidos."
+shortcuts:
+- name: only fix the secret
+  run: |
+    gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+    ticket resolve "Devuelto el permiso del secreto a pagos-sa tras la rotación."
+rubric:
+- name: Pagos funcionando
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: pagos-api cobra
+  - type: exists
+    path: runServices["pagos-api"]
+    expect:
+      image:
+        regex: payments-api:1\.0
+    desc: En la versión buena
+- name: Permiso justo
+  validator: security
+  points: 20
+  all: true
+  checks:
+  - type: iam
+    principal: serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: secretmanager.versions.access
+    resource: secret:proveedor-psp
+    desc: Lee su secreto
+  - type: command
+    regex: projects add-iam-policy-binding .*secretmanager
+    max: 0
+    desc: No en todo el proyecto
+- name: Proceso
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Rollback aprobado
+  - type: command
+    regex: logging read
+    min: 2
+    desc: Registros y auditoría
+- name: Comunicación
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: true
+    keywords:
+    - - pago
+      - payment
+    - - tarjeta
+      - card
+    desc: Negocio informado
+  - type: ticket_escalated
+    team: pagos|payments
+    keywords:
+    - - '3.0'
+    - - '1.0'
+      - rollback
+      - anterior
+    desc: Pagos sabe qué arreglar
+tutor:
+- match: revisions list
+  title: Las revisiones
+  why: 'La 3.0 no arranca: el tráfico sigue en una revisión rota.'
+- match: secrets get-iam-policy
+  title: El segundo problema
+  why: pagos-sa ya no está en la política del secreto.
+en:
+  title: Week 3 test · Virtual card launch
+  summary: 'Two problems at once: a release that won''t start and, underneath, a lost secret permission. Fixing one isn''t enough.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31059 · P1** · *"We launch the virtual card today and payments have failed since the 08:00 deployment. Marketing's campaign is live. Urgent!"*
+
+    **Week 3 test.** There's a catch: once you fix the obvious, check the service **really** works. Review revisions, logs and the audit log; the rollback is an emergency change (ask for approval). Tell the business early and escalate to Payments whatever is theirs.
+  objectives:
+  - Communicate and review revisions
+  - Roll back to the good version (with approval)
+  - Find the second problem
+  - Fix, validate and escalate
+  hints:
+  - 'After the rollback, check the logs again: can the service read its secret?'
+  ticket:
+    summary: We launch the virtual card today and payments have failed since the 08:00 deployment. Marketing's campaign is live. Urgent!
+  text:
+    Carla Méndez (producto): Carla Méndez (product)
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Un cambio en producción necesita registro; si es urgente, lo apruebo como emergencia.: A production change needs a record; if urgent, I approve it as an emergency.
+    Aprobado como cambio de emergencia (CHG-7790). Déjalo anotado en el ticket.: Approved as an emergency change (CHG-7790). Note it in the ticket.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Seguridad cloud.: Cloud security.
+    Anoche rotamos los secretos de proveedores.: Last night we rotated the provider secrets.
+    ? El proceso de rotación recreó la política del secreto y se dejó a pagos-sa. Devuélvele secretAccessor solo en proveedor-psp.
+    : The rotation job recreated the secret's policy and left pagos-sa out. Give it secretAccessor back only on proveedor-psp.
+    Product owner.: Product owner.
+    Necesito saber cuándo vuelve el pago con tarjeta virtual.: I need to know when virtual card payments are back.
+    Pagos funcionando: Payments working
+    pagos-api cobra: pagos-api charges
+    En la versión buena: On the good version
+    Permiso justo: Right permission
+    Lee su secreto: Reads its secret
+    No en todo el proyecto: Not on the whole project
+    Proceso: Process
+    Rollback aprobado: Rollback approved
+    Registros y auditoría: Logs and audit
+    Comunicación: Communication
+    Negocio informado: Business informed
+    Pagos sabe qué arreglar: Payments knows what to fix
+    Las revisiones: The revisions
+    'La 3.0 no arranca: el tráfico sigue en una revisión rota.': '3.0 won''t start: traffic sits on a broken revision.'
+    El segundo problema: The second problem
+    pagos-sa ya no está en la política del secreto.: pagos-sa is no longer in the secret's policy.

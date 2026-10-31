@@ -1,0 +1,217 @@
+id: zentra-z55-service-account
+title: REQ P3 · Identidad para el nuevo microservicio de préstamos
+summary: Una cuenta de servicio propia, sin claves, con acceso solo a su secreto y a su tema, y el despliegue de Cloud Run con ella.
+track: zentra
+day: 55
+level: basic
+branch: iam
+type: challenge
+mode: production
+skills:
+- iam.serviceaccounts
+- iam.leastprivilege
+- security.secrets
+wellArchitected:
+- security
+certs:
+- ACE
+- PCA
+difficulty: 2
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  echo -n "scoring_live_92XQ" | gcloud secrets create prestamos-scoring --data-file=-
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud pubsub topics create solicitudes-prestamo
+ticket:
+  id: REQ-21055
+  kind: REQ
+  priority: P3
+  sla: 2d
+  reporter: Equipo de Préstamos
+  summary: Vamos a desplegar prestamos-api en Cloud Run (imagen payments-api:1.0). Necesita leer la clave del proveedor de scoring (secreto prestamos-scoring) y publicar en solicitudes-prestamo. Lo invoca app-gateway. ¿Nos lo dejáis listo?
+actors:
+- role: dev
+  name: Equipo de Préstamos
+  persona: Desarrollan prestamos-api.
+  fallback: Usad la cuenta que queráis, nos da igual.
+  facts:
+  - keywords:
+    - - cuenta
+      - account
+      - compute
+      - default
+      - pagos-sa
+      - reutiliz
+      - reuse
+    answer: Si es más rápido, usad pagos-sa, que ya tiene permisos…
+  - keywords:
+    - - variable
+      - env
+      - api_key
+      - secreto
+      - secret
+    answer: La app lee la clave de la variable API_KEY.
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Accesos siempre por grupos, mínimo privilegio y nada de externos en grupos internos.
+  facts:
+  - keywords:
+    - - revisi
+      - review
+      - editor
+      - externo
+      - external
+      - gmail
+      - suspend
+      - carla
+    answer: 'Adelante con todo: fuera el Editor directo de Hugo (ya tiene lo suyo por grupo), fuera el externo y cierra gcp-datos a externos, y saca a Carla de los grupos. Déjalo documentado para el informe.'
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-prestamos-prod*).
+
+  > **REQ-21055 · P3** · *«Vamos a desplegar prestamos-api en Cloud Run (imagen payments-api:1.0). Necesita leer la clave del proveedor de scoring (secreto prestamos-scoring) y publicar en solicitudes-prestamo. Lo invoca app-gateway. ¿Nos lo dejáis listo?»*
+
+  Norma de Zentra: **una cuenta de servicio por microservicio**, **sin claves descargadas**, y permisos **sobre el recurso concreto** (el secreto, el tema), nunca en todo el proyecto. No reutilices la cuenta de otro servicio aunque te lo pidan: mezclaría permisos y auditoría. El secreto se monta como variable con `--set-secrets`, no en texto plano.
+objectives:
+- Crea la cuenta de servicio propia
+- Permisos solo en el secreto y el tema
+- Despliega con el secreto montado
+- Deja que app-gateway lo invoque
+hints:
+- text: '`gcloud secrets add-iam-policy-binding prestamos-scoring --member=serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor`'
+- text: '`gcloud run deploy prestamos-api … --service-account=prestamos-sa@… --set-secrets=API_KEY=prestamos-scoring:latest`'
+solution: |
+  ticket
+  ask dev "¿qué variable usa la app para la clave?"
+  ask security "¿puedo reutilizar pagos-sa para prestamos-api?"
+  gcloud iam service-accounts create prestamos-sa --display-name="prestamos-api"
+  gcloud secrets add-iam-policy-binding prestamos-scoring --member=serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud pubsub topics add-iam-policy-binding solicitudes-prestamo --member=serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  gcloud run deploy prestamos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=prestamos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=prestamos-scoring:latest --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding prestamos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  ticket update "Listo: prestamos-api corre con su propia cuenta (prestamos-sa), sin claves. Solo puede leer el secreto prestamos-scoring (montado en API_KEY) y publicar en solicitudes-prestamo; solo app-gateway puede invocarlo. No hemos reutilizado pagos-sa por norma de seguridad."
+  ticket resolve "Creada prestamos-sa con secretAccessor en prestamos-scoring y publisher en solicitudes-prestamo; prestamos-api desplegado con ella."
+shortcuts:
+- name: reuse a broad account
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+    gcloud run deploy prestamos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=prestamos-scoring:latest --no-allow-unauthenticated
+    ticket resolve "Desplegado prestamos-api con la cuenta de pagos."
+rubric:
+- name: Servicio en marcha
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: http
+    target: run:prestamos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: app-gateway invoca prestamos-api
+  - type: exists
+    path: runServices["prestamos-api"]
+    expect:
+      serviceAccount:
+        regex: ^prestamos-sa@
+    desc: Con su propia cuenta
+- name: Mínimo privilegio
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: secretmanager.versions.access
+    resource: secret:prestamos-scoring
+    desc: Lee su secreto
+  - type: iam
+    principal: serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: secretmanager.versions.access
+    resource: secret:proveedor-psp
+    expect: false
+    desc: No lee secretos ajenos
+  - type: iam
+    principal: serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: pubsub.topics.publish
+    resource: topic:solicitudes-prestamo
+    desc: Publica en su tema
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Sin roles básicos
+- name: Respuesta
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - prestamos-sa
+      - cuenta propia
+      - own account
+    - - secreto
+      - secret
+      - api_key
+    desc: Explica qué tiene y por qué
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: service-accounts create prestamos-sa
+  title: Una por servicio
+  why: Permisos y auditoría separados para cada microservicio.
+- match: secrets add-iam-policy-binding
+  title: En el recurso
+  why: Solo ese secreto, no todos los del proyecto.
+- match: --set-secrets
+  title: ''
+  why: El secreto llega como variable sin estar en la configuración en claro.
+en:
+  title: REQ P3 · Identity for the new loans microservice
+  summary: Its own service account, no keys, access only to its secret and its topic, and the Cloud Run deployment using it.
+  story: |-
+    **Project `{{.project}}`** (*zentra-prestamos-prod*).
+
+    > **REQ-21055 · P3** · *"We're deploying prestamos-api on Cloud Run (image payments-api:1.0). It needs to read the scoring provider key (secret prestamos-scoring) and publish to solicitudes-prestamo. app-gateway invokes it. Can you set it up?"*
+
+    Zentra rule: **one service account per microservice**, **no downloaded keys**, and permissions **on the specific resource** (the secret, the topic), never on the whole project. Don't reuse another service's account even if asked: it would mix permissions and audit trails. The secret is mounted as a variable with `--set-secrets`, not in plain text.
+  objectives:
+  - Create its own service account
+  - Permissions only on the secret and topic
+  - Deploy with the secret mounted
+  - Let app-gateway invoke it
+  hints:
+  - '`gcloud secrets add-iam-policy-binding prestamos-scoring --member=serviceAccount:prestamos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor`'
+  - '`gcloud run deploy prestamos-api … --service-account=prestamos-sa@… --set-secrets=API_KEY=prestamos-scoring:latest`'
+  ticket:
+    summary: We're deploying prestamos-api on Cloud Run (image payments-api:1.0). It needs to read the scoring provider key (secret prestamos-scoring) and publish to solicitudes-prestamo. app-gateway invokes it. Can you set it up?
+  text:
+    Equipo de Préstamos: Loans team
+    Desarrollan prestamos-api.: They develop prestamos-api.
+    Usad la cuenta que queráis, nos da igual.: Use whatever account you like, we don't mind.
+    Si es más rápido, usad pagos-sa, que ya tiene permisos…: If it's quicker, use pagos-sa, it already has permissions…
+    La app lee la clave de la variable API_KEY.: The app reads the key from the API_KEY variable.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Accesos siempre por grupos, mínimo privilegio y nada de externos en grupos internos.: Access always through groups, least privilege and no outsiders in internal groups.
+    ? 'Adelante con todo: fuera el Editor directo de Hugo (ya tiene lo suyo por grupo), fuera el externo y cierra gcp-datos a externos, y saca a Carla de los grupos. Déjalo documentado para el informe.'
+    : 'Go ahead with all of it: remove Hugo''s direct Editor (he has what he needs through his group), remove the outsider and close gcp-datos to outsiders, and take Carla out of the groups. Document it for the report.'
+    Servicio en marcha: Service running
+    app-gateway invoca prestamos-api: app-gateway invokes prestamos-api
+    Con su propia cuenta: With its own account
+    Mínimo privilegio: Least privilege
+    Lee su secreto: Reads its secret
+    No lee secretos ajenos: Doesn't read other secrets
+    Publica en su tema: Publishes to its topic
+    Sin roles básicos: No basic roles
+    Respuesta: Reply
+    Explica qué tiene y por qué: Explains what it has and why
+    Ticket cerrado: Ticket closed
+    Una por servicio: One per service
+    Permisos y auditoría separados para cada microservicio.: Separate permissions and audit for each microservice.
+    En el recurso: On the resource
+    Solo ese secreto, no todos los del proyecto.: Only that secret, not every secret in the project.
+    El secreto llega como variable sin estar en la configuración en claro.: The secret arrives as a variable without being in plain configuration.

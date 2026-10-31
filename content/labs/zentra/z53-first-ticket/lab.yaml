@@ -1,0 +1,222 @@
+id: zentra-z53-first-ticket
+title: Tutorial 9 · Tu primer ticket de principio a fin
+summary: 'Una petición sencilla para practicar el ciclo completo de un ticket: leer, preguntar lo que falta, hacerlo bien, responder y cerrar.'
+track: zentra
+day: 53
+level: basic
+branch: storage
+type: guided
+mode: production
+skills:
+- storage.buckets
+- storage.access
+- iam.roles
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+ticket:
+  id: REQ-20053
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Sara Benítez (Datos)
+  summary: 'Hola: necesitamos un sitio en Cloud Storage para dejar los informes de riesgo. Que lo pueda leer todo el equipo de Datos. ¡Gracias!'
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Son informes internos de riesgo, nada público.
+  facts:
+  - keywords:
+    - - nombre
+      - name
+      - bucket
+      - llam
+    answer: Llámalo zentra-informes-riesgo-{{.project}}.
+  - keywords:
+    - - quien
+      - quién
+      - who
+      - equipo
+      - team
+      - grupo
+      - group
+      - leer
+      - read
+    answer: 'Todo el equipo de Datos: el grupo gcp-datos@zentra.dev. Solo leer; los informes los sube un proceso.'
+  - keywords:
+    - - donde
+      - dónde
+      - region
+      - ubicaci
+      - location
+      - eu
+    answer: En la UE, como todo.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **REQ-20053 · P4** · *«Hola: necesitamos un sitio en Cloud Storage para dejar los informes de riesgo. Que lo pueda leer todo el equipo de Datos. ¡Gracias!»*
+
+  Así se trabaja cada ticket en Zentra:
+
+  1. **Léelo** con `ticket` y apunta lo que falta (nombre, quién, dónde).
+  2. **Pregunta** al solicitante (`ask data "…"`). No supongas.
+  3. **Hazlo bien a la primera**: bucket en la **UE**, **acceso uniforme**, **prevención de acceso público** y etiquetas `equipo` y `uso`.
+  4. Da el acceso **al grupo**, no a las personas, y con el **rol más pequeño** (lectura: `roles/storage.objectViewer`).
+  5. **Responde** en lenguaje claro (`ticket update`) y **cierra** con una nota de qué has hecho (`ticket resolve`).
+objectives:
+- Lee el ticket y pregunta lo que falta
+- Crea el bucket con los estándares de Zentra
+- Da lectura al grupo de Datos
+- Responde y cierra
+hints:
+- text: '`gcloud storage buckets create gs://zentra-informes-riesgo-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention`'
+- text: '`gcloud storage buckets add-iam-policy-binding gs://zentra-informes-riesgo-{{.project}} --member=group:gcp-datos@zentra.dev --role=roles/storage.objectViewer`'
+solution: |
+  ticket
+  ask data "¿cómo quieres que se llame el bucket?"
+  ask data "¿quién tiene que leerlo exactamente?"
+  ask data "¿en qué región o ubicación lo creamos?"
+  gcloud storage buckets create gs://zentra-informes-riesgo-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  gcloud storage buckets update gs://zentra-informes-riesgo-{{.project}} --update-labels=equipo=datos,uso=informes-riesgo
+  gcloud storage buckets add-iam-policy-binding gs://zentra-informes-riesgo-{{.project}} --member=group:gcp-datos@zentra.dev --role=roles/storage.objectViewer
+  gcloud storage buckets get-iam-policy gs://zentra-informes-riesgo-{{.project}}
+  ticket update "Hola Sara: ya tenéis gs://zentra-informes-riesgo en la UE. Todo el grupo gcp-datos puede leer los informes; no es público. Si el proceso que los sube necesita permiso de escritura, abre otra petición con su cuenta de servicio."
+  ticket resolve "Creado gs://zentra-informes-riesgo en EU con acceso uniforme, sin acceso público y lectura para gcp-datos."
+shortcuts:
+- name: read access to everyone
+  run: |
+    gcloud storage buckets create gs://zentra-informes-riesgo-{{.project}} --location=EU
+    gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/storage.admin
+    ticket resolve "Bucket creado y acceso dado a Datos en el proyecto."
+rubric:
+- name: Bucket con los estándares
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: exists
+    path: buckets["zentra-informes-riesgo-{{.project}}"]
+    expect:
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+    desc: Acceso uniforme y sin acceso público
+  - type: exists
+    path: buckets["zentra-informes-riesgo-{{.project}}"]
+    expect:
+      location:
+        regex: (?i)^eu
+    desc: En la UE
+- name: Acceso correcto
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:sara.benitez@zentra.dev
+    permission: storage.objects.get
+    resource: bucket:zentra-informes-riesgo-{{.project}}
+    desc: Datos puede leer (por su grupo)
+  - type: iam
+    principal: user:sara.benitez@zentra.dev
+    permission: storage.objects.delete
+    resource: bucket:zentra-informes-riesgo-{{.project}}
+    expect: false
+    desc: Solo lectura
+- name: Preguntar
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: asked
+    actor: data
+    min: 2
+    desc: Preguntado lo que faltaba
+- name: Respuesta y cierre
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - gcp-datos
+      - grupo
+      - group
+    - - ue
+      - eu
+      - público
+      - public
+    desc: Respuesta clara a Sara
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: ask data
+  title: Preguntar antes de hacer
+  why: 'Nombre, quién y dónde: tres datos que el ticket no dice.'
+- match: buckets create
+  title: Los estándares
+  why: UE, acceso uniforme (sin ACL por objeto) y prevención de acceso público.
+- match: add-iam-policy-binding
+  title: Al grupo, rol pequeño
+  why: objectViewer sobre el bucket, no admin sobre el proyecto.
+- match: ticket update
+  title: Responder
+  why: Qué tiene, quién y qué no (no es público). Sin jerga.
+en:
+  title: Tutorial 9 · Your first ticket from start to finish
+  summary: 'A simple request to practise the whole ticket cycle: read, ask what''s missing, do it right, reply and close.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **REQ-20053 · P4** · *"Hi: we need a place in Cloud Storage to drop the risk reports. The whole Data team should be able to read it. Thanks!"*
+
+    This is how every ticket works at Zentra:
+
+    1. **Read it** with `ticket` and note what's missing (name, who, where).
+    2. **Ask** the requester (`ask data "…"`). Don't assume.
+    3. **Do it right first time**: bucket in the **EU**, **uniform access**, **public access prevention** and `equipo` and `uso` labels.
+    4. Grant access **to the group**, not to people, with the **smallest role** (read: `roles/storage.objectViewer`).
+    5. **Reply** in plain words (`ticket update`) and **close** with a note of what you did (`ticket resolve`).
+  objectives:
+  - Read the ticket and ask what's missing
+  - Create the bucket with Zentra's standards
+  - Give read access to the Data group
+  - Reply and close
+  hints:
+  - '`gcloud storage buckets create gs://zentra-informes-riesgo-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention`'
+  - '`gcloud storage buckets add-iam-policy-binding gs://zentra-informes-riesgo-{{.project}} --member=group:gcp-datos@zentra.dev --role=roles/storage.objectViewer`'
+  ticket:
+    summary: 'Hi: we need a place in Cloud Storage to drop the risk reports. The whole Data team should be able to read it. Thanks!'
+  text:
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Son informes internos de riesgo, nada público.: They're internal risk reports, nothing public.
+    Llámalo zentra-informes-riesgo-{{.project}}.: Call it zentra-informes-riesgo-{{.project}}.
+    'Todo el equipo de Datos: el grupo gcp-datos@zentra.dev. Solo leer; los informes los sube un proceso.': 'The whole Data team: the gcp-datos@zentra.dev group. Read only; a job uploads the reports.'
+    En la UE, como todo.: In the EU, like everything.
+    Bucket con los estándares: Bucket to standard
+    Acceso uniforme y sin acceso público: Uniform access, no public access
+    En la UE: In the EU
+    Acceso correcto: Right access
+    Datos puede leer (por su grupo): Data can read (through its group)
+    Solo lectura: Read only
+    Preguntar: Ask
+    Preguntado lo que faltaba: Asked what was missing
+    Respuesta y cierre: Reply and close
+    Respuesta clara a Sara: Clear reply to Sara
+    Ticket cerrado: Ticket closed
+    Preguntar antes de hacer: Ask before doing
+    'Nombre, quién y dónde: tres datos que el ticket no dice.': 'Name, who and where: three facts the ticket doesn''t say.'
+    Los estándares: The standards
+    UE, acceso uniforme (sin ACL por objeto) y prevención de acceso público.: EU, uniform access (no per-object ACLs) and public access prevention.
+    Al grupo, rol pequeño: To the group, small role
+    objectViewer sobre el bucket, no admin sobre el proyecto.: objectViewer on the bucket, not admin on the project.
+    Responder: Reply
+    Qué tiene, quién y qué no (no es público). Sin jerga.: What they have, who, and what not (it isn't public). No jargon.

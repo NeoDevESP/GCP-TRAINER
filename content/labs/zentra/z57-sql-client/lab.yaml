@@ -1,0 +1,185 @@
+id: zentra-z57-sql-client
+title: INC P2 · Cuentas no conecta con su base de datos tras la limpieza de permisos
+summary: Para usar el conector de Cloud SQL la cuenta del servicio necesita Cloud SQL Client. Un script de «limpieza» se lo quitó.
+track: zentra
+day: 57
+level: intermediate
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.cloudsql
+- iam.serviceaccounts
+- observability.logging
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:cuentas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create cuentas-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create cuentas --instance=cuentas-db
+  gcloud sql users create app --instance=cuentas-db --password=pw-cuentas-1
+  gcloud run deploy cuentas-api --image=europe-docker.pkg.dev/gcplab-public/apps/inventory-api:1.0 --region={{.region}} --service-account=cuentas-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:cuentas-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:cuentas-db,DB_USER=app,DB_PASSWORD=pw-cuentas-1,DB_NAME=cuentas,DB_POOL_SIZE=10 --max-instances=4 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding cuentas-api --region={{.region}} --member=user:carla.mendez@zentra.dev --role=roles/run.invoker
+faults:
+- type: iam_remove
+  resource: project
+  role: roles/cloudsql.client
+  member: serviceAccount:cuentas-sa@{{.project}}.iam.gserviceaccount.com
+  actor: iam-limpieza@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: saldos
+  target: run:cuentas-api
+  path: /stock
+  rps: 20
+  principal: user:carla.mendez@zentra.dev
+ticket:
+  id: INC-31057
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo de Cuentas
+  summary: cuentas-api devuelve 500 en todas las consultas desde las 10:00. No hemos desplegado nada. En los registros sale algo de «not authorized» al conectar con la base de datos.
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Seguridad cloud.
+  fallback: Esta mañana pasamos el script de limpieza de permisos sin uso.
+  facts:
+  - keywords:
+    - - cloudsql
+      - client
+      - cuentas-sa
+      - limpieza
+      - clean
+    answer: Vaya, el script vio cloudsql.client como «sin uso». Devuélveselo a cuentas-sa; lo excluimos.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **INC-31057 · P2** · *«cuentas-api devuelve 500 en todas las consultas desde las 10:00. No hemos desplegado nada. En los registros sale algo de «not authorized» al conectar con la base de datos.»*
+
+  Cloud Run se conecta a Cloud SQL con el **conector** (`/cloudsql/…`), que pide que la cuenta del servicio tenga **`roles/cloudsql.client`**. Lee el error en los registros, mira qué cuenta usa el servicio y busca en la auditoría qué cambió en la política IAM.
+objectives:
+- Lee el error del servicio
+- Identifica la cuenta y el permiso que falta
+- Encuentra quién lo quitó
+- Devuélvelo y valida
+hints:
+- text: '`gcloud logging read ''resource.type=cloud_run_revision severity>=ERROR'' --limit=3` y `gcloud logging read ''protoPayload.methodName:SetIamPolicy'' --limit=3`'
+solution: |
+  ticket
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  gcloud run services describe cuentas-api --region={{.region}}
+  gcloud logging read 'protoPayload.methodName:SetIamPolicy' --limit=3
+  ask security "¿el script de limpieza ha tocado cuentas-sa?"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:cuentas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  ticket comment "Causa: el script iam-limpieza retiró roles/cloudsql.client a cuentas-sa por considerarlo sin uso; sin él, el conector de Cloud SQL rechaza la conexión. Devuelto el rol (solo cloudsql.client). Seguridad excluye este rol del script."
+  ticket update "Resuelto: cuentas-api vuelve a responder. Un proceso de limpieza de permisos retiró el acceso del servicio a su base de datos; está restaurado."
+  ticket resolve "Devuelto cloudsql.client a cuentas-sa retirado por iam-limpieza; cuentas-api responde."
+shortcuts:
+- name: make the account Editor
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:cuentas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/editor
+    ticket resolve "Dado Editor a la cuenta de cuentas-api para que conecte."
+rubric:
+- name: Servicio recuperado
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: http
+    target: run:cuentas-api
+    path: /stock
+    principal: user:carla.mendez@zentra.dev
+    status: 200
+    desc: cuentas-api responde
+- name: Solo lo necesario
+  validator: security
+  points: 25
+  checks:
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Sin roles básicos
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  checks:
+  - type: command
+    regex: logging read
+    min: 2
+    desc: Registros y auditoría
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - cloudsql.client
+      - cloud sql client
+    - - limpieza
+      - clean
+      - script
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: SetIamPolicy
+  title: La auditoría
+  why: iam-limpieza cambió la política a las 10:00.
+- match: roles/cloudsql.client
+  title: ''
+  why: El rol justo para conectar por el conector, nada más.
+en:
+  title: INC P2 · Accounts can't reach its database after the permissions clean-up
+  summary: To use the Cloud SQL connector the service account needs Cloud SQL Client. A "clean-up" script removed it.
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **INC-31057 · P2** · *"cuentas-api has returned 500 on every query since 10:00. We haven't deployed anything. The logs show something about "not authorized" connecting to the database."*
+
+    Cloud Run connects to Cloud SQL through the **connector** (`/cloudsql/…`), which requires the service's account to have **`roles/cloudsql.client`**. Read the error in the logs, check which account the service uses and look in the audit log for what changed in the IAM policy.
+  objectives:
+  - Read the service's error
+  - Identify the account and the missing permission
+  - Find who removed it
+  - Restore it and validate
+  hints:
+  - '`gcloud logging read ''resource.type=cloud_run_revision severity>=ERROR'' --limit=3` and `gcloud logging read ''protoPayload.methodName:SetIamPolicy'' --limit=3`'
+  ticket:
+    summary: cuentas-api has returned 500 on every query since 10:00. We haven't deployed anything. The logs show something about "not authorized" connecting to the database.
+  text:
+    Equipo de Cuentas: Accounts team
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Seguridad cloud.: Cloud security.
+    Esta mañana pasamos el script de limpieza de permisos sin uso.: This morning we ran the unused-permissions clean-up script.
+    Vaya, el script vio cloudsql.client como «sin uso». Devuélveselo a cuentas-sa; lo excluimos.: Oops, the script saw cloudsql.client as "unused". Give it back to cuentas-sa; we'll exclude it.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Servicio recuperado: Service back
+    cuentas-api responde: cuentas-api responds
+    Solo lo necesario: Only what's needed
+    Sin roles básicos: No basic roles
+    Diagnóstico: Diagnosis
+    Registros y auditoría: Logs and audit
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    La auditoría: The audit
+    iam-limpieza cambió la política a las 10:00.: iam-limpieza changed the policy at 10:00.
+    El rol justo para conectar por el conector, nada más.: Just the role to connect through the connector, nothing more.

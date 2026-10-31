@@ -1,0 +1,209 @@
+id: zentra-z54-week1-test
+title: Prueba de la semana 1 · El portal de informes no carga
+summary: 'Sin tutorial: registros, entrar por IAP, revisar el servicio, arreglar, responder y cerrar. Más unas preguntas rápidas de lo visto en la semana.'
+track: zentra
+day: 54
+level: basic
+branch: observability
+type: challenge
+mode: production
+skills:
+- observability.logging
+- compute.vm
+- compute.troubleshooting
+wellArchitected:
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 2
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create informes-web --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=informes --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-informes --network=zentra-vpc --allow=tcp:80 --source-tags=ops --target-tags=informes
+faults:
+- type: service_stop
+  vm: informes-web
+  service: nginx
+ticket:
+  id: INC-30054
+  kind: INC
+  priority: P3
+  sla: 4h
+  reporter: Riesgos · Analítica
+  summary: El portal interno de informes (informes-web) no carga desde esta mañana. La VM aparece encendida en la consola.
+actors:
+- role: risk
+  name: Riesgos · Analítica
+  persona: Equipo de riesgos.
+  fallback: Lo usamos a diario a las 9:00.
+  facts:
+  - keywords:
+    - - cuando
+      - when
+      - desde
+      - since
+      - cambio
+      - change
+    answer: Ayer por la noche hubo mantenimiento de parches en las VMs.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-riesgos-prod*).
+
+  > **INC-30054 · P3** · *«El portal interno de informes (informes-web) no carga desde esta mañana. La VM aparece encendida en la consola.»*
+
+  **Prueba de la semana 1.** Esta vez no hay tutor paso a paso: aplica el método. Qué ha cambiado, entra en la VM por IAP, mira el servicio (`systemctl status`), arréglalo, comprueba que el portal responde, responde al equipo y cierra. Al final responde las preguntas rápidas (`quiz`).
+objectives:
+- Averigua qué ha cambiado
+- Revisa el servicio en la VM
+- Arranca el servicio y valida
+- Responde, cierra y contesta las preguntas
+hints:
+- text: '`gcloud compute ssh informes-web --zone={{.zone}} --tunnel-through-iap --command=''sudo systemctl status nginx''`'
+quiz:
+- id: q1
+  question: 'Una VM sin IP pública: ¿desde qué rango entra IAP por SSH?'
+  options:
+  - 0.0.0.0/0
+  - 35.235.240.0/20
+  - 10.0.0.0/8
+  - 130.211.0.0/22
+  answer:
+  - 1
+- id: q2
+  question: ¿Dónde miras quién cambió un recurso?
+  options:
+  - En los registros de auditoría de actividad
+  - En la factura
+  - En el panel de cuotas
+  - En Cloud Shell
+  answer:
+  - 0
+- id: q3
+  question: ¿A quién se da un permiso en Zentra?
+  options:
+  - A la persona, con Editor
+  - A un grupo, con el rol más pequeño
+  - A todos los usuarios del dominio
+  - A una cuenta de servicio compartida
+  answer:
+  - 1
+solution: |
+  ticket
+  ask risk "¿hubo algún cambio anoche en las VMs?"
+  gcloud compute ssh informes-web --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
+  gcloud compute ssh informes-web --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl start nginx'
+  gcloud compute ssh informes-web --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
+  ticket comment "Causa: tras el mantenimiento de parches de anoche nginx quedó parado en informes-web (la VM sí estaba encendida). Arrancado; pedido al equipo de parches que verifique servicios tras reiniciar."
+  ticket update "Resuelto: el portal de informes vuelve a cargar. El servidor web no arrancó tras el mantenimiento de anoche; ya está en marcha."
+  ticket resolve "nginx arrancado en informes-web tras el mantenimiento; el portal responde."
+shortcuts:
+- name: recreate the VM
+  run: |
+    gcloud compute instances reset informes-web --zone={{.zone}}
+    ticket resolve "Reiniciada la VM de informes."
+rubric:
+- name: Portal recuperado
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:informes-web:80
+    path: /
+    status: 200
+    desc: El portal responde
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  checks:
+  - type: command
+    regex: systemctl status
+    min: 1
+    desc: Servicio revisado
+- name: Conceptos de la semana
+  validator: quiz
+  points: 20
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Al menos 2 de 3 correctas
+- name: Respuesta y cierre
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - nginx
+    - - parche
+      - patch
+      - manten
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: systemctl status
+  title: El servicio
+  why: 'nginx parado: la VM está encendida pero el servicio no.'
+en:
+  title: Week 1 test · The reports portal won't load
+  summary: 'No tutorial: logs, IAP access, check the service, fix it, reply and close. Plus a few quick questions on the week.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-riesgos-prod*).
+
+    > **INC-30054 · P3** · *"The internal reports portal (informes-web) hasn't loaded since this morning. The VM shows as running in the console."*
+
+    **Week 1 test.** No step-by-step tutor this time: apply the method. What changed, get into the VM through IAP, check the service (`systemctl status`), fix it, check the portal responds, reply to the team and close. Finally answer the quick questions (`quiz`).
+  objectives:
+  - Find out what changed
+  - Check the service on the VM
+  - Start the service and validate
+  - Reply, close and answer the questions
+  hints:
+  - '`gcloud compute ssh informes-web --zone={{.zone}} --tunnel-through-iap --command=''sudo systemctl status nginx''`'
+  ticket:
+    summary: The internal reports portal (informes-web) hasn't loaded since this morning. The VM shows as running in the console.
+  text:
+    Riesgos · Analítica: Risk · Analytics
+    Equipo de riesgos.: Risk team.
+    Lo usamos a diario a las 9:00.: We use it every day at 9:00.
+    Ayer por la noche hubo mantenimiento de parches en las VMs.: Last night there was patch maintenance on the VMs.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    'Una VM sin IP pública: ¿desde qué rango entra IAP por SSH?': 'A VM without a public IP: which range does IAP SSH come from?'
+    0.0.0.0/0: 0.0.0.0/0
+    35.235.240.0/20: 35.235.240.0/20
+    10.0.0.0/8: 10.0.0.0/8
+    130.211.0.0/22: 130.211.0.0/22
+    ¿Dónde miras quién cambió un recurso?: Where do you look for who changed a resource?
+    En los registros de auditoría de actividad: In the admin activity audit logs
+    En la factura: In the bill
+    En el panel de cuotas: In the quotas page
+    En Cloud Shell: In Cloud Shell
+    ¿A quién se da un permiso en Zentra?: Who gets a permission at Zentra?
+    A la persona, con Editor: To the person, with Editor
+    A un grupo, con el rol más pequeño: To a group, with the smallest role
+    A todos los usuarios del dominio: To every user in the domain
+    A una cuenta de servicio compartida: To a shared service account
+    Portal recuperado: Portal back
+    El portal responde: The portal responds
+    Diagnóstico: Diagnosis
+    Servicio revisado: Service checked
+    Conceptos de la semana: The week's concepts
+    Al menos 2 de 3 correctas: At least 2 of 3 right
+    Respuesta y cierre: Reply and close
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    El servicio: The service
+    'nginx parado: la VM está encendida pero el servicio no.': 'nginx stopped: the VM is on but the service isn''t.'
