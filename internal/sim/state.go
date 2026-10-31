@@ -27,6 +27,7 @@ type State struct {
 	Images      map[string]*Behavior `json:"images"` // image catalog (behaviour models)
 	Tick        int                  `json:"tick"`
 	Extra       map[string]string    `json:"extra,omitempty"`
+	Directory   *Directory           `json:"directory,omitempty"` // Workspace / Cloud Identity users and groups
 	ipSeq       map[string]int
 	rng         *rand.Rand
 	explain     *[]Hop // causal-chain recorder for "teach me why" (not serialised)

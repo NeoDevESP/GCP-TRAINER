@@ -233,8 +233,9 @@ func (s *State) memberMatches(member, principal string) bool {
 		return true
 	}
 	if strings.HasPrefix(member, "group:") {
+		bare := principal[strings.Index(principal, ":")+1:]
 		for _, m := range s.GroupMembers(strings.TrimPrefix(member, "group:")) {
-			if m == principal {
+			if m == principal || strings.EqualFold(m, bare) {
 				return true
 			}
 		}
@@ -251,8 +252,17 @@ func (s *State) memberMatches(member, principal string) bool {
 	return false
 }
 
-// GroupMembers returns members of a Google group modelled in Extra.
+// GroupMembers returns the members of a Google group: from the Workspace
+// directory when the group lives there (nested groups resolved), otherwise
+// from the simple model in Extra.
 func (s *State) GroupMembers(group string) []string {
+	if ms, ok := s.directoryMembers(group, map[string]bool{}); ok {
+		out := make([]string, len(ms))
+		for i, m := range ms {
+			out[i] = m[strings.Index(m, ":")+1:]
+		}
+		return out
+	}
 	v := s.Extra["group:"+group]
 	if v == "" {
 		return nil
@@ -297,6 +307,9 @@ func (s *State) Allowed(principal, perm string, r Resource) bool {
 // Explain returns the decision and the binding that granted access (for the
 // policy troubleshooter).
 func (s *State) Explain(principal, perm string, r Resource) (bool, string) {
+	if s.Suspended(principal) {
+		return false, "the user account is suspended in Google Workspace"
+	}
 	pols := append([]*Policy{}, r.Policies...)
 	if r.Project != "" {
 		pols = append(pols, s.hierarchyPolicies(r.Project)...)

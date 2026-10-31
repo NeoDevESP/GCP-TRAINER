@@ -59,6 +59,12 @@ func (s *State) ProjectView(project string) map[string]any {
 		}
 	}
 	m["pods"] = pods
+	if d := s.directoryView(); d != nil {
+		db, _ := json.Marshal(d)
+		var dm map[string]any
+		_ = json.Unmarshal(db, &dm)
+		m["directory"] = dm
+	}
 	var health []any
 	for _, bn := range SortedKeys(p.BackendServices) {
 		for _, h := range s.BackendHealth(project, p.BackendServices[bn]) {

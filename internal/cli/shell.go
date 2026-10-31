@@ -574,6 +574,8 @@ func (s *Session) run(args []string, stdin string) (string, error) {
 		return s.kubectl(args[1:], stdin)
 	case "terraform", "tf":
 		return s.terraform(args[1:])
+	case "gam":
+		return s.gam(args[1:])
 	case "git":
 		return s.git(args[1:])
 	case "docker":
@@ -956,13 +958,15 @@ const helpTextES = `Terminal del simulador GCP Lab (F0). Herramientas disponible
   gcloud    compute, network, storage, iam, run, sql, pubsub, secrets, kms,
             container, artifacts, builds, deploy, logging, monitoring, dns,
             ai, scc, services, config, auth, projects, folders, organizations,
-            org-policies, billing, recommender
+            org-policies, billing, recommender, identity groups
   gsutil    mb, ls, cp, cat, rm, iam ch, lifecycle, versioning, pap, ubla
   bq        mk, ls, show, query (--dry_run), rm
   kubectl   apply, get, describe, logs, scale, set, rollout, autoscale,
             expose, create, delete, run, exec, top, auth can-i
   terraform init, validate, plan, apply, destroy, output, fmt, show,
             import, state (list|show|rm|mv), -target, -refresh-only
+  gam       directorio de Workspace: info/print/update user, info/print/update group,
+            print group-members, print orgs, report admin (gam help)
   git, docker, curl, nc, ping, dig, psql
   desk      ticket (show|comment|update|resolve|escalate), team, ask QUIÉN "pregunta"
   mentor    why OBJETIVO (cadena causal de una petición), whatif COMANDO (vista previa del impacto)
@@ -984,13 +988,15 @@ const helpText = `GCP Lab Simulator terminal (F0). Available tools:
   gcloud    compute, network, storage, iam, run, sql, pubsub, secrets, kms,
             container, artifacts, builds, deploy, logging, monitoring, dns,
             ai, scc, services, config, auth, projects, folders, organizations,
-            org-policies, billing, recommender
+            org-policies, billing, recommender, identity groups
   gsutil    mb, ls, cp, cat, rm, iam ch, lifecycle, versioning, pap, ubla
   bq        mk, ls, show, query (--dry_run), rm
   kubectl   apply, get, describe, logs, scale, set, rollout, autoscale,
             expose, create, delete, run, exec, top, auth can-i
   terraform init, validate, plan, apply, destroy, output, fmt, show,
             import, state (list|show|rm|mv), -target, -refresh-only
+  gam       Workspace directory: info/print/update user, info/print/update group,
+            print group-members, print orgs, report admin (gam help)
   git, docker, curl, nc, ping, dig, psql
   desk      ticket (show|comment|update|resolve|escalate), team, ask WHO "question"
   mentor    why TARGET (causal chain of a request), whatif COMMAND (impact preview)
