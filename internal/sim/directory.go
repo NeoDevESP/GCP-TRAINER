@@ -171,3 +171,18 @@ func (s *State) PermittedDomain(member string) bool {
 	}
 	return s.Directory != nil && s.Directory.Domain != "" && !s.Directory.External(email)
 }
+
+// ZoneStockout reports whether a zone has no capacity for a machine family
+// right now (modelled per zone and family, e.g. "n2" or "a2").
+func (s *State) ZoneStockout(zone, machineType string) bool {
+	fam := machineType
+	if i := strings.Index(fam, "-"); i > 0 {
+		fam = fam[:i]
+	}
+	for _, f := range strings.Split(s.Extra["stockout:"+zone], ",") {
+		if f == "*" || strings.TrimSpace(f) == fam {
+			return true
+		}
+	}
+	return false
+}

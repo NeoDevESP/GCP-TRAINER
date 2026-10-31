@@ -264,6 +264,17 @@ func ApplyFault(st *sim.State, project string, l *Lab, f Fault) error {
 		b.PAP = "inherited"
 		b.IAM.AddBinding("roles/storage.objectViewer", "allUsers", nil)
 		audit("storage.googleapis.com", "storage.setIamPermissions", "projects/_/buckets/"+b.Name)
+	case "zone_stockout":
+		// no capacity for these machine families in the zone (ZONE_RESOURCE_POOL_EXHAUSTED)
+		if st.Extra == nil {
+			st.Extra = map[string]string{}
+		}
+		st.Extra["stockout:"+fs(f, "zone")] = strings.Join(fl(f, "families"), ",")
+	case "quota_limit":
+		if p.Quotas == nil {
+			p.Quotas = map[string]float64{}
+		}
+		p.Quotas[fs(f, "metric")+"@"+fs(f, "region")] = float64(fi(f, "limit", 0))
 	case "api_disable":
 		p.Services[fs(f, "service")] = false
 	case "k8s_image", "k8s_remove_requests", "k8s_probe_port", "k8s_scale":

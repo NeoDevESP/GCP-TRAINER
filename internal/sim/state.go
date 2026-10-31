@@ -80,6 +80,7 @@ type Project struct {
 	Parent         string                `json:"parent"`
 	State          string                `json:"lifecycleState"`
 	Labels         map[string]string     `json:"labels"`
+	Quotas         map[string]float64    `json:"quotas,omitempty"` // e.g. "CPUS@europe-west1" -> limit
 	IAM            Policy                `json:"iamPolicy"`
 	Services       map[string]bool       `json:"services"`
 	OrgPolicies    map[string]*OrgPolicy `json:"orgPolicies"`
@@ -256,6 +257,31 @@ type NAT struct {
 	Subnets    []string `json:"subnets"`
 	AutoIPs    bool     `json:"autoAllocateIps"`
 	LogErrors  bool     `json:"logErrors"`
+	MinPorts   int      `json:"minPortsPerVm,omitempty"` // default 64
+	Dynamic    bool     `json:"enableDynamicPortAllocation,omitempty"`
+	MaxPorts   int      `json:"maxPortsPerVm,omitempty"` // with dynamic allocation; default 65536
+}
+
+// PortsPerVMMin is the configured minimum (64 by default).
+func (n NAT) PortsPerVMMin() int {
+	if n.MinPorts > 0 {
+		return n.MinPorts
+	}
+	return 64
+}
+
+// PortsPerVM is how many source ports each VM gets for a single destination.
+func (n NAT) PortsPerVM() int {
+	if n.Dynamic {
+		if n.MaxPorts > 0 {
+			return n.MaxPorts
+		}
+		return 65536
+	}
+	if n.MinPorts > 0 {
+		return n.MinPorts
+	}
+	return 64
 }
 
 type Address struct {

@@ -555,6 +555,9 @@ func (s *State) checkDep(w *Workload, d Dep) (int, string) {
 		if p == nil || p.Datasets[ds] == nil {
 			return 500, "googleapi: Error 404: Not found: Dataset " + val
 		}
+		if loc := w.Env["BQ_LOCATION"]; loc != "" && !strings.EqualFold(loc, p.Datasets[ds].Location) {
+			return 500, fmt.Sprintf("googleapi: Error 404: Not found: Dataset %s:%s was not found in location %s, notFound", proj, ds, strings.ToUpper(loc))
+		}
 		if !s.Allowed(w.Principal, "bigquery.tables.updateData", Resource{Project: proj, Type: "bigquery.googleapis.com/Dataset", Name: "projects/" + proj + "/datasets/" + ds, Service: "bigquery.googleapis.com", Policies: []*Policy{&p.Datasets[ds].IAM}}) {
 			return 403, "googleapi: Error 403: Access Denied: Table " + val + ": Permission bigquery.tables.updateData denied"
 		}

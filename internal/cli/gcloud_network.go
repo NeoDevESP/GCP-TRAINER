@@ -757,6 +757,24 @@ func init() {
 			if c.Bool("enable-logging") {
 				nat.LogErrors = true
 			}
+			if c.Has("min-ports-per-vm") {
+				nat.MinPorts = c.Int("min-ports-per-vm", 64)
+				if nat.MinPorts < 2 || nat.MinPorts > 65536 {
+					return nil, fmt.Errorf("Invalid value for [--min-ports-per-vm]: must be between 2 and 65536")
+				}
+			}
+			if c.Bool("enable-dynamic-port-allocation") {
+				nat.Dynamic = true
+			}
+			if c.Bool("no-enable-dynamic-port-allocation") {
+				nat.Dynamic = false
+			}
+			if c.Has("max-ports-per-vm") {
+				if !nat.Dynamic {
+					return nil, fmt.Errorf("--max-ports-per-vm requires --enable-dynamic-port-allocation")
+				}
+				nat.MaxPorts = c.Int("max-ports-per-vm", 65536)
+			}
 			if create && !nat.AllSubnets && len(nat.Subnets) == 0 {
 				return nil, fmt.Errorf("Exactly one of (--nat-all-subnet-ip-ranges | --nat-custom-subnet-ip-ranges | --nat-primary-subnet-ip-ranges) must be specified.")
 			}
@@ -806,7 +824,54 @@ func init() {
 		for _, x := range r.NATs {
 			rows = append(rows, x)
 		}
-		return Table{Cols: []Col{{"NAME", "name"}, {"ALL_SUBNETS", "allSubnets"}, {"SUBNETS", "subnets"}}, Rows: rows}, nil
+		return Table{Cols: []Col{{"NAME", "name"}, {"ALL_SUBNETS", "allSubnets"}, {"SUBNETS", "subnets"}, {"MIN_PORTS_PER_VM", "minPortsPerVm"}, {"DYNAMIC_PORTS", "enableDynamicPortAllocation"}}, Rows: rows}, nil
+	})
+	reg("compute routers nats describe", func(c *Cmd) (any, error) {
+		p, err := c.P()
+		if err != nil {
+			return nil, err
+		}
+		n, _ := c.Arg(0, "NAME")
+		r := p.Routers[c.Str("router", "")]
+		if r == nil {
+			return nil, fmt.Errorf("router not found")
+		}
+		for _, x := range r.NATs {
+			if x.Name == n {
+				return map[string]any{"name": x.Name, "sourceSubnetworkIpRangesToNat": map[bool]string{true: "ALL_SUBNETWORKS_ALL_IP_RANGES", false: "LIST_OF_SUBNETWORKS"}[x.AllSubnets],
+					"subnetworks": x.Subnets, "natIpAllocateOption": "AUTO_ONLY", "minPortsPerVm": x.PortsPerVMMin(), "enableDynamicPortAllocation": x.Dynamic, "maxPortsPerVm": x.MaxPorts,
+					"logConfig": map[string]any{"enable": x.LogErrors, "filter": "ERRORS_ONLY"}}, nil
+			}
+		}
+		return nil, fmt.Errorf("NAT %s not found", n)
+	})
+	reg("compute routers get-nat-mapping-info", func(c *Cmd) (any, error) {
+		p, err := c.P()
+		if err != nil {
+			return nil, err
+		}
+		rn, _ := c.Arg(0, "ROUTER")
+		r := p.Routers[rn]
+		if r == nil {
+			return nil, fmt.Errorf("router %s not found", rn)
+		}
+		var rows []any
+		for _, vn := range sim.SortedKeys(p.Instances) {
+			vm := p.Instances[vn]
+			if vm.ExternalIP != "" || sim.RegionOf(vm.Zone) != r.Region {
+				continue
+			}
+			for _, x := range r.NATs {
+				covered := x.AllSubnets
+				for _, sn := range x.Subnets {
+					covered = covered || sn == vm.Subnet
+				}
+				if covered {
+					rows = append(rows, map[string]any{"instanceName": vm.Name, "interfaceIp": vm.InternalIP, "natName": x.Name, "numTotalNatPorts": x.PortsPerVM(), "numTotalDrainNatPorts": 0})
+				}
+			}
+		}
+		return Table{Cols: []Col{{"INSTANCE", "instanceName"}, {"INTERFACE_IP", "interfaceIp"}, {"NAT", "natName"}, {"NAT_PORTS", "numTotalNatPorts"}}, Rows: rows}, nil
 	})
 	reg("compute routers add-bgp-peer", func(c *Cmd) (any, error) {
 		p, err := c.P()

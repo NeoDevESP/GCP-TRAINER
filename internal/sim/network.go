@@ -339,33 +339,69 @@ func (s *State) internetPath(src Endpoint) (bool, string) {
 			return true, "external IP"
 		}
 	}
-	if s.natCovers(src.Project, src.Network, src.Region, src.Subnet) {
+	if nat := s.natFor(src.Project, src.Network, src.Region, src.Subnet); nat != nil {
+		if src.Kind == "vm" {
+			if vm := s.Projects[src.Project].Instances[src.Name]; vm != nil {
+				need, _ := strconv.Atoi(vm.Metadata["sim-egress-connections"])
+				if ports := nat.PortsPerVM(); need > ports {
+					s.natDropLog(src.Project, nat, vm, need, ports)
+					return false, fmt.Sprintf("Cloud NAT %s dropped packets: OUT_OF_RESOURCES (%s needs %d concurrent connections to the same destination, NAT allocates %d ports per VM)", nat.Name, vm.Name, need, ports)
+				}
+			}
+		}
 		return true, "Cloud NAT"
 	}
 	return false, fmt.Sprintf("%s has no external IP and no Cloud NAT covers subnet %s in %s", src.Name, src.Subnet, src.Region)
 }
 
 func (s *State) natCovers(project, network, region, subnet string) bool {
+	return s.natFor(project, network, region, subnet) != nil
+}
+
+// natFor returns the Cloud NAT gateway serving a subnet, or nil.
+func (s *State) natFor(project, network, region, subnet string) *NAT {
 	p := s.Projects[project]
 	if p == nil {
-		return false
+		return nil
 	}
-	for _, r := range p.Routers {
+	for _, rn := range SortedKeys(p.Routers) {
+		r := p.Routers[rn]
 		if r.Network != network || r.Region != region {
 			continue
 		}
-		for _, n := range r.NATs {
+		for i := range r.NATs {
+			n := &r.NATs[i]
 			if n.AllSubnets {
-				return true
+				return n
 			}
 			for _, sn := range n.Subnets {
 				if sn == subnet {
-					return true
+					return n
 				}
 			}
 		}
 	}
-	return false
+	return nil
+}
+
+// natDropLog writes a Cloud NAT log entry for dropped packets (when the
+// gateway logs errors), at most once per tick and VM.
+func (s *State) natDropLog(project string, nat *NAT, vm *Instance, need, ports int) {
+	if !nat.LogErrors {
+		return
+	}
+	key := "natlog:" + vm.Name
+	if s.Extra == nil {
+		s.Extra = map[string]string{}
+	}
+	if s.Extra[key] == strconv.Itoa(s.Tick) {
+		return
+	}
+	s.Extra[key] = strconv.Itoa(s.Tick)
+	s.Log(project, LogEntry{Severity: "WARNING", LogName: "compute.googleapis.com%2Fnat_flows",
+		Resource: LogResource{Type: "nat_gateway", Labels: map[string]string{"gateway_name": nat.Name, "project_id": project}},
+		Text:     fmt.Sprintf("allocation_status=DROPPED reason=OUT_OF_RESOURCES vm=%s src_ip=%s dest=api.exchangerate.example:443 connections=%d nat_ports_per_vm=%d", vm.Name, vm.InternalIP, need, ports),
+		Labels:   map[string]string{"allocation_status": "DROPPED", "vm_name": vm.Name}})
 }
 
 // GoogleAPIAccess checks whether a VPC endpoint can reach *.googleapis.com.

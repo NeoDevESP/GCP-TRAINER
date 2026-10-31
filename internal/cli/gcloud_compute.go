@@ -175,6 +175,14 @@ func (s *Session) createInstance(c *Cmd, p *sim.Project, name, zone string) (*si
 	if !reMachine.MatchString(mt) {
 		return nil, fmt.Errorf("Could not fetch resource:\n - Invalid value for field 'resource.machineType': 'zones/%s/machineTypes/%s'. Machine type with name '%s' does not exist in zone '%s'.", zone, mt, mt, zone)
 	}
+	if lim, ok := p.Quotas["CPUS@"+sim.RegionOf(zone)]; ok {
+		if used := regionCPUs(p, sim.RegionOf(zone)); float64(used+machineCPUs(mt)) > lim {
+			return nil, fmt.Errorf("Could not fetch resource:\n - Quota 'CPUS' exceeded.  Limit: %.1f in region %s. (QUOTA_EXCEEDED: %d vCPUs in use, %d requested)", lim, sim.RegionOf(zone), used, machineCPUs(mt))
+		}
+	}
+	if s.State.ZoneStockout(zone, mt) {
+		return nil, fmt.Errorf("Could not fetch resource:\n - The zone 'projects/%s/zones/%s' does not have enough resources available to fulfill the request.  '(resource type:compute)'. (ZONE_RESOURCE_POOL_EXHAUSTED) Try a different zone, a different machine type, or try again later.", p.ID, zone)
+	}
 	if s.Policy.MaxMachineCPUs > 0 && machineCPUs(mt) > s.Policy.MaxMachineCPUs {
 		return nil, fmt.Errorf("Quota 'CPUS' exceeded. Limit: %d.0 in region %s (lab quota).", s.Policy.MaxMachineCPUs, sim.RegionOf(zone))
 	}
@@ -1294,6 +1302,57 @@ func init() {
 		}
 		return Table{Cols: []Col{{"NAME", "name"}, {"CPUS", "cpus"}, {"EST_HOURLY_EUR", "hourlyEur"}}, Rows: rows}, nil
 	})
+	reg("compute regions describe", func(c *Cmd) (any, error) {
+		p, err := c.P()
+		if err != nil {
+			return nil, err
+		}
+		r, err := c.Arg(0, "REGION")
+		if err != nil {
+			return nil, err
+		}
+		if !sim.ValidRegions[r] {
+			return nil, fmt.Errorf("Could not fetch resource:\n - The resource 'projects/%s/regions/%s' was not found", p.ID, r)
+		}
+		lim := 24.0
+		if v, ok := p.Quotas["CPUS@"+r]; ok {
+			lim = v
+		}
+		inst := 0
+		for _, vm := range p.Instances {
+			if sim.RegionOf(vm.Zone) == r {
+				inst++
+			}
+		}
+		quotas := []any{
+			map[string]any{"metric": "CPUS", "limit": lim, "usage": float64(regionCPUs(p, r))},
+			map[string]any{"metric": "INSTANCES", "limit": 500.0, "usage": float64(inst)},
+			map[string]any{"metric": "NVIDIA_T4_GPUS", "limit": 0.0, "usage": 0.0},
+		}
+		return map[string]any{"name": r, "status": "UP", "zones": []string{r + "-b", r + "-c", r + "-d"}, "quotas": quotas}, nil
+	})
+	reg("quotas preferences create", func(c *Cmd) (any, error) {
+		p, err := c.P()
+		if err != nil {
+			return nil, err
+		}
+		qid, val := c.Str("quota-id", ""), c.Str("preferred-value", "")
+		if qid == "" || val == "" {
+			return nil, fmt.Errorf("--quota-id and --preferred-value are required")
+		}
+		if c.Str("justification", "") == "" && c.Str("email", "") == "" {
+			return nil, fmt.Errorf("a quota increase request needs --justification (and a contact --email)")
+		}
+		id := "zentra-" + c.S.State.ID(6)
+		if c.S.State.Extra == nil {
+			c.S.State.Extra = map[string]string{}
+		}
+		c.S.State.Extra["quotareq:"+id] = qid + "=" + val + " " + c.Str("dimensions", "")
+		c.Audit("cloudquotas.googleapis.com", "google.api.cloudquotas.v1.CloudQuotas.CreateQuotaPreference", "projects/"+p.ID+"/locations/global/quotaPreferences/"+id)
+		return map[string]any{"name": "projects/" + p.ID + "/locations/global/quotaPreferences/" + id, "quotaId": qid, "service": c.Str("service", "compute.googleapis.com"),
+			"quotaConfig": map[string]any{"preferredValue": val, "stateDetail": "Request submitted. Increases are reviewed by Google and can take from minutes to several business days."},
+			"dimensions":  c.Str("dimensions", ""), "reconciling": true}, nil
+	})
 	reg("compute zones list", func(c *Cmd) (any, error) {
 		var rows []any
 		for _, r := range sim.SortedKeys(sim.ValidRegions) {
@@ -1336,4 +1395,15 @@ func contains(l []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// regionCPUs is the vCPUs of the project's running VMs in a region.
+func regionCPUs(p *sim.Project, region string) int {
+	n := 0
+	for _, vm := range p.Instances {
+		if sim.RegionOf(vm.Zone) == region && vm.Status != "TERMINATED" {
+			n += machineCPUs(vm.MachineType)
+		}
+	}
+	return n
 }

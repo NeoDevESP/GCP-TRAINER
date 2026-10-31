@@ -668,5 +668,4 @@ func orNever(s string) string {
 	return s
 }
 
-
 var _ = sort.Strings

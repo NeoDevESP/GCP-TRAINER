@@ -590,6 +590,14 @@ func (s *Session) bq(args []string, stdin string) (string, error) {
 			}
 			return fmt.Sprintf("Waiting on bqjob_r%s ... (1s) Current status: DONE\nNumber of affected rows: %d\n", s.State.ID(10), n), nil
 		}
+		if loc := c.Str("location", ""); loc != "" {
+			for _, fm := range regexp.MustCompile("(?i)(?:FROM|JOIN)\\s+`?([a-zA-Z0-9_.:-]+)`?").FindAllStringSubmatch(sql, -1) {
+				dsn, _ := ref(fm[1])
+				if ds := p.Datasets[dsn]; ds != nil && !sameBQLocation(ds.Location, loc) {
+					return "", fail(2, "BigQuery error in query operation: Error processing job '%s:bqjob_r%s': Not found: Dataset %s:%s was not found in location %s", p.ID, s.State.ID(10), p.ID, dsn, strings.ToUpper(loc))
+				}
+			}
+		}
 		res, err := s.State.RunQuery(p.ID, s.Principal(), sql, dry, strings.ReplaceAll(dest, ":", "."), c.Str("time_partitioning_field", ""), c.List("clustering_fields"))
 		if err != nil {
 			return "", fail(1, "Error in query string: %v", err)
@@ -759,3 +767,6 @@ func (s *Session) bq(args []string, stdin string) (string, error) {
 	}
 	return "", fail(1, "FATAL Flags parsing error: Unknown command %q (supported: mk, ls, show, rm, query, head, load, insert, extract, add-iam-policy-binding)", pos[0])
 }
+
+// sameBQLocation compares BigQuery locations case-insensitively (EU, US, europe-west1…).
+func sameBQLocation(a, b string) bool { return strings.EqualFold(a, b) }
