@@ -1,0 +1,195 @@
+id: zentra-z28-nat-ports
+title: INC P2 · Divisas falla «a ratos» desde que el cotizador cotiza 30 monedas
+summary: 'Fallos intermitentes solo hacia internet: Cloud NAT se ha quedado sin puertos para esa VM. Demuéstralo con los registros y amplía los puertos.'
+track: zentra
+day: 28
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.nat
+- observability.logging
+- observability.incident
+wellArchitected:
+- reliability
+- performance
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --enable-logging
+  gcloud compute instances create divisas-cotizador --zone={{.zone}} --machine-type=e2-standard-2 --subnet=apps --no-address --tags=divisas --metadata=sim-preinstalled=docker-images,sim-egress-connections=900,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/egress-app:1.0'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-divisas --network=zentra-vpc --allow=tcp:8080 --source-tags=ops --target-tags=divisas
+ticket:
+  id: INC-31028
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo de Divisas
+  summary: Desde que el cotizador pide precios de 30 divisas a la vez (cambio de ayer), las llamadas al proveedor fallan a ratos con timeout. El proveedor dice que no nos bloquea.
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red.
+  fallback: Cambiar el NAT es cosa mía, pero dime qué necesitas.
+  facts:
+  - keywords:
+    - - puerto
+      - port
+      - nat
+      - min-ports
+      - dinamic
+      - dynamic
+    answer: 'Adelante: sube los puertos por VM del zentra-nat (o activa la asignación dinámica). Tenemos IP de sobra.'
+- role: fx
+  name: Equipo de Divisas
+  persona: Mantienen el cotizador.
+  fallback: Ahora abrimos unas 900 conexiones simultáneas al proveedor.
+  facts:
+  - keywords:
+    - - conexion
+      - connection
+      - cuantas
+      - how many
+      - simultan
+    answer: Unas 900 conexiones a la vez contra la misma IP y puerto del proveedor.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-divisas-prod*).
+
+  > **INC-31028 · P2** · *«Desde que el cotizador pide precios de 30 divisas a la vez (cambio de ayer), las llamadas al proveedor fallan a ratos con timeout. El proveedor dice que no nos bloquea.»*
+
+  `divisas-cotizador` no tiene IP pública y sale por **Cloud NAT** (`zentra-nat`). NAT reparte a cada VM un número fijo de **puertos** por destino (64 por defecto): si la VM abre más conexiones simultáneas al mismo destino, el resto se descarta con `OUT_OF_RESOURCES`. El NAT ya tiene los registros activados: búscalos en Logging (`logName:nat_flows`).
+objectives:
+- Comprueba que solo falla la salida a internet
+- Encuentra la evidencia OUT_OF_RESOURCES
+- Amplía los puertos por VM del NAT
+- Valida y propón la mejora de la aplicación
+hints:
+- text: '`gcloud logging read ''logName:nat_flows'' --limit=5` y `gcloud compute routers get-nat-mapping-info zentra-router --region={{.region}}`.'
+- text: '`gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --min-ports-per-vm=1024`.'
+solution: |
+  ticket
+  gcloud logging read 'logName:nat_flows' --limit=5
+  gcloud compute routers get-nat-mapping-info zentra-router --region={{.region}}
+  gcloud compute routers nats describe zentra-nat --router=zentra-router --region={{.region}}
+  ask fx "¿cuántas conexiones simultáneas abre ahora el cotizador?"
+  ask network "¿puedo ampliar los puertos por VM de zentra-nat?"
+  gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --min-ports-per-vm=1024
+  gcloud compute routers get-nat-mapping-info zentra-router --region={{.region}}
+  ticket comment "Causa: el cotizador pasó a ~900 conexiones simultáneas al mismo destino y zentra-nat solo da 64 puertos por VM; los registros de NAT muestran DROPPED / OUT_OF_RESOURCES. Ampliado a 1024 puertos por VM con OK de Red. Recomendado a Divisas reutilizar conexiones (keep-alive / pool) en vez de abrir una por divisa."
+  ticket update "Resuelto: las cotizaciones vuelven a llegar sin cortes. La salida a internet se quedaba sin puertos con el nuevo volumen; la hemos ampliado y os pasamos una recomendación para la aplicación."
+  ticket resolve "Ampliado zentra-nat a 1024 puertos por VM tras ver OUT_OF_RESOURCES; cotizaciones sin fallos."
+shortcuts:
+- name: recreate the NAT the same
+  run: |
+    gcloud compute routers nats delete zentra-nat --router=zentra-router --region={{.region}} --quiet
+    gcloud compute routers nats create zentra-nat --router=zentra-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+    ticket resolve "Recreado el NAT de la red para limpiar las conexiones."
+rubric:
+- name: Cotizaciones sin cortes
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:divisas-cotizador:8080
+    path: /fx
+    status: 200
+    desc: El cotizador llega al proveedor
+- name: Arreglo en el NAT, sin IP pública
+  validator: security
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: absent
+    path: instances["divisas-cotizador"].natIP
+    desc: La VM sigue privada
+  - type: org_policy
+    constraint: compute.vmExternalIpAccess
+    enforced: true
+    desc: Política de IP públicas intacta
+- name: Evidencia
+  validator: diagnosis
+  points: 20
+  checks:
+  - type: command
+    regex: nat_flows|get-nat-mapping-info
+    min: 1
+    desc: Registros o asignación de puertos consultados
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - out_of_resources
+      - puertos
+      - ports
+    - - conexion
+      - connection
+      - keep-alive
+      - pool
+    desc: Nota con la causa y la mejora
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: nat_flows
+  title: La evidencia
+  why: 'allocation_status=DROPPED reason=OUT_OF_RESOURCES: NAT no tiene más puertos para esa VM.'
+- match: get-nat-mapping-info
+  title: ''
+  why: '64 puertos por VM frente a 900 conexiones: no caben.'
+- match: min-ports-per-vm=1024
+  title: ''
+  why: Más puertos por VM. A medio plazo, que la app reutilice conexiones.
+en:
+  title: INC P2 · FX fails "now and then" since the pricer quotes 30 currencies
+  summary: 'Intermittent failures only to the internet: Cloud NAT ran out of ports for that VM. Prove it with the logs and raise the ports.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-divisas-prod*).
+
+    > **INC-31028 · P2** · *"Since the pricer requests 30 currencies at once (yesterday's change), calls to the provider time out now and then. The provider says it isn't blocking us."*
+
+    `divisas-cotizador` has no public IP and goes out through **Cloud NAT** (`zentra-nat`). NAT gives each VM a fixed number of **ports** per destination (64 by default): if the VM opens more simultaneous connections to the same destination, the rest are dropped with `OUT_OF_RESOURCES`. NAT logging is already on: look for it in Logging (`logName:nat_flows`).
+  objectives:
+  - Check only internet egress fails
+  - Find the OUT_OF_RESOURCES evidence
+  - Raise the NAT's ports per VM
+  - Validate and propose the app-side improvement
+  hints:
+  - '`gcloud logging read ''logName:nat_flows'' --limit=5` and `gcloud compute routers get-nat-mapping-info zentra-router --region={{.region}}`.'
+  - '`gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --min-ports-per-vm=1024`.'
+  ticket:
+    summary: Since the pricer requests 30 currencies at once (yesterday's change), calls to the provider time out now and then. The provider says it isn't blocking us.
+  text:
+    Equipo de Divisas: FX team
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red.: Network architect.
+    Cambiar el NAT es cosa mía, pero dime qué necesitas.: Changing NAT is my call, but tell me what you need.
+    'Adelante: sube los puertos por VM del zentra-nat (o activa la asignación dinámica). Tenemos IP de sobra.': 'Go ahead: raise zentra-nat''s ports per VM (or enable dynamic allocation). We have plenty of IPs.'
+    Mantienen el cotizador.: They maintain the pricer.
+    Ahora abrimos unas 900 conexiones simultáneas al proveedor.: We now open about 900 simultaneous connections to the provider.
+    Unas 900 conexiones a la vez contra la misma IP y puerto del proveedor.: About 900 connections at once to the provider's same IP and port.
+    Cotizaciones sin cortes: Quotes without drops
+    El cotizador llega al proveedor: The pricer reaches the provider
+    Arreglo en el NAT, sin IP pública: NAT fix, no public IP
+    La VM sigue privada: The VM stays private
+    Política de IP públicas intacta: Public IP policy intact
+    Evidencia: Evidence
+    Registros o asignación de puertos consultados: Logs or port mapping checked
+    Documentado: Documented
+    Nota con la causa y la mejora: Note with the cause and the improvement
+    Ticket cerrado: Ticket closed
+    La evidencia: The evidence
+    'allocation_status=DROPPED reason=OUT_OF_RESOURCES: NAT no tiene más puertos para esa VM.': 'allocation_status=DROPPED reason=OUT_OF_RESOURCES: NAT has no more ports for that VM.'
+    '64 puertos por VM frente a 900 conexiones: no caben.': '64 ports per VM against 900 connections: they don''t fit.'
+    Más puertos por VM. A medio plazo, que la app reutilice conexiones.: More ports per VM. In the medium term, the app should reuse connections.

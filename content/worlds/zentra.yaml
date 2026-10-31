@@ -666,6 +666,15 @@ sections:
     meta:
     - Nivel avanzado
     - Advanced level
+  - title:
+    - Semana 5 · Capacidad y datos
+    - Week 5 · Capacity and data
+    text:
+    - NAT sin puertos, zonas sin máquinas, cuotas, BigQuery en otra ubicación, Cloud SQL para DORA, Memorystore y autoescalado de GKE.
+    - NAT out of ports, zones without machines, quotas, BigQuery in another location, Cloud SQL for DORA, Memorystore and GKE autoscaling.
+    meta:
+    - Nivel avanzado
+    - Advanced level
 people:
 - name: Marta Ibáñez
   email: marta.ibanez@zentra.dev

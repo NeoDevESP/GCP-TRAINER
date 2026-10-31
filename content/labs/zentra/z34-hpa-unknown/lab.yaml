@@ -1,0 +1,209 @@
+id: zentra-z34-hpa-unknown
+title: 'INC P2 · Preparando la nómina: las autorizaciones de tarjeta no escalan'
+summary: 'Un HPA que muestra <unknown> no puede escalar: sin requests de CPU no hay porcentaje que medir. Pon los requests y demuestra que escala y vuelve a bajar.'
+track: zentra
+day: 34
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.autoscaling
+- gke.workloads
+- observability.incident
+wellArchitected:
+- performance
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 40
+baseline:
+- zentra-core
+setup: |
+  gcloud container clusters create tarjetas-gke --zone={{.zone}} --num-nodes=3 --machine-type=e2-standard-4 --network=zentra-vpc --subnetwork=gke --enable-private-nodes
+  cat > autorizaciones.yaml <<'YAML'
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: autorizaciones}
+  spec:
+    replicas: 1
+    selector: {matchLabels: {app: autorizaciones}}
+    template:
+      metadata: {labels: {app: autorizaciones}}
+      spec:
+        containers:
+        - name: autorizaciones
+          image: europe-docker.pkg.dev/gcplab-public/apps/cpu-burner:1.0
+          ports: [{containerPort: 8080}]
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: autorizaciones}
+  spec:
+    selector: {app: autorizaciones}
+    ports: [{port: 8080, targetPort: 8080}]
+  ---
+  apiVersion: autoscaling/v2
+  kind: HorizontalPodAutoscaler
+  metadata: {name: autorizaciones}
+  spec:
+    scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: autorizaciones}
+    minReplicas: 1
+    maxReplicas: 6
+    metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 50}}
+  YAML
+  gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+  kubectl apply -f autorizaciones.yaml
+traffic:
+- name: autorizaciones
+  target: k8s:tarjetas-gke/autorizaciones
+  rps: 2
+ticket:
+  id: INC-31034
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Hugo Martín (Tarjetas)
+  summary: En la prueba de carga previa a la nómina, autorizaciones se queda en 1 réplica y las compras con tarjeta tardan 4 s. El HPA está creado (1 a 6 réplicas al 50 % de CPU) pero no hace nada.
+actors:
+- role: dev
+  name: Hugo Martín (Tarjetas)
+  persona: Desarrollador de Tarjetas.
+  fallback: Copiamos el HPA de la documentación tal cual.
+  facts:
+  - keywords:
+    - - request
+      - cpu
+      - recursos
+      - resources
+    answer: ¿Requests? No pusimos ninguno en el despliegue; pensábamos que eran opcionales. Cada réplica usa unos 150m de CPU en reposo.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-tarjetas-prod*). Clúster `tarjetas-gke` (zona `{{.zone}}`); configura `kubectl` con `get-credentials`.
+
+  > **INC-31034 · P2** · *«En la prueba de carga previa a la nómina, autorizaciones se queda en 1 réplica y las compras con tarjeta tardan 4 s. El HPA está creado (1 a 6 réplicas al 50 % de CPU) pero no hace nada.»*
+
+  Mira el HPA (`kubectl describe hpa autorizaciones`): si la utilización sale como `<unknown>`, no puede calcular el porcentaje. El objetivo «50 % de CPU» es un porcentaje **de los requests**. Después, demuestra que escala con carga (`kubectl run carga …`) y que vuelve a bajar al quitarla.
+objectives:
+- Averigua por qué el HPA no actúa
+- Pon requests y límites de CPU al despliegue
+- Demuestra que escala con carga
+- Y que vuelve a bajar; documenta
+hints:
+- text: '`kubectl set resources deployment autorizaciones --requests=cpu=200m,memory=128Mi --limits=cpu=500m,memory=256Mi`.'
+- text: '`kubectl run carga --image=busybox --restart=Never -- /bin/sh -c "while true; do wget -q -O- http://autorizaciones:8080; done"`.'
+solution: |
+  ticket
+  gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+  kubectl describe hpa autorizaciones
+  ask dev "¿qué requests de CPU tiene el despliegue?"
+  kubectl set resources deployment autorizaciones --requests=cpu=200m,memory=128Mi --limits=cpu=500m,memory=256Mi
+  kubectl run carga --image=busybox --restart=Never -- /bin/sh -c "while true; do wget -q -O- http://autorizaciones:8080; done"
+  sleep 300
+  kubectl get hpa autorizaciones
+  kubectl delete pod carga
+  sleep 600
+  kubectl get hpa autorizaciones
+  ticket comment "Causa: el despliegue no tenía requests de CPU y el HPA mostraba <unknown>, así que nunca escalaba. Puestos requests 200m y límites 500m; con carga escaló hacia las 6 réplicas y al quitarla volvió a bajar."
+  ticket update "Hola Hugo: el autoescalado de autorizaciones ya funciona: con la carga de la prueba sube réplicas y al terminar vuelve a bajar. Listo para la nómina."
+  ticket resolve "Añadidos requests de CPU a autorizaciones; HPA escala con carga y vuelve a bajar."
+shortcuts:
+- name: fixed replicas
+  run: |
+    gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+    kubectl scale deployment autorizaciones --replicas=6
+    ticket resolve "Puestas 6 réplicas fijas de autorizaciones para la nómina."
+rubric:
+- name: Requests configurados
+  validator: state
+  points: 25
+  checks:
+  - type: exists
+    path: clusters["tarjetas-gke"].k8s.namespaces.default.deployments.autorizaciones.template.containers[0].requests
+    expect:
+      cpu:
+        regex: m$|^[0-9.]+$
+    desc: Requests de CPU puestos
+- name: Escala con la carga
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: hpa_scaled
+    cluster: tarjetas-gke
+    deployment: autorizaciones
+    desc: El HPA escaló hacia fuera
+- name: Y vuelve a bajar
+  validator: cost
+  points: 20
+  checks:
+  - type: hpa_scaled
+    cluster: tarjetas-gke
+    deployment: autorizaciones
+    requireScaleIn: true
+    desc: Escalado hacia dentro demostrado
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - request
+    - - unknown
+      - hpa
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: describe hpa
+  title: Lo que ve el HPA
+  why: '<unknown>/50%: sin requests no hay porcentaje, así que el HPA no decide nada.'
+- match: set resources deployment autorizaciones
+  title: ''
+  why: 'El 50 % se mide sobre el request: 200m de request, escala al pasar de 100m de media.'
+- match: delete pod carga
+  title: ''
+  why: 'Comprobar que baja también importa: un HPA que solo sube cuesta dinero.'
+en:
+  title: 'INC P2 · Getting ready for payday: card authorisations don''t scale'
+  summary: 'An HPA showing <unknown> can''t scale: without CPU requests there''s no percentage to measure. Set the requests and prove it scales out and back in.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-tarjetas-prod*). Cluster `tarjetas-gke` (zone `{{.zone}}`); configure `kubectl` with `get-credentials`.
+
+    > **INC-31034 · P2** · *"In the pre-payday load test, autorizaciones stays at 1 replica and card purchases take 4 s. The HPA exists (1 to 6 replicas at 50% CPU) but does nothing."*
+
+    Look at the HPA (`kubectl describe hpa autorizaciones`): if utilisation shows as `<unknown>`, it can't compute the percentage. The "50% CPU" target is a percentage **of the requests**. Then prove it scales with load (`kubectl run carga …`) and comes back down when you remove it.
+  objectives:
+  - Find out why the HPA doesn't act
+  - Set CPU requests and limits on the deployment
+  - Prove it scales under load
+  - And scales back in; document
+  hints:
+  - '`kubectl set resources deployment autorizaciones --requests=cpu=200m,memory=128Mi --limits=cpu=500m,memory=256Mi`.'
+  - '`kubectl run carga --image=busybox --restart=Never -- /bin/sh -c "while true; do wget -q -O- http://autorizaciones:8080; done"`.'
+  ticket:
+    summary: In the pre-payday load test, autorizaciones stays at 1 replica and card purchases take 4 s. The HPA exists (1 to 6 replicas at 50% CPU) but does nothing.
+  text:
+    Hugo Martín (Tarjetas): Hugo Martín (Cards)
+    Desarrollador de Tarjetas.: Cards developer.
+    Copiamos el HPA de la documentación tal cual.: We copied the HPA from the docs as is.
+    ? ¿Requests? No pusimos ninguno en el despliegue; pensábamos que eran opcionales. Cada réplica usa unos 150m de CPU en reposo.
+    : Requests? We didn't set any in the deployment; we thought they were optional. Each replica uses about 150m of CPU at rest.
+    Requests configurados: Requests configured
+    Requests de CPU puestos: CPU requests set
+    Escala con la carga: Scales with load
+    El HPA escaló hacia fuera: The HPA scaled out
+    Y vuelve a bajar: And scales back in
+    Escalado hacia dentro demostrado: Scale-in demonstrated
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Lo que ve el HPA: What the HPA sees
+    '<unknown>/50%: sin requests no hay porcentaje, así que el HPA no decide nada.': '<unknown>/50%: without requests there''s no percentage, so the HPA decides nothing.'
+    'El 50 % se mide sobre el request: 200m de request, escala al pasar de 100m de media.': 'The 50% is measured against the request: with a 200m request, it scales above a 100m average.'
+    'Comprobar que baja también importa: un HPA que solo sube cuesta dinero.': 'Checking it scales in matters too: an HPA that only goes up costs money.'

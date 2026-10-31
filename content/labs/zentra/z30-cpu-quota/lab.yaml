@@ -1,0 +1,182 @@
+id: zentra-z30-cpu-quota
+title: 'INC P2 · La conciliación nocturna no arranca: «Quota CPUS exceeded»'
+summary: Esta vez sí es cuota, pero la llenan máquinas olvidadas de una prueba. Libera lo que sobra (confirmándolo), arranca el proceso y pide aumento solo si hace falta.
+track: zentra
+day: 30
+level: intermediate
+branch: finops
+type: incident
+mode: production
+skills:
+- compute.vm
+- finops.optimization
+- foundations.billing
+wellArchitected:
+- cost
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create prueba-carga-1 prueba-carga-2 --zone={{.zone}} --machine-type=e2-standard-8 --subnet=apps --no-address --labels=equipo=sre,uso=prueba-carga
+faults:
+- type: quota_limit
+  metric: CPUS
+  region: '{{.region}}'
+  limit: 24
+ticket:
+  id: INC-31030
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: NOC 24x7
+  summary: 'La VM de conciliación nocturna (conciliacion, e2-standard-8) no se puede crear: «Quota ''CPUS'' exceeded. Limit: 24.0 in region {{.region}}». Si no corre antes de las 6:00, las cuentas no cuadran por la mañana.'
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts:
+  - keywords:
+    - - prueba
+      - carga
+      - load
+      - test
+      - prueba-carga
+    answer: ¡Las prueba-carga! Son de la prueba de rendimiento de la semana pasada, se quedaron encendidas. Bórralas sin miedo.
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: FinOps.
+  fallback: Antes de pedir más cuota, mirad qué está encendido y no se usa.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **INC-31030 · P2** · *«La VM de conciliación nocturna (conciliacion, e2-standard-8) no se puede crear: «Quota 'CPUS' exceeded. Limit: 24.0 in region {{.region}}». Si no corre antes de las 6:00, las cuentas no cuadran por la mañana.»*
+
+  Ahora sí es **cuota**. Una solicitud de aumento tarda (minutos o días, la revisa Google), y el proceso tiene que correr esta noche. Mira **qué está usando la cuota** (`regions describe`, `instances list`) antes de pedir más. No borres nada sin confirmar con su dueño. Crea `conciliacion` en la subred `datos`, sin IP pública.
+objectives:
+- Mira cuánta cuota hay y quién la usa
+- Confirma con su dueño y libera lo que sobra
+- Arranca la conciliación
+- Documenta y deja la prevención
+hints:
+- text: '`gcloud compute regions describe {{.region}}` y `gcloud compute instances list --format=''table(name,machineType,labels)''`.'
+- text: Pregunta a Diego por las prueba-carga antes de borrarlas.
+solution: |
+  ticket
+  gcloud compute regions describe {{.region}}
+  gcloud compute instances list --format='table(name,machineType,labels)'
+  ask sre "¿las VMs prueba-carga se siguen usando?"
+  gcloud compute instances delete prueba-carga-1 prueba-carga-2 --zone={{.zone}} --quiet
+  gcloud compute instances create conciliacion --zone={{.zone}} --machine-type=e2-standard-8 --subnet=datos --no-address --labels=equipo=cuentas,entorno=prod
+  ticket comment "Causa: la cuota CPUS de {{.region}} (24) estaba ocupada por prueba-carga-1 y -2 (16 vCPU), restos de la prueba de rendimiento de la semana pasada. Borradas con OK de Diego (SRE); conciliacion creada. Prevención: etiqueta de caducidad en VMs de prueba y alerta de uso de cuota al 80 %."
+  ticket update "Resuelto: la conciliación nocturna está en marcha. Unas máquinas de una prueba antigua ocupaban la capacidad reservada al proyecto; las hemos retirado."
+  ticket resolve "Liberada la cuota borrando prueba-carga-1 y -2 (confirmado con SRE) y creada conciliacion."
+shortcuts:
+- name: only ask for more quota
+  run: |
+    gcloud beta quotas preferences create --service=compute.googleapis.com --quota-id=CPUS-per-project-region --preferred-value=64 --dimensions=region={{.region}} --justification="conciliacion" --email=soporte@zentra.dev
+    ticket resolve "Pedido aumento de cuota de CPU para la conciliación."
+rubric:
+- name: Conciliación en marcha
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: exists
+    path: instances["conciliacion"]
+    expect:
+      status: RUNNING
+    desc: conciliacion creada
+- name: Coste bajo control
+  validator: cost
+  points: 20
+  checks:
+  - type: absent
+    path: instances["prueba-carga-1"]
+    desc: Máquinas olvidadas retiradas
+- name: Confirmado antes de borrar
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: asked
+    actor: sre
+    min: 1
+    desc: Consultado con el dueño
+  - type: command
+    regex: regions describe
+    min: 1
+    desc: Uso de cuota revisado
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - cuota
+      - quota
+    - - prueba
+      - test
+    - - prevenc
+      - prevent
+      - alerta
+      - caducidad
+    desc: Nota con causa y prevención
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: regions describe
+  title: Uso frente a límite
+  why: '24 de 24 vCPU en uso: alguien ocupa la cuota.'
+- match: ^ask sre
+  title: ''
+  why: 'Nunca borres máquinas ajenas sin confirmar: en un banco, eso es otro incidente.'
+en:
+  title: 'INC P2 · Nightly reconciliation won''t start: "Quota CPUS exceeded"'
+  summary: This time it is quota, but forgotten test machines are filling it. Free what's left over (after confirming), start the job and request an increase only if needed.
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **INC-31030 · P2** · *"The nightly reconciliation VM (conciliacion, e2-standard-8) can't be created: "Quota 'CPUS' exceeded. Limit: 24.0 in region {{.region}}". If it doesn't run before 6:00, the accounts won't balance in the morning."*
+
+    This time it is **quota**. An increase request takes time (minutes or days, Google reviews it), and the job must run tonight. See **what's using the quota** (`regions describe`, `instances list`) before asking for more. Delete nothing without confirming with its owner. Create `conciliacion` in the `datos` subnet, without a public IP.
+  objectives:
+  - See how much quota there is and who uses it
+  - Confirm with the owner and free what's left over
+  - Start the reconciliation
+  - Document and leave the prevention
+  hints:
+  - '`gcloud compute regions describe {{.region}}` and `gcloud compute instances list --format=''table(name,machineType,labels)''`.'
+  - Ask Diego about the prueba-carga VMs before deleting them.
+  ticket:
+    summary: 'The nightly reconciliation VM (conciliacion, e2-standard-8) can''t be created: "Quota ''CPUS'' exceeded. Limit: 24.0 in region {{.region}}". If it doesn''t run before 6:00, the accounts won''t balance in the morning.'
+  text:
+    NOC 24x7: NOC 24x7
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    ¡Las prueba-carga! Son de la prueba de rendimiento de la semana pasada, se quedaron encendidas. Bórralas sin miedo.: The prueba-carga VMs! They're from last week's performance test, left running. Delete them, no worries.
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    FinOps.: FinOps.
+    Antes de pedir más cuota, mirad qué está encendido y no se usa.: Before asking for more quota, see what's running and unused.
+    Conciliación en marcha: Reconciliation running
+    conciliacion creada: conciliacion created
+    Coste bajo control: Cost under control
+    Máquinas olvidadas retiradas: Forgotten machines removed
+    Confirmado antes de borrar: Confirmed before deleting
+    Consultado con el dueño: Checked with the owner
+    Uso de cuota revisado: Quota usage reviewed
+    Documentado: Documented
+    Nota con causa y prevención: Note with cause and prevention
+    Ticket cerrado: Ticket closed
+    Uso frente a límite: Usage vs limit
+    '24 de 24 vCPU en uso: alguien ocupa la cuota.': '24 of 24 vCPUs in use: something is taking the quota.'
+    'Nunca borres máquinas ajenas sin confirmar: en un banco, eso es otro incidente.': 'Never delete someone else''s machines without confirming: at a bank, that''s another incident.'

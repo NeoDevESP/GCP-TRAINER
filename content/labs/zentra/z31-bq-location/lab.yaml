@@ -1,0 +1,199 @@
+id: zentra-z31-bq-location
+title: 'INC P3 · «Not found: Dataset» aunque el dataset existe'
+summary: El dataset está en la UE, pero el worker lanza sus trabajos en US. En BigQuery un trabajo solo ve los datasets de su ubicación.
+track: zentra
+day: 31
+level: intermediate
+branch: data
+type: incident
+mode: production
+skills:
+- data.bigquery
+- data.pubsub
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create analitica-sa --display-name="worker de analitica"
+  gcloud iam service-accounts create push-sa --display-name="push de Pub/Sub"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql users create pagos --instance=ledger-db --password=pw-ledger-1
+  gcloud pubsub topics create transacciones
+  bq mk --dataset --location=EU analitica
+  bq mk --table analitica.transacciones id:STRING,importe:NUMERIC,fecha:TIMESTAMP
+  gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  bq add-iam-policy-binding --member=serviceAccount:analitica-sa@{{.project}}.iam.gserviceaccount.com --role=roles/bigquery.dataEditor analitica
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:ledger-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:ledger-db,DB_USER=pagos,DB_PASSWORD=pw-ledger-1,DB_NAME=ledger,DB_POOL_SIZE=5,TOPIC=transacciones --max-instances=5 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud run deploy analitica-worker --image=europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0 --region={{.region}} --service-account=analitica-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BQ_TABLE=analitica.transacciones --max-instances=3 --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud pubsub subscriptions create transacciones-analitica --topic=transacciones --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+faults:
+- type: run_env
+  service: analitica-worker
+  key: BQ_LOCATION
+  value: US
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: clientes
+  target: run:pagos-api
+  path: /orders
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31031
+  kind: INC
+  priority: P3
+  sla: 8h
+  reporter: Sara Benítez (Datos)
+  summary: 'Desde el despliegue de la nueva plantilla del worker, analitica-worker da «Not found: Dataset analitica». ¡Pero el dataset está ahí, lo veo en la consola!'
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: La plantilla nueva viene de un proyecto de otro equipo.
+  facts:
+  - keywords:
+    - - ubicacion
+      - location
+      - us
+      - eu
+      - region
+    answer: Ese equipo trabaja en US… y nuestros datos están en EU por normativa.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **INC-31031 · P3** · *«Desde el despliegue de la nueva plantilla del worker, analitica-worker da «Not found: Dataset analitica». ¡Pero el dataset está ahí, lo veo en la consola!»*
+
+  Flujo afectado: `pagos-api` (Cloud Run) guarda cada pago en `ledger-db` y publica un evento en el tema **transacciones**; la suscripción push **transacciones-analitica** (autenticada como `push-sa`) lo entrega a `analitica-worker`, que lo escribe en BigQuery `analitica.transacciones`.
+
+  En BigQuery, cada trabajo se ejecuta en una **ubicación** y solo ve los datasets de esa ubicación. «Not found» con un recurso que existe suele ser proyecto o ubicación equivocados. Compara la ubicación del dataset (`bq show analitica`) con la configuración del worker.
+objectives:
+- Lee el error del worker
+- Compara la ubicación del dataset y la del trabajo
+- Corrige la configuración del worker, sin mover datos fuera de la UE
+- Comprueba y documenta
+hints:
+- text: '`bq show analitica` y `gcloud run services describe analitica-worker --region={{.region}}` (variables).'
+- text: '`gcloud run services update analitica-worker --region={{.region}} --update-env-vars=BQ_LOCATION=EU`.'
+solution: |
+  ticket
+  gcloud logging read 'resource.type=cloud_run_revision resource.labels.service_name="analitica-worker" severity>=ERROR' --limit=3
+  bq show analitica
+  gcloud run services describe analitica-worker --region={{.region}}
+  ask data "¿de dónde viene la plantilla nueva?"
+  gcloud run services update analitica-worker --region={{.region}} --update-env-vars=BQ_LOCATION=EU
+  sleep 120
+  gcloud pubsub subscriptions describe transacciones-analitica
+  ticket comment "Causa: la plantilla nueva del worker (de un equipo que trabaja en US) traía BQ_LOCATION=US; el dataset analitica está en EU y un trabajo en US no lo ve (Not found in location US). Cambiado a BQ_LOCATION=EU. Los datos no salen de la UE."
+  ticket update "Hola Sara: el worker vuelve a escribir. Lanzaba sus trabajos de BigQuery en US y vuestro dataset está en la UE; está corregido."
+  ticket resolve "Corregido BQ_LOCATION=EU en analitica-worker; la cola de transacciones-analitica se vacía."
+shortcuts:
+- name: bigquery admin
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:analitica-sa@{{.project}}.iam.gserviceaccount.com --role=roles/bigquery.admin
+    ticket resolve "Dado BigQuery Admin al worker para que encuentre el dataset."
+rubric:
+- name: Datos fluyendo
+  validator: functional
+  points: 45
+  critical: true
+  checks:
+  - type: pubsub
+    subscription: transacciones-analitica
+    ackedMin: 10
+    backlogMax: 50
+    settle: 3
+    desc: El worker escribe de nuevo
+- name: Datos en la UE y sin atajos
+  validator: security
+  points: 20
+  all: true
+  checks:
+  - type: exists
+    path: datasets.analitica
+    expect:
+      location: EU
+    desc: El dataset sigue en la UE
+  - type: command
+    regex: add-iam-policy-binding .*analitica-sa
+    max: 0
+    desc: Sin permisos nuevos
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: bq show analitica
+    min: 1
+    desc: Ubicación del dataset comprobada
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - location
+      - ubicaci
+    - - us
+    - - eu
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: bq show analitica
+  title: La ubicación del dataset
+  why: 'location: EU. El error dice «not found in location US»: el trabajo busca en otro sitio.'
+- match: BQ_LOCATION=EU
+  title: ''
+  why: 'Se corrige la configuración, no los datos: mover el dataset a US incumpliría la residencia.'
+en:
+  title: 'INC P3 · "Not found: Dataset" even though the dataset exists'
+  summary: The dataset is in the EU, but the worker runs its jobs in US. In BigQuery a job only sees datasets in its location.
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **INC-31031 · P3** · *"Since the new worker template was deployed, analitica-worker returns "Not found: Dataset analitica". But the dataset is there, I can see it in the console!"*
+
+    Affected flow: `pagos-api` (Cloud Run) stores each payment in `ledger-db` and publishes an event to the **transacciones** topic; the **transacciones-analitica** push subscription (authenticated as `push-sa`) delivers it to `analitica-worker`, which writes it to BigQuery `analitica.transacciones`.
+
+    In BigQuery each job runs in a **location** and only sees datasets in that location. "Not found" with a resource that exists is usually the wrong project or location. Compare the dataset's location (`bq show analitica`) with the worker's configuration.
+  objectives:
+  - Read the worker's error
+  - Compare the dataset and job locations
+  - Fix the worker configuration, without moving data out of the EU
+  - Check and document
+  hints:
+  - '`bq show analitica` and `gcloud run services describe analitica-worker --region={{.region}}` (variables).'
+  - '`gcloud run services update analitica-worker --region={{.region}} --update-env-vars=BQ_LOCATION=EU`.'
+  ticket:
+    summary: 'Since the new worker template was deployed, analitica-worker returns "Not found: Dataset analitica". But the dataset is there, I can see it in the console!'
+  text:
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    La plantilla nueva viene de un proyecto de otro equipo.: The new template comes from another team's project.
+    Ese equipo trabaja en US… y nuestros datos están en EU por normativa.: That team works in US… and our data is in EU by regulation.
+    Datos fluyendo: Data flowing
+    El worker escribe de nuevo: The worker writes again
+    Datos en la UE y sin atajos: Data in the EU, no shortcuts
+    El dataset sigue en la UE: The dataset stays in the EU
+    Sin permisos nuevos: No new permissions
+    Diagnóstico: Diagnosis
+    Ubicación del dataset comprobada: Dataset location checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    La ubicación del dataset: The dataset's location
+    'location: EU. El error dice «not found in location US»: el trabajo busca en otro sitio.': 'location: EU. The error says "not found in location US": the job looks elsewhere.'
+    'Se corrige la configuración, no los datos: mover el dataset a US incumpliría la residencia.': 'You fix the configuration, not the data: moving the dataset to US would break residency.'

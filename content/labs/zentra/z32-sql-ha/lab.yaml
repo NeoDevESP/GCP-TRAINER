@@ -1,0 +1,173 @@
+id: zentra-z32-sql-ha
+title: 'CHG · DORA: el ledger debe sobrevivir a la caída de una zona'
+summary: 'Alta disponibilidad regional, copias diarias, recuperación a un punto en el tiempo y protección contra borrado: lo que exige el regulador para la base de datos del dinero.'
+track: zentra
+day: 32
+level: intermediate
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.ha
+- databases.cloudsql
+- architecture.dr
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create ledger --instance=ledger-db
+ticket:
+  id: CHG-5032
+  kind: CHG
+  priority: P3
+  sla: 2d
+  reporter: Irene Soler (Cumplimiento)
+  summary: 'Hallazgo de la auditoría DORA: ledger-db es zonal, sin copias de seguridad ni recuperación a un punto en el tiempo, y se puede borrar por error. Cambio aprobado por el CAB para esta semana.'
+actors:
+- role: compliance
+  name: Irene Soler (Cumplimiento)
+  persona: Cumplimiento.
+  fallback: 'Necesitamos: alta disponibilidad entre zonas, copias diarias, recuperación a un punto en el tiempo y que no se pueda borrar.'
+  facts: []
+- role: change
+  name: Javier Luna (gestor de cambios)
+  persona: Gestor de cambios.
+  fallback: 'Aprobado. Ventana: hoy, y deja constancia en el ticket.'
+  facts:
+  - keywords:
+    - - ventana
+      - window
+      - reinicio
+      - restart
+      - cuando
+    answer: La ventana es hoy de 22:00 a 23:00; pasar a alta disponibilidad reinicia la instancia unos minutos.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **CHG-5032** · *«Hallazgo de la auditoría DORA: ledger-db es zonal, sin copias de seguridad ni recuperación a un punto en el tiempo, y se puede borrar por error. Cambio aprobado por el CAB para esta semana.»*
+
+  Revisa la instancia (`gcloud sql instances describe ledger-db`) y aplica lo que pide el hallazgo con `gcloud sql instances patch`: alta disponibilidad **regional** (réplica en otra zona con conmutación automática), copias automáticas diarias, **recuperación a un punto en el tiempo** y **protección contra borrado**. Una réplica de lectura **no** es alta disponibilidad.
+objectives:
+- Revisa la configuración actual
+- Activa alta disponibilidad regional
+- Copias diarias y recuperación a un punto en el tiempo
+- Protección contra borrado y registro del cambio
+hints:
+- text: '`gcloud sql instances patch ledger-db --availability-type=REGIONAL --backup-start-time=02:00 --enable-point-in-time-recovery --deletion-protection`.'
+- text: Pregunta al gestor de cambios por la ventana.
+solution: |
+  ticket
+  gcloud sql instances describe ledger-db
+  ask change "¿cuál es la ventana del cambio?"
+  gcloud sql instances patch ledger-db --availability-type=REGIONAL --backup-start-time=02:00 --enable-point-in-time-recovery --deletion-protection --quiet
+  gcloud sql instances describe ledger-db
+  ticket comment "CHG-5032 aplicado en la ventana de 22:00: ledger-db pasa a REGIONAL (standby en otra zona con failover automático), copias diarias a las 02:00, PITR activado y protección contra borrado. Reinicio de unos minutos durante el cambio."
+  ticket update "Hola Irene: ledger-db ya cumple el hallazgo: alta disponibilidad regional, copias diarias, recuperación a un punto en el tiempo y protección contra borrado."
+  ticket resolve "ledger-db en alta disponibilidad regional con backups, PITR y protección contra borrado."
+shortcuts:
+- name: read replica instead of HA
+  run: |
+    gcloud sql instances create ledger-db-replica --master-instance-name=ledger-db --region={{.region}} --tier=db-custom-2-7680
+    ticket resolve "Creada una réplica de ledger-db para tener redundancia."
+rubric:
+- name: Resiliencia DORA
+  validator: state
+  points: 60
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: sqlInstances["ledger-db"]
+    expect:
+      availabilityType: REGIONAL
+    desc: Alta disponibilidad regional
+  - type: exists
+    path: sqlInstances["ledger-db"]
+    expect:
+      backupEnabled: true
+      pointInTimeRecovery: true
+    desc: Copias y PITR
+  - type: exists
+    path: sqlInstances["ledger-db"]
+    expect:
+      deletionProtection: true
+    desc: Protección contra borrado
+- name: Cambio gestionado
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Ventana confirmada con el CAB
+- name: Registro del cambio
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - regional
+    - - pitr
+      - punto en el tiempo
+      - point-in-time
+    - - borrado
+      - deletion
+    desc: Nota con lo aplicado
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: sql instances describe
+  title: El punto de partida
+  why: 'availabilityType ZONAL, sin backups ni PITR: una zona caída o un DROP y se pierde el dinero.'
+- match: availability-type=REGIONAL
+  title: ''
+  why: REGIONAL crea un standby en otra zona con conmutación automática; una réplica de lectura no conmuta sola.
+en:
+  title: 'CHG · DORA: the ledger must survive a zone failure'
+  summary: 'Regional high availability, daily backups, point-in-time recovery and deletion protection: what the regulator requires for the money database.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **CHG-5032** · *"DORA audit finding: ledger-db is zonal, with no backups or point-in-time recovery, and can be deleted by mistake. Change approved by the CAB for this week."*
+
+    Review the instance (`gcloud sql instances describe ledger-db`) and apply what the finding asks with `gcloud sql instances patch`: **regional** high availability (standby in another zone with automatic failover), daily automatic backups, **point-in-time recovery** and **deletion protection**. A read replica is **not** high availability.
+  objectives:
+  - Review the current configuration
+  - Enable regional high availability
+  - Daily backups and point-in-time recovery
+  - Deletion protection and change record
+  hints:
+  - '`gcloud sql instances patch ledger-db --availability-type=REGIONAL --backup-start-time=02:00 --enable-point-in-time-recovery --deletion-protection`.'
+  - Ask the change manager about the window.
+  ticket:
+    summary: 'DORA audit finding: ledger-db is zonal, with no backups or point-in-time recovery, and can be deleted by mistake. Change approved by the CAB for this week.'
+  text:
+    Irene Soler (Cumplimiento): Irene Soler (Compliance)
+    Cumplimiento.: Compliance.
+    ? 'Necesitamos: alta disponibilidad entre zonas, copias diarias, recuperación a un punto en el tiempo y que no se pueda borrar.'
+    : 'We need: high availability across zones, daily backups, point-in-time recovery and deletion protection.'
+    Javier Luna (gestor de cambios): Javier Luna (change manager)
+    Gestor de cambios.: Change manager.
+    'Aprobado. Ventana: hoy, y deja constancia en el ticket.': 'Approved. Window: today, and record it on the ticket.'
+    La ventana es hoy de 22:00 a 23:00; pasar a alta disponibilidad reinicia la instancia unos minutos.: The window is today 22:00-23:00; switching to HA restarts the instance for a few minutes.
+    Resiliencia DORA: DORA resilience
+    Alta disponibilidad regional: Regional high availability
+    Copias y PITR: Backups and PITR
+    Protección contra borrado: Deletion protection
+    Cambio gestionado: Managed change
+    Ventana confirmada con el CAB: Window confirmed with the CAB
+    Registro del cambio: Change record
+    Nota con lo aplicado: Note with what was applied
+    Ticket cerrado: Ticket closed
+    El punto de partida: The starting point
+    'availabilityType ZONAL, sin backups ni PITR: una zona caída o un DROP y se pierde el dinero.': 'availabilityType ZONAL, no backups or PITR: a zone outage or a DROP and the money is gone.'
+    REGIONAL crea un standby en otra zona con conmutación automática; una réplica de lectura no conmuta sola.: REGIONAL creates a standby in another zone with automatic failover; a read replica doesn't fail over on its own.

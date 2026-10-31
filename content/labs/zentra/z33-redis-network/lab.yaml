@@ -1,0 +1,182 @@
+id: zentra-z33-redis-network
+title: 'INC P2 · La app va lentísima: las sesiones no llegan a Memorystore'
+summary: Memorystore solo es accesible desde la red autorizada al crearlo, y eso no se cambia después. Créalo en la red correcta, comprueba desde la VM y retira el inservible.
+track: zentra
+day: 33
+level: intermediate
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.performance
+- networking.vpc
+- compute.troubleshooting
+wellArchitected:
+- performance
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud services enable redis.googleapis.com
+  gcloud compute instances create sesiones-api --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=sesiones
+  gcloud compute networks create pruebas-vpc --subnet-mode=custom
+  gcloud redis instances create sesiones --region={{.region}} --size=1 --tier=basic --network=pruebas-vpc
+ticket:
+  id: INC-31033
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Carla Méndez (producto)
+  summary: 'Desde el cambio de ayer la app tarda 3 segundos en cada pantalla. En los registros de sesiones-api: «Could not connect to Redis at 10.x.x.x:6379: Connection timed out».'
+actors:
+- role: product
+  name: Carla Méndez (producto)
+  persona: Product owner de la app.
+  fallback: Los clientes se quejan en redes; necesito saber cuándo estará.
+  facts: []
+- role: dev
+  name: Equipo de la app
+  persona: Desarrolladores de sesiones-api.
+  fallback: Creamos la instancia sesiones ayer copiando el comando del entorno de pruebas.
+  facts:
+  - keywords:
+    - - red
+      - network
+      - vpc
+      - default
+    answer: ¿La red? Copiamos el comando de pruebas tal cual, con --network=pruebas-vpc. sesiones-api está en zentra-vpc, eso seguro.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-app-prod*).
+
+  > **INC-31033 · P2** · *«Desde el cambio de ayer la app tarda 3 segundos en cada pantalla. En los registros de sesiones-api: «Could not connect to Redis at 10.x.x.x:6379: Connection timed out».»*
+
+  Un *timeout* es un problema de camino. Compara la **red autorizada** de la instancia de Memorystore con la red de la VM. Memorystore solo acepta conexiones desde la red que se le indicó al crearla, y **no se puede cambiar** después: habrá que crear otra en la red correcta, comprobar con `redis-cli` desde la VM y retirar la inservible.
+objectives:
+- Compara la red de Memorystore y la de la VM
+- Crea la instancia en zentra-vpc
+- Comprueba desde la VM
+- Retira la instancia inservible y documenta
+hints:
+- text: '`gcloud redis instances describe sesiones --region={{.region}} --format=''value(authorizedNetwork,host)''`.'
+- text: '`gcloud redis instances create sesiones-cache --region={{.region}} --size=1 --tier=basic --network=zentra-vpc`.'
+solution: |
+  ticket
+  gcloud redis instances describe sesiones --region={{.region}} --format='value(authorizedNetwork,host)'
+  gcloud compute instances describe sesiones-api --zone={{.zone}} --format='value(networkInterfaces[0].network)'
+  ask dev "¿en qué red creasteis la instancia sesiones?"
+  gcloud redis instances create sesiones-cache --region={{.region}} --size=1 --tier=basic --network=zentra-vpc
+  gcloud compute ssh sesiones-api --zone={{.zone}} --tunnel-through-iap --command='sudo apt-get install -y redis-tools'
+  gcloud compute ssh sesiones-api --zone={{.zone}} --tunnel-through-iap --command="redis-cli -h $(gcloud redis instances describe sesiones-cache --region={{.region}} --format='value(host)') PING"
+  gcloud compute ssh sesiones-api --zone={{.zone}} --tunnel-through-iap --command="redis-cli -h $(gcloud redis instances describe sesiones-cache --region={{.region}} --format='value(host)') SET healthcheck ok"
+  gcloud redis instances delete sesiones --region={{.region}} --quiet
+  ticket comment "Causa: la instancia sesiones se creó con el comando de pruebas y quedó autorizada en pruebas-vpc; sesiones-api está en zentra-vpc y no llega (timeout). Creada sesiones-cache en zentra-vpc, PING correcto desde sesiones-api, retirada la instancia inservible. Pendiente que el equipo de la app apunte a la IP nueva."
+  ticket update "Resuelto: la caché de sesiones ya es accesible y la app vuelve a ir rápida en cuanto el equipo de la app aplique la dirección nueva (ya la tienen)."
+  ticket resolve "Creada sesiones-cache en zentra-vpc, verificada desde sesiones-api y retirada la instancia en la red equivocada."
+shortcuts:
+- name: open redis port to the internet
+  run: |
+    gcloud compute firewall-rules create allow-redis --network=zentra-vpc --allow=tcp:6379 --source-ranges=0.0.0.0/0
+    ticket resolve "Abierto el puerto 6379 para las sesiones."
+rubric:
+- name: Caché accesible
+  validator: functional
+  points: 45
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: redis["sesiones-cache"]
+    expect:
+      authorizedNetwork: zentra-vpc
+      state: READY
+    desc: sesiones-cache en zentra-vpc
+  - type: exists
+    path: redis["sesiones-cache"].data
+    expect:
+      healthcheck: ok
+    desc: La VM ha escrito en la caché
+- name: Limpieza
+  validator: cost
+  points: 20
+  checks:
+  - type: absent
+    path: redis.sesiones
+    desc: Instancia inservible retirada
+- name: Sin exponer nada
+  validator: security
+  points: 15
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+    max: 0
+    desc: Nada abierto a internet
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - red
+      - network
+      - pruebas-vpc
+    - - zentra-vpc
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: authorizedNetwork
+  title: La red autorizada
+  why: 'pruebas-vpc frente a zentra-vpc: la caché está en una red a la que la VM no llega.'
+- match: redis instances create sesiones-cache
+  title: ''
+  why: 'La red de Memorystore se elige al crearla y no se cambia: por eso se crea otra.'
+en:
+  title: 'INC P2 · The app is crawling: sessions don''t reach Memorystore'
+  summary: Memorystore is only reachable from the network authorised at creation, and that can't change later. Create it on the right network, check from the VM and remove the unusable one.
+  story: |-
+    **Project `{{.project}}`** (*zentra-app-prod*).
+
+    > **INC-31033 · P2** · *"Since yesterday's change the app takes 3 seconds per screen. In sesiones-api's logs: "Could not connect to Redis at 10.x.x.x:6379: Connection timed out"."*
+
+    A *timeout* is a path problem. Compare the Memorystore instance's **authorised network** with the VM's network. Memorystore only accepts connections from the network given at creation, and **it can't be changed** later: you'll need another one on the right network, a `redis-cli` check from the VM, and to remove the unusable one.
+  objectives:
+  - Compare Memorystore's network and the VM's
+  - Create the instance on zentra-vpc
+  - Check from the VM
+  - Remove the unusable instance and document
+  hints:
+  - '`gcloud redis instances describe sesiones --region={{.region}} --format=''value(authorizedNetwork,host)''`.'
+  - '`gcloud redis instances create sesiones-cache --region={{.region}} --size=1 --tier=basic --network=zentra-vpc`.'
+  ticket:
+    summary: 'Since yesterday''s change the app takes 3 seconds per screen. In sesiones-api''s logs: "Could not connect to Redis at 10.x.x.x:6379: Connection timed out".'
+  text:
+    Carla Méndez (producto): Carla Méndez (product)
+    Product owner de la app.: App product owner.
+    Los clientes se quejan en redes; necesito saber cuándo estará.: Customers are complaining online; I need to know when it'll be fixed.
+    Equipo de la app: App team
+    Desarrolladores de sesiones-api.: sesiones-api developers.
+    Creamos la instancia sesiones ayer copiando el comando del entorno de pruebas.: We created the sesiones instance yesterday copying the command from the test environment.
+    ¿La red? Copiamos el comando de pruebas tal cual, con --network=pruebas-vpc. sesiones-api está en zentra-vpc, eso seguro.: The network? We copied the test command as is, with --network=pruebas-vpc. sesiones-api is on zentra-vpc, that's for sure.
+    Caché accesible: Cache reachable
+    sesiones-cache en zentra-vpc: sesiones-cache on zentra-vpc
+    La VM ha escrito en la caché: The VM wrote to the cache
+    Limpieza: Clean-up
+    Instancia inservible retirada: Unusable instance removed
+    Sin exponer nada: Nothing exposed
+    Nada abierto a internet: Nothing open to the internet
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    La red autorizada: The authorised network
+    'pruebas-vpc frente a zentra-vpc: la caché está en una red a la que la VM no llega.': 'pruebas-vpc vs zentra-vpc: the cache is on a network the VM can''t reach.'
+    'La red de Memorystore se elige al crearla y no se cambia: por eso se crea otra.': 'Memorystore''s network is chosen at creation and can''t be changed: that''s why you create another.'

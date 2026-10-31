@@ -121,14 +121,14 @@ tracks:
       description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
   - id: zentra
     title: 'Zentra: tu primer mes en un banco digital'
-    description: 'Entras en Soporte GCP de Zentra, un banco digital europeo que vive entero en Google Cloud. Primera semana de tutoriales guiados desde cero; después, peticiones e incidencias reales de cada equipo y, al final, la guardia del día de la nómina.'
+    description: 'Entras en Soporte GCP de Zentra, un banco digital europeo que vive entero en Google Cloud. Primera semana de tutoriales guiados desde cero; después, peticiones e incidencias reales de cada equipo la guardia del día de la nómina y una quinta semana de capacidad, bases de datos y escalado.'
     level: associate
     certs: [ACE, PCSE]
     phase: V3
-    labs: [zentra-z01-first-day, zentra-z02-who-is-who, zentra-z03-log-detective, zentra-z04-private-vm, zentra-z05-private-run, zentra-z06-secrets, zentra-z07-noc-alert, zentra-z08-finops-basics, zentra-z09-joiner, zentra-z10-mover, zentra-z11-urgent-leaver, zentra-z12-external-consultant, zentra-z13-enable-api, zentra-z14-auditors, zentra-z15-external-member, zentra-z16-publish-denied, zentra-z17-push-backlog, zentra-z18-bq-denied, zentra-z19-wi-namespace, zentra-z20-armor-blocks-customers, zentra-z21-bad-release, zentra-z22-leaked-key, zentra-z23-push-endpoint, zentra-z24-healthcheck-path, zentra-z25-fx-no-egress, zentra-z26-secret-version, zentra-z27-payday-boss]
+    labs: [zentra-z01-first-day, zentra-z02-who-is-who, zentra-z03-log-detective, zentra-z04-private-vm, zentra-z05-private-run, zentra-z06-secrets, zentra-z07-noc-alert, zentra-z08-finops-basics, zentra-z09-joiner, zentra-z10-mover, zentra-z11-urgent-leaver, zentra-z12-external-consultant, zentra-z13-enable-api, zentra-z14-auditors, zentra-z15-external-member, zentra-z16-publish-denied, zentra-z17-push-backlog, zentra-z18-bq-denied, zentra-z19-wi-namespace, zentra-z20-armor-blocks-customers, zentra-z21-bad-release, zentra-z22-leaked-key, zentra-z23-push-endpoint, zentra-z24-healthcheck-path, zentra-z25-fx-no-egress, zentra-z26-secret-version, zentra-z27-payday-boss, zentra-z28-nat-ports, zentra-z29-zone-stockout, zentra-z30-cpu-quota, zentra-z31-bq-location, zentra-z32-sql-ha, zentra-z33-redis-network, zentra-z34-hpa-unknown]
     en:
       title: 'Zentra: your first month at a digital bank'
-      description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. A first week of guided tutorials from scratch; then real requests and incidents from every team and, at the end, the payday on-call shift.'
+      description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. A first week of guided tutorials from scratch; then real requests and incidents from every team the payday on-call shift and a fifth week on capacity, databases and scaling.'
   - id: support-bank
     title: Soporte GCP en banca
     description: 'El día a día de soporte de plataforma GCP en un banco regulado: peticiones de acceso, políticas de organización, redes privadas, permisos entre servicios, secretos, incidentes de seguridad, GKE, Cloud SQL, costes, auditoría, rotación de secretos, discos llenos, tickets mal dirigidos y caídas de Google. Tickets reales, preguntas al solicitante, respuestas escritas y escalados, sin saltarse las normas.'

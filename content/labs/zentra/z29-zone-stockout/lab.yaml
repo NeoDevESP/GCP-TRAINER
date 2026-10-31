@@ -1,0 +1,157 @@
+id: zentra-z29-zone-stockout
+title: REQ P2 · «No hay sitio» para el cálculo del informe al regulador
+summary: 'ZONE_RESOURCE_POOL_EXHAUSTED no es una cuota: la zona no tiene máquinas libres. Se resuelve con otra zona de la UE, no pidiendo más cuota.'
+track: zentra
+day: 29
+level: intermediate
+branch: compute
+type: incident
+mode: production
+skills:
+- compute.vm
+- compute.troubleshooting
+- architecture.reliability
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+faults:
+- type: zone_stockout
+  zone: '{{.zone}}'
+  families:
+  - n2
+ticket:
+  id: REQ-21029
+  kind: REQ
+  priority: P2
+  sla: 4h
+  reporter: Riesgos · Analítica
+  summary: Esta noche hay que entregar el informe de liquidez al regulador. Necesitamos la VM riesgo-calculo (n2-standard-8) en {{.zone}} y gcloud dice «ZONE_RESOURCE_POOL_EXHAUSTED». ¿Pedimos más cuota a Google?
+actors:
+- role: risk
+  name: Riesgos · Analítica
+  persona: Equipo de riesgos.
+  fallback: Solo necesitamos la VM esta noche; la zona nos da igual mientras sea en la UE.
+  facts:
+  - keywords:
+    - - zona
+      - zone
+      - region
+      - donde
+      - where
+    answer: Cualquier zona de {{.region}} vale; los datos están en la UE.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-riesgos-prod*).
+
+  > **REQ-21029 · P2** · *«Esta noche hay que entregar el informe de liquidez al regulador. Necesitamos la VM riesgo-calculo (n2-standard-8) en {{.zone}} y gcloud dice «ZONE_RESOURCE_POOL_EXHAUSTED». ¿Pedimos más cuota a Google?»*
+
+  Dos errores que se confunden: **QUOTA_EXCEEDED** (has llegado a *tu* límite: se pide aumento) y **ZONE_RESOURCE_POOL_EXHAUSTED** (la *zona* no tiene máquinas libres ahora mismo: subir la cuota no crea máquinas). Reproduce el error, mira tu cuota (`gcloud compute regions describe {{.region}}`) y busca dónde sí hay sitio, siempre en la UE. Crea la VM en la subred `datos`, sin IP pública.
+objectives:
+- Reproduce el error y distingue cuota de capacidad
+- Comprueba que la cuota no es el problema
+- Crea la VM en otra zona de la misma región
+- Explica la diferencia y cierra
+hints:
+- text: '`gcloud compute regions describe {{.region}}` muestra uso y límite de CPUS.'
+- text: Prueba `--zone={{.region}}-c`.
+solution: |
+  ticket
+  gcloud compute regions describe {{.region}}
+  ask risk "¿os vale cualquier zona de la región?"
+  gcloud compute instances create riesgo-calculo --zone={{.region}}-c --machine-type=n2-standard-8 --subnet=datos --no-address --labels=equipo=riesgos,entorno=prod
+  ticket update "Hola: riesgo-calculo ya está creada en {{.region}}-c (misma región, datos en la UE). El error no era de cuota sino de capacidad: la zona {{.zone}} no tenía máquinas n2 libres en ese momento, y pedir más cuota no lo habría arreglado."
+  ticket resolve "Creada riesgo-calculo n2-standard-8 en {{.region}}-c; la zona original no tenía capacidad (no era cuota)."
+shortcuts:
+- name: quota request
+  run: |
+    gcloud beta quotas preferences create --service=compute.googleapis.com --quota-id=CPUS-per-project-region --preferred-value=96 --dimensions=region={{.region}} --justification="informe regulador" --email=soporte@zentra.dev
+    ticket resolve "Pedido aumento de cuota de CPU a Google para riesgos."
+rubric:
+- name: VM disponible esta noche
+  validator: functional
+  points: 45
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: instances["riesgo-calculo"]
+    expect:
+      zone:
+        regex: ^{{.region}}-
+      machineType:
+        regex: n2-standard-8
+    desc: riesgo-calculo creada en la región
+  - type: absent
+    path: instances["riesgo-calculo"].natIP
+    desc: Sin IP pública
+- name: Cuota frente a capacidad
+  validator: diagnosis
+  points: 20
+  checks:
+  - type: command
+    regex: regions describe
+    min: 1
+    desc: Cuota revisada
+- name: Explicación
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - cuota
+      - quota
+    - - capacidad
+      - capacity
+      - zona
+      - zone
+    desc: Explica cuota frente a capacidad
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: regions describe
+  title: Mira la cuota
+  why: 'Uso de CPUS por debajo del límite: no es cuota.'
+- match: --zone={{.region}}-c
+  title: ''
+  why: 'Otra zona de la misma región: misma latencia, mismos datos en la UE y con máquinas libres.'
+en:
+  title: REQ P2 · "No room" for the regulator report computation
+  summary: 'ZONE_RESOURCE_POOL_EXHAUSTED isn''t a quota: the zone has no free machines. It''s solved with another EU zone, not by asking for more quota.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-riesgos-prod*).
+
+    > **REQ-21029 · P2** · *"Tonight the liquidity report is due to the regulator. We need the riesgo-calculo VM (n2-standard-8) in {{.zone}} and gcloud says "ZONE_RESOURCE_POOL_EXHAUSTED". Shall we ask Google for more quota?"*
+
+    Two errors that get confused: **QUOTA_EXCEEDED** (you hit *your* limit: request an increase) and **ZONE_RESOURCE_POOL_EXHAUSTED** (the *zone* has no free machines right now: raising quota doesn't create machines). Reproduce the error, check your quota (`gcloud compute regions describe {{.region}}`) and find where there is room, always in the EU. Create the VM in the `datos` subnet, without a public IP.
+  objectives:
+  - Reproduce the error and tell quota from capacity
+  - Check quota isn't the problem
+  - Create the VM in another zone of the same region
+  - Explain the difference and close
+  hints:
+  - '`gcloud compute regions describe {{.region}}` shows CPUS usage and limit.'
+  - Try `--zone={{.region}}-c`.
+  ticket:
+    summary: Tonight the liquidity report is due to the regulator. We need the riesgo-calculo VM (n2-standard-8) in {{.zone}} and gcloud says "ZONE_RESOURCE_POOL_EXHAUSTED". Shall we ask Google for more quota?
+  text:
+    Riesgos · Analítica: Risk · Analytics
+    Equipo de riesgos.: Risk team.
+    Solo necesitamos la VM esta noche; la zona nos da igual mientras sea en la UE.: We only need the VM tonight; we don't mind the zone as long as it's in the EU.
+    Cualquier zona de {{.region}} vale; los datos están en la UE.: Any {{.region}} zone works; the data is in the EU.
+    VM disponible esta noche: VM available tonight
+    riesgo-calculo creada en la región: riesgo-calculo created in the region
+    Sin IP pública: No public IP
+    Cuota frente a capacidad: Quota vs capacity
+    Cuota revisada: Quota checked
+    Explicación: Explanation
+    Explica cuota frente a capacidad: Explains quota vs capacity
+    Ticket cerrado: Ticket closed
+    Mira la cuota: Check the quota
+    'Uso de CPUS por debajo del límite: no es cuota.': 'CPUS usage under the limit: it isn''t quota.'
+    'Otra zona de la misma región: misma latencia, mismos datos en la UE y con máquinas libres.': 'Another zone in the same region: same latency, same EU data and free machines.'
