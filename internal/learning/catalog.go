@@ -81,6 +81,7 @@ type Catalog struct {
 	Study       []StudyTopic             `json:"-"` // "Learn" section material
 	Worlds      map[string]*World        `json:"-"` // company handbooks (content/worlds)
 	Runbooks    []*Runbook               `json:"-"` // quick diagnosis guide (content/runbooks.yaml)
+	Videos      map[string][]Video       `json:"-"` // official videos per study topic (content/learn/videos.yaml)
 	Exams       []StudyExam              `json:"-"` // official exam structures
 	LabOrder    []string                 `json:"-"`
 	skillBranch map[string]string
@@ -167,6 +168,9 @@ func LoadCatalog(root string) (*Catalog, error) {
 	if c.Runbooks, err = loadRunbooks(filepath.Join(root, "runbooks.yaml")); err != nil {
 		return nil, err
 	}
+	if c.Videos, err = loadVideos(filepath.Join(root, "learn", "videos.yaml")); err != nil {
+		return nil, err
+	}
 	labs, err := scenario.LoadAll(filepath.Join(root, "labs"))
 	if err != nil {
 		return nil, err
@@ -241,6 +245,7 @@ func (c *Catalog) Validate() []string {
 	problems = append(problems, c.validateStudy()...)
 	problems = append(problems, c.validateWorlds()...)
 	problems = append(problems, c.validateRunbooks()...)
+	problems = append(problems, c.validateVideos()...)
 	for _, st := range c.Career.Stages {
 		for _, id := range st.Capstones {
 			if c.Lab(id) == nil {

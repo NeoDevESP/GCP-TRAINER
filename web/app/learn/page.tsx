@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Nav from "@/components/Nav";
 import Exam, { Choices } from "@/components/Exam";
+import VideoCard from "@/components/VideoCard";
 import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { k, useI18n } from "@/lib/i18n";
@@ -444,8 +445,27 @@ export default function LearnPage() {
 function Concepts({ topic, seen, toggle, next }: { topic: Topic; seen: string[]; toggle: (id: string) => void; next: () => void }) {
   const { t } = useI18n();
   const n = topic.concepts.filter((c) => seen.includes(c.id)).length;
+  const videos = topic.videos ?? [];
+  const [playing, setPlaying] = useState("");
+  const play = (id: string) => {
+    setPlaying(id);
+    document.getElementById("vid-" + id)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  };
   return (
     <>
+      {videos.length > 0 && (
+        <section className="vd-section" aria-labelledby="vd-title">
+          <div className="vd-head">
+            <h2 id="vd-title">{t("Vídeos del tema")}</h2>
+            <span className="muted small">{t("Oficiales de Google Cloud, en inglés con subtítulos. Necesitan conexión a internet.")}</span>
+          </div>
+          <div className="vd-grid">
+            {videos.map((v) => (
+              <VideoCard key={v.id + (v.concept ?? "")} video={v} playing={playing === v.id} onPlay={() => setPlaying(v.id)} />
+            ))}
+          </div>
+        </section>
+      )}
       <p className="muted" style={{ marginTop: 0 }}>{t("Lee cada concepto y márcalo cuando lo entiendas. {n} de {total} entendidos.", { n, total: topic.concepts.length })}</p>
       <div className="ln-concepts">
         {topic.concepts.map((c) => {
@@ -461,6 +481,12 @@ function Concepts({ topic, seen, toggle, next }: { topic: Topic; seen: string[];
                 <strong>{t("En el examen")}</strong>
                 <span>{c.tip}</span>
               </div>
+              {videos.filter((v) => v.concept === c.id).map((v) => (
+                <button key={v.id} type="button" className="vd-link" onClick={() => play(v.id)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+                  {t("Vídeo: {title}", { title: v.title })} · {v.length}
+                </button>
+              ))}
               <button type="button" className={"btn " + (ok ? "secondary" : "")} aria-pressed={ok} onClick={() => toggle(c.id)}>
                 {ok ? "✓ " + t("Entendido") : t("Lo he entendido")}
               </button>

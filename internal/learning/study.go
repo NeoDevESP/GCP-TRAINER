@@ -238,7 +238,11 @@ func (c *Catalog) StudyView(lang string) []map[string]any {
 			}
 			cs = append(cs, map[string]any{"id": k.ID, "term": k.Term.In(lang), "what": k.What.In(lang), "points": pts, "tip": k.Tip.In(lang)})
 		}
-		out = append(out, map[string]any{"id": t.ID, "branch": t.Branch, "name": t.Name.In(lang), "intro": t.Intro.In(lang), "concepts": cs, "scenarios": qs(t.Scenarios), "quiz": qs(t.Quiz)})
+		videos := src.Videos[t.ID]
+		if videos == nil {
+			videos = []Video{}
+		}
+		out = append(out, map[string]any{"id": t.ID, "branch": t.Branch, "name": t.Name.In(lang), "intro": t.Intro.In(lang), "concepts": cs, "scenarios": qs(t.Scenarios), "quiz": qs(t.Quiz), "videos": videos})
 	}
 	return out
 }

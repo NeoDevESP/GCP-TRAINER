@@ -2166,4 +2166,9 @@ export const en: Record<string, string> = {
   "Practícalo": "Practise it",
   "GKE": "GKE",
   "Guía de diagnóstico": "Diagnosis guide",
+  "Reproducir el vídeo «{title}» ({length})": "Play the video \"{title}\" ({length})",
+  "Abrir en YouTube": "Open on YouTube",
+  "Vídeos del tema": "Topic videos",
+  "Oficiales de Google Cloud, en inglés con subtítulos. Necesitan conexión a internet.": "Official Google Cloud videos, in English with subtitles. They need an internet connection.",
+  "Vídeo: {title}": "Video: {title}",
 };

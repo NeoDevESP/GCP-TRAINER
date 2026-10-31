@@ -1,0 +1,442 @@
+# Official Google Cloud videos per study topic (YouTube). Every id was checked with
+# YouTube oEmbed (it exists, can be embedded and belongs to the channel shown).
+# Videos are in English; the player turns Spanish subtitles on when available.
+videos:
+  gcp-console:
+  - id: GKEk1FzAN1A
+    title: Getting started with Google Cloud
+    channel: Google Cloud Tech
+    length: '7:31'
+    concept: big-picture
+  - id: 27Pb5g7bEAA
+    title: How to use the Google Cloud Console
+    channel: Google Cloud Tech
+    length: '6:19'
+    concept: console-map
+  foundations:
+  - id: as8t-F8m7Ww
+    title: Google Cloud billing
+    channel: Google Cloud Tech
+    length: '2:50'
+    concept: billing
+  - id: FBU_tF7UzQY
+    title: What is the Google Cloud CLI?
+    channel: Google Cloud Tech
+    length: '2:51'
+    concept: tools
+  - id: tPnCfLaQmvk
+    title: Intro to Cloud Shell Editor
+    channel: Google Cloud Tech
+    length: '2:45'
+    concept: tools
+  - id: ezzZ--xt43c
+    title: Gcloud command-line tips and tricks
+    channel: Google Cloud Tech
+    length: '10:21'
+    concept: tools
+  iam:
+  - id: zd5d9Vv1ZFE
+    title: Cloud IAM in a minute
+    channel: Google Cloud Tech
+    length: '1:38'
+    concept: principals
+  - id: xQClVtAECdg
+    title: What is Cloud IAM?
+    channel: Google Cloud Tech
+    length: '9:44'
+    concept: roles
+  - id: xXk1YlkKW_k
+    title: What are Service Accounts?
+    channel: Google Cloud Tech
+    length: '5:29'
+    concept: sa
+  - id: CTcQNPWNRkE
+    title: How to secure your Service Accounts
+    channel: Google Cloud Tech
+    length: '6:19'
+    concept: sa
+  - id: geqSzNvZOuk
+    title: How to use Policy Troubleshooter
+    channel: Google Cloud Tech
+    length: '3:39'
+    concept: troubleshoot
+  networking:
+  - id: hS_uvz4ohbo
+    title: Virtual Private Cloud in a minute
+    channel: Google Cloud Tech
+    length: '2:13'
+    concept: vpc
+  - id: QuXAj6R93xI
+    title: How Google Cloud Firewall protects your workloads
+    channel: Google Cloud Tech
+    length: '5:51'
+    concept: firewall
+  - id: ydQQhC3NrzQ
+    title: What is Private Google Access?
+    channel: Google Cloud Tech
+    length: '3:24'
+    concept: nat
+  - id: h8EqM6Xt3MA
+    title: What is Cloud Load Balancing?
+    channel: Google Cloud Tech
+    length: '5:08'
+    concept: lb
+  - id: JAFagcQBV08
+    title: What is Private Service Connect?
+    channel: Google Cloud Tech
+    length: '7:19'
+    concept: psc
+  compute:
+  - id: IuK4gQeHRcI
+    title: Compute Engine in a minute
+    channel: Google Cloud Tech
+    length: '1:43'
+    concept: gce
+  - id: KBeyQHoAcrQ
+    title: What is Compute Engine?
+    channel: Google Cloud Tech
+    length: '3:01'
+    concept: gce
+  - id: KGtN5XEP658
+    title: How to perform rolling updates to Managed Instance Group (MIG)
+    channel: Google Cloud Tech
+    length: '5:32'
+    concept: mig
+  - id: zovhVfou-DI
+    title: Persistent Disk in a minute
+    channel: Google Cloud Tech
+    length: '1:43'
+    concept: disks
+  - id: AL2rAmWFZjM
+    title: Cloud Run in a minute
+    channel: Google Cloud Tech
+    length: '1:33'
+    concept: run
+  - id: UcGPtVrd97M
+    title: How Cloud Run Works
+    channel: Google Cloud
+    length: '3:22'
+    concept: run
+  storage:
+  - id: wNOs3LlsH6k
+    title: Cloud Storage in a minute
+    channel: Google Cloud Tech
+    length: '1:46'
+    concept: classes
+  - id: 8DMOJ6Lgm7s
+    title: Bucket options in Cloud Storage
+    channel: Google Cloud Tech
+    length: '3:27'
+    concept: location
+  - id: 0HSEQUyiexU
+    title: Authentication controls for Cloud Storage
+    channel: Google Cloud Tech
+    length: '2:59'
+    concept: access
+  databases:
+  - id: xRjWZwh5Ip4
+    title: Cloud SQL, Cloud Spanner, or Firestore?
+    channel: Google Cloud
+    length: '1:22'
+    concept: choose
+  - id: Kl8ig2BtLAY
+    title: What is Cloud SQL?
+    channel: Google Cloud Tech
+    length: '3:10'
+    concept: cloudsql
+  - id: E4dbrWl-liA
+    title: 'Cloud SQL: Concepts of Networking'
+    channel: Google Cloud Tech
+    length: '6:49'
+    concept: sql-ops
+  - id: bUSU1e9j8wc
+    title: What is Cloud Spanner?
+    channel: Google Cloud Tech
+    length: '6:18'
+    concept: spanner
+  - id: ra3Vow3-HHg
+    title: Memorystore in a minute
+    channel: Google Cloud Tech
+    length: '1:40'
+    concept: memorystore
+  data:
+  - id: m8WqxLd1jSc
+    title: What is BigQuery?
+    channel: Google Cloud Tech
+    length: '2:28'
+    concept: bigquery
+  - id: 0Hd23GnZ1bE
+    title: How does BigQuery store data?
+    channel: Google Cloud Tech
+    length: '8:20'
+    concept: bigquery
+  - id: jLI-84UjZLE
+    title: Cloud Pub/Sub in a minute
+    channel: Google Cloud Tech
+    length: '1:46'
+    concept: pubsub
+  - id: aHc-DOP43a8
+    title: 'Pub/Sub Best Practices: Subscribing'
+    channel: Google Cloud Tech
+    length: '3:52'
+    concept: pubsub
+  - id: KalJ0VuEM7s
+    title: What is Dataflow?
+    channel: Google Cloud Tech
+    length: '5:03'
+    concept: dataflow
+  gke:
+  - id: Rl5M1CzgEH4
+    title: What is Google Kubernetes Engine (GKE)?
+    channel: Google Cloud Tech
+    length: '6:31'
+    concept: objects
+  - id: _JKsv2BtAnY
+    title: Introducing GKE Autopilot
+    channel: Google Cloud Tech
+    length: '6:37'
+    concept: modes
+  - id: aVBV4O3h4AY
+    title: 'GKE: Concepts of Networking'
+    channel: Google Cloud Tech
+    length: '11:29'
+    concept: gke-net
+  - id: IdCjKUZah-Q
+    title: 'GKE Cluster Autoscaler: How to troubleshoot and resolve scaling issues'
+    channel: Google Cloud Tech
+    length: '3:33'
+    concept: scaling
+  - id: 4OzbPaJCUr8
+    title: Secure access to GKE workloads with Workload Identity
+    channel: Google Cloud Tech
+    length: '6:34'
+    concept: wi
+  security:
+  - id: JIE89dneaGo
+    title: Manage your Cloud Run secrets securely with Secret Manager
+    channel: Google Cloud Tech
+    length: '6:38'
+    concept: secrets
+  - id: WKZC93y-aWI
+    title: Encryption with Cloud KMS Keys
+    channel: Google Cloud Tech
+    length: '5:24'
+    concept: kms
+  - id: gniNe_ZxdJU
+    title: How to use customer-managed keys (CMEK)
+    channel: Google Cloud Tech
+    length: '3:44'
+    concept: kms
+  - id: TD06WkY1zLs
+    title: Protect your resources with VPC Service Controls
+    channel: Google Cloud Tech
+    length: '3:27'
+    concept: vpcsc
+  - id: 7b9bRfHn-aU
+    title: Introduction to Go Deep | Google Cloud Armor
+    channel: Google Cloud Tech
+    length: '4:41'
+    concept: armor
+  - id: YLz3Xtf8LTc
+    title: Secure Cloud Run with IAP (Identity-Aware Proxy)
+    channel: Google Cloud Tech
+    length: '7:47'
+    concept: iap
+  observability:
+  - id: hpUHZixlHiA
+    title: Cloud Logging in a minute
+    channel: Google Cloud Tech
+    length: '1:50'
+    concept: logging
+  - id: gyDp-Cl_MdA
+    title: Cloud logging
+    channel: Google Cloud Tech
+    length: '4:02'
+    concept: logging
+  - id: D0YKWvuJgwg
+    title: Create Alerts on Cloud Monitoring
+    channel: Google Cloud Tech
+    length: '5:43'
+    concept: monitoring
+  - id: r3oZVYVSbqg
+    title: How to do alerting right
+    channel: Google Cloud Tech
+    length: '10:26'
+    concept: monitoring
+  - id: 3Wtbde9fB_Y
+    title: How to create log sinks
+    channel: Google Cloud Tech
+    length: '4:57'
+    concept: log-routing
+  sre:
+  - id: E3ReKuJ8ewA
+    title: The Art of SLOs (Service Level Objectives)
+    channel: Google Cloud Tech
+    length: '4:01'
+    concept: slo
+  - id: U53wC2A75Is
+    title: Getting started with SLOs
+    channel: Google Cloud Tech
+    length: '8:13'
+    concept: slo
+  devops:
+  - id: BUPenAjobjw
+    title: Getting Started with Terraform for Google Cloud
+    channel: Google Cloud Tech
+    length: '5:05'
+    concept: iac
+  - id: 712Y0KpeHok
+    title: Intro to Artifact Registry
+    channel: Google Cloud Tech
+    length: '6:53'
+    concept: registry
+  - id: Il8FlhR9jKM
+    title: Introducing Cloud Deploy
+    channel: Google Cloud Tech
+    length: '2:36'
+    concept: deploy
+  architecture:
+  - id: IeMYQ-qJeK4
+    title: Introduction to Google Cloud
+    channel: Google Cloud Tech
+    length: '22:25'
+  - id: 3WSHo--vX6Q
+    title: Disaster Recovery in GKE
+    channel: Google Cloud Tech
+    length: '12:13'
+    concept: rto
+  migration:
+  - id: 6BSjMpO4rGU
+    title: 'How to Migrate to Google Cloud: The 4-Phase Framework (Course Preview)'
+    channel: Google Cloud
+    length: '1:26'
+    concept: phases
+  - id: ul7iaLxpy64
+    title: 'Migrating to Google Cloud: Assess and discover your workloads'
+    channel: Google Cloud
+    length: '2:38'
+    concept: phases
+  - id: Wh7koygb1ZE
+    title: Introducing Database Migration Service
+    channel: Google Cloud Tech
+    length: '5:05'
+    concept: dms
+  ml:
+  - id: Rl9Gz1Yf6wM
+    title: What is Vertex AI
+    channel: Google Cloud
+    length: '7:10'
+    concept: vertex
+  - id: I7UiSU96CLc
+    title: Introduction to Vertex AI Model Garden
+    channel: Google Cloud Tech
+    length: '5:59'
+    concept: garden
+  - id: YfiLUpNejpE
+    title: Introduction to Gemini on Vertex AI
+    channel: Google Cloud Tech
+    length: '5:28'
+    concept: genai
+  support-compute:
+  - id: sTiswpYxZgU
+    title: Troubleshooting OS Login SSH access
+    channel: Google Cloud Tech
+    length: '3:46'
+    concept: oslogin
+  - id: vg0-5rHTTKo
+    title: Getting started with troubleshooting OS Login
+    channel: Google Cloud Tech
+    length: '4:30'
+    concept: oslogin
+  - id: GSksIUqBJPo
+    title: How to troubleshoot Google Compute Engine Instances using the serial console
+    channel: Google Cloud Tech
+    length: '5:28'
+    concept: serial
+  - id: FGTcclTUmIs
+    title: Common Cloud Run errors and how to fix them with Cloud Logging
+    channel: Google Cloud Tech
+    length: '6:30'
+    concept: runport
+  support-network:
+  - id: k3U3W4q89tg
+    title: How to Troubleshoot 502 Error with External HTTP(S) Load Balancer
+    channel: Google Cloud Tech
+    length: '5:31'
+    concept: lb502
+  - id: f-VIZ8ALVD4
+    title: How to troubleshoot unhealthy backends in Google Cloud Load Balancers
+    channel: Google Cloud Tech
+    length: '5:36'
+    concept: lb502
+  - id: ZmU1fvK6J7s
+    title: How to create and analyze Connectivity Tests for Google Cloud Load Balancers
+    channel: Google Cloud Tech
+    length: '4:59'
+  support-data:
+  - id: r9qvB-JH4jM
+    title: Optimize application performance with Cloud Run and Cloud SQL
+    channel: Google Cloud Tech
+    length: '9:46'
+    concept: sqlops
+  - id: VxXJUYcLmTk
+    title: How to monitor quotas in Google Cloud
+    channel: Google Cloud Tech
+    length: '4:20'
+    concept: bqquota
+  - id: uiUIjAKhWB4
+    title: 'Capacity, Quota, and Stockout: Concepts and Tips'
+    channel: Google Cloud Events
+    length: '30:17'
+    concept: gpu
+  support-governance:
+  - id: 3Wtbde9fB_Y
+    title: How to create log sinks
+    channel: Google Cloud Tech
+    length: '4:57'
+    concept: sinks
+  - id: mW2CLYr6w4M
+    title: Introducing pipe syntax in BigQuery and Cloud Logging
+    channel: Google Cloud Tech
+    length: '5:01'
+    concept: lql
+  - id: maFV-fZA6To
+    title: Enabling, disabling, or changing billing for a billing project
+    channel: Google Cloud Tech
+    length: '2:16'
+    concept: billing
+  support-method:
+  - id: MRylGoXDjxw
+    title: Troubleshooting group and resource hierarchy permissions
+    channel: Google Cloud Tech
+    length: '3:03'
+    concept: deny403
+  - id: SaLHDNqrZ80
+    title: How to use Cloud Audit Logging
+    channel: Google Cloud Tech
+    length: '7:01'
+  - id: dVBBKR3SgDQ
+    title: 'Audit Logs: Querying Logs, Pricing and Retention'
+    channel: Google Cloud Tech
+    length: '4:57'
+  support-identity:
+  - id: MRylGoXDjxw
+    title: Troubleshooting group and resource hierarchy permissions
+    channel: Google Cloud Tech
+    length: '3:03'
+    concept: groups
+  support-google:
+  - id: TSUWMnVLcho
+    title: Google Cloud Premium Support onboarding and best practices
+    channel: Google Cloud Events
+    length: '46:22'
+    concept: tiers
+  support:
+  - id: SaLHDNqrZ80
+    title: How to use Cloud Audit Logging
+    channel: Google Cloud Tech
+    length: '7:01'
+  - id: VBsLG4jCHJk
+    title: How to reduce costs with Active Assist
+    channel: Google Cloud Tech
+    length: '8:35'

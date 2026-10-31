@@ -22,6 +22,13 @@ export interface Question {
   why: string;
   key?: string; // "topic:q3" (quiz) or "topic:s1" (scenario), for spaced repetition
 }
+export interface Video {
+  id: string; // YouTube id
+  title: string;
+  channel: string;
+  length: string;
+  concept?: string;
+}
 export interface Topic {
   id: string;
   branch: string;
@@ -30,6 +37,7 @@ export interface Topic {
   concepts: Concept[];
   scenarios: Question[];
   quiz: Question[];
+  videos?: Video[];
 }
 export interface Domain {
   name: string;
