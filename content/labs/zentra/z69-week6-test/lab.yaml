@@ -1,0 +1,217 @@
+id: zentra-z69-week6-test
+title: Prueba de la semana 6 · El informe trimestral al regulador no sale
+summary: 'Dos cambios ajenos se suman: la API de BigQuery desactivada por un script y un worker que lanza sus trabajos en US. Arréglalo sin sacar datos de la UE.'
+track: zentra
+day: 69
+level: advanced
+branch: data
+type: boss
+mode: production
+skills:
+- data.bigquery
+- foundations.apis
+- security.audit
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 40
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create analitica-sa --display-name="worker de analitica"
+  gcloud iam service-accounts create push-sa --display-name="push de Pub/Sub"
+  gcloud services enable bigquery.googleapis.com
+  gcloud pubsub topics create transacciones
+  bq mk --dataset --location=EU analitica
+  bq mk --table analitica.transacciones id:STRING,importe:NUMERIC,fecha:TIMESTAMP
+  bq add-iam-policy-binding --member=serviceAccount:analitica-sa@{{.project}}.iam.gserviceaccount.com --role=roles/bigquery.dataEditor analitica
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.user
+  gcloud run deploy analitica-worker --image=europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0 --region={{.region}} --service-account=analitica-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BQ_TABLE=analitica.transacciones --max-instances=3 --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud pubsub subscriptions create transacciones-analitica --topic=transacciones --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+faults:
+- type: run_env
+  service: analitica-worker
+  key: BQ_LOCATION
+  value: US
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+- type: command
+  actor: finops-limpieza@{{.project}}.iam.gserviceaccount.com
+  run: gcloud services disable bigquery.googleapis.com --force
+traffic:
+- name: transacciones
+  target: pubsub:transacciones
+  rps: 5
+ticket:
+  id: INC-31069
+  kind: INC
+  priority: P1
+  sla: 1h
+  reporter: Irene Soler (Cumplimiento)
+  summary: 'El informe trimestral al regulador vence hoy y Datos no puede lanzarlo: BigQuery da errores y las transacciones del trimestre no se están cargando. Necesito una hora estimada.'
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Necesitamos el informe a tiempo, pero sin sacar datos de la UE.
+  facts: []
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: FinOps.
+  fallback: Nuestro script desactiva APIs sin uso.
+  facts:
+  - keywords:
+    - - bigquery
+      - api
+      - script
+      - desactiv
+      - disable
+    answer: Sí, el script desactivó BigQuery. Actívala; añadimos la excepción.
+- role: compliance
+  name: Irene Soler (Cumplimiento)
+  persona: Cumplimiento.
+  fallback: Los datos del informe no pueden salir de la UE.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **INC-31069 · P1** · *«El informe trimestral al regulador vence hoy y Datos no puede lanzarlo: BigQuery da errores y las transacciones del trimestre no se están cargando. Necesito una hora estimada.»*
+
+  **Prueba de la semana 6.** Busca **todos** los cambios recientes (auditoría y configuración del worker): puede haber más de uno. Nada de copiar datos a US para salir del paso. Da a Cumplimiento una hora estimada pronto.
+objectives:
+- Da una estimación a Cumplimiento
+- Encuentra los dos cambios
+- Corrige los dos sin sacar datos de la UE
+- Valida la carga y documenta
+hints:
+- text: '`gcloud logging read ''protoPayload.methodName:DisableService''` y `gcloud run services describe analitica-worker`'
+solution: |
+  ticket
+  ticket update "Estamos con el fallo de BigQuery del informe trimestral. Estimamos tenerlo resuelto en una hora; próxima actualización en 30 minutos."
+  gcloud services list --enabled
+  gcloud logging read 'protoPayload.methodName:DisableService' --limit=3
+  ask finops "¿el script de limpieza ha desactivado BigQuery?"
+  gcloud services enable bigquery.googleapis.com
+  gcloud run services describe analitica-worker --region={{.region}}
+  bq show analitica
+  ask data "¿de dónde salió BQ_LOCATION=US en el worker?"
+  gcloud run services update analitica-worker --region={{.region}} --update-env-vars=BQ_LOCATION=EU
+  sleep 120
+  gcloud pubsub subscriptions describe transacciones-analitica
+  ticket comment "Dos causas: 1) finops-limpieza desactivó bigquery.googleapis.com (reactivada; FinOps añade excepción); 2) analitica-worker recibió BQ_LOCATION=US en su último despliegue y el dataset analitica está en EU (corregido a EU). Ningún dato ha salido de la UE."
+  ticket update "Resuelto: BigQuery vuelve a funcionar y las transacciones del trimestre se están cargando; Datos puede lanzar el informe hoy. Los datos no han salido de la UE."
+  ticket resolve "Reactivada la API de BigQuery y corregido BQ_LOCATION=EU en analitica-worker; carga al día."
+shortcuts:
+- name: only enable the API
+  run: |
+    gcloud services enable bigquery.googleapis.com
+    ticket resolve "Reactivada la API de BigQuery desactivada por el script de limpieza."
+rubric:
+- name: BigQuery disponible
+  validator: functional
+  points: 25
+  critical: true
+  checks:
+  - type: exists
+    path: services
+    expect:
+      '["bigquery.googleapis.com"]': true
+    desc: API activa
+- name: Carga al día
+  validator: functional
+  points: 25
+  critical: true
+  checks:
+  - type: pubsub
+    subscription: transacciones-analitica
+    ackedMin: 10
+    backlogMax: 50
+    settle: 3
+    desc: El worker escribe en BigQuery
+- name: Datos en la UE
+  validator: security
+  points: 20
+  checks:
+  - type: exists
+    path: datasets.analitica
+    expect:
+      location: EU
+    desc: El dataset sigue en la UE
+- name: Comunicación
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: true
+    keywords:
+    - - hora
+      - hour
+      - estim
+      - eta
+      - hoy
+      - today
+    desc: Estimación a Cumplimiento
+  - type: ticket_update
+    public: false
+    keywords:
+    - - api
+      - disable
+      - desactiv
+    - - bq_location
+      - location
+      - ubicaci
+    desc: Nota con las dos causas
+tutor:
+- match: DisableService
+  title: Cambio 1
+  why: finops-limpieza desactivó BigQuery.
+- match: BQ_LOCATION=EU
+  title: Cambio 2
+  why: El worker lanzaba sus trabajos en US; el dataset está en EU.
+en:
+  title: Week 6 test · The quarterly regulator report won't run
+  summary: 'Two unrelated changes add up: the BigQuery API disabled by a script and a worker launching its jobs in the US. Fix it without taking data out of the EU.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **INC-31069 · P1** · *"The quarterly regulator report is due today and Data can't run it: BigQuery returns errors and the quarter's transactions aren't loading. I need an ETA."*
+
+    **Week 6 test.** Look for **all** recent changes (audit log and the worker's configuration): there may be more than one. No copying data to the US to get by. Give Compliance an ETA early.
+  objectives:
+  - Give Compliance an estimate
+  - Find both changes
+  - Fix both without taking data out of the EU
+  - Validate loading and document
+  hints:
+  - '`gcloud logging read ''protoPayload.methodName:DisableService''` and `gcloud run services describe analitica-worker`'
+  ticket:
+    summary: 'The quarterly regulator report is due today and Data can''t run it: BigQuery returns errors and the quarter''s transactions aren''t loading. I need an ETA.'
+  text:
+    Irene Soler (Cumplimiento): Irene Soler (Compliance)
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Necesitamos el informe a tiempo, pero sin sacar datos de la UE.: We need the report on time, but without taking data out of the EU.
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    FinOps.: FinOps.
+    Nuestro script desactiva APIs sin uso.: Our script disables unused APIs.
+    Sí, el script desactivó BigQuery. Actívala; añadimos la excepción.: Yes, the script disabled BigQuery. Turn it on; we'll add the exception.
+    Cumplimiento.: Compliance.
+    Los datos del informe no pueden salir de la UE.: The report's data can't leave the EU.
+    BigQuery disponible: BigQuery available
+    API activa: API enabled
+    Carga al día: Loading up to date
+    El worker escribe en BigQuery: The worker writes to BigQuery
+    Datos en la UE: Data in the EU
+    El dataset sigue en la UE: The dataset stays in the EU
+    Comunicación: Communication
+    Estimación a Cumplimiento: Estimate to Compliance
+    Nota con las dos causas: Note with both causes
+    Cambio 1: Change 1
+    finops-limpieza desactivó BigQuery.: finops-limpieza disabled BigQuery.
+    Cambio 2: Change 2
+    El worker lanzaba sus trabajos en US; el dataset está en EU.: The worker launched its jobs in the US; the dataset is in the EU.

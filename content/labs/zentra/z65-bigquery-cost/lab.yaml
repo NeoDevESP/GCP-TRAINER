@@ -1,0 +1,174 @@
+id: zentra-z65-bigquery-cost
+title: REQ P3 · El informe diario de riesgo lee 1,8 TB cada mañana
+summary: Una tabla sin particiones obliga a leerlo todo. Particiona por fecha, agrupa por país y demuestra el ahorro con una ejecución de prueba.
+track: zentra
+day: 65
+level: advanced
+branch: data
+type: incident
+mode: production
+skills:
+- data.bigquery
+- finops.optimization
+- data.pipelines
+wellArchitected:
+- cost
+- performance
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  bq mk --dataset --location=EU riesgo
+  bq mk --table --sim_rows=2000000000 riesgo.operaciones fecha:TIMESTAMP:8,cuenta_id:STRING:16,pais:STRING:4,tipo:STRING:12,detalle:STRING:900,importe:NUMERIC:16
+ticket:
+  id: REQ-21065
+  kind: REQ
+  priority: P3
+  sla: 2d
+  reporter: Elena Ríos (FinOps)
+  summary: 'El informe diario de riesgo por país (consulta de la última semana) cuesta una fortuna: BigQuery dice que procesa casi 2 TB cada vez. ¿Se puede abaratar sin cambiar el resultado?'
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Necesitamos el informe a tiempo, pero sin sacar datos de la UE.
+  facts:
+  - keywords:
+    - - consulta
+      - query
+      - filtro
+      - filter
+      - semana
+      - week
+      - pais
+      - país
+    answer: Cada mañana sumamos importe por país de los últimos 7 días, sobre todo España (ES).
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: FinOps.
+  fallback: Quiero ver la cifra antes y después.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **REQ-21065 · P3** · *«El informe diario de riesgo por país (consulta de la última semana) cuesta una fortuna: BigQuery dice que procesa casi 2 TB cada vez. ¿Se puede abaratar sin cambiar el resultado?»*
+
+  En BigQuery pagas por **bytes leídos**. `riesgo.operaciones` no tiene particiones: cualquier filtro por fecha lee la tabla entera. Mide con `--dry_run`, crea una copia **particionada por fecha** y **agrupada (cluster) por país**, y vuelve a medir la misma consulta.
+objectives:
+- Mide la consulta actual
+- Crea la tabla particionada y agrupada
+- Mide de nuevo
+- Explica el ahorro
+hints:
+- text: '`bq query --dry_run --use_legacy_sql=false "SELECT …"`'
+- text: '`CREATE TABLE riesgo.operaciones_p PARTITION BY DATE(fecha) CLUSTER BY pais AS SELECT * FROM riesgo.operaciones`'
+solution: |
+  ticket
+  ask data "¿qué filtra exactamente el informe diario?"
+  bq query --dry_run --use_legacy_sql=false "SELECT pais, SUM(importe) AS importe FROM riesgo.operaciones WHERE DATE(fecha) BETWEEN '2026-08-25' AND '2026-08-31' AND pais = 'ES' GROUP BY pais"
+  bq query --use_legacy_sql=false "CREATE TABLE riesgo.operaciones_p PARTITION BY DATE(fecha) CLUSTER BY pais AS SELECT * FROM riesgo.operaciones"
+  bq query --dry_run --use_legacy_sql=false "SELECT pais, SUM(importe) AS importe FROM riesgo.operaciones_p WHERE DATE(fecha) BETWEEN '2026-08-25' AND '2026-08-31' AND pais = 'ES' GROUP BY pais"
+  bq query --use_legacy_sql=false "SELECT pais, SUM(importe) AS importe FROM riesgo.operaciones_p WHERE DATE(fecha) BETWEEN '2026-08-25' AND '2026-08-31' AND pais = 'ES' GROUP BY pais"
+  ticket update "Hola Elena: el informe leía la tabla entera (casi 2 TB) porque no estaba particionada. Hemos creado riesgo.operaciones_p particionada por fecha y agrupada por país: la misma consulta lee ahora solo la última semana de ES, unos pocos GB. El resultado es idéntico; Datos tiene que apuntar el informe a la tabla nueva."
+  ticket resolve "Creada riesgo.operaciones_p (partición por fecha, cluster por país); el informe pasa de ~2 TB a pocos GB por ejecución."
+shortcuts:
+- name: just limit rows
+  run: |
+    bq query --use_legacy_sql=false "SELECT pais, SUM(importe) AS importe FROM riesgo.operaciones WHERE pais = 'ES' GROUP BY pais LIMIT 10"
+    ticket resolve "Añadido LIMIT a la consulta del informe para que lea menos."
+rubric:
+- name: Consulta barata
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: bq_bytes_max
+    queryContains: importe
+    bytes: 100000000000
+    desc: El informe lee menos de 100 GB
+- name: Diseño de la tabla
+  validator: state
+  points: 25
+  checks:
+  - type: count
+    collection: datasets.riesgo.tables
+    where:
+      partitionField: fecha
+      clustering:
+        contains: pais
+    min: 1
+    desc: Particionada por fecha y agrupada por país
+- name: Medir antes y después
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: dry_run|dry-run
+    min: 2
+    desc: Dos ejecuciones de prueba
+- name: Explicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - partici
+      - partition
+    - - tb
+      - gb
+      - bytes
+    desc: Explica el ahorro
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: --dry_run
+  title: Medir
+  why: Una ejecución de prueba dice los bytes que leería, sin coste.
+- match: PARTITION BY DATE(fecha)
+  title: Particionar
+  why: Con el filtro por fecha solo se leen los días pedidos; el cluster por país afina aún más.
+en:
+  title: REQ P3 · The daily risk report reads 1.8 TB every morning
+  summary: An unpartitioned table forces reading everything. Partition by date, cluster by country and prove the saving with a dry run.
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **REQ-21065 · P3** · *"The daily risk report by country (last week's query) costs a fortune: BigQuery says it processes almost 2 TB each time. Can it be made cheaper without changing the result?"*
+
+    In BigQuery you pay for **bytes read**. `riesgo.operaciones` isn't partitioned: any date filter reads the whole table. Measure with `--dry_run`, create a copy **partitioned by date** and **clustered by country**, and measure the same query again.
+  objectives:
+  - Measure the current query
+  - Create the partitioned, clustered table
+  - Measure again
+  - Explain the saving
+  hints:
+  - '`bq query --dry_run --use_legacy_sql=false "SELECT …"`'
+  - '`CREATE TABLE riesgo.operaciones_p PARTITION BY DATE(fecha) CLUSTER BY pais AS SELECT * FROM riesgo.operaciones`'
+  ticket:
+    summary: 'The daily risk report by country (last week''s query) costs a fortune: BigQuery says it processes almost 2 TB each time. Can it be made cheaper without changing the result?'
+  text:
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Necesitamos el informe a tiempo, pero sin sacar datos de la UE.: We need the report on time, but without taking data out of the EU.
+    Cada mañana sumamos importe por país de los últimos 7 días, sobre todo España (ES).: Every morning we sum the amount per country for the last 7 days, mainly Spain (ES).
+    FinOps.: FinOps.
+    Quiero ver la cifra antes y después.: I want to see the figure before and after.
+    Consulta barata: Cheap query
+    El informe lee menos de 100 GB: The report reads under 100 GB
+    Diseño de la tabla: Table design
+    Particionada por fecha y agrupada por país: Partitioned by date and clustered by country
+    Medir antes y después: Measure before and after
+    Dos ejecuciones de prueba: Two dry runs
+    Explicación: Explanation
+    Explica el ahorro: Explains the saving
+    Ticket cerrado: Ticket closed
+    Medir: Measure
+    Una ejecución de prueba dice los bytes que leería, sin coste.: A dry run tells you the bytes it would read, at no cost.
+    Particionar: Partition
+    Con el filtro por fecha solo se leen los días pedidos; el cluster por país afina aún más.: With the date filter only the requested days are read; clustering by country narrows it further.

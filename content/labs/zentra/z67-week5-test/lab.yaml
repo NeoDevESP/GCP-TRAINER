@@ -1,0 +1,263 @@
+id: zentra-z67-week5-test
+title: 'Prueba de la semana 5 · Campaña de cashback: todo va mal a la vez'
+summary: 'Dos problemas de capacidad sin relación, en el mismo ticket: el cotizador se queda sin puertos de NAT y la base de datos de Cuentas sin conexiones.'
+track: zentra
+day: 67
+level: advanced
+branch: networking
+type: boss
+mode: production
+skills:
+- networking.nat
+- databases.cloudsql
+- observability.incident
+wellArchitected:
+- reliability
+- performance
+certs:
+- ACE
+- PCA
+difficulty: 5
+minutes: 45
+baseline:
+- zentra-core
+setup: |
+  gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --enable-logging
+  gcloud compute instances create divisas-cotizador --zone={{.zone}} --machine-type=e2-standard-2 --subnet=apps --no-address --tags=divisas --metadata=sim-preinstalled=docker-images,sim-egress-connections=900,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/egress-app:1.0'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-divisas --network=zentra-vpc --allow=tcp:8080 --source-tags=ops --target-tags=divisas
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:cuentas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create cuentas-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create cuentas --instance=cuentas-db
+  gcloud sql users create app --instance=cuentas-db --password=pw-cuentas-1
+  gcloud run deploy cuentas-api --image=europe-docker.pkg.dev/gcplab-public/apps/inventory-api:1.0 --region={{.region}} --service-account=cuentas-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:cuentas-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:cuentas-db,DB_USER=app,DB_PASSWORD=pw-cuentas-1,DB_NAME=cuentas,DB_POOL_SIZE=5 --max-instances=4 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding cuentas-api --region={{.region}} --member=user:carla.mendez@zentra.dev --role=roles/run.invoker
+faults:
+- type: sql_extra_connections
+  instance: cuentas-db
+  count: '40'
+traffic:
+- name: saldos
+  target: run:cuentas-api
+  path: /stock
+  rps: 60
+  principal: user:carla.mendez@zentra.dev
+ticket:
+  id: INC-31067
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: Carla Méndez (producto)
+  summary: ¡Arranca la campaña de cashback y la app va fatal! Los saldos no cargan y el cambio de divisas falla a ratos. Marketing ya ha enviado 2 millones de notificaciones.
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red.
+  fallback: Cambiar el NAT es cosa mía, pero dime qué necesitas.
+  facts:
+  - keywords:
+    - - puerto
+      - port
+      - nat
+      - min-ports
+    answer: 'Adelante: sube los puertos por VM de zentra-nat a 1024.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Cambios en producción con registro; si es urgente, emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - réplica
+      - replica
+      - tier
+      - nat
+      - puerto
+      - port
+      - restaur
+      - restore
+      - emergencia
+      - emergency
+      - canary
+      - canario
+    answer: Aprobado (CHG-7830). Déjalo anotado en el ticket.
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Hoy lanzamos los informes de la campaña.
+  facts:
+  - keywords:
+    - - conex
+      - connect
+      - cuentas-db
+      - informe
+      - report
+    answer: Sí, los informes de la campaña abren unas 40 conexiones a cuentas-db.
+- role: fx
+  name: Equipo de Divisas
+  persona: Mantienen el cotizador.
+  fallback: Con la campaña abrimos ~900 conexiones al proveedor.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-campanas-prod*).
+
+  > **INC-31067 · P1** · *«¡Arranca la campaña de cashback y la app va fatal! Los saldos no cargan y el cambio de divisas falla a ratos. Marketing ya ha enviado 2 millones de notificaciones.»*
+
+  **Prueba de la semana 5.** Un ticket, **dos síntomas** que pueden tener causas distintas: sepáralos y diagnostica cada uno con su evidencia (registros de NAT, registros de Cloud SQL). Prioriza el que más clientes afecta, pide los cambios y comunica a menudo.
+objectives:
+- Separa los dos síntomas
+- Diagnostica cada uno con evidencia
+- Corrige ambos con cambios aprobados
+- Comunica y documenta
+hints:
+- text: Saldos → registros de `cloudsql_database`. Divisas → `logName:nat_flows`.
+solution: |
+  ticket
+  ticket update "Estamos con dos problemas: saldos que no cargan y cambio de divisas intermitente. Próxima actualización en 15 minutos."
+  gcloud logging read 'resource.type="cloudsql_database" severity>=ERROR' --limit=3 --format='value(textPayload)'
+  gcloud logging read 'logName:nat_flows' --limit=3
+  ask data "¿quién más se conecta hoy a cuentas-db?"
+  ask fx "¿cuántas conexiones abre el cotizador durante la campaña?"
+  ask change "¿apruebas ampliar cuentas-db y los puertos del NAT como cambios de emergencia?"
+  gcloud sql instances patch cuentas-db --tier=db-custom-2-7680 --quiet
+  ask network "¿puedo subir los puertos por VM de zentra-nat?"
+  gcloud compute routers nats update zentra-nat --router=zentra-router --region={{.region}} --min-ports-per-vm=1024
+  sleep 120
+  gcloud sql instances describe cuentas-db
+  gcloud compute routers get-nat-mapping-info zentra-router --region={{.region}}
+  ticket comment "Dos causas: 1) cuentas-db (db-g1-small, 50 conexiones) saturada por 40 conexiones de informes de la campaña + cuentas-api: ampliada a db-custom-2-7680; 2) el cotizador abre ~900 conexiones y zentra-nat daba 64 puertos por VM (OUT_OF_RESOURCES): subido a 1024. CHG-7830. Pendiente: réplica de lectura para informes y reutilizar conexiones en el cotizador."
+  ticket update "Resuelto: los saldos vuelven a cargar y el cambio de divisas funciona. La campaña generó más carga de la que aguantaban la base de datos y la salida a internet; ambas están ampliadas."
+  ticket resolve "Ampliada cuentas-db y subidos los puertos de zentra-nat a 1024; saldos y divisas funcionando."
+shortcuts:
+- name: only the database
+  run: |
+    gcloud sql instances patch cuentas-db --tier=db-custom-2-7680 --quiet
+    ticket resolve "Ampliada la base de datos de cuentas para la campaña."
+rubric:
+- name: Saldos
+  validator: functional
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: sql_healthy
+    instance: cuentas-db
+    settle: 2
+    desc: Conexiones por debajo del máximo
+  - type: http
+    target: run:cuentas-api
+    path: /stock
+    principal: user:carla.mendez@zentra.dev
+    status: 200
+    desc: cuentas-api responde
+- name: Divisas
+  validator: functional
+  points: 25
+  critical: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:divisas-cotizador:8080
+    path: /fx
+    status: 200
+    desc: El cotizador llega al proveedor
+- name: Evidencia
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: cloudsql_database
+    min: 1
+    desc: Registros de la base de datos
+  - type: command
+    regex: nat_flows|get-nat-mapping-info
+    min: 1
+    desc: Registros del NAT
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambios aprobados
+- name: Comunicación
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: true
+    keywords:
+    - - saldo
+      - balance
+    - - divisa
+      - currency
+      - cambio
+    desc: Negocio informado de ambos
+  - type: ticket_update
+    public: false
+    keywords:
+    - - max_connections
+      - conexiones
+      - connections
+    - - puertos
+      - ports
+      - out_of_resources
+    desc: Nota técnica con las dos causas
+tutor:
+- match: cloudsql_database
+  title: Síntoma 1
+  why: 'remaining connection slots: la base de datos está llena de conexiones.'
+- match: nat_flows
+  title: Síntoma 2
+  why: 'OUT_OF_RESOURCES: el NAT se queda sin puertos para el cotizador.'
+en:
+  title: 'Week 5 test · Cashback campaign: everything breaks at once'
+  summary: 'Two unrelated capacity problems in the same ticket: the pricer runs out of NAT ports and the Accounts database runs out of connections.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-campanas-prod*).
+
+    > **INC-31067 · P1** · *"The cashback campaign starts and the app is a mess! Balances won't load and currency exchange fails now and then. Marketing has already sent 2 million notifications."*
+
+    **Week 5 test.** One ticket, **two symptoms** that may have different causes: separate them and diagnose each with its evidence (NAT logs, Cloud SQL logs). Prioritise whatever affects most customers, request the changes and communicate often.
+  objectives:
+  - Separate the two symptoms
+  - Diagnose each with evidence
+  - Fix both with approved changes
+  - Communicate and document
+  hints:
+  - Balances → `cloudsql_database` logs. FX → `logName:nat_flows`.
+  ticket:
+    summary: The cashback campaign starts and the app is a mess! Balances won't load and currency exchange fails now and then. Marketing has already sent 2 million notifications.
+  text:
+    Carla Méndez (producto): Carla Méndez (product)
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red.: Network architect.
+    Cambiar el NAT es cosa mía, pero dime qué necesitas.: Changing NAT is my call, but tell me what you need.
+    'Adelante: sube los puertos por VM de zentra-nat a 1024.': 'Go ahead: raise zentra-nat''s ports per VM to 1024.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Cambios en producción con registro; si es urgente, emergencia.: Production changes with a record; if urgent, emergency.
+    Aprobado (CHG-7830). Déjalo anotado en el ticket.: Approved (CHG-7830). Note it in the ticket.
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Hoy lanzamos los informes de la campaña.: Today we run the campaign reports.
+    Sí, los informes de la campaña abren unas 40 conexiones a cuentas-db.: Yes, the campaign reports open about 40 connections to cuentas-db.
+    Equipo de Divisas: FX team
+    Mantienen el cotizador.: They maintain the pricer.
+    Con la campaña abrimos ~900 conexiones al proveedor.: With the campaign we open ~900 connections to the provider.
+    Saldos: Balances
+    Conexiones por debajo del máximo: Connections under the maximum
+    cuentas-api responde: cuentas-api responds
+    Divisas: FX
+    El cotizador llega al proveedor: The pricer reaches the provider
+    Evidencia: Evidence
+    Registros de la base de datos: Database logs
+    Registros del NAT: NAT logs
+    Cambios aprobados: Changes approved
+    Comunicación: Communication
+    Negocio informado de ambos: Business informed of both
+    Nota técnica con las dos causas: Technical note with both causes
+    Síntoma 1: Symptom 1
+    'remaining connection slots: la base de datos está llena de conexiones.': 'remaining connection slots: the database is full of connections.'
+    Síntoma 2: Symptom 2
+    'OUT_OF_RESOURCES: el NAT se queda sin puertos para el cotizador.': 'OUT_OF_RESOURCES: NAT runs out of ports for the pricer.'

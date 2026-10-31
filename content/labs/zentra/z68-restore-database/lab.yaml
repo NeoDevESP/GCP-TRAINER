@@ -1,0 +1,233 @@
+id: zentra-z68-restore-database
+title: INC P1 · Una migración borró la base de datos del libro mayor
+summary: Restaurar la copia de anoche en una instancia temporal y traer solo la base de datos borrada, sin pisar la de auditoría. Después, activar la recuperación a un punto en el tiempo.
+track: zentra
+day: 68
+level: advanced
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.cloudsql
+- databases.ha
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 45
+baseline:
+- zentra-core
+setup: |
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc --backup-start-time=02:00
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql databases create auditoria --instance=ledger-db
+  gcloud sql backups create --instance=ledger-db
+  gcloud storage buckets create gs://zentra-volcados-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  gcloud iam service-accounts create migracion-sa --display-name="migraciones de esquema"
+faults:
+- type: command
+  actor: migracion-sa@{{.project}}.iam.gserviceaccount.com
+  run: |
+    gcloud sql databases delete ledger --instance=ledger-db --quiet
+ticket:
+  id: INC-31068
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: Lucía Navarro (Pagos)
+  summary: La migración de las 09:00 ha borrado la base de datos ledger de ledger-db. La de auditoría sigue ahí y no se puede tocar (la usa el regulador).
+actors:
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Cambios en producción con registro; si es urgente, emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - réplica
+      - replica
+      - tier
+      - nat
+      - puerto
+      - port
+      - restaur
+      - restore
+      - emergencia
+      - emergency
+      - canary
+      - canario
+    answer: Aprobado (CHG-7830). Déjalo anotado en el ticket.
+- role: payments
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: Lo que se haya movido desde las 02:00 lo podemos reconstruir desde el proveedor.
+  facts:
+  - keywords:
+    - - copia
+      - backup
+      - restaur
+      - restore
+      - auditoria
+      - sobrescrib
+      - overwrite
+    answer: 'Restaurar encima de ledger-db borraría auditoria con la copia de anoche: no. Usad una instancia temporal y traed solo ledger.'
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-ledger-prod*).
+
+  > **INC-31068 · P1** · *«La migración de las 09:00 ha borrado la base de datos ledger de ledger-db. La de auditoría sigue ahí y no se puede tocar (la usa el regulador).»*
+
+  Restaurar una copia de Cloud SQL **encima** de la instancia sustituye **todas** sus bases de datos, también `auditoria`. El camino seguro: restaurar en una **instancia temporal**, exportar solo `ledger` a Cloud Storage, importarla en `ledger-db`, borrar la temporal y activar la **recuperación a un punto en el tiempo** (PITR) para la próxima vez.
+objectives:
+- Confirma qué se borró y quién
+- Restaura en una instancia temporal
+- Trae solo ledger
+- Limpia, activa PITR y comunica
+hints:
+- text: '`gcloud sql backups restore BACKUP_ID --restore-instance=ledger-restore --backup-instance=ledger-db`'
+- text: La instancia temporal necesita permiso de escritura en el bucket para exportar.
+solution: |
+  ticket
+  gcloud logging read 'protoPayload.methodName:databases.delete' --limit=3
+  gcloud sql databases list --instance=ledger-db
+  gcloud sql backups list --instance=ledger-db
+  ask payments "¿restauramos encima de ledger-db o en una instancia temporal?"
+  ask change "¿apruebas la restauración como cambio de emergencia?"
+  ticket update "Restaurando la base de datos del libro mayor desde la copia de las 02:00 en una instancia temporal; auditoría no se toca. Próxima actualización en 30 minutos."
+  gcloud sql instances create ledger-restore --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql backups restore $(gcloud sql backups list --instance=ledger-db --format='value(id)' --limit=1) --restore-instance=ledger-restore --backup-instance=ledger-db --quiet
+  gcloud storage buckets add-iam-policy-binding gs://zentra-volcados-{{.project}} --member=serviceAccount:$(gcloud sql instances describe ledger-restore --format='value(serviceAccountEmailAddress)') --role=roles/storage.objectAdmin
+  gcloud sql export sql ledger-restore gs://zentra-volcados-{{.project}}/ledger.sql --database=ledger
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql import sql ledger-db gs://zentra-volcados-{{.project}}/ledger.sql --database=ledger --quiet
+  gcloud sql databases list --instance=ledger-db
+  gcloud sql instances patch ledger-db --enable-point-in-time-recovery
+  gcloud sql instances delete ledger-restore --quiet
+  ticket comment "Causa: migracion-sa borró la base de datos ledger a las 09:00. Restaurada la copia de las 02:00 en ledger-restore, exportada solo ledger e importada en ledger-db; auditoria intacta. PITR activado y temporal borrada (CHG-7830). Los movimientos de 02:00 a 09:00 se reconstruyen desde el proveedor."
+  ticket update "Resuelto: el libro mayor está recuperado con los datos de las 02:00 y Pagos reconstruye los movimientos posteriores desde el proveedor. La base de datos de auditoría no se ha tocado."
+  ticket resolve "Restaurada ledger vía instancia temporal sin tocar auditoria; PITR activado."
+shortcuts:
+- name: restore over the instance
+  run: |
+    gcloud sql backups restore $(gcloud sql backups list --instance=ledger-db --format='value(id)' --limit=1) --restore-instance=ledger-db --quiet
+    ticket resolve "Restaurada la copia de anoche sobre ledger-db."
+rubric:
+- name: Libro mayor recuperado
+  validator: functional
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: sqlInstances["ledger-db"]
+    expect:
+      databases:
+        contains: ledger
+    desc: ledger vuelve a existir
+  - type: command
+    regex: sql import sql ledger-db .*--database[= ]ledger
+    desc: Importada solo ledger
+- name: Auditoría intacta
+  validator: security
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: sqlInstances["ledger-db"]
+    expect:
+      databases:
+        contains: auditoria
+    desc: auditoria sigue ahí
+  - type: command
+    regex: restore-instance=ledger-db
+    max: 0
+    desc: No se restauró encima
+- name: Prevención y limpieza
+  validator: state
+  points: 20
+  all: true
+  checks:
+  - type: exists
+    path: sqlInstances["ledger-db"]
+    expect:
+      pointInTimeRecovery: true
+    desc: PITR activado
+  - type: count
+    collection: sqlInstances
+    max: 1
+    desc: Instancia temporal borrada
+- name: Comunicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: true
+    keywords:
+    - - 02:00
+      - copia
+      - backup
+    - - auditor
+    desc: Qué se recupera y qué no
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: backups restore
+  title: En una temporal
+  why: Así la copia no sustituye auditoria en ledger-db.
+- match: sql import sql ledger-db
+  title: Solo ledger
+  why: Se trae una base de datos, no la instancia entera.
+- match: --enable-point-in-time-recovery
+  title: ''
+  why: La próxima vez se podrá volver al minuto anterior al borrado.
+en:
+  title: INC P1 · A migration dropped the ledger database
+  summary: Restore last night's backup to a temporary instance and bring back only the dropped database, without overwriting the audit one. Then enable point-in-time recovery.
+  story: |-
+    **Project `{{.project}}`** (*zentra-ledger-prod*).
+
+    > **INC-31068 · P1** · *"The 09:00 migration dropped the ledger database from ledger-db. The audit one is still there and can't be touched (the regulator uses it)."*
+
+    Restoring a Cloud SQL backup **over** the instance replaces **all** its databases, `auditoria` included. The safe path: restore to a **temporary instance**, export only `ledger` to Cloud Storage, import it into `ledger-db`, delete the temporary one and enable **point-in-time recovery** (PITR) for next time.
+  objectives:
+  - Confirm what was dropped and by whom
+  - Restore to a temporary instance
+  - Bring back only ledger
+  - Clean up, enable PITR and communicate
+  hints:
+  - '`gcloud sql backups restore BACKUP_ID --restore-instance=ledger-restore --backup-instance=ledger-db`'
+  - The temporary instance needs write permission on the bucket to export.
+  ticket:
+    summary: The 09:00 migration dropped the ledger database from ledger-db. The audit one is still there and can't be touched (the regulator uses it).
+  text:
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Cambios en producción con registro; si es urgente, emergencia.: Production changes with a record; if urgent, emergency.
+    Aprobado (CHG-7830). Déjalo anotado en el ticket.: Approved (CHG-7830). Note it in the ticket.
+    Tech lead de Pagos.: Payments tech lead.
+    Lo que se haya movido desde las 02:00 lo podemos reconstruir desde el proveedor.: Whatever moved since 02:00 we can rebuild from the provider.
+    ? 'Restaurar encima de ledger-db borraría auditoria con la copia de anoche: no. Usad una instancia temporal y traed solo ledger.'
+    : 'Restoring over ledger-db would replace auditoria with last night''s copy: no. Use a temporary instance and bring back only ledger.'
+    Libro mayor recuperado: Ledger recovered
+    ledger vuelve a existir: ledger exists again
+    Importada solo ledger: Only ledger imported
+    Auditoría intacta: Audit intact
+    auditoria sigue ahí: auditoria is still there
+    No se restauró encima: Not restored over it
+    Prevención y limpieza: Prevention and clean-up
+    PITR activado: PITR enabled
+    Instancia temporal borrada: Temporary instance deleted
+    Comunicación: Communication
+    Qué se recupera y qué no: What's recovered and what isn't
+    Ticket cerrado: Ticket closed
+    En una temporal: Into a temporary one
+    Así la copia no sustituye auditoria en ledger-db.: That way the backup doesn't replace auditoria in ledger-db.
+    Solo ledger: Only ledger
+    Se trae una base de datos, no la instancia entera.: You bring back one database, not the whole instance.
+    La próxima vez se podrá volver al minuto anterior al borrado.: Next time you can go back to the minute before the drop.

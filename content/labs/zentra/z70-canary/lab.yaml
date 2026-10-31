@@ -1,0 +1,209 @@
+id: zentra-z70-canary
+title: REQ P3 · Despliegue canario del nuevo motor de divisas
+summary: Publica la versión nueva sin tráfico, dale un 10 % con una etiqueta para probarla y deja el 90 % en la actual. Volver atrás debe ser un comando.
+track: zentra
+day: 70
+level: professional
+branch: devops
+type: challenge
+mode: production
+skills:
+- devops.delivery
+- compute.serverless
+- architecture.reliability
+wellArchitected:
+- reliability
+- operations
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create divisas-api-sa --display-name="divisas-api"
+  gcloud run deploy divisas-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --service-account=divisas-api-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=FX_ENGINE=v1 --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding divisas-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+ticket:
+  id: REQ-21070
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Equipo de Divisas
+  summary: 'Queremos sacar el motor de divisas v2 (variable FX_ENGINE=v2) a producción, pero poco a poco: un 10 % de los clientes esta semana, y poder probarlo nosotros directamente. Si algo va mal, volver atrás al momento.'
+actors:
+- role: fx
+  name: Equipo de Divisas
+  persona: Mantienen divisas-api.
+  fallback: La v2 solo cambia FX_ENGINE.
+  facts:
+  - keywords:
+    - - etiqueta
+      - tag
+      - url
+      - probar
+      - test
+    answer: 'Una etiqueta «canary» nos vale: así tenemos una URL propia para probar.'
+  - keywords:
+    - - porcentaje
+      - percent
+      - '10'
+      - trafico
+      - tráfico
+      - traffic
+    answer: 10 % a la v2 y 90 % a la v1.
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Cambios en producción con registro; si es urgente, emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - réplica
+      - replica
+      - tier
+      - nat
+      - puerto
+      - port
+      - restaur
+      - restore
+      - emergencia
+      - emergency
+      - canary
+      - canario
+    answer: Aprobado (CHG-7830). Déjalo anotado en el ticket.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-divisas-prod*).
+
+  > **REQ-21070 · P3** · *«Queremos sacar el motor de divisas v2 (variable FX_ENGINE=v2) a producción, pero poco a poco: un 10 % de los clientes esta semana, y poder probarlo nosotros directamente. Si algo va mal, volver atrás al momento.»*
+
+  Cloud Run guarda cada despliegue como una **revisión** y reparte el tráfico entre ellas. El patrón **canario**: desplegar con `--no-traffic --tag=canary` (la revisión existe y tiene su propia URL, pero no recibe clientes), probarla, y luego darle un porcentaje con `update-traffic --to-tags=canary=10`. Volver atrás es devolver el 100 % a la revisión anterior.
+objectives:
+- Confirma el plan con Divisas
+- Despliega la v2 sin tráfico y con etiqueta
+- Dale el 10 %
+- Explica cómo volver atrás
+hints:
+- text: '`gcloud run deploy divisas-api … --update-env-vars=FX_ENGINE=v2 --no-traffic --tag=canary`'
+- text: '`gcloud run services update-traffic divisas-api --region={{.region}} --to-tags=canary=10`'
+solution: |
+  ticket
+  ask fx "¿qué porcentaje queréis para la v2?"
+  ask fx "¿os vale una etiqueta canary para probarla directamente?"
+  ask change "¿apruebas el canario del 10 % de divisas-api?"
+  gcloud run revisions list --service=divisas-api --region={{.region}}
+  gcloud run deploy divisas-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --service-account=divisas-api-sa@{{.project}}.iam.gserviceaccount.com --update-env-vars=FX_ENGINE=v2 --no-traffic --tag=canary --no-allow-unauthenticated
+  gcloud run services update-traffic divisas-api --region={{.region}} --to-tags=canary=10
+  gcloud run revisions list --service=divisas-api --region={{.region}}
+  ticket update "Listo: la v2 (FX_ENGINE=v2) está desplegada como revisión con etiqueta canary y recibe el 10 % del tráfico; el 90 % sigue en la v1. Tenéis una URL propia de la etiqueta para probarla. Para volver atrás: update-traffic con el 100 % a la revisión anterior; para promocionarla: --to-tags=canary=100."
+  ticket resolve "Desplegada la v2 de divisas-api como canario (10 %, etiqueta canary) con la v1 al 90 %."
+shortcuts:
+- name: deploy straight to 100%
+  run: |
+    gcloud run deploy divisas-api --image=europe-docker.pkg.dev/gcplab-public/apps/hello:1.0 --region={{.region}} --service-account=divisas-api-sa@{{.project}}.iam.gserviceaccount.com --update-env-vars=FX_ENGINE=v2 --no-allow-unauthenticated
+    ticket resolve "Desplegada la v2 de divisas-api en producción."
+rubric:
+- name: Canario al 10 %
+  validator: functional
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: runServices["divisas-api"]
+    expect:
+      revisions:
+        regex: FX_ENGINE.{1,4}v2.*canary.{1,6}traffic.{1,4}10[^0-9]
+    desc: La v2 recibe el 10 % con etiqueta canary
+  - type: exists
+    path: runServices["divisas-api"]
+    expect:
+      revisions:
+        regex: '"traffic":90'
+    desc: La v1 sigue con el 90 %
+- name: Servicio estable
+  validator: security
+  points: 20
+  checks:
+  - type: http
+    target: run:divisas-api
+    path: /
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: divisas-api responde
+- name: Proceso
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio aprobado
+- name: Plan de vuelta atrás
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - '10'
+    - - volver atrás
+      - rollback
+      - revisión anterior
+      - previous revision
+      - update-traffic
+    desc: Explica el reparto y cómo volver
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: --no-traffic --tag=canary
+  title: Sin clientes
+  why: La revisión existe y tiene su URL, pero no recibe tráfico.
+- match: --to-tags=canary=10
+  title: El 10 %
+  why: Uno de cada diez clientes usa la v2; el resto sigue en la v1.
+en:
+  title: REQ P3 · Canary release of the new FX engine
+  summary: Publish the new version with no traffic, give it 10% with a tag to test it and keep 90% on the current one. Rolling back must be one command.
+  story: |-
+    **Project `{{.project}}`** (*zentra-divisas-prod*).
+
+    > **REQ-21070 · P3** · *"We want to release FX engine v2 (variable FX_ENGINE=v2) to production, but gradually: 10% of customers this week, and be able to test it ourselves directly. If anything goes wrong, roll back instantly."*
+
+    Cloud Run keeps each deployment as a **revision** and splits traffic between them. The **canary** pattern: deploy with `--no-traffic --tag=canary` (the revision exists and has its own URL, but gets no customers), test it, then give it a share with `update-traffic --to-tags=canary=10`. Rolling back means sending 100% back to the previous revision.
+  objectives:
+  - Confirm the plan with FX
+  - Deploy v2 with no traffic and a tag
+  - Give it 10%
+  - Explain how to roll back
+  hints:
+  - '`gcloud run deploy divisas-api … --update-env-vars=FX_ENGINE=v2 --no-traffic --tag=canary`'
+  - '`gcloud run services update-traffic divisas-api --region={{.region}} --to-tags=canary=10`'
+  ticket:
+    summary: 'We want to release FX engine v2 (variable FX_ENGINE=v2) to production, but gradually: 10% of customers this week, and be able to test it ourselves directly. If anything goes wrong, roll back instantly.'
+  text:
+    Equipo de Divisas: FX team
+    Mantienen divisas-api.: They maintain divisas-api.
+    La v2 solo cambia FX_ENGINE.: v2 only changes FX_ENGINE.
+    'Una etiqueta «canary» nos vale: así tenemos una URL propia para probar.': 'A "canary" tag works for us: that gives us our own URL to test.'
+    10 % a la v2 y 90 % a la v1.: 10% to v2 and 90% to v1.
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Cambios en producción con registro; si es urgente, emergencia.: Production changes with a record; if urgent, emergency.
+    Aprobado (CHG-7830). Déjalo anotado en el ticket.: Approved (CHG-7830). Note it in the ticket.
+    Canario al 10 %: 10% canary
+    La v2 recibe el 10 % con etiqueta canary: v2 gets 10% with the canary tag
+    La v1 sigue con el 90 %: v1 keeps 90%
+    Servicio estable: Stable service
+    divisas-api responde: divisas-api responds
+    Proceso: Process
+    Cambio aprobado: Change approved
+    Plan de vuelta atrás: Rollback plan
+    Explica el reparto y cómo volver: Explains the split and how to roll back
+    Ticket cerrado: Ticket closed
+    Sin clientes: No customers
+    La revisión existe y tiene su URL, pero no recibe tráfico.: The revision exists with its own URL, but gets no traffic.
+    El 10 %: The 10%
+    Uno de cada diez clientes usa la v2; el resto sigue en la v1.: One in ten customers uses v2; the rest stay on v1.

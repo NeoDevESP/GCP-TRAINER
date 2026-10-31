@@ -1,0 +1,193 @@
+id: zentra-z66-read-replica
+title: REQ P3 · Una réplica de lectura para los informes del cierre
+summary: 'La mejora que quedó pendiente tras el cierre de mes: los informes leen de una réplica y la base de datos de la app queda libre.'
+track: zentra
+day: 66
+level: advanced
+branch: databases
+type: challenge
+mode: production
+skills:
+- databases.cloudsql
+- databases.ha
+- architecture.reliability
+wellArchitected:
+- performance
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud sql instances create cuentas-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc --backup-start-time=02:00
+  gcloud sql databases create cuentas --instance=cuentas-db
+ticket:
+  id: REQ-21066
+  kind: REQ
+  priority: P3
+  sla: 3d
+  reporter: Sara Benítez (Datos)
+  summary: Tras la incidencia del cierre (INC-31035), acordamos que los informes no lean de cuentas-db. ¿Nos creáis una réplica de lectura y nos decís cómo conectar?
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Necesitamos el informe a tiempo, pero sin sacar datos de la UE.
+  facts:
+  - keywords:
+    - - region
+      - región
+      - zona
+      - donde
+      - where
+    answer: En la misma región, {{.region}}; los datos no salen de la UE.
+  - keywords:
+    - - nombre
+      - name
+      - llam
+    answer: cuentas-db-informes estaría bien.
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Cambios en producción con registro; si es urgente, emergencia.
+  facts:
+  - keywords:
+    - - cambio
+      - change
+      - réplica
+      - replica
+      - tier
+      - nat
+      - puerto
+      - port
+      - restaur
+      - restore
+      - emergencia
+      - emergency
+      - canary
+      - canario
+    answer: Aprobado (CHG-7830). Déjalo anotado en el ticket.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **REQ-21066 · P3** · *«Tras la incidencia del cierre (INC-31035), acordamos que los informes no lean de cuentas-db. ¿Nos creáis una réplica de lectura y nos decís cómo conectar?»*
+
+  Una **réplica de lectura** es una copia que Cloud SQL mantiene al día de forma asíncrona: acepta consultas, no escrituras, y sus conexiones no cuentan contra la instancia principal. Créala en la misma región, con IP privada como la principal, y explica a Datos que puede ir unos segundos por detrás.
+objectives:
+- Confirma nombre y región
+- Crea la réplica con un cambio
+- Comprueba que replica y es privada
+- Explica cómo usarla
+hints:
+- text: '`gcloud sql instances create cuentas-db-informes --master-instance-name=cuentas-db --region={{.region}}`'
+solution: |
+  ticket
+  ask data "¿cómo quieres llamar la réplica?"
+  ask data "¿en qué región la necesitáis?"
+  ask change "¿apruebas crear una réplica de lectura de cuentas-db?"
+  gcloud sql instances create cuentas-db-informes --master-instance-name=cuentas-db --region={{.region}}
+  gcloud sql instances describe cuentas-db-informes
+  ticket update "Hola Sara: ya tenéis cuentas-db-informes, réplica de lectura de cuentas-db en {{.region}} con IP privada. Usad su IP para los informes del cierre: acepta consultas pero no escrituras, y puede ir unos segundos por detrás de la principal. Vuestras conexiones ya no afectan a la app."
+  ticket resolve "Creada la réplica de lectura cuentas-db-informes para los informes de Datos (CHG-7830)."
+shortcuts:
+- name: bigger primary
+  run: |
+    gcloud sql instances patch cuentas-db --tier=db-custom-4-15360 --quiet
+    ticket resolve "Ampliada cuentas-db para que aguante también los informes."
+rubric:
+- name: Réplica creada
+  validator: functional
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: sqlInstances["cuentas-db-informes"]
+    expect:
+      masterInstanceName: cuentas-db
+    desc: Réplica de cuentas-db
+  - type: exists
+    path: sqlInstances["cuentas-db-informes"]
+    expect:
+      region: '{{.region}}'
+    desc: En la misma región
+- name: Sin tocar la principal
+  validator: security
+  points: 15
+  checks:
+  - type: command
+    regex: sql instances patch cuentas-db
+    max: 0
+    desc: La principal no se cambia
+- name: Proceso
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio aprobado
+- name: Explicación
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - réplica
+      - replica
+    - - escritura
+      - write
+      - por detrás
+      - lag
+      - behind
+    desc: Cómo usarla y sus límites
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: --master-instance-name
+  title: La réplica
+  why: Copia asíncrona de solo lectura; hereda la red privada de la principal.
+en:
+  title: REQ P3 · A read replica for month-end reports
+  summary: 'The improvement left pending after month-end: reports read from a replica and the app''s database stays free.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **REQ-21066 · P3** · *"After the month-end incident (INC-31035), we agreed reports won't read from cuentas-db. Can you create a read replica and tell us how to connect?"*
+
+    A **read replica** is a copy Cloud SQL keeps up to date asynchronously: it accepts queries, not writes, and its connections don't count against the primary. Create it in the same region, with a private IP like the primary, and tell Data it may lag a few seconds behind.
+  objectives:
+  - Confirm name and region
+  - Create the replica with a change
+  - Check it replicates and is private
+  - Explain how to use it
+  hints:
+  - '`gcloud sql instances create cuentas-db-informes --master-instance-name=cuentas-db --region={{.region}}`'
+  ticket:
+    summary: After the month-end incident (INC-31035), we agreed reports won't read from cuentas-db. Can you create a read replica and tell us how to connect?
+  text:
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Necesitamos el informe a tiempo, pero sin sacar datos de la UE.: We need the report on time, but without taking data out of the EU.
+    En la misma región, {{.region}}; los datos no salen de la UE.: In the same region, {{.region}}; the data stays in the EU.
+    cuentas-db-informes estaría bien.: cuentas-db-informes would be fine.
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Cambios en producción con registro; si es urgente, emergencia.: Production changes with a record; if urgent, emergency.
+    Aprobado (CHG-7830). Déjalo anotado en el ticket.: Approved (CHG-7830). Note it in the ticket.
+    Réplica creada: Replica created
+    Réplica de cuentas-db: Replica of cuentas-db
+    En la misma región: In the same region
+    Sin tocar la principal: Primary untouched
+    La principal no se cambia: The primary isn't changed
+    Proceso: Process
+    Cambio aprobado: Change approved
+    Explicación: Explanation
+    Cómo usarla y sus límites: How to use it and its limits
+    Ticket cerrado: Ticket closed
+    La réplica: The replica
+    Copia asíncrona de solo lectura; hereda la red privada de la principal.: Asynchronous read-only copy; it inherits the primary's private network.
