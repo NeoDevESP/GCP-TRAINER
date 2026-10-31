@@ -1,0 +1,152 @@
+id: zentra-z50-retention-lock
+title: 'REQ P3 · Auditoría: los registros de operaciones deben ser imborrables 10 años'
+summary: 'Retención de 10 años bloqueada (WORM) en el bucket de registros. Bloquearla es irreversible: se confirma con Cumplimiento antes.'
+track: zentra
+day: 50
+level: intermediate
+branch: storage
+type: challenge
+mode: production
+skills:
+- storage.lifecycle
+- security.audit
+- storage.access
+wellArchitected:
+- security
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud storage buckets create gs://zentra-registros-operaciones-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  echo "2026-08,cierre" > registro-2026-08.csv
+  gcloud storage cp registro-2026-08.csv gs://zentra-registros-operaciones-{{.project}}/2026/registro-2026-08.csv
+ticket:
+  id: REQ-21050
+  kind: REQ
+  priority: P3
+  sla: 2d
+  reporter: Irene Soler (Cumplimiento)
+  summary: El auditor externo exige que los registros de operaciones (gs://zentra-registros-operaciones-…) no se puedan borrar ni modificar durante 10 años, ni siquiera por un administrador.
+actors:
+- role: compliance
+  name: Irene Soler (Cumplimiento)
+  persona: Cumplimiento normativo.
+  fallback: La norma pide conservar 10 años sin posibilidad de borrado (WORM).
+  facts:
+  - keywords:
+    - - bloque
+      - lock
+      - irreversible
+      - worm
+      - retenc
+      - retention
+      - '10'
+    answer: 'Sí: bloqueada. Sé que es irreversible; es justo lo que pide el auditor. 10 años.'
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-auditoria-prod*).
+
+  > **REQ-21050 · P3** · *«El auditor externo exige que los registros de operaciones (gs://zentra-registros-operaciones-…) no se puedan borrar ni modificar durante 10 años, ni siquiera por un administrador.»*
+
+  Cloud Storage tiene **política de retención**: ningún objeto se puede borrar ni sobrescribir hasta cumplir su edad mínima. Mientras no esté **bloqueada**, un administrador podría quitarla; una vez **bloqueada**, nadie puede reducirla ni borrarla (tampoco borrar el bucket con objetos): eso es lo que piden los auditores (*WORM*). **Bloquear es irreversible**: confirma el periodo con Cumplimiento antes.
+objectives:
+- Confirma el periodo con Cumplimiento
+- Aplica la retención de 10 años
+- Bloquéala
+- Responde con lo que implica
+hints:
+- text: '`gcloud storage buckets update gs://zentra-registros-operaciones-{{.project}} --retention-period=10y`'
+- text: '`gcloud storage buckets update gs://zentra-registros-operaciones-{{.project}} --lock-retention-period`'
+solution: |
+  ticket
+  ask compliance "¿confirmas 10 años y que se bloquee, sabiendo que es irreversible?"
+  gcloud storage buckets update gs://zentra-registros-operaciones-{{.project}} --retention-period=10y
+  gcloud storage buckets update gs://zentra-registros-operaciones-{{.project}} --lock-retention-period
+  gcloud storage buckets describe gs://zentra-registros-operaciones-{{.project}}
+  ticket update "Hola Irene: el bucket de registros de operaciones tiene una retención de 10 años bloqueada. Ningún objeto se puede borrar ni modificar antes de cumplir 10 años, ni siquiera por un administrador, y la política ya no se puede reducir ni quitar (es irreversible, como pedía el auditor)."
+  ticket resolve "Retención de 10 años aplicada y bloqueada en gs://zentra-registros-operaciones tras confirmarlo con Cumplimiento."
+shortcuts:
+- name: retention without lock
+  run: |
+    gcloud storage buckets update gs://zentra-registros-operaciones-{{.project}} --retention-period=10y
+    ticket resolve "Aplicada retención de 10 años al bucket de registros."
+rubric:
+- name: WORM de 10 años
+  validator: security
+  points: 50
+  critical: true
+  checks:
+  - type: exists
+    path: buckets["zentra-registros-operaciones-{{.project}}"]
+    expect:
+      retentionPeriodSec:
+        gte: 315360000
+      retentionPolicyLocked: true
+    desc: Retención de 10 años bloqueada
+- name: Confirmado antes
+  validator: diagnosis
+  points: 25
+  checks:
+  - type: asked
+    actor: compliance
+    min: 1
+    desc: Confirmado con Cumplimiento
+- name: Respuesta
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - '10'
+    - - bloque
+      - lock
+      - irreversible
+    desc: Explica qué implica
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: --retention-period=10y
+  title: Retención
+  why: Nada se borra antes de 10 años… mientras nadie quite la política.
+- match: --lock-retention-period
+  title: Bloqueo
+  why: 'Irreversible: ya nadie puede quitarla ni reducirla.'
+en:
+  title: 'REQ P3 · Audit: transaction records must be undeletable for 10 years'
+  summary: 'A locked 10-year retention (WORM) on the records bucket. Locking is irreversible: confirm with Compliance first.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-auditoria-prod*).
+
+    > **REQ-21050 · P3** · *"The external auditor requires that transaction records (gs://zentra-registros-operaciones-…) can't be deleted or modified for 10 years, not even by an administrator."*
+
+    Cloud Storage has a **retention policy**: no object can be deleted or overwritten until it reaches a minimum age. While it isn't **locked**, an administrator could remove it; once **locked**, nobody can shorten or remove it (or delete the bucket with objects): that's what auditors ask for (*WORM*). **Locking is irreversible**: confirm the period with Compliance first.
+  objectives:
+  - Confirm the period with Compliance
+  - Apply the 10-year retention
+  - Lock it
+  - Reply with what it implies
+  hints:
+  - '`gcloud storage buckets update gs://zentra-registros-operaciones-{{.project}} --retention-period=10y`'
+  - '`gcloud storage buckets update gs://zentra-registros-operaciones-{{.project}} --lock-retention-period`'
+  ticket:
+    summary: The external auditor requires that transaction records (gs://zentra-registros-operaciones-…) can't be deleted or modified for 10 years, not even by an administrator.
+  text:
+    Irene Soler (Cumplimiento): Irene Soler (Compliance)
+    Cumplimiento normativo.: Regulatory compliance.
+    La norma pide conservar 10 años sin posibilidad de borrado (WORM).: The rule requires keeping it for 10 years with no possibility of deletion (WORM).
+    'Sí: bloqueada. Sé que es irreversible; es justo lo que pide el auditor. 10 años.': 'Yes: locked. I know it''s irreversible; that''s exactly what the auditor asks for. 10 years.'
+    WORM de 10 años: 10-year WORM
+    Retención de 10 años bloqueada: 10-year retention locked
+    Confirmado antes: Confirmed first
+    Confirmado con Cumplimiento: Confirmed with Compliance
+    Respuesta: Reply
+    Explica qué implica: Explains what it implies
+    Ticket cerrado: Ticket closed
+    Retención: Retention
+    Nada se borra antes de 10 años… mientras nadie quite la política.: Nothing is deleted before 10 years… as long as nobody removes the policy.
+    Bloqueo: Lock
+    'Irreversible: ya nadie puede quitarla ni reducirla.': 'Irreversible: nobody can remove or shorten it any more.'

@@ -233,6 +233,7 @@ runbooks:
   - 'Giving the VM a public IP: the org policy forbids it and it exposes the server.'
   labs:
   - zentra-z25-fx-no-egress
+  - zentra-z43-default-route
   - bank-b03-no-egress
   - ace-d12-private-egress
 - id: nat-ports
@@ -364,6 +365,8 @@ runbooks:
   causes:
   - - Cortafuegos sin los rangos de las sondas
     - Firewall without the probe ranges
+  - - La VM perdió la etiqueta de red a la que apunta la regla
+    - The VM lost the network tag the rule targets
   - - Health check al puerto o ruta equivocados
     - Health check to the wrong port or path
   - - Falta el *named port* del grupo
@@ -376,6 +379,8 @@ runbooks:
   - ''
   labs:
   - zentra-z24-healthcheck-path
+  - zentra-z45-lost-tag
+  - zentra-z46-named-port
   - bank-b21-lb-502-healthcheck
   - ace-d09-health-check
 - id: dns-name
@@ -922,3 +927,221 @@ runbooks:
   labs:
   - zentra-z22-leaked-key
   - sec-s01-leaked-key
+- id: connection-refused
+  area: network
+  symptom:
+  - «Connection refused» desde otra máquina, pero en la propia VM funciona
+  - '"Connection refused" from another machine, but it works on the VM itself'
+  errors:
+  - 'curl: (7) Failed to connect to 10.40.1.2 port 8080: Connection refused'
+  means:
+  - 'El paquete llega (no es cortafuegos: eso daría *timeout*), pero **nadie escucha** en esa IP y puerto. Típico: la app escucha solo en `127.0.0.1`, está parada o en otro puerto.'
+  - 'The packet arrives (it isn''t the firewall: that would be a *timeout*), but **nobody listens** on that IP and port. Typical: the app only listens on `127.0.0.1`, is stopped or on another port.'
+  steps:
+  - text:
+    - Dónde escucha el proceso
+    - Where the process listens
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command='sudo ss -tlnp'
+  - text:
+    - Estado del servicio
+    - Service status
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command='sudo systemctl status SERVICIO'
+  causes:
+  - - Escucha en 127.0.0.1 tras un cambio de configuración
+    - Listens on 127.0.0.1 after a configuration change
+  - - Servicio parado o en otro puerto
+    - Service stopped or on another port
+  fix:
+  - Haz que escuche en `0.0.0.0` (o en la IP interna) y deja que el cortafuegos decida quién entra.
+  - Make it listen on `0.0.0.0` (or the internal IP) and let the firewall decide who gets in.
+  avoid:
+  - 'Abrir el cortafuegos: no es el problema.'
+  - 'Opening the firewall: it isn''t the problem.'
+  labs:
+  - zentra-z44-listen-localhost
+- id: public-bucket
+  area: security
+  symptom:
+  - Un bucket con datos de clientes es público
+  - A bucket with customer data is public
+  errors:
+  - PUBLIC_BUCKET_ACL
+  - allUsers
+  means:
+  - Incidente de seguridad. Primero **contener**, luego recuperar los guardarraíles, conservar la evidencia y **escalar** a Seguridad (decide si se notifica).
+  - Security incident. First **contain**, then restore the guardrails, keep the evidence and **escalate** to Security (they decide on notification).
+  steps:
+  - text:
+    - Quién tiene acceso
+    - Who has access
+    cmd: gcloud storage buckets get-iam-policy gs://BUCKET
+  - text:
+    - Quién lo abrió
+    - Who opened it
+    cmd: gcloud logging read 'protoPayload.methodName:"setIamPermissions"' --limit=5
+  causes:
+  - - Alguien quitó la prevención de acceso público para una campaña o prueba
+    - Someone removed public access prevention for a campaign or test
+  fix:
+  - Quita `allUsers`/`allAuthenticatedUsers`, `--public-access-prevention` en el bucket, vuelve a aplicar la política de organización y escala.
+  - Remove `allUsers`/`allAuthenticatedUsers`, `--public-access-prevention` on the bucket, re-enforce the org policy and escalate.
+  avoid:
+  - 'Borrar los ficheros expuestos: es la evidencia.'
+  - 'Deleting the exposed files: they''re the evidence.'
+  labs:
+  - zentra-z47-public-kyc-bucket
+  - bank-b07-public-bucket
+  - ace-d25-public-exposure
+- id: linux-permission
+  area: compute
+  symptom:
+  - 'Un servicio no arranca: «permission denied» al abrir un fichero'
+  - 'A service won''t start: "permission denied" opening a file'
+  errors:
+  - 'open /etc/nginx/tls/empresas.key: permission denied'
+  means:
+  - 'El usuario con el que corre el servicio (p. ej. `www-data`) no puede leer el fichero: dueño, grupo o permisos no le dejan.'
+  - 'The user the service runs as (e.g. `www-data`) can''t read the file: owner, group or permissions don''t allow it.'
+  steps:
+  - text:
+    - Por qué falla
+    - Why it fails
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command='sudo systemctl status SERVICIO'
+  - text:
+    - Dueño y permisos
+    - Owner and permissions
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command='ls -l /RUTA'
+  causes:
+  - - Un script de endurecimiento cambió dueño o permisos
+    - A hardening script changed owner or permissions
+  fix:
+  - 'Da acceso solo al grupo del servicio: `chgrp SERVICIO` y `chmod 640` (claves: nunca legibles por todos).'
+  - 'Give access only to the service''s group: `chgrp SERVICE` and `chmod 640` (keys: never world-readable).'
+  avoid:
+  - '`chmod 644` o `777` sobre una clave privada.'
+  - '`chmod 644` or `777` on a private key.'
+  labs:
+  - zentra-z48-key-permissions
+  - linux-l02-permission-denied
+- id: slow-query
+  area: data
+  symptom:
+  - La base de datos va lenta y la CPU de Cloud SQL está al 100 %
+  - The database is slow and Cloud SQL CPU is at 100%
+  errors:
+  - 'LOG: duration: 8421.337 ms statement: SELECT'
+  means:
+  - Casi siempre es una consulta concreta (nueva) sin índice, no falta de tamaño. Ampliar tapa el problema y cuesta dinero.
+  - It's nearly always a specific (new) query without an index, not a lack of size. Upsizing hides the problem and costs money.
+  steps:
+  - text:
+    - Consultas lentas en los registros
+    - Slow queries in the logs
+    cmd: gcloud logging read 'resource.type="cloudsql_database" "duration"' --limit=3
+  - text:
+    - Conéctate desde una VM de la red
+    - Connect from a VM in the network
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command="psql -h IP -U USUARIO -d BD"
+  causes:
+  - - Versión nueva con una consulta sin índice
+    - A new release with an unindexed query
+  fix:
+  - Crea el índice con un cambio aprobado y pide que vaya en la migración de la aplicación.
+  - Create the index with an approved change and ask for it in the app's migration.
+  avoid:
+  - Subir el tier sin mirar la consulta.
+  - Raising the tier without looking at the query.
+  labs:
+  - zentra-z51-slow-query
+  - ace-d20-sql-saturated
+- id: zone-outage
+  area: compute
+  symptom:
+  - Una zona de Google está caída
+  - A Google zone is down
+  errors:
+  - The zone is currently unavailable
+  means:
+  - 'No se arregla la zona: se **sacan las cargas**. Lo regional con autorreparación se recoloca solo; lo zonal hay que levantarlo en otra zona (las instantáneas son regionales).'
+  - 'You don''t fix the zone: you **move workloads out**. Regional workloads with autohealing relocate by themselves; zonal ones must be brought up in another zone (snapshots are regional).'
+  steps:
+  - text:
+    - Confirma que es Google
+    - Confirm it's Google
+    cmd: gcloud logging read 'logName:cloud-status' --limit=3
+  - text:
+    - Qué sigue sano
+    - What's still healthy
+    cmd: gcloud compute backend-services get-health BACKEND --global
+  - text:
+    - Instantáneas disponibles
+    - Available snapshots
+    cmd: gcloud compute snapshots list
+  causes:
+  - - Cargas en una sola zona
+    - Workloads in a single zone
+  fix:
+  - Levanta lo zonal en otra zona (`instances create --source-snapshot=…`), comunica qué está afectado y propone hacerlo regional.
+  - Bring the zonal parts up in another zone (`instances create --source-snapshot=…`), say what's affected and propose making it regional.
+  avoid:
+  - Esperar a Google sin mover nada.
+  - Waiting for Google without moving anything.
+  labs:
+  - zentra-z52-zone-outage
+  - bank-b08-region-outage
+  - sre-c01-zone-chaos
+- id: temporary-access
+  area: access
+  symptom:
+  - 'Petición: acceso elevado solo durante una ventana de cambio'
+  - 'Request: elevated access only during a change window'
+  errors: []
+  means:
+  - Los accesos elevados en banca son temporales y ligados a un cambio aprobado. Una **condición de IAM** con `request.time` hace que caduque sola.
+  - Elevated access in banking is temporary and tied to an approved change. An **IAM condition** with `request.time` makes it expire by itself.
+  steps:
+  - text:
+    - Da el rol con caducidad
+    - Grant the role with an expiry
+    cmd: gcloud projects add-iam-policy-binding PROYECTO --member=user:EMAIL --role=ROL --condition='expression=request.time < timestamp("2026-09-06T00:00:00Z"),title=CHG-XXXX'
+  causes:
+  - - Accesos «temporales» que nadie quita
+    - '"Temporary" access nobody removes'
+  fix:
+  - Comprueba el cambio, da el rol con condición y deja la fecha de fin en el ticket.
+  - Check the change, grant the role with a condition and put the end date in the ticket.
+  avoid:
+  - Darlo sin condición «y quitarlo el lunes».
+  - Granting it without a condition "and removing it on Monday".
+  labs:
+  - zentra-z49-temporary-access
+  - zentra-z12-external-consultant
+- id: worm-retention
+  area: security
+  symptom:
+  - 'Petición: datos que no se puedan borrar en X años (WORM)'
+  - 'Request: data that can''t be deleted for X years (WORM)'
+  errors: []
+  means:
+  - Una **política de retención** impide borrar o sobrescribir objetos antes de su edad mínima; **bloqueada**, ni un administrador puede quitarla. Bloquear es irreversible.
+  - A **retention policy** prevents deleting or overwriting objects before their minimum age; **locked**, not even an administrator can remove it. Locking is irreversible.
+  steps:
+  - text:
+    - Aplica la retención
+    - Apply retention
+    cmd: gcloud storage buckets update gs://BUCKET --retention-period=10y
+  - text:
+    - Bloquéala (tras confirmarlo)
+    - Lock it (after confirming)
+    cmd: gcloud storage buckets update gs://BUCKET --lock-retention-period
+  causes:
+  - - Requisito de auditoría o regulador
+    - Audit or regulator requirement
+  fix:
+  - Confirma el periodo con Cumplimiento, aplica y bloquea, y explica en el ticket que es irreversible.
+  - Confirm the period with Compliance, apply and lock, and explain in the ticket that it's irreversible.
+  avoid:
+  - Bloquear sin confirmar el periodo.
+  - Locking without confirming the period.
+  labs:
+  - zentra-z50-retention-lock

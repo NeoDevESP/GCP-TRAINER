@@ -1,0 +1,181 @@
+id: zentra-z44-listen-localhost
+title: 'INC P2 · Extractos: «connection refused» desde la app, pero en la VM funciona'
+summary: 'El servicio está levantado y el cortafuegos bien: la aplicación escucha solo en 127.0.0.1 tras un cambio de configuración.'
+track: zentra
+day: 44
+level: intermediate
+branch: compute
+type: incident
+mode: production
+skills:
+- compute.troubleshooting
+- networking.firewall
+- linux.processes
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create extractos-api --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=extractos --metadata=sim-preinstalled=docker-images,listen-address-hello=0.0.0.0,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/hello:1.0'
+  gcloud compute instances create app-gateway --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=gateway
+  gcloud compute firewall-rules create allow-gateway-to-extractos --network=zentra-vpc --allow=tcp:8080 --source-tags=gateway --target-tags=extractos
+faults:
+- type: vm_metadata
+  vm: extractos-api
+  key: listen-address-hello
+  value: 127.0.0.1
+  actor: deploy-bot@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31044
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo de Cuentas
+  summary: Desde el despliegue de configuración de anoche, app-gateway recibe «connection refused» al pedir extractos a extractos-api:8080. Si entramos en la VM y hacemos curl localhost:8080, responde bien.
+actors:
+- role: dev
+  name: Equipo de Cuentas
+  persona: Mantienen extractos-api.
+  fallback: La app lee su dirección de escucha del metadato listen-address-hello de la VM.
+  facts:
+  - keywords:
+    - - listen
+      - escucha
+      - metadat
+      - 127.0.0.1
+      - localhost
+      - bind
+    answer: ¡Ups! En el despliegue de anoche pusimos listen-address-hello=127.0.0.1 para una prueba local. Debe ser 0.0.0.0.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **INC-31044 · P2** · *«Desde el despliegue de configuración de anoche, app-gateway recibe «connection refused» al pedir extractos a extractos-api:8080. Si entramos en la VM y hacemos curl localhost:8080, responde bien.»*
+
+  Distingue los dos errores: **timeout** suele ser cortafuegos o ruta (el paquete se pierde); **connection refused** significa que el paquete llega pero **nadie escucha** en esa IP y puerto. Mira en la VM en qué dirección escucha el proceso (`ss -tlnp`): `127.0.0.1` solo acepta conexiones desde la propia máquina; `0.0.0.0`, desde cualquier interfaz.
+objectives:
+- Distingue refused de timeout
+- Mira dónde escucha el proceso
+- Corrige la dirección de escucha
+- Valida desde app-gateway
+hints:
+- text: '`gcloud compute ssh extractos-api --zone={{.zone}} --tunnel-through-iap --command=''sudo ss -tlnp''`'
+- text: '`gcloud compute instances add-metadata extractos-api --zone={{.zone}} --metadata=listen-address-hello=0.0.0.0`'
+solution: |
+  ticket
+  gcloud compute ssh extractos-api --zone={{.zone}} --tunnel-through-iap --command='sudo ss -tlnp'
+  gcloud compute instances describe extractos-api --zone={{.zone}} --format='value(metadata.items)'
+  ask dev "¿qué cambió en la configuración de extractos-api anoche?"
+  gcloud compute instances add-metadata extractos-api --zone={{.zone}} --metadata=listen-address-hello=0.0.0.0
+  gcloud compute ssh extractos-api --zone={{.zone}} --tunnel-through-iap --command='sudo ss -tlnp'
+  ticket comment "Causa: el despliegue de anoche cambió el metadato listen-address-hello de extractos-api a 127.0.0.1, así que la app solo aceptaba conexiones locales (connection refused desde app-gateway; el cortafuegos estaba bien). Devuelto a 0.0.0.0; ss muestra 0.0.0.0:8080."
+  ticket update "Resuelto: app-gateway vuelve a obtener los extractos. Un cambio de configuración hacía que el servicio solo aceptara conexiones desde su propia máquina."
+  ticket resolve "listen-address de extractos-api devuelto a 0.0.0.0; app-gateway recibe los extractos."
+shortcuts:
+- name: open the firewall
+  run: |
+    gcloud compute firewall-rules create allow-all-extractos --network=zentra-vpc --allow=tcp:8080 --source-ranges=0.0.0.0/0 --target-tags=extractos
+    ticket resolve "Abierto el puerto 8080 de extractos-api para todos los orígenes."
+rubric:
+- name: Extractos disponibles
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: http
+    from: vm:app-gateway
+    target: vm:extractos-api:8080
+    path: /
+    status: 200
+    desc: app-gateway llega a extractos-api
+- name: Sin abrir de más
+  validator: security
+  points: 20
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+    max: 0
+    desc: Ninguna regla abierta a internet
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  checks:
+  - type: command
+    regex: ss -tlnp|netstat
+    min: 1
+    desc: Puertos de escucha revisados
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - 127.0.0.1
+      - localhost
+      - escucha
+      - listen
+    - - refused
+      - rechaz
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: ss -tlnp
+  title: Dónde escucha
+  why: '127.0.0.1:8080: solo conexiones de la propia VM.'
+- match: add-metadata
+  title: ''
+  why: '0.0.0.0: escucha en todas las interfaces; el cortafuegos sigue decidiendo quién entra.'
+en:
+  title: 'INC P2 · Statements: "connection refused" from the app, but it works on the VM'
+  summary: 'The service is up and the firewall is fine: the app only listens on 127.0.0.1 after a configuration change.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **INC-31044 · P2** · *"Since last night's configuration deployment, app-gateway gets "connection refused" requesting statements from extractos-api:8080. If we log into the VM and curl localhost:8080, it answers fine."*
+
+    Tell the two errors apart: **timeout** is usually firewall or routing (the packet gets lost); **connection refused** means the packet arrives but **nobody listens** on that IP and port. Check on the VM which address the process listens on (`ss -tlnp`): `127.0.0.1` only accepts connections from the machine itself; `0.0.0.0`, from any interface.
+  objectives:
+  - Tell refused from timeout
+  - See where the process listens
+  - Fix the listen address
+  - Validate from app-gateway
+  hints:
+  - '`gcloud compute ssh extractos-api --zone={{.zone}} --tunnel-through-iap --command=''sudo ss -tlnp''`'
+  - '`gcloud compute instances add-metadata extractos-api --zone={{.zone}} --metadata=listen-address-hello=0.0.0.0`'
+  ticket:
+    summary: Since last night's configuration deployment, app-gateway gets "connection refused" requesting statements from extractos-api:8080. If we log into the VM and curl localhost:8080, it answers fine.
+  text:
+    Equipo de Cuentas: Accounts team
+    Mantienen extractos-api.: They maintain extractos-api.
+    La app lee su dirección de escucha del metadato listen-address-hello de la VM.: The app reads its listen address from the VM's listen-address-hello metadata.
+    ¡Ups! En el despliegue de anoche pusimos listen-address-hello=127.0.0.1 para una prueba local. Debe ser 0.0.0.0.: Oops! In last night's deployment we set listen-address-hello=127.0.0.1 for a local test. It should be 0.0.0.0.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Extractos disponibles: Statements available
+    app-gateway llega a extractos-api: app-gateway reaches extractos-api
+    Sin abrir de más: Nothing opened too wide
+    Ninguna regla abierta a internet: No rule open to the internet
+    Diagnóstico: Diagnosis
+    Puertos de escucha revisados: Listening ports checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Dónde escucha: Where it listens
+    '127.0.0.1:8080: solo conexiones de la propia VM.': '127.0.0.1:8080: only connections from the VM itself.'
+    '0.0.0.0: escucha en todas las interfaces; el cortafuegos sigue decidiendo quién entra.': '0.0.0.0: listens on every interface; the firewall still decides who gets in.'

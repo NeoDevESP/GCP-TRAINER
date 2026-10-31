@@ -1,0 +1,229 @@
+id: zentra-z52-zone-outage
+title: 'INC P1 · Caída de una zona de Google: ¿qué está afectado y qué hacemos?'
+summary: La web de pagos aguanta porque está en un grupo regional; la liquidación nocturna vivía en una sola zona. Recupérala desde su instantánea en otra zona y comunica bien.
+track: zentra
+day: 52
+level: intermediate
+branch: architecture
+type: boss
+mode: production
+skills:
+- architecture.reliability
+- compute.mig
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 40
+baseline:
+- zentra-core
+setup: |
+  gcloud compute firewall-rules create allow-health-checks --network=zentra-vpc --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=pagos-web
+  gcloud compute health-checks create http pagos-web-hc --port=80 --request-path=/
+  gcloud compute instance-templates create pagos-web-tpl --machine-type=e2-small --subnet=apps --region={{.region}} --no-address --tags=pagos-web --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instance-groups managed create pagos-web-mig --template=pagos-web-tpl --size=3 --region={{.region}} --health-check=pagos-web-hc --initial-delay=60
+  gcloud compute instance-groups managed set-named-ports pagos-web-mig --named-ports=http:80 --region={{.region}}
+  gcloud compute backend-services create pagos-web-be --protocol=HTTP --port-name=http --health-checks=pagos-web-hc --global
+  gcloud compute backend-services add-backend pagos-web-be --instance-group=pagos-web-mig --instance-group-region={{.region}} --global
+  gcloud compute url-maps create pagos-web-map --default-service=pagos-web-be
+  gcloud compute target-http-proxies create pagos-web-proxy --url-map=pagos-web-map
+  gcloud compute forwarding-rules create pagos-web-lb --global --target-http-proxy=pagos-web-proxy --ports=80
+  gcloud compute instances create liquidacion-batch --zone={{.zone}} --machine-type=e2-standard-2 --subnet=datos --no-address --labels=equipo=pagos,uso=liquidacion
+  gcloud compute disks snapshot liquidacion-batch --zone={{.zone}} --snapshot-names=liquidacion-batch-diario
+faults:
+- type: zone_outage
+  zone: '{{.zone}}'
+traffic:
+- name: pagos-web
+  target: lb:pagos-web-lb
+  path: /
+  rps: 20
+ticket:
+  id: INC-31052
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: NOC 24x7
+  summary: 'Alertas en cadena en {{.zone}}: VMs sin responder y la VM liquidacion-batch caída. La liquidación con los bancos corresponsales debe correr antes de las 06:00. ¿Está afectada la web de pagos?'
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts:
+  - keywords:
+    - - estado
+      - status
+      - google
+      - zona
+      - zone
+    answer: 'El panel de estado de Google confirma problemas en {{.zone}}. No es cosa nuestra: no intentéis arreglar la zona, moved lo que dependa de ella.'
+- role: payments
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: La liquidación tiene que correr esta noche sí o sí.
+  facts:
+  - keywords:
+    - - snapshot
+      - instantánea
+      - copia
+      - backup
+      - otra zona
+      - another zone
+      - liquidacion
+    answer: La instantánea liquidacion-batch-diario es de esta medianoche y tiene todo lo necesario. Levántala en otra zona de {{.region}}.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31052 · P1** · *«Alertas en cadena en {{.zone}}: VMs sin responder y la VM liquidacion-batch caída. La liquidación con los bancos corresponsales debe correr antes de las 06:00. ¿Está afectada la web de pagos?»*
+
+  Cuando falla una **zona de Google**, no se arregla la zona: se **sacan las cargas** de ella. Lo que está en un **grupo regional** con autorreparación (la web de pagos) se recoloca solo en las zonas sanas. Lo que vivía en **una sola zona** (`liquidacion-batch`) hay que levantarlo en otra zona de la región, por ejemplo desde su **instantánea** (las instantáneas son regionales). Comunica pronto: qué está afectado y qué no.
+objectives:
+- Confirma que es una caída de Google
+- Comprueba la web de pagos
+- Levanta la liquidación en otra zona
+- Comunica el estado y la mejora
+hints:
+- text: '`gcloud logging read ''logName:cloud-status'' --limit=3` y `gcloud compute backend-services get-health pagos-web-be --global`'
+- text: '`gcloud compute instances create liquidacion-batch-c --zone={{.region}}-c --source-snapshot=liquidacion-batch-diario --machine-type=e2-standard-2 --subnet=datos --no-address`'
+solution: |
+  ticket
+  gcloud logging read 'logName:cloud-status' --limit=3
+  ask sre "¿Google ha confirmado la incidencia en la zona?"
+  ticket update "Incidencia de Google en {{.zone}}. La web de pagos sigue funcionando (grupo regional). La liquidación nocturna está afectada; la estamos levantando en otra zona. Próxima actualización en 30 minutos."
+  gcloud compute backend-services get-health pagos-web-be --global
+  gcloud compute instance-groups managed list-instances pagos-web-mig --region={{.region}}
+  gcloud compute snapshots list
+  ask payments "¿la instantánea de liquidacion-batch de esta noche vale para levantarla en otra zona?"
+  gcloud compute instances create liquidacion-batch-c --zone={{.region}}-c --source-snapshot=liquidacion-batch-diario --machine-type=e2-standard-2 --subnet=datos --no-address --labels=equipo=pagos,uso=liquidacion
+  gcloud compute instances list --filter='name~liquidacion'
+  ticket comment "Caída zonal de Google en {{.zone}} confirmada en el panel de estado. pagos-web-mig (regional, con autorreparación) sigue sirviendo desde las otras zonas. liquidacion-batch era zonal: levantada como liquidacion-batch-c en {{.region}}-c desde la instantánea liquidacion-batch-diario de medianoche. Mejora: convertir la liquidación en un grupo regional o en un proceso con reintento multizona."
+  ticket update "Actualización: la web de pagos no se ha visto afectada. La liquidación nocturna ya está en marcha en otra zona y llegará antes de las 06:00. Seguimos vigilando la incidencia de Google."
+  ticket resolve "Liquidación levantada en {{.region}}-c desde instantánea; la web de pagos siguió activa gracias al grupo regional."
+shortcuts:
+- name: wait for Google
+  run: |
+    ticket update "Es una incidencia de Google en la zona; esperamos a que la resuelvan para relanzar la liquidación."
+    ticket resolve "Incidencia de Google; esperamos a que se recupere la zona."
+rubric:
+- name: Pagos sigue en pie
+  validator: functional
+  points: 25
+  checks:
+  - type: http
+    target: lb:pagos-web-lb
+    path: /
+    status: 200
+    desc: La web de pagos responde
+- name: Liquidación recuperada
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: count
+    collection: instances
+    where:
+      name:
+        regex: ^liquidacion
+      zone:
+        ne: '{{.zone}}'
+      status: RUNNING
+    min: 1
+    desc: Liquidación en marcha en otra zona
+  - type: count
+    collection: disks
+    where:
+      sourceSnapshot: liquidacion-batch-diario
+    min: 1
+    desc: Restaurada desde la instantánea
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: cloud-status|get-health|list-instances
+    min: 2
+    desc: Estado de Google y de la web comprobados
+- name: Comunicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: true
+    keywords:
+    - - pagos
+      - payments
+      - web
+    - - liquidaci
+      - settlement
+    desc: Estado claro para el negocio
+  - type: ticket_update
+    public: false
+    keywords:
+    - - regional
+      - zonal
+    - - instantánea
+      - snapshot
+    desc: Nota técnica con la mejora
+tutor:
+- match: cloud-status
+  title: ¿Es Google?
+  why: 'El panel de estado confirma la zona: no se arregla, se sale de ella.'
+- match: get-health
+  title: La web de pagos
+  why: El grupo regional ya recolocó las VMs en las zonas sanas.
+- match: --source-snapshot
+  title: La liquidación
+  why: 'La instantánea es regional: se puede levantar en otra zona.'
+en:
+  title: 'INC P1 · A Google zone is down: what''s affected and what do we do?'
+  summary: The payments website holds because it's in a regional group; the nightly settlement lived in a single zone. Restore it from its snapshot in another zone and communicate well.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31052 · P1** · *"Cascading alerts in {{.zone}}: VMs not responding and the liquidacion-batch VM down. Settlement with correspondent banks must run before 06:00. Is the payments website affected?"*
+
+    When a **Google zone** fails, you don't fix the zone: you **move workloads out** of it. Whatever runs in a **regional group** with autohealing (the payments website) relocates by itself to the healthy zones. Whatever lived in **a single zone** (`liquidacion-batch`) must be brought up in another zone of the region, for example from its **snapshot** (snapshots are regional). Communicate early: what's affected and what isn't.
+  objectives:
+  - Confirm it's a Google outage
+  - Check the payments website
+  - Bring up settlement in another zone
+  - Communicate status and improvement
+  hints:
+  - '`gcloud logging read ''logName:cloud-status'' --limit=3` and `gcloud compute backend-services get-health pagos-web-be --global`'
+  - '`gcloud compute instances create liquidacion-batch-c --zone={{.region}}-c --source-snapshot=liquidacion-batch-diario --machine-type=e2-standard-2 --subnet=datos --no-address`'
+  ticket:
+    summary: 'Cascading alerts in {{.zone}}: VMs not responding and the liquidacion-batch VM down. Settlement with correspondent banks must run before 06:00. Is the payments website affected?'
+  text:
+    NOC 24x7: NOC 24x7
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    ? 'El panel de estado de Google confirma problemas en {{.zone}}. No es cosa nuestra: no intentéis arreglar la zona, moved lo que dependa de ella.'
+    : 'Google''s status dashboard confirms problems in {{.zone}}. It isn''t us: don''t try to fix the zone, move whatever depends on it.'
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tech lead de Pagos.: Payments tech lead.
+    La liquidación tiene que correr esta noche sí o sí.: Settlement must run tonight no matter what.
+    ? La instantánea liquidacion-batch-diario es de esta medianoche y tiene todo lo necesario. Levántala en otra zona de {{.region}}.
+    : The liquidacion-batch-diario snapshot is from this midnight and has everything needed. Bring it up in another {{.region}} zone.
+    Pagos sigue en pie: Payments stays up
+    La web de pagos responde: The payments website responds
+    Liquidación recuperada: Settlement restored
+    Liquidación en marcha en otra zona: Settlement running in another zone
+    Restaurada desde la instantánea: Restored from the snapshot
+    Diagnóstico: Diagnosis
+    Estado de Google y de la web comprobados: Google's status and the website checked
+    Comunicación: Communication
+    Estado claro para el negocio: Clear status for the business
+    Nota técnica con la mejora: Technical note with the improvement
+    ¿Es Google?: Is it Google?
+    'El panel de estado confirma la zona: no se arregla, se sale de ella.': 'The status dashboard confirms the zone: you don''t fix it, you move out of it.'
+    La web de pagos: The payments website
+    El grupo regional ya recolocó las VMs en las zonas sanas.: The regional group already relocated the VMs to the healthy zones.
+    La liquidación: Settlement
+    'La instantánea es regional: se puede levantar en otra zona.': 'The snapshot is regional: it can be brought up in another zone.'

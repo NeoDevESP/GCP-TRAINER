@@ -1,0 +1,202 @@
+id: zentra-z48-key-permissions
+title: INC P2 · El portal de empresas no arranca tras el endurecimiento
+summary: Un script de endurecimiento dejó la clave TLS solo para root y nginx, que corre como www-data, ya no puede leerla. Arréglalo sin dejarla legible para todos.
+track: zentra
+day: 48
+level: intermediate
+branch: compute
+type: incident
+mode: production
+skills:
+- linux.permissions
+- compute.troubleshooting
+- security.secrets
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create portal-empresas --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=portal --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-portal --network=zentra-vpc --allow=tcp:80 --source-tags=ops --target-tags=portal
+faults:
+- type: os_user
+  vm: portal-empresas
+  user: www-data
+  groups:
+  - www-data
+- type: os_file
+  vm: portal-empresas
+  path: /etc/nginx/tls/empresas.key
+  content: '-----BEGIN PRIVATE KEY-----'
+  owner: root
+  group: root
+  mode: '600'
+- type: os_service
+  vm: portal-empresas
+  service: nginx
+  user: www-data
+  config: /etc/nginx/tls/empresas.key
+ticket:
+  id: INC-31048
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Banca de empresas
+  summary: El portal de empresas no carga desde el reinicio de esta mañana. Seguridad pasó anoche su script de endurecimiento por todas las VMs.
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: 'Si hay datos de clientes expuestos, es un incidente de seguridad: contén primero y avísanos.'
+  facts:
+  - keywords:
+    - - clave
+      - key
+      - tls
+      - permiso
+      - permission
+      - '600'
+      - '640'
+      - chmod
+    answer: 'El script pone las claves en 600 root:root. Para nginx lo correcto es 640 root:www-data: la lee el servicio y nadie más. Nunca 644.'
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-empresas-prod*).
+
+  > **INC-31048 · P2** · *«El portal de empresas no carga desde el reinicio de esta mañana. Seguridad pasó anoche su script de endurecimiento por todas las VMs.»*
+
+  Entra por IAP y mira por qué no arranca nginx (`systemctl status nginx`, `journalctl`). En Linux, quién puede leer un fichero depende del **dueño**, el **grupo** y los **permisos** (`ls -l`). Una clave privada nunca debe ser legible por todos: lo correcto es que la lea **solo** el usuario del servicio.
+objectives:
+- Mira por qué no arranca nginx
+- Revisa dueño y permisos de la clave
+- Dale lectura solo al grupo del servicio
+- Arranca y valida
+hints:
+- text: '`sudo systemctl status nginx` y `ls -l /etc/nginx/tls/`'
+- text: '`sudo chgrp www-data /etc/nginx/tls/empresas.key && sudo chmod 640 /etc/nginx/tls/empresas.key`'
+solution: |
+  ticket
+  gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
+  gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='ls -l /etc/nginx/tls/'
+  ask security "¿qué permisos debe tener la clave TLS de nginx según la norma?"
+  gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='sudo chgrp www-data /etc/nginx/tls/empresas.key'
+  gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='sudo chmod 640 /etc/nginx/tls/empresas.key'
+  gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
+  gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
+  ticket comment "Causa: el script de endurecimiento dejó /etc/nginx/tls/empresas.key en 600 root:root y nginx corre como www-data (permission denied al arrancar). Puesto 640 root:www-data con el OK de Seguridad; la clave no es legible por otros usuarios. Pedido a Seguridad que el script respete el grupo del servicio."
+  ticket update "Resuelto: el portal de empresas vuelve a funcionar. Un ajuste de seguridad impedía al servidor web leer su certificado; lo hemos corregido manteniendo la clave protegida."
+  ticket resolve "Clave TLS en 640 root:www-data; nginx arranca y el portal responde."
+shortcuts:
+- name: make the key world-readable
+  run: |
+    gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='sudo chmod 644 /etc/nginx/tls/empresas.key'
+    gcloud compute ssh portal-empresas --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl restart nginx'
+    ticket resolve "Dado permiso de lectura a la clave TLS para que nginx arranque."
+rubric:
+- name: Portal en marcha
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:portal-empresas:80
+    path: /
+    status: 200
+    desc: El portal responde
+- name: Clave protegida
+  validator: security
+  points: 35
+  critical: true
+  checks:
+  - type: vm_file
+    vm: portal-empresas
+    path: /etc/nginx/tls/empresas.key
+    noWorld: true
+    readableBy: www-data
+    desc: La lee www-data y no el resto
+- name: Diagnóstico
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: command
+    regex: systemctl status|journalctl|ls -l
+    min: 2
+    desc: Servicio y permisos revisados
+- name: Documentado
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - '640'
+      - www-data
+      - permiso
+      - permission
+    - - endurec
+      - harden
+      - script
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: systemctl status nginx
+  title: Por qué no arranca
+  why: «permission denied (running as www-data)» al abrir la clave.
+- match: chmod 640
+  title: Mínimo necesario
+  why: rw para root, r para el grupo www-data, nada para el resto.
+en:
+  title: INC P2 · The business portal won't start after hardening
+  summary: A hardening script left the TLS key for root only, and nginx, running as www-data, can no longer read it. Fix it without making it world-readable.
+  story: |-
+    **Project `{{.project}}`** (*zentra-empresas-prod*).
+
+    > **INC-31048 · P2** · *"The business portal hasn't loaded since this morning's restart. Security ran its hardening script on every VM last night."*
+
+    SSH in through IAP and see why nginx won't start (`systemctl status nginx`, `journalctl`). In Linux, who can read a file depends on the **owner**, the **group** and the **permissions** (`ls -l`). A private key must never be world-readable: the right thing is that **only** the service's user reads it.
+  objectives:
+  - See why nginx won't start
+  - Check the key's owner and permissions
+  - Give read access only to the service's group
+  - Start and validate
+  hints:
+  - '`sudo systemctl status nginx` and `ls -l /etc/nginx/tls/`'
+  - '`sudo chgrp www-data /etc/nginx/tls/empresas.key && sudo chmod 640 /etc/nginx/tls/empresas.key`'
+  ticket:
+    summary: The business portal hasn't loaded since this morning's restart. Security ran its hardening script on every VM last night.
+  text:
+    Banca de empresas: Business banking
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    'Si hay datos de clientes expuestos, es un incidente de seguridad: contén primero y avísanos.': 'If customer data is exposed, it''s a security incident: contain first and tell us.'
+    ? 'El script pone las claves en 600 root:root. Para nginx lo correcto es 640 root:www-data: la lee el servicio y nadie más. Nunca 644.'
+    : 'The script sets keys to 600 root:root. For nginx the right thing is 640 root:www-data: the service reads it and nobody else. Never 644.'
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Portal en marcha: Portal running
+    El portal responde: The portal responds
+    Clave protegida: Key protected
+    La lee www-data y no el resto: www-data reads it, nobody else does
+    Diagnóstico: Diagnosis
+    Servicio y permisos revisados: Service and permissions checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Por qué no arranca: Why it won't start
+    «permission denied (running as www-data)» al abrir la clave.: '"permission denied (running as www-data)" opening the key.'
+    Mínimo necesario: Least needed
+    rw para root, r para el grupo www-data, nada para el resto.: rw for root, r for the www-data group, nothing for others.

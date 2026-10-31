@@ -525,6 +525,7 @@ type Bucket struct {
 	Objects       map[string]*Object `json:"objects"`
 	KMSKey        string             `json:"defaultKmsKey,omitempty"`
 	RetentionSec  int                `json:"retentionPeriodSec,omitempty"`
+	RetentionLock bool               `json:"retentionPolicyLocked,omitempty"`
 	Labels        map[string]string  `json:"labels"`
 	SoftDeleteSec int                `json:"softDeleteRetentionSec"`
 	Logging       bool               `json:"accessLogging"`

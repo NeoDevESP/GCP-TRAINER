@@ -1,0 +1,191 @@
+id: zentra-z51-slow-query
+title: INC P2 · Movimientos tarda 8 segundos y la CPU de la base de datos está al 100 %
+summary: Una consulta nueva recorre la tabla entera. Encuéntrala en los registros y crea el índice desde una VM de la red, sin ampliar la base de datos.
+track: zentra
+day: 51
+level: intermediate
+branch: databases
+type: incident
+mode: production
+skills:
+- databases.cloudsql
+- observability.logging
+- databases.performance
+wellArchitected:
+- performance
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud sql instances create movimientos-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create movimientos --instance=movimientos-db
+  gcloud sql users create app --instance=movimientos-db --password=pw-mov-1
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+faults:
+- type: sql_slow_query
+  instance: movimientos-db
+  query: SELECT * FROM movimientos WHERE cuenta_id = 4471 ORDER BY fecha DESC LIMIT 50
+ticket:
+  id: INC-31051
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Carla Méndez (producto)
+  summary: Desde la versión de ayer de la pantalla «Últimos movimientos», tarda 8 segundos en cargar y la monitorización marca CPU al 100 % en movimientos-db. ¿Ampliamos la base de datos?
+actors:
+- role: dev
+  name: Equipo de Cuentas
+  persona: Mantienen la pantalla de movimientos.
+  fallback: La versión nueva filtra por cuenta y ordena por fecha.
+  facts:
+  - keywords:
+    - - indice
+      - índice
+      - index
+      - cuenta_id
+      - consulta
+      - query
+    answer: '¿Índice? No, no añadimos ninguno para cuenta_id en la migración… Créalo tú, por favor: CREATE INDEX en movimientos (cuenta_id).'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Un índice en producción es un cambio estándar si va en horario de baja carga.
+  facts:
+  - keywords:
+    - - indice
+      - índice
+      - index
+      - cambio
+      - change
+    answer: Aprobado como cambio estándar CHG-7810.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-cuentas-prod*).
+
+  > **INC-31051 · P2** · *«Desde la versión de ayer de la pantalla «Últimos movimientos», tarda 8 segundos en cargar y la monitorización marca CPU al 100 % en movimientos-db. ¿Ampliamos la base de datos?»*
+
+  Ampliar es caro y tapa el problema. Cloud SQL registra las **consultas lentas**: búscalas en Logging. Si una consulta filtra por una columna **sin índice**, PostgreSQL recorre la tabla entera en cada petición. La base de datos solo tiene IP privada: conéctate con `psql` **desde una VM de la red** (`ops-consola`).
+objectives:
+- Encuentra la consulta lenta
+- Confirma que falta el índice
+- Crea el índice con un cambio aprobado
+- Valida que la CPU baja
+hints:
+- text: '`gcloud logging read ''resource.type="cloudsql_database" "duration"'' --limit=3`'
+- text: '`gcloud compute ssh ops-consola --zone={{.zone}} --tunnel-through-iap --command="psql -h IP -U app -d movimientos -c ''CREATE INDEX idx_mov_cuenta ON movimientos (cuenta_id)''"`'
+solution: |
+  ticket
+  gcloud logging read 'resource.type="cloudsql_database" "duration"' --limit=3 --format='value(textPayload)'
+  gcloud sql instances describe movimientos-db
+  ask dev "¿la consulta nueva tiene índice por cuenta_id?"
+  ask change "¿puedo crear un índice en movimientos-db como cambio estándar?"
+  gcloud compute ssh ops-consola --zone={{.zone}} --tunnel-through-iap --command="psql -h $(gcloud sql instances describe movimientos-db --format='value(ipAddresses[0].ipAddress)') -U app -d movimientos -c 'CREATE INDEX idx_mov_cuenta ON movimientos (cuenta_id)'"
+  sleep 120
+  gcloud sql instances describe movimientos-db
+  ticket comment "Causa: la versión nueva de «Últimos movimientos» consulta movimientos por cuenta_id sin índice (8,4 s por consulta en los registros de Cloud SQL, CPU al 100 %). Creado idx_mov_cuenta en movimientos (cuenta_id) con CHG-7810. No se amplía la instancia. Pedido a Cuentas que el índice vaya en su migración."
+  ticket update "Hola Carla: la pantalla de movimientos vuelve a cargar al momento. Faltaba un índice para la consulta nueva; lo hemos creado y no hace falta ampliar la base de datos."
+  ticket resolve "Creado índice por cuenta_id en movimientos; consulta lenta resuelta sin ampliar la instancia."
+shortcuts:
+- name: upsize the database
+  run: |
+    gcloud sql instances patch movimientos-db --tier=db-custom-8-30720 --quiet
+    ticket resolve "Ampliada movimientos-db para soportar la carga de la pantalla nueva."
+rubric:
+- name: Consulta rápida
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: sql_healthy
+    instance: movimientos-db
+    noSlowQueries: true
+    desc: Sin consultas lentas
+- name: Sin ampliar
+  validator: security
+  points: 15
+  checks:
+  - type: command
+    regex: sql instances patch .*--tier
+    max: 0
+    desc: No se ha cambiado el tamaño
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: logging read
+    min: 1
+    desc: Registros de la base de datos revisados
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio aprobado
+- name: Documentado
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - indice
+      - índice
+      - index
+    - - cuenta_id
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: logging read
+  title: La consulta lenta
+  why: 'duration: 8421 ms … WHERE cuenta_id = …: sin índice, recorre la tabla entera.'
+- match: CREATE INDEX
+  title: ''
+  why: Con el índice, la consulta va directa a las filas de esa cuenta.
+en:
+  title: INC P2 · Transactions take 8 seconds and database CPU is at 100%
+  summary: A new query scans the whole table. Find it in the logs and create the index from a VM in the network, without upsizing the database.
+  story: |-
+    **Project `{{.project}}`** (*zentra-cuentas-prod*).
+
+    > **INC-31051 · P2** · *"Since yesterday's release of the "Latest transactions" screen, it takes 8 seconds to load and monitoring shows CPU at 100% on movimientos-db. Shall we upsize the database?"*
+
+    Upsizing is expensive and hides the problem. Cloud SQL logs **slow queries**: find them in Logging. If a query filters by a column **without an index**, PostgreSQL scans the whole table on every request. The database only has a private IP: connect with `psql` **from a VM in the network** (`ops-consola`).
+  objectives:
+  - Find the slow query
+  - Confirm the index is missing
+  - Create the index with an approved change
+  - Check CPU goes down
+  hints:
+  - '`gcloud logging read ''resource.type="cloudsql_database" "duration"'' --limit=3`'
+  - '`gcloud compute ssh ops-consola --zone={{.zone}} --tunnel-through-iap --command="psql -h IP -U app -d movimientos -c ''CREATE INDEX idx_mov_cuenta ON movimientos (cuenta_id)''"`'
+  ticket:
+    summary: Since yesterday's release of the "Latest transactions" screen, it takes 8 seconds to load and monitoring shows CPU at 100% on movimientos-db. Shall we upsize the database?
+  text:
+    Carla Méndez (producto): Carla Méndez (product)
+    Equipo de Cuentas: Accounts team
+    Mantienen la pantalla de movimientos.: They maintain the transactions screen.
+    La versión nueva filtra por cuenta y ordena por fecha.: The new release filters by account and sorts by date.
+    ? '¿Índice? No, no añadimos ninguno para cuenta_id en la migración… Créalo tú, por favor: CREATE INDEX en movimientos (cuenta_id).'
+    : 'Index? No, we didn''t add one for cuenta_id in the migration… Please create it: CREATE INDEX on movimientos (cuenta_id).'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Un índice en producción es un cambio estándar si va en horario de baja carga.: A production index is a standard change if done in low-traffic hours.
+    Aprobado como cambio estándar CHG-7810.: Approved as standard change CHG-7810.
+    Consulta rápida: Fast query
+    Sin consultas lentas: No slow queries
+    Sin ampliar: No upsizing
+    No se ha cambiado el tamaño: The size wasn't changed
+    Diagnóstico: Diagnosis
+    Registros de la base de datos revisados: Database logs checked
+    Cambio aprobado: Change approved
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    La consulta lenta: The slow query
+    'duration: 8421 ms … WHERE cuenta_id = …: sin índice, recorre la tabla entera.': 'duration: 8421 ms … WHERE cuenta_id = …: without an index, it scans the whole table.'
+    Con el índice, la consulta va directa a las filas de esa cuenta.: With the index, the query goes straight to that account's rows.

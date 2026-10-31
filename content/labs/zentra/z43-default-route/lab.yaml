@@ -1,0 +1,183 @@
+id: zentra-z43-default-route
+title: INC P1 · Nada sale a internet desde zentra-vpc
+summary: Cloud NAT está bien, pero alguien borró la ruta por defecto. Sin ruta 0.0.0.0/0 no hay NAT que valga.
+track: zentra
+day: 43
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.routing
+- networking.nat
+- security.audit
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create divisas-cotizador --zone={{.zone}} --machine-type=e2-standard-2 --subnet=apps --no-address --tags=divisas --metadata=sim-preinstalled=docker-images,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/egress-app:1.0'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-divisas --network=zentra-vpc --allow=tcp:8080 --source-tags=ops --target-tags=divisas
+faults:
+- type: route_delete
+  network: zentra-vpc
+  dest: 0.0.0.0/0
+  actor: red-limpieza@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31043
+  kind: INC
+  priority: P1
+  sla: 30m
+  reporter: NOC 24x7
+  summary: 'Desde las 07:10 todo lo que sale a internet desde zentra-vpc falla: cotizaciones de divisas, actualizaciones, llamadas a proveedores. Cloud NAT aparece como configurado y sin errores.'
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red.
+  fallback: En zentra-vpc la salida a internet es ruta por defecto + Cloud NAT. Nada más.
+  facts:
+  - keywords:
+    - - ruta
+      - route
+      - 0.0.0.0
+      - default
+      - limpieza
+      - cleanup
+      - script
+    answer: ¡El script de limpieza de rutas! Se llevó la ruta por defecto pensando que sobraba. Vuelve a crearla hacia default-internet-gateway; el NAT la necesita.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-divisas-prod*).
+
+  > **INC-31043 · P1** · *«Desde las 07:10 todo lo que sale a internet desde zentra-vpc falla: cotizaciones de divisas, actualizaciones, llamadas a proveedores. Cloud NAT aparece como configurado y sin errores.»*
+
+  Para salir a internet, el tráfico de una VM sin IP pública necesita **dos cosas**: una **ruta** que mande `0.0.0.0/0` a `default-internet-gateway` y **Cloud NAT** que le ponga una IP pública. Si el NAT está bien, revisa la tabla de rutas y busca en la auditoría qué ha cambiado.
+objectives:
+- Confirma que el NAT está bien
+- Revisa las rutas de zentra-vpc
+- Encuentra quién borró la ruta
+- Vuelve a crear la ruta por defecto
+hints:
+- text: '`gcloud compute routes list --filter=''network:zentra-vpc''`'
+- text: '`gcloud compute routes create zentra-default-internet --network=zentra-vpc --destination-range=0.0.0.0/0 --next-hop-gateway=default-internet-gateway`'
+solution: |
+  ticket
+  ticket update "Estamos revisando la salida a internet de la red de producción. Próxima actualización en 15 minutos."
+  gcloud compute routers nats describe zentra-nat --router=zentra-router --region={{.region}}
+  gcloud compute routes list --filter='network:zentra-vpc'
+  gcloud logging read 'protoPayload.methodName:"routes.delete"' --limit=3
+  ask network "¿alguien ha tocado las rutas de zentra-vpc esta mañana?"
+  gcloud compute routes create zentra-default-internet --network=zentra-vpc --destination-range=0.0.0.0/0 --next-hop-gateway=default-internet-gateway
+  gcloud compute routes list --filter='network:zentra-vpc'
+  ticket comment "Causa: el script red-limpieza borró la ruta 0.0.0.0/0 de zentra-vpc a las 07:10; sin ella Cloud NAT no tiene por dónde sacar el tráfico. Recreada la ruta por defecto hacia default-internet-gateway con el OK de Red. Pedido excluir la ruta por defecto del script."
+  ticket update "Resuelto: vuelve la salida a internet de producción. Un proceso automático borró una ruta de red necesaria; está restaurada."
+  ticket resolve "Recreada la ruta por defecto de zentra-vpc borrada por red-limpieza; la salida por Cloud NAT funciona."
+shortcuts:
+- name: recreate the NAT
+  run: |
+    gcloud compute routers nats delete zentra-nat --router=zentra-router --region={{.region}} --quiet
+    gcloud compute routers nats create zentra-nat --router=zentra-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+    ticket resolve "Recreado el NAT de producción para recuperar la salida a internet."
+rubric:
+- name: Salida recuperada
+  validator: functional
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:divisas-cotizador:8080
+    path: /fx
+    status: 200
+    desc: El cotizador llega al proveedor
+  - type: absent
+    path: instances["divisas-cotizador"].natIP
+    desc: Sin IP pública
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: routes list
+    min: 1
+    desc: Rutas revisadas
+  - type: command
+    regex: logging read
+    min: 1
+    desc: Auditoría revisada
+- name: Documentado
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - ruta
+      - route
+      - 0.0.0.0
+    - - red-limpieza
+      - script
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: routes list
+  title: La tabla de rutas
+  why: 'Solo quedan las rutas de las subredes: falta 0.0.0.0/0.'
+- match: routes create
+  title: ''
+  why: Con la ruta por defecto de vuelta, el NAT vuelve a tener salida.
+en:
+  title: INC P1 · Nothing reaches the internet from zentra-vpc
+  summary: Cloud NAT is fine, but someone deleted the default route. Without a 0.0.0.0/0 route, NAT is useless.
+  story: |-
+    **Project `{{.project}}`** (*zentra-divisas-prod*).
+
+    > **INC-31043 · P1** · *"Since 07:10 everything going out to the internet from zentra-vpc fails: FX quotes, updates, calls to providers. Cloud NAT shows as configured with no errors."*
+
+    To reach the internet, traffic from a VM without a public IP needs **two things**: a **route** sending `0.0.0.0/0` to `default-internet-gateway`, and **Cloud NAT** to give it a public IP. If NAT is fine, check the route table and look for what changed in the audit log.
+  objectives:
+  - Confirm NAT is fine
+  - Check zentra-vpc's routes
+  - Find who deleted the route
+  - Re-create the default route
+  hints:
+  - '`gcloud compute routes list --filter=''network:zentra-vpc''`'
+  - '`gcloud compute routes create zentra-default-internet --network=zentra-vpc --destination-range=0.0.0.0/0 --next-hop-gateway=default-internet-gateway`'
+  ticket:
+    summary: 'Since 07:10 everything going out to the internet from zentra-vpc fails: FX quotes, updates, calls to providers. Cloud NAT shows as configured with no errors.'
+  text:
+    NOC 24x7: NOC 24x7
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red.: Network architect.
+    En zentra-vpc la salida a internet es ruta por defecto + Cloud NAT. Nada más.: In zentra-vpc internet egress is default route + Cloud NAT. Nothing else.
+    ? ¡El script de limpieza de rutas! Se llevó la ruta por defecto pensando que sobraba. Vuelve a crearla hacia default-internet-gateway; el NAT la necesita.
+    : The route clean-up script! It took the default route thinking it was spare. Re-create it to default-internet-gateway; NAT needs it.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Salida recuperada: Egress back
+    El cotizador llega al proveedor: The pricer reaches the provider
+    Sin IP pública: No public IP
+    Diagnóstico: Diagnosis
+    Rutas revisadas: Routes checked
+    Auditoría revisada: Audit checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    La tabla de rutas: The route table
+    'Solo quedan las rutas de las subredes: falta 0.0.0.0/0.': 'Only the subnet routes remain: 0.0.0.0/0 is missing.'
+    Con la ruta por defecto de vuelta, el NAT vuelve a tener salida.: With the default route back, NAT has a way out again.

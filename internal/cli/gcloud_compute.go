@@ -180,6 +180,9 @@ func (s *Session) createInstance(c *Cmd, p *sim.Project, name, zone string) (*si
 			return nil, fmt.Errorf("Could not fetch resource:\n - Quota 'CPUS' exceeded.  Limit: %.1f in region %s. (QUOTA_EXCEEDED: %d vCPUs in use, %d requested)", lim, sim.RegionOf(zone), used, machineCPUs(mt))
 		}
 	}
+	if s.State.ZoneDown(zone) {
+		return nil, fmt.Errorf("Could not fetch resource:\n - The zone 'projects/%s/zones/%s' is currently unavailable (zonal outage). Create the instance in another zone of the region.", p.ID, zone)
+	}
 	if s.State.ZoneStockout(zone, mt) {
 		return nil, fmt.Errorf("Could not fetch resource:\n - The zone 'projects/%s/zones/%s' does not have enough resources available to fulfill the request.  '(resource type:compute)'. (ZONE_RESOURCE_POOL_EXHAUSTED) Try a different zone, a different machine type, or try again later.", p.ID, zone)
 	}
@@ -266,7 +269,23 @@ func (s *Session) createInstance(c *Cmd, p *sim.Project, name, zone string) (*si
 		}
 	}
 	size := c.Int("boot-disk-size", 10)
-	p.Disks[name] = &sim.Disk{Name: name, Zone: zone, SizeGB: size, Type: c.Str("boot-disk-type", "pd-balanced"), Image: image, Users: []string{name}}
+	snap := c.Str("source-snapshot", "")
+	if snap != "" {
+		// boot disk restored from a snapshot (it can live in another zone or region)
+		sn := p.Snapshots[snap]
+		if sn == nil {
+			return nil, fmt.Errorf("The resource 'projects/%s/global/snapshots/%s' was not found", p.ID, snap)
+		}
+		size = max(size, sn.SizeGB)
+		if src := p.Disks[sn.SourceDisk]; src != nil && src.Image != "" {
+			vm.Image = src.Image
+		}
+		if old := p.Instances[sn.SourceDisk]; old != nil && old.OS != nil {
+			cp := *old.OS
+			vm.OS = &cp
+		}
+	}
+	p.Disks[name] = &sim.Disk{Name: name, Zone: zone, SizeGB: size, Type: c.Str("boot-disk-type", "pd-balanced"), Image: vm.Image, Snapshot: snap, Users: []string{name}}
 	p.Instances[name] = vm
 	s.State.Audit(p.ID, c.Principal(), "compute.googleapis.com", "v1.compute.instances.insert", "projects/"+p.ID+"/zones/"+zone+"/instances/"+name)
 	return vm, nil

@@ -1,0 +1,206 @@
+id: zentra-z45-lost-tag
+title: INC P2 · La web de tarifas da 502 tras «limpiar etiquetas»
+summary: Las reglas de cortafuegos se aplican por etiqueta de red. La VM perdió la suya y las sondas de salud ya no llegan.
+track: zentra
+day: 45
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.lb
+- networking.firewall
+- security.audit
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create tarifas-web --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=tarifas-web --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-health-checks --network=zentra-vpc --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=tarifas-web
+  gcloud compute instance-groups unmanaged create tarifas-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances tarifas-ig --instances=tarifas-web --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports tarifas-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute health-checks create http tarifas-hc --port=80 --request-path=/
+  gcloud compute backend-services create tarifas-be --protocol=HTTP --port-name=http --health-checks=tarifas-hc --global
+  gcloud compute backend-services add-backend tarifas-be --instance-group=tarifas-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create tarifas-map --default-service=tarifas-be
+  gcloud compute target-http-proxies create tarifas-proxy --url-map=tarifas-map
+  gcloud compute forwarding-rules create tarifas-lb --global --target-http-proxy=tarifas-proxy --ports=80
+faults:
+- type: vm_tag_remove
+  vm: tarifas-web
+  tag: tarifas-web
+  actor: finops-etiquetas@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: tarifas
+  target: lb:tarifas-lb
+  path: /
+  rps: 10
+ticket:
+  id: INC-31045
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo web
+  summary: La página pública de tarifas devuelve 502 desde las 09:30. No hemos desplegado nada; la VM está encendida y nginx funciona.
+actors:
+- role: finops
+  name: Elena Ríos (FinOps)
+  persona: FinOps.
+  fallback: Esta mañana pasamos un script para ordenar etiquetas.
+  facts:
+  - keywords:
+    - - etiqueta
+      - tag
+      - script
+      - tarifas
+    answer: El script de etiquetas quitó las «etiquetas de red» que no seguían la norma de nombres… ¿tarifas-web era una de ellas? Vuelve a ponerla, la excluimos.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-web-prod*).
+
+  > **INC-31045 · P2** · *«La página pública de tarifas devuelve 502 desde las 09:30. No hemos desplegado nada; la VM está encendida y nginx funciona.»*
+
+  El balanceador solo manda tráfico a backends **sanos**, y lo decide con sondas que llegan desde `35.191.0.0/16` y `130.211.0.0/22`. La regla que las deja pasar (`allow-health-checks`) se aplica a las VMs con la **etiqueta de red** `tarifas-web`. Ojo: las *etiquetas de red* (tags) no son lo mismo que las *etiquetas* (labels) de costes.
+objectives:
+- Mira la salud del backend
+- Compara la regla con las etiquetas de la VM
+- Encuentra quién quitó la etiqueta
+- Devuélvela y valida
+hints:
+- text: '`gcloud compute backend-services get-health tarifas-be --global` y `gcloud compute instances describe tarifas-web --zone={{.zone}} --format=''value(tags.items)''`'
+- text: '`gcloud compute instances add-tags tarifas-web --zone={{.zone}} --tags=tarifas-web`'
+solution: |
+  ticket
+  gcloud compute backend-services get-health tarifas-be --global
+  gcloud compute firewall-rules describe allow-health-checks
+  gcloud compute instances describe tarifas-web --zone={{.zone}} --format='value(tags.items)'
+  gcloud logging read 'protoPayload.methodName:"setTags"' --limit=3
+  ask finops "¿el script de etiquetas ha tocado tarifas-web?"
+  gcloud compute instances add-tags tarifas-web --zone={{.zone}} --tags=tarifas-web
+  gcloud compute backend-services get-health tarifas-be --global
+  ticket comment "Causa: el script finops-etiquetas quitó la etiqueta de red tarifas-web de la VM; allow-health-checks ya no se le aplicaba, las sondas no llegaban, el backend quedó UNHEALTHY y el balanceador devolvía 502. Devuelta la etiqueta; FinOps excluye las etiquetas de red de su script."
+  ticket update "Resuelto: la página de tarifas vuelve a funcionar. Un proceso de ordenación de etiquetas quitó una que el cortafuegos necesitaba; ya está restaurada."
+  ticket resolve "Devuelta la etiqueta de red tarifas-web; backend HEALTHY y web respondiendo."
+shortcuts:
+- name: open port 80 to everyone
+  run: |
+    gcloud compute firewall-rules create allow-80-all --network=zentra-vpc --allow=tcp:80 --source-ranges=0.0.0.0/0
+    ticket resolve "Abierto el puerto 80 para que el balanceador llegue a la web."
+rubric:
+- name: Web recuperada
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: http
+    target: lb:tarifas-lb
+    path: /
+    status: 200
+    desc: El balanceador responde
+- name: Sin exponer la VM
+  validator: security
+  points: 20
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+    max: 0
+    desc: Ninguna regla abierta a internet
+- name: Diagnóstico
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - type: command
+    regex: get-health
+    min: 1
+    desc: Salud del backend revisada
+  - type: command
+    regex: instances describe tarifas-web|logging read
+    min: 1
+    desc: Etiquetas o auditoría revisadas
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - etiqueta
+      - tag
+    - - sonda
+      - health
+      - probe
+      - unhealthy
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: get-health
+  title: El backend
+  why: 'UNHEALTHY: las sondas no reciben respuesta.'
+- match: value(tags.items)
+  title: Las etiquetas de red
+  why: La VM ya no tiene tarifas-web, así que la regla de sondas no se le aplica.
+- match: add-tags
+  title: ''
+  why: Con la etiqueta de vuelta, las sondas llegan y el backend pasa a HEALTHY.
+en:
+  title: INC P2 · The pricing website returns 502 after "cleaning up tags"
+  summary: Firewall rules apply by network tag. The VM lost its tag and the health probes no longer get through.
+  story: |-
+    **Project `{{.project}}`** (*zentra-web-prod*).
+
+    > **INC-31045 · P2** · *"The public pricing page has returned 502 since 09:30. We haven't deployed anything; the VM is on and nginx works."*
+
+    The load balancer only sends traffic to **healthy** backends, decided by probes coming from `35.191.0.0/16` and `130.211.0.0/22`. The rule letting them in (`allow-health-checks`) applies to VMs with the **network tag** `tarifas-web`. Careful: *network tags* aren't the same as cost *labels*.
+  objectives:
+  - Check backend health
+  - Compare the rule with the VM's tags
+  - Find who removed the tag
+  - Put it back and validate
+  hints:
+  - '`gcloud compute backend-services get-health tarifas-be --global` and `gcloud compute instances describe tarifas-web --zone={{.zone}} --format=''value(tags.items)''`'
+  - '`gcloud compute instances add-tags tarifas-web --zone={{.zone}} --tags=tarifas-web`'
+  ticket:
+    summary: The public pricing page has returned 502 since 09:30. We haven't deployed anything; the VM is on and nginx works.
+  text:
+    Equipo web: Web team
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    FinOps.: FinOps.
+    Esta mañana pasamos un script para ordenar etiquetas.: This morning we ran a script to tidy up tags.
+    ? El script de etiquetas quitó las «etiquetas de red» que no seguían la norma de nombres… ¿tarifas-web era una de ellas? Vuelve a ponerla, la excluimos.
+    : The tags script removed "network tags" that didn't follow the naming rule… was tarifas-web one of them? Put it back, we'll exclude it.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Web recuperada: Website back
+    El balanceador responde: The load balancer responds
+    Sin exponer la VM: VM not exposed
+    Ninguna regla abierta a internet: No rule open to the internet
+    Diagnóstico: Diagnosis
+    Salud del backend revisada: Backend health checked
+    Etiquetas o auditoría revisadas: Tags or audit checked
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    El backend: The backend
+    'UNHEALTHY: las sondas no reciben respuesta.': 'UNHEALTHY: the probes get no answer.'
+    Las etiquetas de red: The network tags
+    La VM ya no tiene tarifas-web, así que la regla de sondas no se le aplica.: The VM no longer has tarifas-web, so the probes rule doesn't apply to it.
+    Con la etiqueta de vuelta, las sondas llegan y el backend pasa a HEALTHY.: With the tag back, probes get through and the backend turns HEALTHY.

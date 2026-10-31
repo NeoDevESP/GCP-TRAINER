@@ -177,7 +177,23 @@ func (s *Session) updateBucket(c *Cmd, b *sim.Bucket) error {
 		b.KMSKey = ""
 	}
 	if v := c.Str("retention-period", ""); v != "" {
-		b.RetentionSec = parseDurationSec(v)
+		sec := parseDurationSec(v)
+		if b.RetentionLock && sec < b.RetentionSec {
+			return fmt.Errorf("HTTPError 403: The retention policy of bucket %s is locked; the retention period can only be increased.", b.Name)
+		}
+		b.RetentionSec = sec
+	}
+	if c.Bool("clear-retention-period") {
+		if b.RetentionLock {
+			return fmt.Errorf("HTTPError 403: The retention policy of bucket %s is locked and cannot be removed.", b.Name)
+		}
+		b.RetentionSec = 0
+	}
+	if c.Bool("lock-retention-period") {
+		if b.RetentionSec == 0 {
+			return fmt.Errorf("HTTPError 400: Bucket %s has no retention policy to lock.", b.Name)
+		}
+		b.RetentionLock = true
 	}
 	if v := c.Str("soft-delete-duration", ""); v != "" {
 		b.SoftDeleteSec = parseDurationSec(v)
@@ -230,7 +246,7 @@ func bucketView(b *sim.Bucket) map[string]any {
 	return map[string]any{"name": b.Name, "storage_url": "gs://" + b.Name + "/", "location": b.Location, "location_type": b.LocationType,
 		"default_storage_class": b.StorageClass, "uniform_bucket_level_access": b.UBLA, "public_access_prevention": b.PAP,
 		"versioning_enabled": b.Versioning, "lifecycle_config": map[string]any{"rule": b.Lifecycle}, "default_kms_key": b.KMSKey,
-		"retention_policy": b.RetentionSec, "labels": b.Labels, "soft_delete_policy": map[string]any{"retentionDurationSeconds": b.SoftDeleteSec}}
+		"retention_policy": b.RetentionSec, "retention_policy_locked": b.RetentionLock, "labels": b.Labels, "soft_delete_policy": map[string]any{"retentionDurationSeconds": b.SoftDeleteSec}}
 }
 
 func (s *Session) storageCp(c *Cmd, src, dst string) (string, error) {
@@ -438,7 +454,7 @@ func init() {
 			return nil, err
 		}
 		b, _ := c.S.State.FindBucket(bucketName(ref))
-		if c.Has("lifecycle-file") || c.Has("versioning") || c.Has("default-encryption-key") || c.Has("retention-period") || c.Has("soft-delete-duration") || c.Has("update-labels") {
+		if c.Has("lifecycle-file") || c.Has("versioning") || c.Has("default-encryption-key") || c.Has("retention-period") || c.Has("lock-retention-period") || c.Has("clear-retention-period") || c.Has("soft-delete-duration") || c.Has("update-labels") {
 			if err := c.S.updateBucket(c, b); err != nil {
 				return nil, err
 			}

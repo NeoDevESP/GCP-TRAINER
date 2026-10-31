@@ -684,6 +684,15 @@ sections:
     meta:
     - Nivel avanzado
     - Advanced level
+  - title:
+    - Semana 7 · Operaciones del día a día
+    - Week 7 · Everyday operations
+    text:
+    - Rutas borradas, apps que solo escuchan en localhost, etiquetas de red y puertos con nombre, documentos KYC expuestos, permisos en Linux, accesos que caducan, retención WORM, consultas lentas y la caída de una zona.
+    - Deleted routes, apps listening only on localhost, network tags and named ports, exposed KYC documents, Linux permissions, expiring access, WORM retention, slow queries and a zone outage.
+    meta:
+    - Nivel avanzado
+    - Advanced level
 people:
 - name: Marta Ibáñez
   email: marta.ibanez@zentra.dev

@@ -1,0 +1,216 @@
+id: zentra-z47-public-kyc-bucket
+title: SEC P1 · Documentos de identidad de clientes accesibles desde internet
+summary: Marketing hizo público un bucket para una campaña sin saber que también guardaba documentos KYC. Contener, recuperar los guardarraíles y escalar a Seguridad.
+track: zentra
+day: 47
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- storage.access
+- security.incident
+- security.audit
+wellArchitected:
+- security
+certs:
+- ACE
+- PCA
+difficulty: 4
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud storage buckets create gs://zentra-onboarding-{{.project}} --location=EU --uniform-bucket-level-access
+  echo "banner" > banner.png
+  echo "dni" > dni-cliente-48211.pdf
+  gcloud storage cp banner.png gs://zentra-onboarding-{{.project}}/campanas/banner.png
+  gcloud storage cp dni-cliente-48211.pdf gs://zentra-onboarding-{{.project}}/kyc/dni-cliente-48211.pdf
+faults:
+- type: command
+  actor: marketing-automation@{{.project}}.iam.gserviceaccount.com
+  run: gcloud resource-manager org-policies disable-enforce storage.publicAccessPrevention --project={{.project}}
+- type: bucket_public
+  bucket: zentra-onboarding-{{.project}}
+  actor: marketing-automation@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: SEC-41047
+  kind: SEC
+  priority: P1
+  sla: 30m
+  reporter: Security Command Center
+  summary: 'Hallazgo PUBLIC_BUCKET_ACL: gs://zentra-onboarding-… permite lectura a allUsers. El bucket contiene la carpeta kyc/ con documentos de identidad de clientes.'
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: 'Si hay datos de clientes expuestos, es un incidente de seguridad: contén primero y avísanos.'
+  facts:
+  - keywords:
+    - - public
+      - allusers
+      - expuest
+      - expos
+      - bucket
+      - kyc
+      - dni
+    answer: 'Quita el acceso público ya, vuelve a aplicar la prevención de acceso público y escálanos el ticket: el CSIRT revisa quién descargó qué y si hay que notificar.'
+- role: marketing
+  name: Equipo de Marketing
+  persona: Lanzan campañas.
+  fallback: Necesitábamos que el banner de la campaña se viera en la web.
+  facts:
+  - keywords:
+    - - bucket
+      - public
+      - banner
+      - kyc
+      - politica
+      - policy
+    answer: Nuestra automatización quitó la prevención de acceso público del proyecto y abrió el bucket para el banner. No sabíamos que kyc/ estaba ahí.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-onboarding-prod*).
+
+  > **SEC-41047 · P1** · *«Hallazgo PUBLIC_BUCKET_ACL: gs://zentra-onboarding-… permite lectura a allUsers. El bucket contiene la carpeta kyc/ con documentos de identidad de clientes.»*
+
+  Datos personales expuestos = **incidente de seguridad**. El orden: **contener** (quitar `allUsers`), **recuperar los guardarraíles** (prevención de acceso público en el bucket y la política de organización del proyecto), **conservar la evidencia** (registros de auditoría) y **escalar** a Seguridad: ellos deciden si hay que notificar al regulador. Para el banner hay alternativas seguras (otro bucket detrás de un balanceador o una URL firmada), pero eso viene después.
+objectives:
+- Confirma la exposición
+- Quita el acceso público
+- Recupera los guardarraíles
+- Busca quién fue y escala a Seguridad
+hints:
+- text: '`gcloud storage buckets get-iam-policy gs://zentra-onboarding-{{.project}}`'
+- text: '`gcloud storage buckets update gs://zentra-onboarding-{{.project}} --public-access-prevention` y `gcloud resource-manager org-policies enable-enforce storage.publicAccessPrevention --project={{.project}}`'
+solution: |
+  ticket
+  gcloud storage buckets get-iam-policy gs://zentra-onboarding-{{.project}}
+  gcloud storage ls gs://zentra-onboarding-{{.project}}/**
+  gcloud storage buckets remove-iam-policy-binding gs://zentra-onboarding-{{.project}} --member=allUsers --role=roles/storage.objectViewer
+  gcloud storage buckets update gs://zentra-onboarding-{{.project}} --public-access-prevention
+  gcloud resource-manager org-policies enable-enforce storage.publicAccessPrevention --project={{.project}}
+  gcloud logging read 'protoPayload.methodName:"setIamPermissions" OR protoPayload.methodName:"SetOrgPolicy" OR protoPayload.methodName:"policy"' --limit=5
+  ask marketing "¿por qué se hizo público el bucket de onboarding?"
+  ask security "¿cómo seguimos con la exposición de documentos KYC?"
+  ticket comment "Contención: quitado allUsers de gs://zentra-onboarding, prevención de acceso público aplicada en el bucket y política de organización de nuevo aplicada en el proyecto. Origen: marketing-automation desactivó la política y abrió el bucket para un banner; kyc/ contiene documentos de identidad. Evidencia: registros de auditoría conservados."
+  ticket escalate security "Exposición pública de documentos KYC en gs://zentra-onboarding contenida; necesitáis revisar accesos de datos y decidir la notificación."
+shortcuts:
+- name: delete the KYC files
+  run: |
+    gcloud storage rm gs://zentra-onboarding-{{.project}}/kyc/dni-cliente-48211.pdf
+    ticket resolve "Borrados los documentos sensibles del bucket público."
+rubric:
+- name: Exposición contenida
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: allUsers
+    permission: storage.objects.get
+    resource: bucket:zentra-onboarding-{{.project}}
+    expect: false
+    desc: Ya no es legible desde internet
+  - type: exists
+    path: buckets["zentra-onboarding-{{.project}}"]
+    expect:
+      publicAccessPrevention: enforced
+    desc: Prevención de acceso público en el bucket
+- name: Guardarraíl recuperado
+  validator: security
+  points: 15
+  checks:
+  - type: org_policy
+    constraint: storage.publicAccessPrevention
+    enforced: true
+    desc: Política de organización aplicada de nuevo
+- name: Evidencia intacta
+  validator: functional
+  points: 15
+  checks:
+  - type: exists
+    path: buckets["zentra-onboarding-{{.project}}"]
+    desc: El bucket y su contenido se conservan
+- name: Escalado a Seguridad
+  validator: evidence
+  points: 35
+  all: true
+  checks:
+  - type: ticket_escalated
+    team: secur|segur|csirt
+    keywords:
+    - - kyc
+      - identidad
+      - identity
+    - - notific
+      - regulador
+      - regulator
+      - acceso
+      - access
+    desc: Escalado con el contexto
+  - type: command
+    regex: logging read
+    min: 1
+    desc: Auditoría revisada
+tutor:
+- match: get-iam-policy
+  title: La exposición
+  why: 'allUsers con objectViewer: cualquiera en internet puede leer kyc/.'
+- match: remove-iam-policy-binding
+  title: Contener
+  why: Primero se cierra; las preguntas, después.
+- match: enable-enforce storage.publicAccessPrevention
+  title: El guardarraíl
+  why: Con la política aplicada, nadie puede volver a abrir un bucket del proyecto.
+- match: ticket escalate
+  title: ''
+  why: 'Datos personales expuestos: decide Seguridad (y quizá el regulador), no Soporte.'
+en:
+  title: SEC P1 · Customer ID documents reachable from the internet
+  summary: Marketing made a bucket public for a campaign without knowing it also held KYC documents. Contain, restore the guardrails and escalate to Security.
+  story: |-
+    **Project `{{.project}}`** (*zentra-onboarding-prod*).
+
+    > **SEC-41047 · P1** · *"PUBLIC_BUCKET_ACL finding: gs://zentra-onboarding-… allows allUsers to read. The bucket contains the kyc/ folder with customer ID documents."*
+
+    Exposed personal data = **security incident**. The order: **contain** (remove `allUsers`), **restore the guardrails** (public access prevention on the bucket and the project's organization policy), **keep the evidence** (audit logs) and **escalate** to Security: they decide whether the regulator must be notified. There are safe alternatives for the banner (another bucket behind a load balancer or a signed URL), but that comes later.
+  objectives:
+  - Confirm the exposure
+  - Remove public access
+  - Restore the guardrails
+  - Find who did it and escalate to Security
+  hints:
+  - '`gcloud storage buckets get-iam-policy gs://zentra-onboarding-{{.project}}`'
+  - '`gcloud storage buckets update gs://zentra-onboarding-{{.project}} --public-access-prevention` and `gcloud resource-manager org-policies enable-enforce storage.publicAccessPrevention --project={{.project}}`'
+  ticket:
+    summary: 'PUBLIC_BUCKET_ACL finding: gs://zentra-onboarding-… allows allUsers to read. The bucket contains the kyc/ folder with customer ID documents.'
+  text:
+    Security Command Center: Security Command Center
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    'Si hay datos de clientes expuestos, es un incidente de seguridad: contén primero y avísanos.': 'If customer data is exposed, it''s a security incident: contain first and tell us.'
+    ? 'Quita el acceso público ya, vuelve a aplicar la prevención de acceso público y escálanos el ticket: el CSIRT revisa quién descargó qué y si hay que notificar.'
+    : 'Remove public access now, re-apply public access prevention and escalate the ticket to us: the CSIRT checks who downloaded what and whether to notify.'
+    Equipo de Marketing: Marketing team
+    Lanzan campañas.: They launch campaigns.
+    Necesitábamos que el banner de la campaña se viera en la web.: We needed the campaign banner to show on the website.
+    ? Nuestra automatización quitó la prevención de acceso público del proyecto y abrió el bucket para el banner. No sabíamos que kyc/ estaba ahí.
+    : Our automation removed the project's public access prevention and opened the bucket for the banner. We didn't know kyc/ was there.
+    Exposición contenida: Exposure contained
+    Ya no es legible desde internet: No longer readable from the internet
+    Prevención de acceso público en el bucket: Public access prevention on the bucket
+    Guardarraíl recuperado: Guardrail restored
+    Política de organización aplicada de nuevo: Organization policy enforced again
+    Evidencia intacta: Evidence intact
+    El bucket y su contenido se conservan: The bucket and its contents are kept
+    Escalado a Seguridad: Escalated to Security
+    Escalado con el contexto: Escalated with context
+    Auditoría revisada: Audit checked
+    La exposición: The exposure
+    'allUsers con objectViewer: cualquiera en internet puede leer kyc/.': 'allUsers with objectViewer: anyone on the internet can read kyc/.'
+    Contener: Contain
+    Primero se cierra; las preguntas, después.: Close it first; questions later.
+    El guardarraíl: The guardrail
+    Con la política aplicada, nadie puede volver a abrir un bucket del proyecto.: With the policy enforced, nobody can open a project bucket again.
+    'Datos personales expuestos: decide Seguridad (y quizá el regulador), no Soporte.': 'Exposed personal data: Security decides (and maybe the regulator), not Support.'

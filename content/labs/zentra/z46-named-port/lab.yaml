@@ -1,0 +1,177 @@
+id: zentra-z46-named-port
+title: 'INC P2 · Simulador de préstamos: 502 tras recrear el grupo de instancias'
+summary: El backend service busca el puerto con nombre «http», y el grupo de instancias ya no lo tiene. Sin puerto con nombre, el balanceador no sabe a qué puerto ir.
+track: zentra
+day: 46
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.lb
+- compute.mig
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create prestamos-web --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=prestamos-web --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-health-checks --network=zentra-vpc --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=prestamos-web
+  gcloud compute instance-groups unmanaged create prestamos-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances prestamos-ig --instances=prestamos-web --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports prestamos-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute health-checks create http prestamos-hc --port=80 --request-path=/
+  gcloud compute backend-services create prestamos-be --protocol=HTTP --port-name=http --health-checks=prestamos-hc --global
+  gcloud compute backend-services add-backend prestamos-be --instance-group=prestamos-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create prestamos-map --default-service=prestamos-be
+  gcloud compute target-http-proxies create prestamos-proxy --url-map=prestamos-map
+  gcloud compute forwarding-rules create prestamos-lb --global --target-http-proxy=prestamos-proxy --ports=80
+faults:
+- type: named_port_remove
+  group: prestamos-ig
+traffic:
+- name: prestamos
+  target: lb:prestamos-lb
+  path: /
+  rps: 10
+ticket:
+  id: INC-31046
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo de Préstamos
+  summary: Ayer recreamos el grupo de instancias del simulador de préstamos con Terraform y desde entonces el balanceador da 502. Las VMs están bien, el cortafuegos no se ha tocado.
+actors:
+- role: dev
+  name: Equipo de Préstamos
+  persona: Mantienen el simulador.
+  fallback: En el Terraform nuevo del grupo solo pusimos las instancias.
+  facts:
+  - keywords:
+    - - named
+      - puerto con nombre
+      - named-port
+      - http
+      - puerto
+      - port
+    answer: ¿Puerto con nombre? No sabíamos que hacía falta… En el Terraform viejo había un named_port http:80.
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-prestamos-prod*).
+
+  > **INC-31046 · P2** · *«Ayer recreamos el grupo de instancias del simulador de préstamos con Terraform y desde entonces el balanceador da 502. Las VMs están bien, el cortafuegos no se ha tocado.»*
+
+  Un **backend service** no apunta a un número de puerto, sino a un **puerto con nombre** (`--port-name=http`). Cada grupo de instancias traduce ese nombre a un número (`http:80`). Compara lo que espera el backend service con lo que tiene el grupo.
+objectives:
+- Mira la salud del backend
+- Compara el puerto con nombre
+- Añade el puerto con nombre al grupo
+- Valida y pide que vaya al Terraform
+hints:
+- text: '`gcloud compute backend-services describe prestamos-be --global --format=''value(portName)''` y `gcloud compute instance-groups get-named-ports prestamos-ig --zone={{.zone}}`'
+- text: '`gcloud compute instance-groups set-named-ports prestamos-ig --named-ports=http:80 --zone={{.zone}}`'
+solution: |
+  ticket
+  gcloud compute backend-services get-health prestamos-be --global
+  gcloud compute backend-services describe prestamos-be --global
+  gcloud compute instance-groups get-named-ports prestamos-ig --zone={{.zone}}
+  ask dev "¿el Terraform nuevo del grupo define el puerto con nombre?"
+  gcloud compute instance-groups set-named-ports prestamos-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute backend-services get-health prestamos-be --global
+  ticket comment "Causa: al recrear prestamos-ig con Terraform se perdió el puerto con nombre http:80; prestamos-be usa port-name=http y no sabía a qué puerto enviar. Añadido http:80. Pedido a Préstamos que lo incluya en su Terraform (named_port) para que no se pierda en la próxima aplicación."
+  ticket update "Resuelto: el simulador de préstamos vuelve a funcionar. A la nueva configuración del grupo de servidores le faltaba un dato que el balanceador necesita; lo hemos añadido."
+  ticket resolve "Añadido el puerto con nombre http:80 a prestamos-ig; backend sano y web respondiendo."
+shortcuts:
+- name: restart the VM
+  run: |
+    gcloud compute instances reset prestamos-web --zone={{.zone}}
+    ticket resolve "Reiniciada la VM del simulador de préstamos."
+rubric:
+- name: Web recuperada
+  validator: functional
+  points: 45
+  critical: true
+  checks:
+  - type: http
+    target: lb:prestamos-lb
+    path: /
+    status: 200
+    desc: El balanceador responde
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  checks:
+  - type: command
+    regex: get-named-ports|backend-services describe
+    min: 1
+    desc: Puerto con nombre revisado
+- name: Documentado
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - named
+      - puerto con nombre
+      - http:80
+    - - terraform
+    desc: Nota con la causa y la prevención
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: get-named-ports
+  title: El grupo
+  why: 'Vacío: el grupo no sabe qué es «http».'
+- match: set-named-ports
+  title: ''
+  why: 'http:80: el backend service ya sabe a qué puerto ir.'
+en:
+  title: 'INC P2 · Loan simulator: 502 after re-creating the instance group'
+  summary: The backend service looks for the named port "http", and the instance group no longer has it. Without the named port, the load balancer doesn't know which port to use.
+  story: |-
+    **Project `{{.project}}`** (*zentra-prestamos-prod*).
+
+    > **INC-31046 · P2** · *"Yesterday we re-created the loan simulator's instance group with Terraform and since then the load balancer returns 502. The VMs are fine, the firewall wasn't touched."*
+
+    A **backend service** doesn't point to a port number but to a **named port** (`--port-name=http`). Each instance group translates that name into a number (`http:80`). Compare what the backend service expects with what the group has.
+  objectives:
+  - Check backend health
+  - Compare the named port
+  - Add the named port to the group
+  - Validate and ask for it in Terraform
+  hints:
+  - '`gcloud compute backend-services describe prestamos-be --global --format=''value(portName)''` and `gcloud compute instance-groups get-named-ports prestamos-ig --zone={{.zone}}`'
+  - '`gcloud compute instance-groups set-named-ports prestamos-ig --named-ports=http:80 --zone={{.zone}}`'
+  ticket:
+    summary: Yesterday we re-created the loan simulator's instance group with Terraform and since then the load balancer returns 502. The VMs are fine, the firewall wasn't touched.
+  text:
+    Equipo de Préstamos: Loans team
+    Mantienen el simulador.: They maintain the simulator.
+    En el Terraform nuevo del grupo solo pusimos las instancias.: In the group's new Terraform we only put the instances.
+    ¿Puerto con nombre? No sabíamos que hacía falta… En el Terraform viejo había un named_port http:80.: Named port? We didn't know it was needed… The old Terraform had a named_port http:80.
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Web recuperada: Website back
+    El balanceador responde: The load balancer responds
+    Diagnóstico: Diagnosis
+    Puerto con nombre revisado: Named port checked
+    Documentado: Documented
+    Nota con la causa y la prevención: Note with the cause and the prevention
+    Ticket cerrado: Ticket closed
+    El grupo: The group
+    'Vacío: el grupo no sabe qué es «http».': 'Empty: the group doesn''t know what "http" is.'
+    'http:80: el backend service ya sabe a qué puerto ir.': 'http:80: the backend service now knows which port to use.'

@@ -36,3 +36,32 @@ func TestDiskGrowNeedsGuestResize(t *testing.T) {
 		t.Fatalf("reboot should grow the file system, got %d", o.DiskGB)
 	}
 }
+
+func TestRetentionLockSnapshotRestoreAndZoneDown(t *testing.T) {
+	s := newTestSession()
+	run(t, s, "gcloud storage buckets create gs://regs --location=EU")
+	if out := run(t, s, "gcloud storage buckets update gs://regs --lock-retention-period"); !strings.Contains(out, "no retention policy") {
+		t.Fatalf("locking without a policy should fail: %s", out)
+	}
+	run(t, s, "gcloud storage buckets update gs://regs --retention-period=10y")
+	run(t, s, "gcloud storage buckets update gs://regs --lock-retention-period")
+	if out := run(t, s, "gcloud storage buckets update gs://regs --retention-period=1d"); !strings.Contains(out, "locked") {
+		t.Fatalf("a locked policy can't be shortened: %s", out)
+	}
+	if out := run(t, s, "gcloud storage buckets update gs://regs --clear-retention-period"); !strings.Contains(out, "locked") {
+		t.Fatalf("a locked policy can't be removed: %s", out)
+	}
+
+	run(t, s, "gcloud compute networks create vpc --subnet-mode=custom")
+	run(t, s, "gcloud compute networks subnets create apps --network=vpc --range=10.1.0.0/24 --region=europe-west1")
+	run(t, s, "gcloud compute instances create batch --zone=europe-west1-b --machine-type=e2-small --subnet=apps --no-address")
+	run(t, s, "gcloud compute disks snapshot batch --zone=europe-west1-b --snapshot-names=batch-snap")
+	s.State.Extra["outage:europe-west1-b"] = "down"
+	if out := run(t, s, "gcloud compute instances create batch2 --zone=europe-west1-b --machine-type=e2-small --subnet=apps --no-address"); !strings.Contains(out, "unavailable") {
+		t.Fatalf("creating in a downed zone should fail: %s", out)
+	}
+	run(t, s, "gcloud compute instances create batch-c --zone=europe-west1-c --source-snapshot=batch-snap --machine-type=e2-small --subnet=apps --no-address")
+	if d := s.State.Projects["lab-proj"].Disks["batch-c"]; d == nil || d.Snapshot != "batch-snap" {
+		t.Fatal("boot disk should come from the snapshot")
+	}
+}

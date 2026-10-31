@@ -1,0 +1,171 @@
+id: zentra-z49-temporary-access
+title: REQ P3 · Acceso de administrador de Cloud SQL solo para la ventana del sábado
+summary: Diego necesita administrar Cloud SQL durante una ventana de mantenimiento. Se da con una condición de IAM que caduca sola, no «acordándose de quitarlo».
+track: zentra
+day: 49
+level: intermediate
+branch: iam
+type: challenge
+mode: production
+skills:
+- iam.conditions
+- iam.leastprivilege
+- iam.roles
+wellArchitected:
+- security
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-custom-2-7680 --region={{.region}} --no-assign-ip --network=zentra-vpc
+ticket:
+  id: REQ-21049
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Diego Ferrer (SRE)
+  summary: Este sábado 5 de septiembre (CHG-7802) actualizo la versión menor de ledger-db y necesito Cloud SQL Admin en el proyecto durante la ventana, hasta el domingo 6 a las 00:00 UTC.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: Solo lo necesito durante la ventana del cambio.
+  facts:
+  - keywords:
+    - - cuando
+      - when
+      - hasta
+      - until
+      - ventana
+      - window
+      - domingo
+      - sunday
+    answer: Hasta el domingo 6 de septiembre a las 00:00 UTC. Ni un minuto más.
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios.
+  fallback: Los accesos elevados van ligados a un cambio aprobado.
+  facts:
+  - keywords:
+    - - chg-7802
+      - cambio
+      - change
+      - aprob
+      - approv
+    answer: CHG-7802 está aprobado para el sábado 5. El acceso debe caducar al terminar la ventana.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-ledger-prod*).
+
+  > **REQ-21049 · P3** · *«Este sábado 5 de septiembre (CHG-7802) actualizo la versión menor de ledger-db y necesito Cloud SQL Admin en el proyecto durante la ventana, hasta el domingo 6 a las 00:00 UTC.»*
+
+  En un banco los accesos elevados son **temporales y ligados a un cambio aprobado**. IAM permite añadir una **condición** a un permiso: con `request.time < timestamp("…")` el permiso deja de valer solo, sin depender de que alguien se acuerde de quitarlo. Comprueba el cambio, da el rol con la condición y deja la referencia en el ticket.
+objectives:
+- Comprueba el cambio aprobado
+- Da el rol con caducidad
+- Verifica que no es permanente
+- Responde con la fecha de fin
+hints:
+- text: '`--condition=''expression=request.time < timestamp("2026-09-06T00:00:00Z"),title=CHG-7802''`'
+solution: |
+  ticket
+  ask change "¿está aprobado el CHG-7802 para el sábado?"
+  ask sre "¿hasta cuándo necesitas el acceso exactamente?"
+  gcloud projects add-iam-policy-binding {{.project}} --member=user:diego.ferrer@zentra.dev --role=roles/cloudsql.admin --condition='expression=request.time < timestamp("2026-09-06T00:00:00Z"),title=CHG-7802,description=Ventana de mantenimiento de ledger-db'
+  gcloud projects get-iam-policy {{.project}} --flatten='bindings[].members' --filter='bindings.members:diego.ferrer@zentra.dev'
+  ticket update "Hola Diego: tienes Cloud SQL Admin en el proyecto hasta el domingo 6 de septiembre a las 00:00 UTC (condición de IAM CHG-7802). Caduca solo, no hace falta que lo pidas quitar."
+  ticket resolve "Dado roles/cloudsql.admin a Diego con condición request.time < 2026-09-06T00:00Z ligada a CHG-7802."
+shortcuts:
+- name: permanent grant
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:diego.ferrer@zentra.dev --role=roles/cloudsql.admin
+    ticket resolve "Dado Cloud SQL Admin a Diego; lo quitamos el lunes."
+rubric:
+- name: Diego puede trabajar
+  validator: functional
+  points: 30
+  checks:
+  - type: iam
+    principal: user:diego.ferrer@zentra.dev
+    permission: cloudsql.instances.update
+    resource: project
+    desc: Puede administrar Cloud SQL durante la ventana
+- name: Acceso que caduca
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: iamPolicy
+    expect:
+      bindings:
+        regex: cloudsql.admin.*request.time|request.time.*cloudsql.admin
+    desc: El rol lleva condición de caducidad
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Sin roles básicos
+- name: Ligado al cambio
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio comprobado
+  - type: ticket_update
+    keywords:
+    - - '2026-09-06'
+      - domingo
+      - sunday
+      - 00:00
+    - - caduca
+      - expir
+      - condici
+    desc: Respuesta con la fecha de fin
+tutor:
+- match: --condition
+  title: La condición
+  why: 'request.time < timestamp(…): a partir de esa hora IAM deja de conceder el rol.'
+en:
+  title: REQ P3 · Cloud SQL admin access only for Saturday's window
+  summary: Diego needs to administer Cloud SQL during a maintenance window. It's granted with an IAM condition that expires by itself, not by "remembering to remove it".
+  story: |-
+    **Project `{{.project}}`** (*zentra-ledger-prod*).
+
+    > **REQ-21049 · P3** · *"This Saturday 5 September (CHG-7802) I'm upgrading ledger-db's minor version and need Cloud SQL Admin on the project during the window, until Sunday 6 at 00:00 UTC."*
+
+    In a bank, elevated access is **temporary and tied to an approved change**. IAM lets you add a **condition** to a grant: with `request.time < timestamp("…")` the permission stops working by itself, without relying on someone remembering to remove it. Check the change, grant the role with the condition and leave the reference in the ticket.
+  objectives:
+  - Check the approved change
+  - Grant the role with an expiry
+  - Verify it isn't permanent
+  - Reply with the end date
+  hints:
+  - '`--condition=''expression=request.time < timestamp("2026-09-06T00:00:00Z"),title=CHG-7802''`'
+  ticket:
+    summary: This Saturday 5 September (CHG-7802) I'm upgrading ledger-db's minor version and need Cloud SQL Admin on the project during the window, until Sunday 6 at 00:00 UTC.
+  text:
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    Solo lo necesito durante la ventana del cambio.: I only need it during the change window.
+    Hasta el domingo 6 de septiembre a las 00:00 UTC. Ni un minuto más.: Until Sunday 6 September at 00:00 UTC. Not a minute more.
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios.: Change manager.
+    Los accesos elevados van ligados a un cambio aprobado.: Elevated access is tied to an approved change.
+    CHG-7802 está aprobado para el sábado 5. El acceso debe caducar al terminar la ventana.: CHG-7802 is approved for Saturday 5th. The access must expire when the window ends.
+    Diego puede trabajar: Diego can work
+    Puede administrar Cloud SQL durante la ventana: Can administer Cloud SQL during the window
+    Acceso que caduca: Expiring access
+    El rol lleva condición de caducidad: The role carries an expiry condition
+    Sin roles básicos: No basic roles
+    Ligado al cambio: Tied to the change
+    Cambio comprobado: Change checked
+    Respuesta con la fecha de fin: Reply with the end date
+    La condición: The condition
+    'request.time < timestamp(…): a partir de esa hora IAM deja de conceder el rol.': 'request.time < timestamp(…): from that time on IAM stops granting the role.'
