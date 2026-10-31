@@ -1,0 +1,210 @@
+id: zentra-t01-what-is-cloud
+title: Taller 1 · ¿Qué es la nube? Proyectos, regiones y servicios
+summary: 'Lo mínimo para empezar: qué es un proyecto, dónde están físicamente las máquinas y qué es una API.'
+track: zentra
+day: 1
+level: basic
+branch: foundations
+type: guided
+mode: production
+skills:
+- foundations.hierarchy
+- foundations.cli
+- foundations.apis
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 20
+baseline:
+- zentra-core
+ticket:
+  id: FOR-0001
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Primer taller de formación: entiende qué es Google Cloud y cómo se organiza antes de tocar nada.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  **¿Qué es «la nube»?** Ordenadores de Google, en centros de datos repartidos por el mundo, que alquilas por minutos. No compras servidores: los pides con un comando o un clic y pagas por lo que usas.
+
+  **1 · El proyecto.** Todo lo que creas vive dentro de un **proyecto**: es la «carpeta» que agrupa recursos, permisos y factura. Tiene un **nombre** (para personas), un **ID** (único en todo Google, el que usan los comandos) y un **número**.
+  `gcloud config list` → con qué cuenta y en qué proyecto trabaja tu terminal.
+  `gcloud projects describe {{.project}}` → nombre, ID y número del proyecto.
+
+  **2 · Regiones y zonas.** Una **región** es una ciudad o zona geográfica (por ejemplo `europe-west1`, Bélgica). Cada región tiene varias **zonas** (`europe-west1-b`, `-c`, `-d`): edificios separados para que, si uno falla, los demás sigan.
+  `gcloud compute regions list` → todas las regiones.
+  `gcloud compute zones list --filter="region:europe-west1"` → las zonas de una región.
+
+  **3 · Servicios y APIs.** Cada producto (máquinas virtuales, bases de datos, almacenamiento…) se usa a través de su **API**, que se activa por proyecto.
+  `gcloud services list --enabled` → qué servicios están activos aquí.
+
+  **4 · Contesta** las preguntas y cierra con `ticket resolve "…"` contando lo que has aprendido.
+objectives:
+- Mira en qué proyecto estás
+- Distingue región y zona
+- Mira qué servicios están activos
+- Responde y cierra
+hints:
+- text: '`gcloud config list`'
+- text: '`gcloud compute zones list --filter="region:europe-west1"`'
+quiz:
+- id: q1
+  question: ¿Qué identificador usan los comandos para referirse a un proyecto?
+  options:
+  - El ID del proyecto
+  - El nombre visible
+  - El correo del dueño
+  - La región
+  answer:
+  - 0
+- id: q2
+  question: europe-west1-b es…
+  options:
+  - Una zona de la región europe-west1
+  - Una región
+  - Un proyecto
+  - Una red
+  answer:
+  - 0
+- id: q3
+  question: Para usar un producto en un proyecto, antes hay que…
+  options:
+  - Activar su API
+  - Comprar un servidor
+  - Crear una región
+  - Reiniciar Cloud Shell
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud config list
+  gcloud projects describe {{.project}}
+  gcloud compute regions list
+  gcloud compute zones list --filter="region:europe-west1"
+  gcloud services list --enabled
+  ticket resolve "Taller 1 hecho: el proyecto agrupa recursos, permisos y factura; una región tiene varias zonas y cada producto se usa activando su API."
+shortcuts:
+- name: close without exploring
+  run: |
+    ticket resolve "Taller hecho sin mirar nada, ya lo veré más adelante."
+rubric:
+- name: Has explorado
+  validator: diagnosis
+  points: 55
+  critical: true
+  all: true
+  checks:
+  - type: command
+    regex: config list|projects describe
+    min: 1
+    desc: Proyecto y cuenta
+  - type: command
+    regex: regions list|zones list
+    min: 1
+    desc: Regiones y zonas
+  - type: command
+    regex: services list
+    min: 1
+    desc: Servicios activos
+- name: Lo has entendido
+  validator: quiz
+  points: 30
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: config list
+  title: ¿Dónde estoy?
+  why: 'Tu cuenta y el proyecto activo: todo lo que hagas irá a ese proyecto.'
+- match: projects describe
+  title: El proyecto
+  why: name es para personas; projectId es el que usan los comandos; projectNumber, el número interno.
+- match: zones list
+  title: Zonas
+  why: 'Tres edificios de la misma región: si uno cae, los otros siguen.'
+- match: services list
+  title: APIs
+  why: Cada línea es un producto activado en este proyecto.
+en:
+  title: Workshop 1 · What is the cloud? Projects, regions and services
+  summary: 'The minimum to start: what a project is, where the machines physically are and what an API is.'
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    **What is "the cloud"?** Google's computers, in data centres around the world, rented by the minute. You don't buy servers: you ask for them with a command or a click and pay for what you use.
+
+    **1 · The project.** Everything you create lives inside a **project**: the "folder" that groups resources, permissions and billing. It has a **name** (for people), an **ID** (unique across Google, the one commands use) and a **number**.
+    `gcloud config list` → which account and project your terminal uses.
+    `gcloud projects describe {{.project}}` → the project's name, ID and number.
+
+    **2 · Regions and zones.** A **region** is a city or geographic area (e.g. `europe-west1`, Belgium). Each region has several **zones** (`europe-west1-b`, `-c`, `-d`): separate buildings so that if one fails, the others keep going.
+    `gcloud compute regions list` → every region.
+    `gcloud compute zones list --filter="region:europe-west1"` → a region's zones.
+
+    **3 · Services and APIs.** Each product (virtual machines, databases, storage…) is used through its **API**, enabled per project.
+    `gcloud services list --enabled` → which services are enabled here.
+
+    **4 · Answer** the questions and close with `ticket resolve "…"` telling what you learned.
+  objectives:
+  - See which project you're in
+  - Tell region from zone
+  - See which services are enabled
+  - Answer and close
+  hints:
+  - '`gcloud config list`'
+  - '`gcloud compute zones list --filter="region:europe-west1"`'
+  ticket:
+    summary: 'First training workshop: understand what Google Cloud is and how it''s organised before touching anything.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    ¿Qué identificador usan los comandos para referirse a un proyecto?: Which identifier do commands use to refer to a project?
+    El ID del proyecto: The project ID
+    El nombre visible: The display name
+    El correo del dueño: The owner's email
+    La región: The region
+    europe-west1-b es…: europe-west1-b is…
+    Una zona de la región europe-west1: A zone in the europe-west1 region
+    Una región: A region
+    Un proyecto: A project
+    Una red: A network
+    Para usar un producto en un proyecto, antes hay que…: To use a product in a project, first you must…
+    Activar su API: Enable its API
+    Comprar un servidor: Buy a server
+    Crear una región: Create a region
+    Reiniciar Cloud Shell: Restart Cloud Shell
+    Has explorado: You explored
+    Proyecto y cuenta: Project and account
+    Regiones y zonas: Regions and zones
+    Servicios activos: Enabled services
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    ¿Dónde estoy?: Where am I?
+    'Tu cuenta y el proyecto activo: todo lo que hagas irá a ese proyecto.': 'Your account and the active project: everything you do goes there.'
+    El proyecto: The project
+    name es para personas; projectId es el que usan los comandos; projectNumber, el número interno.: name is for people; projectId is what commands use; projectNumber, the internal number.
+    Zonas: Zones
+    'Tres edificios de la misma región: si uno cae, los otros siguen.': 'Three buildings in the same region: if one goes down, the others keep running.'
+    APIs: APIs
+    Cada línea es un producto activado en este proyecto.: Each line is a product enabled in this project.

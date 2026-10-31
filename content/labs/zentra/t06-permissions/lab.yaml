@@ -1,0 +1,198 @@
+id: zentra-t06-permissions
+title: 'Taller 6 · Permisos desde cero: quién, qué rol, sobre qué'
+summary: Un permiso en Google Cloud tiene tres partes. Dale al equipo de Soporte lectura de un bucket, y nada más.
+track: zentra
+day: 6
+level: basic
+branch: iam
+type: guided
+mode: production
+skills:
+- iam.roles
+- iam.leastprivilege
+wellArchitected:
+- security
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud storage buckets create gs://zentra-manuales-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  echo "manual" > manual.pdf
+  gcloud storage cp manual.pdf gs://zentra-manuales-{{.project}}/manual.pdf
+ticket:
+  id: FOR-0006
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Sexto taller: el equipo de Soporte (gcp-soporte@zentra.dev) necesita leer los manuales de gs://zentra-manuales-…, solo leer.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  Un permiso en Google Cloud (IAM) siempre responde a **tres preguntas**:
+
+  1. **¿Quién?** El *principal*: una persona (`user:`), un **grupo** (`group:`) o una cuenta de servicio de una aplicación (`serviceAccount:`).
+  2. **¿Qué puede hacer?** Un **rol**: un paquete de permisos. `roles/storage.objectViewer` = leer objetos; `roles/storage.admin` = hacer de todo.
+  3. **¿Sobre qué?** El **recurso**: todo el proyecto, o solo un bucket, un secreto…
+
+  **Normas de Zentra:** permisos **a grupos** (no a personas), con el **rol más pequeño** que sirva y sobre el **recurso concreto**.
+
+  **1 · Mira quién tiene acceso** al proyecto: `gcloud projects get-iam-policy {{.project}}`.
+  **2 · Y al bucket:** `gcloud storage buckets get-iam-policy gs://zentra-manuales-{{.project}}`.
+  **3 · Da el permiso:** `gcloud storage buckets add-iam-policy-binding gs://zentra-manuales-{{.project}} --member=group:gcp-soporte@zentra.dev --role=roles/storage.objectViewer`.
+  **4 · Comprueba** que Pablo (de Soporte) puede leer: `gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/zentra-manuales-{{.project}} --principal-email=pablo.costa@zentra.dev --permission=storage.objects.get`.
+objectives:
+- Mira la política del proyecto y del bucket
+- Da lectura al grupo sobre el bucket
+- Comprueba con el solucionador de IAM
+- Responde y cierra
+hints:
+- text: '`--member=group:gcp-soporte@zentra.dev --role=roles/storage.objectViewer` sobre el bucket, no sobre el proyecto.'
+quiz:
+- id: q1
+  question: Las tres partes de un permiso son…
+  options:
+  - Quién, qué rol y sobre qué recurso
+  - Usuario, contraseña y región
+  - Proyecto, zona y API
+  - Grupo, etiqueta y puerto
+  answer:
+  - 0
+- id: q2
+  question: ¿Por qué se dan los permisos a grupos?
+  options:
+  - Para gestionarlos al entrar o salir alguien sin tocar IAM
+  - Porque los usuarios no pueden tener permisos
+  - Porque es más barato
+  - Porque lo exige Linux
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud projects get-iam-policy {{.project}}
+  gcloud storage buckets get-iam-policy gs://zentra-manuales-{{.project}}
+  gcloud storage buckets add-iam-policy-binding gs://zentra-manuales-{{.project}} --member=group:gcp-soporte@zentra.dev --role=roles/storage.objectViewer
+  gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/zentra-manuales-{{.project}} --principal-email=pablo.costa@zentra.dev --permission=storage.objects.get
+  ticket resolve "Taller 6 hecho: gcp-soporte tiene storage.objectViewer solo sobre el bucket de manuales; Pablo puede leer y nadie más gana permisos."
+shortcuts:
+- name: admin on the project
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-soporte@zentra.dev --role=roles/storage.admin
+    ticket resolve "Dado acceso de almacenamiento a Soporte en todo el proyecto."
+rubric:
+- name: Soporte puede leer
+  validator: functional
+  points: 30
+  checks:
+  - type: iam
+    principal: user:pablo.costa@zentra.dev
+    permission: storage.objects.get
+    resource: bucket:zentra-manuales-{{.project}}
+    desc: Pablo lee los manuales (por su grupo)
+- name: Y nada más
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:pablo.costa@zentra.dev
+    permission: storage.objects.delete
+    resource: bucket:zentra-manuales-{{.project}}
+    expect: false
+    desc: No puede borrar
+  - type: iam
+    principal: user:pablo.costa@zentra.dev
+    permission: storage.buckets.create
+    resource: project
+    expect: false
+    desc: Sin permisos en el proyecto
+- name: Lo has entendido
+  validator: quiz
+  points: 25
+  checks:
+  - type: quiz
+    ratio: 0.5
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: projects get-iam-policy
+  title: La política
+  why: Cada «binding» es un rol y la lista de quién lo tiene.
+- match: buckets add-iam-policy-binding
+  title: Dar el permiso
+  why: 'Grupo + rol de lectura + este bucket: las tres preguntas respondidas.'
+- match: troubleshoot-policy
+  title: Comprobar
+  why: El solucionador dice si Pablo puede, y por qué rol.
+en:
+  title: 'Workshop 6 · Permissions from zero: who, which role, on what'
+  summary: A Google Cloud permission has three parts. Give the Support team read access to one bucket, and nothing more.
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    A Google Cloud permission (IAM) always answers **three questions**:
+
+    1. **Who?** The *principal*: a person (`user:`), a **group** (`group:`) or an application's service account (`serviceAccount:`).
+    2. **What can they do?** A **role**: a bundle of permissions. `roles/storage.objectViewer` = read objects; `roles/storage.admin` = do everything.
+    3. **On what?** The **resource**: the whole project, or just a bucket, a secret…
+
+    **Zentra rules:** permissions **to groups** (not people), with the **smallest role** that works and on the **specific resource**.
+
+    **1 · See who has access** to the project: `gcloud projects get-iam-policy {{.project}}`.
+    **2 · And to the bucket:** `gcloud storage buckets get-iam-policy gs://zentra-manuales-{{.project}}`.
+    **3 · Grant it:** `gcloud storage buckets add-iam-policy-binding gs://zentra-manuales-{{.project}} --member=group:gcp-soporte@zentra.dev --role=roles/storage.objectViewer`.
+    **4 · Check** that Pablo (Support) can read: `gcloud policy-intelligence troubleshoot-policy iam //storage.googleapis.com/projects/_/buckets/zentra-manuales-{{.project}} --principal-email=pablo.costa@zentra.dev --permission=storage.objects.get`.
+  objectives:
+  - Look at the project and bucket policies
+  - Give the group read access on the bucket
+  - Check with the IAM troubleshooter
+  - Answer and close
+  hints:
+  - '`--member=group:gcp-soporte@zentra.dev --role=roles/storage.objectViewer` on the bucket, not the project.'
+  ticket:
+    summary: 'Sixth workshop: the Support team (gcp-soporte@zentra.dev) needs to read the manuals in gs://zentra-manuales-…, read only.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    Las tres partes de un permiso son…: The three parts of a permission are…
+    Quién, qué rol y sobre qué recurso: Who, which role and on which resource
+    Usuario, contraseña y región: User, password and region
+    Proyecto, zona y API: Project, zone and API
+    Grupo, etiqueta y puerto: Group, tag and port
+    ¿Por qué se dan los permisos a grupos?: Why are permissions given to groups?
+    Para gestionarlos al entrar o salir alguien sin tocar IAM: To manage them when someone joins or leaves without touching IAM
+    Porque los usuarios no pueden tener permisos: Because users can't have permissions
+    Porque es más barato: Because it's cheaper
+    Porque lo exige Linux: Because Linux requires it
+    Soporte puede leer: Support can read
+    Pablo lee los manuales (por su grupo): Pablo reads the manuals (through his group)
+    Y nada más: And nothing more
+    No puede borrar: Can't delete
+    Sin permisos en el proyecto: No project permissions
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    La política: The policy
+    Cada «binding» es un rol y la lista de quién lo tiene.: Each binding is a role and the list of who has it.
+    Dar el permiso: Grant it
+    'Grupo + rol de lectura + este bucket: las tres preguntas respondidas.': 'Group + read role + this bucket: the three questions answered.'
+    Comprobar: Check
+    El solucionador dice si Pablo puede, y por qué rol.: The troubleshooter says whether Pablo can, and through which role.

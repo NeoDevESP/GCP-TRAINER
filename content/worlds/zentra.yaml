@@ -640,6 +640,15 @@ sections:
     **The method for every ticket:** impact → evidence → real identity → recent changes → one hypothesis → validate from the source → document.
   cards:
   - title:
+    - 'Semana 0 · Desde cero'
+    - 'Week 0 · From zero'
+    text:
+    - 'Diez talleres guiados para quien nunca ha tocado la nube: cada concepto explicado antes del comando.'
+    - 'Ten guided workshops for someone who has never touched the cloud: each concept explained before the command.'
+    meta:
+    - 'Nivel inicial · 10 talleres'
+    - 'Starter level · 10 workshops'
+  - title:
     - 'Semana 1 · Bienvenida'
     - 'Week 1 · Welcome'
     text:

@@ -1,0 +1,227 @@
+id: zentra-t10-week0-test
+title: Prueba de la semana 0 · Prepara el entorno de la nueva compañera
+summary: 'Sin tutor: un bucket con los estándares, el permiso justo para su grupo y una regla de cortafuegos mínima. Todo lo de la semana junto.'
+track: zentra
+day: 10
+level: basic
+branch: foundations
+type: challenge
+mode: production
+skills:
+- storage.buckets
+- iam.roles
+- networking.firewall
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+difficulty: 2
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create panel-formacion --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=panel-formacion --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create puesto-lucia --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=puesto-producto
+ticket:
+  id: FOR-0010
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Lucía (gcp-pagos-dev@zentra.dev) empieza el lunes. Necesita: 1) un bucket gs://zentra-lucia-{{.project}} con los estándares del banco donde su grupo pueda leer; 2) que su puesto (etiqueta puesto-producto) vea el panel de formación (panel-formacion, puerto 80).'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🎯 **Prueba de la semana 0.** Esta vez sin pasos: aplica lo aprendido. Si dudas de un comando, vuelve a los talleres o añade `--help`.
+
+  **Proyecto `{{.project}}`.** Lucía (grupo `gcp-pagos-dev@zentra.dev`) empieza el lunes y necesita:
+
+  1. Un bucket `gs://zentra-lucia-{{.project}}` con **los estándares de Zentra** (UE, acceso uniforme, sin acceso público) donde **su grupo pueda leer** (solo leer).
+  2. Que su puesto (las VMs con la etiqueta `puesto-producto`) **vea el panel** `panel-formacion` en el **puerto 80**, sin abrirlo a nadie más.
+
+  Al terminar, responde las preguntas y cierra el ticket con una nota de lo que has hecho.
+objectives:
+- Bucket con los estándares
+- Lectura para su grupo
+- Regla mínima al panel
+- Responde y cierra
+hints:
+- text: Repasa los talleres 5, 6 y 7.
+quiz:
+- id: q1
+  question: Un /24 tiene…
+  options:
+  - 256 direcciones
+  - 24 direcciones
+  - 1024 direcciones
+  - Una sola dirección
+  answer:
+  - 0
+- id: q2
+  question: ¿Dónde miras quién borró algo?
+  options:
+  - En los registros de auditoría
+  - En df -h
+  - En la lista de regiones
+  - En el bucket
+  answer:
+  - 0
+- id: q3
+  question: ¿Qué verbo de gcloud solo lee?
+  options:
+  - describe
+  - create
+  - delete
+  - update
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud storage buckets create gs://zentra-lucia-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  gcloud storage buckets update gs://zentra-lucia-{{.project}} --update-labels=equipo=pagos,uso=formacion
+  gcloud storage buckets add-iam-policy-binding gs://zentra-lucia-{{.project}} --member=group:gcp-pagos-dev@zentra.dev --role=roles/storage.objectViewer
+  gcloud compute firewall-rules create allow-puesto-a-panel-formacion --network=zentra-vpc --allow=tcp:80 --source-tags=puesto-producto --target-tags=panel-formacion
+  gcloud compute ssh puesto-lucia --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 3 http://panel-formacion'
+  ticket resolve "Prueba de la semana 0: bucket zentra-lucia en la UE, uniforme y sin acceso público con lectura para gcp-pagos-dev; regla de puesto-producto a panel-formacion solo en tcp:80."
+shortcuts:
+- name: wide open
+  run: |
+    gcloud storage buckets create gs://zentra-lucia-{{.project}} --location=EU
+    gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-pagos-dev@zentra.dev --role=roles/storage.admin
+    gcloud compute firewall-rules create allow-80-todos --network=zentra-vpc --allow=tcp:80 --source-ranges=0.0.0.0/0
+    ticket resolve "Preparado el entorno de Lucía con acceso amplio para que no tenga problemas."
+rubric:
+- name: Bucket
+  validator: security
+  points: 25
+  critical: true
+  checks:
+  - type: exists
+    path: buckets["zentra-lucia-{{.project}}"]
+    expect:
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      location:
+        regex: (?i)^eu
+    desc: UE, uniforme y sin acceso público
+- name: Permiso justo
+  validator: security
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:lucia.navarro@zentra.dev
+    permission: storage.objects.get
+    resource: bucket:zentra-lucia-{{.project}}
+    desc: Su grupo puede leer
+  - type: iam
+    principal: user:lucia.navarro@zentra.dev
+    permission: storage.objects.delete
+    resource: bucket:zentra-lucia-{{.project}}
+    expect: false
+    desc: Solo leer
+- name: Panel visible y nada más
+  validator: functional
+  points: 20
+  all: true
+  checks:
+  - type: http
+    from: vm:puesto-lucia
+    target: vm:panel-formacion:80
+    path: /
+    status: 200
+    desc: Su puesto ve el panel
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+    max: 0
+    desc: Nada abierto a internet
+- name: Lo has entendido
+  validator: quiz
+  points: 20
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 10
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: buckets create gs://zentra-lucia
+  title: Bucket
+  why: Los tres estándares del taller 7.
+- match: add-iam-policy-binding gs://zentra-lucia
+  title: Permiso
+  why: 'Grupo, rol de lectura y este bucket: taller 6.'
+- match: firewall-rules create allow-puesto
+  title: Cortafuegos
+  why: 'De etiqueta a etiqueta, un puerto: taller 5.'
+en:
+  title: Week 0 test · Set up the new colleague's environment
+  summary: 'No tutor: a bucket to standard, the right permission for her group and a minimal firewall rule. The whole week together.'
+  story: |-
+    > 🎯 **Week 0 test.** No steps this time: apply what you learned. If unsure about a command, go back to the workshops or add `--help`.
+
+    **Project `{{.project}}`.** Lucía (group `gcp-pagos-dev@zentra.dev`) starts on Monday and needs:
+
+    1. A bucket `gs://zentra-lucia-{{.project}}` to **Zentra's standards** (EU, uniform access, no public access) where **her group can read** (read only).
+    2. Her workstation (VMs with the `puesto-producto` tag) to **see the panel** `panel-formacion` on **port 80**, without opening it to anyone else.
+
+    When done, answer the questions and close the ticket with a note of what you did.
+  objectives:
+  - Bucket to standard
+  - Read access for her group
+  - Minimal rule to the panel
+  - Answer and close
+  hints:
+  - Review workshops 5, 6 and 7.
+  ticket:
+    summary: 'Lucía (gcp-pagos-dev@zentra.dev) starts on Monday. She needs: 1) a bucket gs://zentra-lucia-{{.project}} to the bank''s standards where her group can read; 2) her workstation (tag puesto-producto) to see the training panel (panel-formacion, port 80).'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    Un /24 tiene…: A /24 has…
+    256 direcciones: 256 addresses
+    24 direcciones: 24 addresses
+    1024 direcciones: 1,024 addresses
+    Una sola dirección: One address
+    ¿Dónde miras quién borró algo?: Where do you look for who deleted something?
+    En los registros de auditoría: In the audit logs
+    En df -h: In df -h
+    En la lista de regiones: In the region list
+    En el bucket: In the bucket
+    ¿Qué verbo de gcloud solo lee?: Which gcloud verb only reads?
+    describe: describe
+    create: create
+    delete: delete
+    update: update
+    Bucket: Bucket
+    UE, uniforme y sin acceso público: EU, uniform and no public access
+    Permiso justo: Right permission
+    Su grupo puede leer: Her group can read
+    Solo leer: Read only
+    Panel visible y nada más: Panel visible and nothing more
+    Su puesto ve el panel: Her workstation sees the panel
+    Nada abierto a internet: Nothing open to the internet
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    Los tres estándares del taller 7.: The three standards from workshop 7.
+    Permiso: Permission
+    'Grupo, rol de lectura y este bucket: taller 6.': 'Group, read role and this bucket: workshop 6.'
+    Cortafuegos: Firewall
+    'De etiqueta a etiqueta, un puerto: taller 5.': 'Tag to tag, one port: workshop 5.'

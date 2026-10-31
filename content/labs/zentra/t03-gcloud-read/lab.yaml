@@ -1,0 +1,205 @@
+id: zentra-t03-gcloud-read
+title: 'Taller 3 · gcloud: leer antes de tocar'
+summary: 'La regla de oro del soporte: mirar sin cambiar nada. list, describe, --format y --filter.'
+track: zentra
+day: 3
+level: basic
+branch: foundations
+type: guided
+mode: production
+skills:
+- foundations.cli
+- compute.vm
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create informes-1 --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --labels=equipo=riesgos
+  gcloud compute instances create batch-noche --zone={{.zone}} --machine-type=e2-standard-2 --subnet=datos --no-address --labels=equipo=pagos
+  gcloud compute instances create pruebas-ana --zone={{.region}}-c --machine-type=e2-micro --subnet=apps --no-address --labels=equipo=sre
+ticket:
+  id: FOR-0003
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Tercer taller: aprende a consultar con gcloud sin cambiar nada. Al final, apunta en vm.txt qué VM está en la subred «datos».'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  **gcloud** es la herramienta de línea de comandos de Google Cloud. Casi todos los comandos siguen el patrón `gcloud PRODUCTO RECURSO ACCIÓN`, por ejemplo `gcloud compute instances list`.
+
+  **Regla de oro en soporte: primero leer.** Los verbos `list` y `describe` **solo leen**; `create`, `update` y `delete` **cambian** cosas. En un banco nunca se cambia nada sin entender antes qué hay.
+
+  **1 · Listar.** `gcloud compute instances list` → todas las máquinas virtuales (VMs) del proyecto.
+
+  **2 · Elegir columnas con `--format`.** `gcloud compute instances list --format="table(name,zone,machineType,labels)"`.
+
+  **3 · Filtrar con `--filter`.** `gcloud compute instances list --filter="labels.equipo=pagos"` → solo las del equipo de Pagos.
+
+  **4 · El detalle con `describe`.** `gcloud compute instances describe batch-noche --zone={{.zone}}` → todo sobre una VM, incluida su subred (en `networkInterfaces`).
+
+  **5 · Ayuda.** Si dudas, añade `--help` a cualquier comando.
+
+  **Tarea:** escribe en `vm.txt` el nombre de la VM que está en la subred `datos` (por ejemplo `echo "nombre" > vm.txt`) y cierra.
+objectives:
+- Lista las VMs
+- Usa --format y --filter
+- Mira el detalle con describe
+- Anota la VM de «datos» y cierra
+hints:
+- text: La subred aparece en `networkInterfaces[0].subnetwork` del describe.
+quiz:
+- id: q1
+  question: ¿Qué verbos solo leen y no cambian nada?
+  options:
+  - list y describe
+  - create y delete
+  - update y patch
+  - start y stop
+  answer:
+  - 0
+- id: q2
+  question: Para ver solo las VMs del equipo de Pagos usas…
+  options:
+  - --filter="labels.equipo=pagos"
+  - --format=pagos
+  - --zone=pagos
+  - --help pagos
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud compute instances list
+  gcloud compute instances list --format="table(name,zone,machineType,labels)"
+  gcloud compute instances list --filter="labels.equipo=pagos"
+  gcloud compute instances describe batch-noche --zone={{.zone}}
+  echo "batch-noche" > vm.txt
+  ticket resolve "Taller 3 hecho: list y describe solo leen; con --format elijo columnas y con --filter filtro. La VM de la subred datos es batch-noche."
+shortcuts:
+- name: guess
+  run: |
+    echo "informes-1" > vm.txt
+    ticket resolve "Apuntada una VM de la lista sin comprobar su subred."
+rubric:
+- name: Respuesta correcta
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: file_contains
+    file: vm.txt
+    regex: batch-noche
+    desc: vm.txt dice batch-noche
+- name: Leer bien
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: --filter|--format
+    min: 1
+    desc: Has filtrado o elegido columnas
+  - type: command
+    regex: instances describe
+    min: 1
+    desc: Has mirado el detalle
+  - type: command
+    regex: instances (create|delete|stop|update)
+    max: 0
+    desc: Sin cambiar nada
+- name: Lo has entendido
+  validator: quiz
+  points: 25
+  checks:
+  - type: quiz
+    ratio: 0.5
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: instances list --format
+  title: Columnas
+  why: 'Solo lo que te interesa: nombre, zona, tipo y etiquetas.'
+- match: --filter
+  title: Filtrar
+  why: Las etiquetas (labels) dicen de qué equipo es cada cosa.
+- match: instances describe batch-noche
+  title: Detalle
+  why: En networkInterfaces → subnetwork verás «datos».
+en:
+  title: 'Workshop 3 · gcloud: read before you touch'
+  summary: 'Support''s golden rule: look without changing anything. list, describe, --format and --filter.'
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    **gcloud** is Google Cloud's command-line tool. Nearly every command follows `gcloud PRODUCT RESOURCE ACTION`, e.g. `gcloud compute instances list`.
+
+    **Support's golden rule: read first.** The verbs `list` and `describe` **only read**; `create`, `update` and `delete` **change** things. In a bank you never change anything before understanding what's there.
+
+    **1 · List.** `gcloud compute instances list` → every virtual machine (VM) in the project.
+
+    **2 · Choose columns with `--format`.** `gcloud compute instances list --format="table(name,zone,machineType,labels)"`.
+
+    **3 · Filter with `--filter`.** `gcloud compute instances list --filter="labels.equipo=pagos"` → only the Payments team's.
+
+    **4 · Detail with `describe`.** `gcloud compute instances describe batch-noche --zone={{.zone}}` → everything about a VM, including its subnet (in `networkInterfaces`).
+
+    **5 · Help.** If in doubt, add `--help` to any command.
+
+    **Task:** write in `vm.txt` the name of the VM in the `datos` subnet (e.g. `echo "name" > vm.txt`) and close.
+  objectives:
+  - List the VMs
+  - Use --format and --filter
+  - See the detail with describe
+  - Note the "datos" VM and close
+  hints:
+  - The subnet shows in the describe's `networkInterfaces[0].subnetwork`.
+  ticket:
+    summary: 'Third workshop: learn to query with gcloud without changing anything. At the end, write in vm.txt which VM is in the "datos" subnet.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    ¿Qué verbos solo leen y no cambian nada?: Which verbs only read and change nothing?
+    list y describe: list and describe
+    create y delete: create and delete
+    update y patch: update and patch
+    start y stop: start and stop
+    Para ver solo las VMs del equipo de Pagos usas…: To see only the Payments team's VMs you use…
+    --filter="labels.equipo=pagos": --filter="labels.equipo=pagos"
+    --format=pagos: --format=pagos
+    --zone=pagos: --zone=pagos
+    --help pagos: --help pagos
+    Respuesta correcta: Right answer
+    vm.txt dice batch-noche: vm.txt says batch-noche
+    Leer bien: Reading well
+    Has filtrado o elegido columnas: You filtered or chose columns
+    Has mirado el detalle: You looked at the detail
+    Sin cambiar nada: Without changing anything
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    Columnas: Columns
+    'Solo lo que te interesa: nombre, zona, tipo y etiquetas.': 'Only what you need: name, zone, type and labels.'
+    Filtrar: Filter
+    Las etiquetas (labels) dicen de qué equipo es cada cosa.: Labels say which team owns each thing.
+    Detalle: Detail
+    En networkInterfaces → subnetwork verás «datos».: Under networkInterfaces → subnetwork you'll see "datos".

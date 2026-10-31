@@ -1,0 +1,197 @@
+id: zentra-t07-storage
+title: 'Taller 7 · Almacenamiento desde cero: buckets y objetos'
+summary: Cloud Storage guarda ficheros (objetos) en contenedores (buckets). Crea uno con los estándares del banco y sube un fichero.
+track: zentra
+day: 7
+level: basic
+branch: storage
+type: guided
+mode: production
+skills:
+- storage.buckets
+- storage.access
+wellArchitected:
+- security
+- cost
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+ticket:
+  id: FOR-0007
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Séptimo taller: crea gs://zentra-formacion-{{.project}} con los estándares de Zentra y sube tu primer fichero.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  **Cloud Storage** guarda ficheros de cualquier tamaño. Los ficheros se llaman **objetos** y viven en **buckets** (cubos). El nombre de un bucket es **único en todo el mundo**, por eso en Zentra lleva el ID del proyecto.
+
+  **Los estándares de Zentra para un bucket:**
+  - **Ubicación en la UE** (`--location=EU`): los datos de clientes no salen de Europa.
+  - **Acceso uniforme** (`--uniform-bucket-level-access`): permisos solo con IAM, no fichero a fichero.
+  - **Prevención de acceso público** (`--public-access-prevention`): nadie puede hacerlo público por error.
+  - **Etiquetas** `equipo` y `uso`: de quién es y para qué (sirve para la factura).
+
+  **1 · Crea el bucket:** `gcloud storage buckets create gs://zentra-formacion-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention`.
+  **2 · Etiquétalo:** `gcloud storage buckets update gs://zentra-formacion-{{.project}} --update-labels=equipo=soporte,uso=formacion`.
+  **3 · Sube un fichero:** crea uno con `echo "hola" > saludo.txt` y súbelo con `gcloud storage cp saludo.txt gs://zentra-formacion-{{.project}}/saludo.txt`.
+  **4 · Comprueba:** `gcloud storage ls gs://zentra-formacion-{{.project}}` y `gcloud storage buckets describe gs://zentra-formacion-{{.project}}`.
+objectives:
+- Crea el bucket con los estándares
+- Etiquétalo
+- Sube un fichero
+- Comprueba y cierra
+hints:
+- text: '`gcloud storage cp saludo.txt gs://zentra-formacion-{{.project}}/saludo.txt`'
+quiz:
+- id: q1
+  question: ¿Para qué sirve la prevención de acceso público?
+  options:
+  - Para que nadie pueda hacer público el bucket por error
+  - Para cifrar los ficheros
+  - Para que sea más rápido
+  - Para borrar ficheros viejos
+  answer:
+  - 0
+- id: q2
+  question: Los ficheros dentro de un bucket se llaman…
+  options:
+  - Objetos
+  - Discos
+  - Instancias
+  - Tablas
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud storage buckets create gs://zentra-formacion-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention
+  gcloud storage buckets update gs://zentra-formacion-{{.project}} --update-labels=equipo=soporte,uso=formacion
+  echo "hola" > saludo.txt
+  gcloud storage cp saludo.txt gs://zentra-formacion-{{.project}}/saludo.txt
+  gcloud storage ls gs://zentra-formacion-{{.project}}
+  gcloud storage buckets describe gs://zentra-formacion-{{.project}}
+  ticket resolve "Taller 7 hecho: bucket zentra-formacion en la UE con acceso uniforme, sin acceso público y etiquetado; saludo.txt subido."
+shortcuts:
+- name: bucket without standards
+  run: |
+    gcloud storage buckets create gs://zentra-formacion-{{.project}} --location=EU
+    ticket resolve "Creado el bucket de formación en la UE sin más opciones."
+rubric:
+- name: Bucket con los estándares
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: buckets["zentra-formacion-{{.project}}"]
+    expect:
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      location:
+        regex: (?i)^eu
+    desc: UE, acceso uniforme y sin acceso público
+  - type: exists
+    path: buckets["zentra-formacion-{{.project}}"]
+    expect:
+      labels:
+        regex: formacion
+    desc: Etiquetado
+- name: Fichero subido
+  validator: functional
+  points: 20
+  checks:
+  - type: exists
+    path: buckets["zentra-formacion-{{.project}}"].objects["saludo.txt"]
+    desc: saludo.txt está en el bucket
+- name: Lo has entendido
+  validator: quiz
+  points: 30
+  checks:
+  - type: quiz
+    ratio: 0.5
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: buckets create
+  title: Crear
+  why: 'Cada opción es un estándar del banco: UE, acceso uniforme y nada público.'
+- match: --update-labels
+  title: Etiquetas
+  why: 'equipo y uso: así FinOps sabe de quién es el gasto.'
+- match: storage cp
+  title: Subir
+  why: Copiar un fichero local al bucket lo convierte en un objeto.
+en:
+  title: 'Workshop 7 · Storage from zero: buckets and objects'
+  summary: Cloud Storage keeps files (objects) in containers (buckets). Create one to the bank's standards and upload a file.
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    **Cloud Storage** stores files of any size. Files are called **objects** and live in **buckets**. A bucket name is **unique worldwide**, so at Zentra it includes the project ID.
+
+    **Zentra's standards for a bucket:**
+    - **EU location** (`--location=EU`): customer data doesn't leave Europe.
+    - **Uniform access** (`--uniform-bucket-level-access`): permissions only through IAM, not file by file.
+    - **Public access prevention** (`--public-access-prevention`): nobody can make it public by mistake.
+    - **Labels** `equipo` and `uso`: whose it is and what for (used for billing).
+
+    **1 · Create the bucket:** `gcloud storage buckets create gs://zentra-formacion-{{.project}} --location=EU --uniform-bucket-level-access --public-access-prevention`.
+    **2 · Label it:** `gcloud storage buckets update gs://zentra-formacion-{{.project}} --update-labels=equipo=soporte,uso=formacion`.
+    **3 · Upload a file:** create one with `echo "hola" > saludo.txt` and upload it with `gcloud storage cp saludo.txt gs://zentra-formacion-{{.project}}/saludo.txt`.
+    **4 · Check:** `gcloud storage ls gs://zentra-formacion-{{.project}}` and `gcloud storage buckets describe gs://zentra-formacion-{{.project}}`.
+  objectives:
+  - Create the bucket to standard
+  - Label it
+  - Upload a file
+  - Check and close
+  hints:
+  - '`gcloud storage cp saludo.txt gs://zentra-formacion-{{.project}}/saludo.txt`'
+  ticket:
+    summary: 'Seventh workshop: create gs://zentra-formacion-{{.project}} to Zentra''s standards and upload your first file.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    ¿Para qué sirve la prevención de acceso público?: What is public access prevention for?
+    Para que nadie pueda hacer público el bucket por error: So nobody can make the bucket public by mistake
+    Para cifrar los ficheros: To encrypt the files
+    Para que sea más rápido: To make it faster
+    Para borrar ficheros viejos: To delete old files
+    Los ficheros dentro de un bucket se llaman…: Files inside a bucket are called…
+    Objetos: Objects
+    Discos: Disks
+    Instancias: Instances
+    Tablas: Tables
+    Bucket con los estándares: Bucket to standard
+    UE, acceso uniforme y sin acceso público: EU, uniform access, no public access
+    Etiquetado: Labelled
+    Fichero subido: File uploaded
+    saludo.txt está en el bucket: saludo.txt is in the bucket
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    Crear: Create
+    'Cada opción es un estándar del banco: UE, acceso uniforme y nada público.': 'Each option is a bank standard: EU, uniform access and nothing public.'
+    Etiquetas: Labels
+    'equipo y uso: así FinOps sabe de quién es el gasto.': 'equipo and uso: that''s how FinOps knows whose spend it is.'
+    Subir: Upload
+    Copiar un fichero local al bucket lo convierte en un objeto.: Copying a local file to the bucket turns it into an object.

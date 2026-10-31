@@ -1,0 +1,210 @@
+id: zentra-t04-networks
+title: 'Taller 4 · Redes desde cero: IPs, rangos y puertos'
+summary: Qué es una IP privada, cómo se lee 10.40.1.0/24 y qué es un puerto. Crearás tu propia subred.
+track: zentra
+day: 4
+level: basic
+branch: networking
+type: guided
+mode: production
+skills:
+- networking.vpc
+- networking.firewall
+wellArchitected:
+- security
+certs:
+- ACE
+difficulty: 1
+minutes: 30
+baseline:
+- zentra-core
+ticket:
+  id: FOR-0004
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Cuarto taller: entiende las redes. Al final, crea la subred «formacion» con el rango 10.40.50.0/24 en {{.region}}.'
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red.
+  fallback: Pregúntame lo que quieras de redes.
+  facts:
+  - keywords:
+    - - rango
+      - range
+      - cidr
+      - '10.40'
+      - solap
+      - overlap
+    answer: 'Usa 10.40.50.0/24: no se solapa con apps (10.40.1.0/24), datos (10.40.2.0/24) ni gke (10.40.8.0/22).'
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  **Una IP** es la dirección de una máquina en una red, como `10.40.1.5`. Las que empiezan por `10.`, `172.16–31.` o `192.168.` son **privadas**: solo existen dentro de tu red, no en internet.
+
+  **Un rango (CIDR)** como `10.40.1.0/24` describe un bloque de direcciones. El número tras la barra dice cuántos bits son fijos: **/24 = 256 direcciones** (de 10.40.1.0 a 10.40.1.255), /23 = 512, /22 = 1024. Cuanto **más pequeño** el número, **más grande** el bloque.
+
+  **La VPC** es tu red privada en Google Cloud (en Zentra, `zentra-vpc`). Es mundial, y se divide en **subredes**, cada una en una región y con su rango. Dos subredes **no pueden solaparse**.
+
+  **Un puerto** es la «puerta» de un servicio dentro de una máquina: **22** SSH, **80** web, **443** web segura (HTTPS), **5432** PostgreSQL. Para hablar con un servicio necesitas IP **y** puerto.
+
+  **1 · Mira la red.** `gcloud compute networks list` y `gcloud compute networks subnets list --format="table(name,region,ipCidrRange)"`.
+  **2 · Pregunta a Red** qué rango puedes usar (`ask network "…"`).
+  **3 · Crea tu subred:** `gcloud compute networks subnets create formacion --network=zentra-vpc --region={{.region}} --range=10.40.50.0/24 --enable-private-ip-google-access`.
+  **4 · Comprueba** con `subnets list` y cierra.
+objectives:
+- Mira la VPC y sus subredes
+- Elige un rango que no se solape
+- Crea la subred formacion
+- Responde y cierra
+hints:
+- text: '`gcloud compute networks subnets create formacion --network=zentra-vpc --region={{.region}} --range=10.40.50.0/24 --enable-private-ip-google-access`'
+quiz:
+- id: q1
+  question: ¿Cuántas direcciones tiene un /24?
+  options:
+  - '256'
+  - '24'
+  - '1024'
+  - 65 536
+  answer:
+  - 0
+- id: q2
+  question: ¿Qué puerto usa SSH?
+  options:
+  - '22'
+  - '80'
+  - '443'
+  - '5432'
+  answer:
+  - 0
+- id: q3
+  question: 10.40.1.20 es una IP…
+  options:
+  - 'Privada: solo existe dentro de la red'
+  - 'Pública: se ve desde internet'
+  - De Google
+  - No válida
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud compute networks list
+  gcloud compute networks subnets list --format="table(name,region,ipCidrRange)"
+  ask network "¿qué rango puedo usar para la subred de formación?"
+  gcloud compute networks subnets create formacion --network=zentra-vpc --region={{.region}} --range=10.40.50.0/24 --enable-private-ip-google-access
+  gcloud compute networks subnets list --format="table(name,region,ipCidrRange)"
+  ticket resolve "Taller 4 hecho: creada la subred formacion 10.40.50.0/24 en zentra-vpc sin solaparse con apps, datos ni gke; /24 son 256 direcciones."
+shortcuts:
+- name: overlapping range
+  run: |
+    gcloud compute networks subnets create formacion --network=zentra-vpc --region={{.region}} --range=10.40.60.0/22
+    ticket resolve "Creada una subred de formación con un rango cualquiera."
+rubric:
+- name: Tu subred
+  validator: functional
+  points: 40
+  critical: true
+  checks:
+  - type: exists
+    path: subnets["formacion"]
+    expect:
+      ipCidrRange: 10.40.50.0/24
+      network: zentra-vpc
+    desc: formacion 10.40.50.0/24 en zentra-vpc
+- name: Antes de crear, mirar y preguntar
+  validator: diagnosis
+  points: 15
+  all: true
+  checks:
+  - type: command
+    regex: subnets list
+    min: 1
+    desc: Subredes revisadas
+  - type: asked
+    actor: network
+    min: 1
+    desc: Preguntado a Red
+- name: Lo has entendido
+  validator: quiz
+  points: 30
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: subnets list
+  title: Las subredes
+  why: 'apps 10.40.1.0/24, datos 10.40.2.0/24, gke 10.40.8.0/22: tu rango no puede pisar ninguno.'
+- match: subnets create formacion
+  title: Crear
+  why: Una subred regional con 256 direcciones privadas y acceso privado a las APIs de Google.
+en:
+  title: 'Workshop 4 · Networking from zero: IPs, ranges and ports'
+  summary: What a private IP is, how to read 10.40.1.0/24 and what a port is. You'll create your own subnet.
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    **An IP** is a machine's address on a network, like `10.40.1.5`. Those starting with `10.`, `172.16–31.` or `192.168.` are **private**: they only exist inside your network, not on the internet.
+
+    **A range (CIDR)** like `10.40.1.0/24` describes a block of addresses. The number after the slash says how many bits are fixed: **/24 = 256 addresses** (10.40.1.0 to 10.40.1.255), /23 = 512, /22 = 1024. The **smaller** the number, the **bigger** the block.
+
+    **The VPC** is your private network in Google Cloud (at Zentra, `zentra-vpc`). It's global and split into **subnets**, each in one region with its own range. Two subnets **can't overlap**.
+
+    **A port** is a service's "door" inside a machine: **22** SSH, **80** web, **443** secure web (HTTPS), **5432** PostgreSQL. To talk to a service you need IP **and** port.
+
+    **1 · Look at the network.** `gcloud compute networks list` and `gcloud compute networks subnets list --format="table(name,region,ipCidrRange)"`.
+    **2 · Ask Network** which range you can use (`ask network "…"`).
+    **3 · Create your subnet:** `gcloud compute networks subnets create formacion --network=zentra-vpc --region={{.region}} --range=10.40.50.0/24 --enable-private-ip-google-access`.
+    **4 · Check** with `subnets list` and close.
+  objectives:
+  - Look at the VPC and its subnets
+  - Pick a non-overlapping range
+  - Create the formacion subnet
+  - Answer and close
+  hints:
+  - '`gcloud compute networks subnets create formacion --network=zentra-vpc --region={{.region}} --range=10.40.50.0/24 --enable-private-ip-google-access`'
+  ticket:
+    summary: 'Fourth workshop: understand networks. At the end, create the "formacion" subnet with range 10.40.50.0/24 in {{.region}}.'
+  text:
+    Formación Zentra: Zentra training
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red.: Network architect.
+    Pregúntame lo que quieras de redes.: Ask me anything about networks.
+    'Usa 10.40.50.0/24: no se solapa con apps (10.40.1.0/24), datos (10.40.2.0/24) ni gke (10.40.8.0/22).': 'Use 10.40.50.0/24: it doesn''t overlap apps (10.40.1.0/24), datos (10.40.2.0/24) or gke (10.40.8.0/22).'
+    ¿Cuántas direcciones tiene un /24?: How many addresses does a /24 have?
+    '256': '256'
+    '24': '24'
+    '1024': '1024'
+    65 536: 65,536
+    ¿Qué puerto usa SSH?: Which port does SSH use?
+    '22': '22'
+    '80': '80'
+    '443': '443'
+    '5432': '5432'
+    10.40.1.20 es una IP…: 10.40.1.20 is…
+    'Privada: solo existe dentro de la red': 'Private: it only exists inside the network'
+    'Pública: se ve desde internet': 'Public: visible from the internet'
+    De Google: Google's
+    No válida: Invalid
+    Tu subred: Your subnet
+    formacion 10.40.50.0/24 en zentra-vpc: formacion 10.40.50.0/24 in zentra-vpc
+    Antes de crear, mirar y preguntar: Look and ask before creating
+    Subredes revisadas: Subnets reviewed
+    Preguntado a Red: Asked Network
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    Las subredes: The subnets
+    'apps 10.40.1.0/24, datos 10.40.2.0/24, gke 10.40.8.0/22: tu rango no puede pisar ninguno.': 'apps 10.40.1.0/24, datos 10.40.2.0/24, gke 10.40.8.0/22: your range can''t step on any.'
+    Crear: Create
+    Una subred regional con 256 direcciones privadas y acceso privado a las APIs de Google.: A regional subnet with 256 private addresses and private access to Google APIs.

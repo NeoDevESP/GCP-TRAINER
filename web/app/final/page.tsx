@@ -156,8 +156,8 @@ export default function FinalPage() {
   const quiz = useMemo(() => (cur ? cur.quiz.map((it) => rebuild(topics, it)) : []), [cur, topics]);
 
   const start = () => {
-    // one case per week from week 2, not the week test, never a guided tutorial
-    const ids = stages.slice(1).map((s) => shuffle(s.labs.slice(0, -1).filter((id) => labs[id] && labs[id].type !== "guided"))[0]).filter(Boolean);
+    // one case per week from week 2 (weeks 0 and 1 are tutorials), not the week test
+    const ids = stages.filter((s) => !["w0", "w1"].includes(s.id)).map((s) => shuffle(s.labs.slice(0, -1).filter((id) => labs[id] && labs[id].type !== "guided"))[0]).filter(Boolean);
     const pool = Object.keys(TOPIC_AREA)
       .filter((id) => topics[id])
       .map((id) => shuffle([...topics[id].quiz, ...topics[id].scenarios]));

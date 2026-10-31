@@ -109,6 +109,9 @@ export function StageList({ stages, byId, state, running }: { stages: Stage[]; b
   const { t } = useI18n();
   const all = stages.flatMap((s) => s.labs);
   const next = nextLab(all, state);
+  // /catalog?track=zentra#w0 opens that week
+  const [hash, setHash] = useState("");
+  useEffect(() => setHash(window.location.hash.slice(1)), []);
   return (
     <ol className="st-list" aria-label={t("Semanas de la ruta")}>
       {stages.map((s, i) => {
@@ -117,8 +120,8 @@ export function StageList({ stages, byId, state, running }: { stages: Stage[]; b
         const complete = done === s.labs.length && s.labs.length > 0;
         const final = labs[labs.length - 1];
         return (
-          <li key={s.id}>
-            <details className={`card st-week${complete ? " done" : ""}`} open={!!next && s.labs.includes(next)}>
+          <li key={s.id} id={s.id}>
+            <details className={`card st-week${complete ? " done" : ""}`} open={hash ? hash === s.id : !!next && s.labs.includes(next)}>
               <summary>
                 <span className="st-num" aria-hidden="true">{complete ? <Icon name="check" size={18} /> : i + 1}</span>
                 <span className="st-head">

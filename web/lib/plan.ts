@@ -15,12 +15,13 @@ export interface Day {
 const L = (...ids: string[]) => ids.map((lab) => ({ lab }));
 
 const Z = (...n: string[]) => n.map((x) => ({ lab: "zentra-" + x }));
+const T = Z; // week 0 workshops share the zentra- prefix
 
 export const DAYS: Day[] = [
-  { title: k("Día 1 · Bienvenida a Zentra: la consola y el proyecto"), goal: k("Entender cómo se organiza Google Cloud y el banco en el que trabajas."),
-    items: [{ topic: "gcp-console" }, { task: "d1-handbook", text: k("Lee el manual de Zentra"), href: "/zentra" }, ...Z("z01-first-day", "z02-who-is-who", "z53-first-ticket"), ...L("ace-d01-context", "ace-d02-iam-storage-read", "ace-d03-secure-bucket")] },
-  { title: k("Día 2 · Registros, VMs privadas e IAP"), goal: k("Saber quién cambió qué y entrar a una VM sin exponerla."),
-    items: [{ topic: "support-method" }, ...Z("z03-log-detective", "z04-private-vm", "z36-disk-grow", "z44-listen-localhost", "z48-key-permissions", "z54-week1-test"), ...L("ace-d04-web-vm", "ace-d05-subnet-isolation", "ace-d12-private-egress", "bank-b03-no-egress")] },
+  { title: k("Día 1 · Desde cero"), goal: k("Si nunca has tocado la nube: qué es Google Cloud, la terminal, redes, permisos, almacenamiento, registros y Linux, con un taller guiado para cada cosa."),
+    items: [{ topic: "gcp-console" }, ...T("t01-what-is-cloud", "t02-terminal", "t03-gcloud-read", "t04-networks", "t05-firewall", "t06-permissions", "t07-storage", "t08-logs", "t09-linux", "t10-week0-test")] },
+  { title: k("Día 2 · Bienvenida a Zentra: el proyecto, los registros y las VMs privadas"), goal: k("Conocer el banco en el que trabajas, saber quién cambió qué y entrar a una VM sin exponerla."),
+    items: [{ topic: "support-method" }, { task: "d1-handbook", text: k("Lee el manual de Zentra"), href: "/zentra" }, ...Z("z01-first-day", "z02-who-is-who", "z53-first-ticket", "z03-log-detective", "z04-private-vm", "z36-disk-grow", "z44-listen-localhost", "z48-key-permissions", "z54-week1-test")] },
   { title: k("Día 3 · Cloud Run, secretos y alertas"), goal: k("Microservicios privados, claves bien guardadas y avisos al NOC."),
     items: [{ topic: "security" }, ...Z("z05-private-run", "z06-secrets", "z07-noc-alert"), ...L("ace-d06-cloud-run", "ace-d07-cloud-sql", "ace-d08-logs-alert")] },
   { title: k("Día 4 · Accesos: altas, cambios y bajas"), goal: k("Dar y quitar permisos como en un banco: siempre por grupos."),

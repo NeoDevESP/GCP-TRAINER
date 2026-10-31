@@ -1,0 +1,210 @@
+id: zentra-t02-terminal
+title: Taller 2 · La terminal desde cero (Cloud Shell)
+summary: 'Escribir comandos sin miedo: dónde estás, ver ficheros, guardar texto, buscar y repetir comandos.'
+track: zentra
+day: 2
+level: basic
+branch: foundations
+type: guided
+mode: production
+skills:
+- linux.shell
+- foundations.cli
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 20
+baseline:
+- zentra-core
+ticket:
+  id: FOR-0002
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Segundo taller: practica la terminal. En soporte vas a vivir en ella.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  **¿Qué es la terminal?** Una ventana donde escribes órdenes en vez de hacer clic. **Cloud Shell** es una terminal de Google en el navegador que ya trae `gcloud` y las herramientas. Cada línea es: `programa opciones argumentos`, y pulsas Intro.
+
+  **1 · Dónde estás y qué hay.** `pwd` (dónde estoy) y `ls` (qué ficheros hay).
+
+  **2 · Escribir en un fichero.** `echo "texto"` imprime texto; con `>` lo guardas en un fichero (y lo sustituye), con `>>` lo añades al final:
+  `echo "Mi primer día en Zentra" > notas.txt`
+  `echo "Proyecto: {{.project}}" >> notas.txt`
+
+  **3 · Leer y buscar.** `cat notas.txt` muestra el fichero; `grep Proyecto notas.txt` muestra solo las líneas que contienen «Proyecto»; `wc -l notas.txt` cuenta líneas.
+
+  **4 · Combinar con `|`.** La «tubería» pasa la salida de un comando al siguiente: `gcloud compute regions list | grep europe` muestra solo las regiones europeas.
+
+  **5 · Repetir.** `history` lista lo que has escrito; con la flecha ↑ recuperas el último comando.
+
+  Cierra con `ticket resolve "…"`.
+objectives:
+- Mira dónde estás y qué hay
+- Crea notas.txt con dos líneas
+- Busca dentro y combina con |
+- Cierra
+hints:
+- text: '`echo "Proyecto: {{.project}}" >> notas.txt` añade una línea.'
+quiz:
+- id: q1
+  question: ¿Qué hace `>` frente a `>>`?
+  options:
+  - '> sustituye el fichero; >> añade al final'
+  - Son iguales
+  - '> añade; >> borra'
+  - '> es un comentario'
+  answer:
+  - 0
+- id: q2
+  question: '`gcloud compute regions list | grep europe` …'
+  options:
+  - Muestra solo las líneas con «europe»
+  - Crea regiones en Europa
+  - Borra las regiones que no son de Europa
+  - Da error
+  answer:
+  - 0
+solution: |
+  ticket
+  pwd
+  ls
+  echo "Mi primer día en Zentra" > notas.txt
+  echo "Proyecto: {{.project}}" >> notas.txt
+  cat notas.txt
+  grep Proyecto notas.txt
+  wc -l notas.txt
+  gcloud compute regions list | grep europe
+  history
+  ticket resolve "Taller 2 hecho: pwd y ls para orientarme, echo con > y >> para escribir, cat y grep para leer y buscar, y | para encadenar comandos."
+shortcuts:
+- name: close without practising
+  run: |
+    ticket resolve "Taller de terminal cerrado sin practicar todavía."
+rubric:
+- name: Tu fichero de notas
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: file_contains
+    file: notas.txt
+    regex: (?s).+\n.+
+    desc: notas.txt tiene al menos dos líneas
+  - type: file_contains
+    file: notas.txt
+    regex: '{{.project}}'
+    desc: Incluye el proyecto
+- name: Leer, buscar y encadenar
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: '^(cat|grep) '
+    min: 1
+    desc: Has leído o buscado
+  - type: command
+    regex: \| *grep
+    min: 1
+    desc: Has usado una tubería
+- name: Lo has entendido
+  validator: quiz
+  points: 25
+  checks:
+  - type: quiz
+    ratio: 0.5
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: echo "Mi primer
+  title: Crear el fichero
+  why: '> crea notas.txt (o lo sustituye si ya existía).'
+- match: echo "Proyecto
+  title: Añadir
+  why: '>> añade la línea al final sin borrar lo anterior.'
+- match: grep Proyecto
+  title: Buscar
+  why: grep enseña solo las líneas que contienen la palabra.
+- match: '| grep europe'
+  title: La tubería
+  why: La salida de gcloud entra en grep, que filtra.
+en:
+  title: Workshop 2 · The terminal from zero (Cloud Shell)
+  summary: 'Typing commands without fear: where you are, seeing files, saving text, searching and repeating commands.'
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    **What is the terminal?** A window where you type orders instead of clicking. **Cloud Shell** is Google's terminal in the browser, with `gcloud` and the tools already installed. Each line is `program options arguments`, then you press Enter.
+
+    **1 · Where you are and what's there.** `pwd` (where am I) and `ls` (which files are there).
+
+    **2 · Writing to a file.** `echo "text"` prints text; with `>` you save it to a file (replacing it), with `>>` you append it:
+    `echo "My first day at Zentra" > notas.txt`
+    `echo "Project: {{.project}}" >> notas.txt`
+
+    **3 · Reading and searching.** `cat notas.txt` shows the file; `grep Proyecto notas.txt` shows only lines containing "Proyecto"; `wc -l notas.txt` counts lines.
+
+    **4 · Combining with `|`.** The "pipe" sends one command's output to the next: `gcloud compute regions list | grep europe` shows only European regions.
+
+    **5 · Repeating.** `history` lists what you typed; the ↑ arrow brings back the last command.
+
+    Close with `ticket resolve "…"`.
+  objectives:
+  - See where you are and what's there
+  - Create notas.txt with two lines
+  - Search inside and combine with |
+  - Close
+  hints:
+  - '`echo "Proyecto: {{.project}}" >> notas.txt` appends a line.'
+  ticket:
+    summary: 'Second workshop: practise the terminal. In support you''ll live in it.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    ¿Qué hace `>` frente a `>>`?: What does `>` do versus `>>`?
+    '> sustituye el fichero; >> añade al final': '> replaces the file; >> appends'
+    Son iguales: They're the same
+    '> añade; >> borra': '> appends; >> deletes'
+    '> es un comentario': '> is a comment'
+    '`gcloud compute regions list | grep europe` …': '`gcloud compute regions list | grep europe` …'
+    Muestra solo las líneas con «europe»: Shows only lines with "europe"
+    Crea regiones en Europa: Creates regions in Europe
+    Borra las regiones que no son de Europa: Deletes non-European regions
+    Da error: Fails
+    Tu fichero de notas: Your notes file
+    notas.txt tiene al menos dos líneas: notas.txt has at least two lines
+    Incluye el proyecto: It includes the project
+    Leer, buscar y encadenar: Read, search and chain
+    Has leído o buscado: You read or searched
+    Has usado una tubería: You used a pipe
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    Crear el fichero: Create the file
+    '> crea notas.txt (o lo sustituye si ya existía).': '> creates notas.txt (or replaces it if it existed).'
+    Añadir: Append
+    '>> añade la línea al final sin borrar lo anterior.': '>> appends the line without deleting what was there.'
+    Buscar: Search
+    grep enseña solo las líneas que contienen la palabra.: grep shows only the lines containing the word.
+    La tubería: The pipe
+    La salida de gcloud entra en grep, que filtra.: gcloud's output goes into grep, which filters it.

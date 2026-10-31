@@ -59,7 +59,7 @@ export default function PlanPage() {
 
   const label = (it: Item) => {
     if ("lab" in it) {
-      const kind = it.lab.startsWith("zentra-") ? (labs[it.lab]?.type === "guided" ? t("Tutorial Zentra") : t("Caso Zentra")) : it.lab.startsWith("bank-") ? t("Caso Banco Atlas") : t("Laboratorio ACE");
+      const kind = it.lab.startsWith("zentra-t") ? t("Taller desde cero") : it.lab.startsWith("zentra-") ? (labs[it.lab]?.type === "guided" ? t("Tutorial Zentra") : t("Caso Zentra")) : it.lab.startsWith("bank-") ? t("Caso Banco Atlas") : t("Laboratorio ACE");
       return { text: labs[it.lab]?.title ?? it.lab, kind, href: labHref(it.lab, running[it.lab]) };
     }
     if ("topic" in it) return { text: topics[it.topic]?.name ?? it.topic, kind: t("Tema · test ≥ 70"), href: `/learn?topic=${it.topic}` };

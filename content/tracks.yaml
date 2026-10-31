@@ -121,12 +121,18 @@ tracks:
       description: Cloud SQL operations and recovery, BigQuery cost control and streaming ingestion.
   - id: zentra
     title: 'Zentra: de cero a Soporte N2 en un banco digital'
-    description: 'Entras en Soporte GCP de Zentra, un banco digital europeo que vive entero en Google Cloud. Siete semanas de diez casos, de nivel básico a profesional: tutoriales guiados, accesos, incidencias de los equipos, guardia, capacidad y datos, cierre de mes y operaciones. Cada semana termina con una prueba.'
+    description: 'Entras en Soporte GCP de Zentra, un banco digital europeo que vive entero en Google Cloud. Una Semana 0 de talleres desde cero y siete semanas de diez casos, de nivel básico a profesional: tutoriales guiados, accesos, incidencias de los equipos, guardia, capacidad y datos, cierre de mes y operaciones. Cada semana termina con una prueba.'
     level: associate
     certs: [ACE, PCSE]
     phase: V3
     labs: []
     stages:
+      - id: w0
+        title: 'Semana 0 · Desde cero'
+        level: basic
+        description: 'Si nunca has tocado la nube, empieza aquí: diez talleres guiados que explican cada concepto antes del comando. Qué es Google Cloud, la terminal, gcloud, redes, cortafuegos, permisos, almacenamiento, registros y Linux. Termina con la prueba de la semana.'
+        labs: [zentra-t01-what-is-cloud, zentra-t02-terminal, zentra-t03-gcloud-read, zentra-t04-networks, zentra-t05-firewall, zentra-t06-permissions, zentra-t07-storage, zentra-t08-logs, zentra-t09-linux, zentra-t10-week0-test]
+        en: {title: 'Week 0 · From zero', description: 'If you have never touched the cloud, start here: ten guided workshops that explain each concept before the command. What Google Cloud is, the terminal, gcloud, networking, firewalls, permissions, storage, logs and Linux. Ends with the week test.'}
       - id: w1
         title: 'Semana 1 · Bienvenida'
         level: basic
@@ -171,7 +177,7 @@ tracks:
         en: {title: 'Week 7 · Operations', description: 'Routes, localhost listeners, tags and named ports, data exposure, permissions, WORM, slow queries and canary releases. Ends with a Google zone outage.'}
     en:
       title: 'Zentra: from zero to L2 support at a digital bank'
-      description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. Seven weeks of ten cases, from basic to professional: guided tutorials, access, team incidents, on call, capacity and data, month-end close and operations. Each week ends with a test.'
+      description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. A Week 0 of from-zero workshops and seven weeks of ten cases, from basic to professional: guided tutorials, access, team incidents, on call, capacity and data, month-end close and operations. Each week ends with a test.'
   - id: support-bank
     title: Soporte GCP en banca
     description: 'El día a día de soporte de plataforma GCP en un banco regulado: peticiones de acceso, políticas de organización, redes privadas, permisos entre servicios, secretos, incidentes de seguridad, GKE, Cloud SQL, costes, auditoría, rotación de secretos, discos llenos, tickets mal dirigidos y caídas de Google. Tickets reales, preguntas al solicitante, respuestas escritas y escalados, sin saltarse las normas.'

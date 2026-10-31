@@ -1,0 +1,209 @@
+id: zentra-t09-linux
+title: 'Taller 9 · Linux para soporte: entrar, mirar y entender una VM'
+summary: 'Entrar por IAP y las cinco comprobaciones que harás mil veces: servicio, disco, ficheros, procesos y puertos.'
+track: zentra
+day: 9
+level: basic
+branch: compute
+type: guided
+mode: production
+skills:
+- linux.shell
+- linux.troubleshooting
+- compute.vm
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create web-linux --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=web-linux --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+ticket:
+  id: FOR-0009
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Noveno taller: entra en web-linux y revisa su estado como lo haría Soporte. Apunta en estado.txt el % de disco usado que veas con df -h.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  Las máquinas virtuales de Zentra **no tienen IP pública**. Se entra con **IAP** (Identity-Aware Proxy): un túnel de Google que comprueba quién eres antes de dejarte pasar. Con `--command='…'` ejecutas una orden dentro de la VM y vuelves.
+
+  **Las cinco comprobaciones de siempre:**
+
+  1. **¿Está el servicio en marcha?** `gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'`
+  2. **¿Hay disco?** `… --command='df -h'` → la columna `Use%` es el porcentaje usado. Por encima del 90 % hay que actuar.
+  3. **¿Qué ocupa?** `… --command='sudo du -sh /var/*'`
+  4. **¿Qué procesos corren?** `… --command='ps aux'`
+  5. **¿En qué puertos escucha?** `… --command='sudo ss -tlnp'` → `0.0.0.0:80` significa «el puerto 80, para todo el mundo».
+
+  `sudo` delante de una orden la ejecuta como administrador (*root*): úsalo solo cuando haga falta.
+
+  **Tarea:** apunta en `estado.txt` el porcentaje de `df -h` (por ejemplo `echo "24%" > estado.txt`) y cierra.
+objectives:
+- Entra por IAP y mira el servicio
+- Mira el disco
+- Mira procesos y puertos
+- Apunta el disco y cierra
+hints:
+- text: '`gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command=''df -h''`'
+quiz:
+- id: q1
+  question: ¿Cómo se entra en una VM sin IP pública en Zentra?
+  options:
+  - Por SSH a través de IAP
+  - Dándole una IP pública
+  - Por el balanceador
+  - No se puede
+  answer:
+  - 0
+- id: q2
+  question: En `df -h`, ¿qué columna dice cuánto disco se usa?
+  options:
+  - Use%
+  - Size
+  - Mounted on
+  - Filesystem
+  answer:
+  - 0
+- id: q3
+  question: '`0.0.0.0:80` en `ss -tlnp` significa…'
+  options:
+  - Escucha en el puerto 80 en todas las interfaces
+  - El puerto 80 está cerrado
+  - Solo escucha la propia máquina
+  - Es una IP pública
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'
+  gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command='df -h'
+  gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command='ps aux'
+  gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command='sudo ss -tlnp'
+  echo "24%" > estado.txt
+  ticket resolve "Taller 9 hecho: nginx en marcha, disco al 24 %, procesos normales y nginx escuchando en 0.0.0.0:80; entrada siempre por IAP."
+shortcuts:
+- name: skip the checks
+  run: |
+    echo "bien" > estado.txt
+    ticket resolve "La VM parece ir bien sin entrar a mirarla."
+rubric:
+- name: Las comprobaciones
+  validator: diagnosis
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: command
+    regex: tunnel-through-iap
+    min: 2
+    desc: Has entrado por IAP
+  - type: command
+    regex: systemctl status|df -h|ss -tlnp|ps aux
+    min: 3
+    desc: Servicio, disco, procesos o puertos
+- name: Lo apuntado
+  validator: functional
+  points: 15
+  checks:
+  - type: file_contains
+    file: estado.txt
+    regex: \d+ ?%
+    desc: estado.txt tiene un porcentaje
+- name: Lo has entendido
+  validator: quiz
+  points: 30
+  checks:
+  - type: quiz
+    ratio: 0.66
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: systemctl status nginx
+  title: El servicio
+  why: 'active (running): el servidor web funciona.'
+- match: df -h
+  title: El disco
+  why: 'Use% es lo que importa: por encima del 90 % hay que actuar.'
+- match: ss -tlnp
+  title: Los puertos
+  why: '0.0.0.0:80: nginx escucha para todos en el 80.'
+en:
+  title: 'Workshop 9 · Linux for support: get in, look and understand a VM'
+  summary: 'Get in through IAP and the five checks you''ll do a thousand times: service, disk, files, processes and ports.'
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    Zentra's virtual machines **have no public IP**. You get in with **IAP** (Identity-Aware Proxy): a Google tunnel that checks who you are before letting you through. With `--command='…'` you run one order inside the VM and come back.
+
+    **The five usual checks:**
+
+    1. **Is the service running?** `gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command='sudo systemctl status nginx'`
+    2. **Is there disk?** `… --command='df -h'` → the `Use%` column is the percentage used. Above 90% you must act.
+    3. **What takes the space?** `… --command='sudo du -sh /var/*'`
+    4. **Which processes run?** `… --command='ps aux'`
+    5. **Which ports does it listen on?** `… --command='sudo ss -tlnp'` → `0.0.0.0:80` means "port 80, for everyone".
+
+    `sudo` before an order runs it as administrator (*root*): use it only when needed.
+
+    **Task:** write the `df -h` percentage in `estado.txt` (e.g. `echo "24%" > estado.txt`) and close.
+  objectives:
+  - Get in through IAP and check the service
+  - Check the disk
+  - Check processes and ports
+  - Note the disk and close
+  hints:
+  - '`gcloud compute ssh web-linux --zone={{.zone}} --tunnel-through-iap --command=''df -h''`'
+  ticket:
+    summary: 'Ninth workshop: get into web-linux and check its health as Support would. Write in estado.txt the disk % used you see with df -h.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    ¿Cómo se entra en una VM sin IP pública en Zentra?: How do you get into a VM without a public IP at Zentra?
+    Por SSH a través de IAP: SSH through IAP
+    Dándole una IP pública: Giving it a public IP
+    Por el balanceador: Through the load balancer
+    No se puede: You can't
+    En `df -h`, ¿qué columna dice cuánto disco se usa?: In `df -h`, which column says how much disk is used?
+    Use%: Use%
+    Size: Size
+    Mounted on: Mounted on
+    Filesystem: Filesystem
+    '`0.0.0.0:80` en `ss -tlnp` significa…': '`0.0.0.0:80` in `ss -tlnp` means…'
+    Escucha en el puerto 80 en todas las interfaces: Listens on port 80 on every interface
+    El puerto 80 está cerrado: Port 80 is closed
+    Solo escucha la propia máquina: Only the machine itself listens
+    Es una IP pública: It's a public IP
+    Las comprobaciones: The checks
+    Has entrado por IAP: You got in through IAP
+    Servicio, disco, procesos o puertos: Service, disk, processes or ports
+    Lo apuntado: What you noted
+    estado.txt tiene un porcentaje: estado.txt has a percentage
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    El servicio: The service
+    'active (running): el servidor web funciona.': 'active (running): the web server works.'
+    El disco: The disk
+    'Use% es lo que importa: por encima del 90 % hay que actuar.': 'Use% is what matters: above 90% you must act.'
+    Los puertos: The ports
+    '0.0.0.0:80: nginx escucha para todos en el 80.': '0.0.0.0:80: nginx listens for everyone on 80.'

@@ -1,0 +1,197 @@
+id: zentra-t05-firewall
+title: 'Taller 5 · El cortafuegos desde cero: quién puede hablar con quién'
+summary: 'Por defecto no entra nada. Abre solo lo necesario: de una máquina concreta a otra, en un puerto concreto.'
+track: zentra
+day: 5
+level: basic
+branch: networking
+type: guided
+mode: production
+skills:
+- networking.firewall
+- compute.vm
+wellArchitected:
+- security
+certs:
+- ACE
+difficulty: 1
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create web-formacion --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=web-formacion --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute instances create cliente-formacion --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=cliente-formacion
+ticket:
+  id: FOR-0005
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Quinto taller: haz que cliente-formacion pueda ver la web de web-formacion (puerto 80) sin abrirla a nadie más.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  **El cortafuegos** decide qué tráfico puede llegar a cada máquina. En una VPC de Google, por defecto **no entra nada** y **sale todo**. Para dejar pasar algo creas una **regla** con:
+
+  - **Dirección**: entrante (*ingress*) casi siempre.
+  - **Origen**: de dónde viene (un rango de IPs o máquinas con una **etiqueta de red**).
+  - **Destino**: a qué máquinas se aplica (por su etiqueta).
+  - **Protocolo y puerto**: por ejemplo `tcp:80`.
+
+  Las **etiquetas de red** (`--tags`) son como pegatinas en las máquinas: la regla dice «de las que llevan la pegatina A a las que llevan la pegatina B».
+
+  **1 · Compruébalo:** `gcloud compute ssh cliente-formacion --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 3 http://web-formacion'` → no responde: falta la regla.
+  **2 · Mira las reglas:** `gcloud compute firewall-rules list --filter="network:zentra-vpc"`.
+  **3 · Crea la regla mínima:** `gcloud compute firewall-rules create allow-cliente-a-web-formacion --network=zentra-vpc --allow=tcp:80 --source-tags=cliente-formacion --target-tags=web-formacion`.
+  **4 · Vuelve a probar** el `curl` y cierra.
+
+  ⚠️ Nunca `--source-ranges=0.0.0.0/0`: eso es «todo internet».
+objectives:
+- Comprueba que no hay acceso
+- Mira las reglas existentes
+- Crea la regla mínima por etiquetas
+- Valida y cierra
+hints:
+- text: Origen `--source-tags=cliente-formacion`, destino `--target-tags=web-formacion`, `--allow=tcp:80`.
+quiz:
+- id: q1
+  question: Por defecto, en una VPC…
+  options:
+  - No entra nada y sale todo
+  - Entra todo
+  - No sale nada
+  - Solo entra el puerto 80
+  answer:
+  - 0
+- id: q2
+  question: ¿Qué significa --source-ranges=0.0.0.0/0?
+  options:
+  - Desde cualquier IP de internet
+  - Desde ninguna IP
+  - Solo desde la VPC
+  - Solo desde Google
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud compute firewall-rules list --filter="network:zentra-vpc"
+  gcloud compute instances describe web-formacion --zone={{.zone}} --format='value(tags.items)'
+  gcloud compute firewall-rules create allow-cliente-a-web-formacion --network=zentra-vpc --allow=tcp:80 --source-tags=cliente-formacion --target-tags=web-formacion
+  gcloud compute ssh cliente-formacion --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 3 http://web-formacion'
+  ticket resolve "Taller 5 hecho: regla allow-cliente-a-web-formacion de cliente-formacion a web-formacion solo en tcp:80, por etiquetas y sin abrir a internet."
+shortcuts:
+- name: open to the internet
+  run: |
+    gcloud compute firewall-rules create allow-web-todos --network=zentra-vpc --allow=tcp:80 --source-ranges=0.0.0.0/0
+    ticket resolve "Abierto el puerto 80 para que la web se vea."
+rubric:
+- name: La web se ve
+  validator: functional
+  points: 30
+  checks:
+  - type: http
+    from: vm:cliente-formacion
+    target: vm:web-formacion:80
+    path: /
+    status: 200
+    desc: cliente-formacion llega a la web
+- name: Solo lo necesario
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+    max: 0
+    desc: Nada abierto a internet
+- name: Lo has entendido
+  validator: quiz
+  points: 25
+  checks:
+  - type: quiz
+    ratio: 0.5
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: firewall-rules list
+  title: Las reglas
+  why: 'Solo hay la de IAP en el 22: nada deja pasar el 80 entre estas máquinas.'
+- match: firewall-rules create
+  title: La regla mínima
+  why: De una etiqueta a otra, un solo puerto.
+- match: curl -s -m 3
+  title: Probar
+  why: 'Ahora responde nginx: la regla funciona.'
+en:
+  title: 'Workshop 5 · The firewall from zero: who may talk to whom'
+  summary: 'By default nothing gets in. Open only what''s needed: from one specific machine to another, on one specific port.'
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    **The firewall** decides which traffic can reach each machine. In a Google VPC, by default **nothing gets in** and **everything goes out**. To let something through you create a **rule** with:
+
+    - **Direction**: ingress, almost always.
+    - **Source**: where it comes from (an IP range or machines with a **network tag**).
+    - **Target**: which machines it applies to (by their tag).
+    - **Protocol and port**: e.g. `tcp:80`.
+
+    **Network tags** (`--tags`) are like stickers on machines: the rule says "from those with sticker A to those with sticker B".
+
+    **1 · Check it:** `gcloud compute ssh cliente-formacion --zone={{.zone}} --tunnel-through-iap --command='curl -s -m 3 http://web-formacion'` → no answer: the rule is missing.
+    **2 · Look at the rules:** `gcloud compute firewall-rules list --filter="network:zentra-vpc"`.
+    **3 · Create the minimal rule:** `gcloud compute firewall-rules create allow-cliente-a-web-formacion --network=zentra-vpc --allow=tcp:80 --source-tags=cliente-formacion --target-tags=web-formacion`.
+    **4 · Try the `curl` again** and close.
+
+    ⚠️ Never `--source-ranges=0.0.0.0/0`: that means "the whole internet".
+  objectives:
+  - Check there's no access
+  - Look at the existing rules
+  - Create the minimal rule by tags
+  - Validate and close
+  hints:
+  - Source `--source-tags=cliente-formacion`, target `--target-tags=web-formacion`, `--allow=tcp:80`.
+  ticket:
+    summary: 'Fifth workshop: let cliente-formacion see web-formacion''s website (port 80) without opening it to anyone else.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    Por defecto, en una VPC…: By default, in a VPC…
+    No entra nada y sale todo: Nothing comes in and everything goes out
+    Entra todo: Everything comes in
+    No sale nada: Nothing goes out
+    Solo entra el puerto 80: Only port 80 comes in
+    ¿Qué significa --source-ranges=0.0.0.0/0?: What does --source-ranges=0.0.0.0/0 mean?
+    Desde cualquier IP de internet: From any IP on the internet
+    Desde ninguna IP: From no IP
+    Solo desde la VPC: Only from the VPC
+    Solo desde Google: Only from Google
+    La web se ve: The website shows
+    cliente-formacion llega a la web: cliente-formacion reaches the website
+    Solo lo necesario: Only what's needed
+    Nada abierto a internet: Nothing open to the internet
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    Las reglas: The rules
+    'Solo hay la de IAP en el 22: nada deja pasar el 80 entre estas máquinas.': 'There''s only the IAP one on 22: nothing lets 80 through between these machines.'
+    La regla mínima: The minimal rule
+    De una etiqueta a otra, un solo puerto.: From one tag to another, one port only.
+    Probar: Test
+    'Ahora responde nginx: la regla funciona.': 'Now nginx answers: the rule works.'

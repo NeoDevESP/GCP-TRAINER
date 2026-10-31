@@ -1,0 +1,181 @@
+id: zentra-t08-logs
+title: 'Taller 8 · Registros desde cero: qué pasó y quién lo hizo'
+summary: Cloud Logging guarda lo que ocurre. Aprende a filtrar por gravedad, por recurso y a encontrar quién creó una máquina.
+track: zentra
+day: 8
+level: basic
+branch: observability
+type: guided
+mode: production
+skills:
+- observability.logging
+- security.audit
+wellArchitected:
+- operations
+- security
+certs:
+- ACE
+difficulty: 1
+minutes: 25
+baseline:
+- zentra-core
+faults:
+- type: command
+  actor: script-pruebas@{{.project}}.iam.gserviceaccount.com
+  run: gcloud compute instances create vm-misteriosa --zone={{.zone}} --machine-type=e2-micro --subnet=apps --no-address
+ticket:
+  id: FOR-0008
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Formación Zentra
+  summary: 'Octavo taller: ha aparecido una VM llamada vm-misteriosa. Averigua en los registros quién la creó y apúntalo en quien.txt.'
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable en Zentra.
+  fallback: 'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.'
+  facts: []
+story: |-
+  > 🧰 **Taller desde cero.** No necesitas saber nada antes. Lee cada bloque, copia el comando en el terminal de abajo y mira qué sale. Si te pierdes, abre la pestaña **Profesor**: te acompaña paso a paso.
+
+  **Cloud Logging** guarda los **registros** (*logs*): líneas con fecha que cuentan qué ha pasado. Hay dos tipos que usarás a diario:
+
+  - **Registros de aplicación**: lo que escriben los programas («error al conectar…»).
+  - **Registros de auditoría**: **quién** hizo **qué** cambio y **cuándo** (crear, borrar, cambiar permisos). En soporte son oro: casi todo incidente empieza por «¿qué ha cambiado?».
+
+  Cada entrada tiene una **gravedad** (`severity`: INFO, WARNING, ERROR…), un **recurso** (`resource.type`: una VM, un servicio de Cloud Run…) y, en las de auditoría, el **método** (`protoPayload.methodName`) y **quién** (`authenticationInfo.principalEmail`).
+
+  **1 · Lo último:** `gcloud logging read --limit=5`.
+  **2 · Solo errores:** `gcloud logging read 'severity>=ERROR' --limit=5`.
+  **3 · Quién creó VMs:** `gcloud logging read 'protoPayload.methodName:"instances.insert"' --limit=5`. Busca la línea de `vm-misteriosa` y su `principalEmail`.
+  **4 · Apúntalo:** `echo "el-correo-que-veas" > quien.txt` y cierra.
+objectives:
+- Lee los últimos registros
+- Filtra por gravedad
+- Encuentra quién creó la VM
+- Apúntalo y cierra
+hints:
+- text: '`gcloud logging read ''protoPayload.methodName:"instances.insert"'' --limit=5`'
+quiz:
+- id: q1
+  question: ¿Qué registros dicen quién hizo un cambio?
+  options:
+  - Los de auditoría
+  - Los de la aplicación
+  - Los de facturación
+  - Ninguno
+  answer:
+  - 0
+- id: q2
+  question: ¿Qué filtro muestra solo errores y más graves?
+  options:
+  - severity>=ERROR
+  - severity=INFO
+  - --limit=ERROR
+  - error=true
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud logging read --limit=5
+  gcloud logging read 'severity>=ERROR' --limit=5
+  gcloud logging read 'protoPayload.methodName:"instances.insert"' --limit=5
+  echo "script-pruebas@{{.project}}.iam.gserviceaccount.com" > quien.txt
+  ticket resolve "Taller 8 hecho: según la auditoría, vm-misteriosa la creó script-pruebas; los registros de auditoría dicen quién, qué y cuándo."
+shortcuts:
+- name: blame a person
+  run: |
+    echo "marta.ibanez@zentra.dev" > quien.txt
+    ticket resolve "Supongo que la creó alguien de Plataforma."
+rubric:
+- name: Encontrado
+  validator: functional
+  points: 35
+  critical: true
+  checks:
+  - type: file_contains
+    file: quien.txt
+    regex: script-pruebas@
+    desc: quien.txt dice script-pruebas
+- name: Filtrar
+  validator: diagnosis
+  points: 20
+  checks:
+  - type: command
+    regex: logging read .*(severity|methodName)
+    min: 1
+    desc: Has filtrado los registros
+- name: Lo has entendido
+  validator: quiz
+  points: 30
+  checks:
+  - type: quiz
+    ratio: 0.5
+    desc: Preguntas del taller
+- name: Cierre
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_resolved
+    desc: Taller cerrado con una nota
+tutor:
+- match: '''severity>=ERROR'''
+  title: Gravedad
+  why: Solo lo que ha ido mal.
+- match: instances.insert
+  title: Auditoría
+  why: Cada creación de VM queda con el correo de quien la hizo.
+en:
+  title: 'Workshop 8 · Logs from zero: what happened and who did it'
+  summary: Cloud Logging keeps what happens. Learn to filter by severity and resource, and to find who created a machine.
+  story: |-
+    > 🧰 **Workshop from zero.** You don't need to know anything beforehand. Read each block, copy the command into the terminal below and see what comes out. If you get lost, open the **Tutor** tab: it walks you through step by step.
+
+    **Cloud Logging** keeps **logs**: dated lines telling what happened. There are two kinds you'll use every day:
+
+    - **Application logs**: what programs write ("error connecting…").
+    - **Audit logs**: **who** made **which** change and **when** (create, delete, change permissions). In support they're gold: nearly every incident starts with "what changed?".
+
+    Each entry has a **severity** (INFO, WARNING, ERROR…), a **resource** (`resource.type`: a VM, a Cloud Run service…) and, in audit entries, the **method** (`protoPayload.methodName`) and **who** (`authenticationInfo.principalEmail`).
+
+    **1 · The latest:** `gcloud logging read --limit=5`.
+    **2 · Errors only:** `gcloud logging read 'severity>=ERROR' --limit=5`.
+    **3 · Who created VMs:** `gcloud logging read 'protoPayload.methodName:"instances.insert"' --limit=5`. Find the `vm-misteriosa` line and its `principalEmail`.
+    **4 · Note it:** `echo "the-email-you-see" > quien.txt` and close.
+  objectives:
+  - Read the latest logs
+  - Filter by severity
+  - Find who created the VM
+  - Note it and close
+  hints:
+  - '`gcloud logging read ''protoPayload.methodName:"instances.insert"'' --limit=5`'
+  ticket:
+    summary: 'Eighth workshop: a VM called vm-misteriosa appeared. Find out in the logs who created it and write it in quien.txt.'
+  text:
+    Formación Zentra: Zentra training
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Platform lead)
+    Tu responsable en Zentra.: Your manager at Zentra.
+    'Sin prisa: esta semana es para aprender lo básico. Pregunta todo lo que necesites.': 'No rush: this week is for learning the basics. Ask anything you need.'
+    ¿Qué registros dicen quién hizo un cambio?: Which logs say who made a change?
+    Los de auditoría: Audit logs
+    Los de la aplicación: Application logs
+    Los de facturación: Billing logs
+    Ninguno: None
+    ¿Qué filtro muestra solo errores y más graves?: Which filter shows only errors and worse?
+    severity>=ERROR: severity>=ERROR
+    severity=INFO: severity=INFO
+    --limit=ERROR: --limit=ERROR
+    error=true: error=true
+    Encontrado: Found
+    quien.txt dice script-pruebas: quien.txt says script-pruebas
+    Filtrar: Filtering
+    Has filtrado los registros: You filtered the logs
+    Lo has entendido: You understood it
+    Preguntas del taller: Workshop questions
+    Cierre: Close
+    Taller cerrado con una nota: Workshop closed with a note
+    Gravedad: Severity
+    Solo lo que ha ido mal.: Only what went wrong.
+    Auditoría: Audit
+    Cada creación de VM queda con el correo de quien la hizo.: Every VM creation is stored with the email of who did it.

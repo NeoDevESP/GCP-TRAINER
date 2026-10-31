@@ -280,9 +280,12 @@ export default function LearnPage() {
               <section className="card ln-start">
                 <div className="ln-start-text">
                   <h2>{t("¿Empiezas de cero?")}</h2>
-                  <p className="muted">{t("Antes que nada: cómo se organiza Google Cloud, qué hay en cada parte de la consola y qué producto sirve para qué.")}</p>
+                  <p className="muted">{t("Antes que nada: cómo se organiza Google Cloud, qué hay en cada parte de la consola y qué producto sirve para qué. Después, practícalo con los diez talleres guiados de la Semana 0.")}</p>
                 </div>
-                <button type="button" className="cm-pillbtn ink sm" onClick={() => go("gcp-console")}>{byId["gcp-console"].name}</button>
+                <div className="row">
+                  <button type="button" className="cm-pillbtn ink sm" onClick={() => go("gcp-console")}>{byId["gcp-console"].name}</button>
+                  <a className="btn secondary" href="/catalog?track=zentra#w0">{t("Talleres de la Semana 0")}</a>
+                </div>
               </section>
             )}
             <section className="zt-banner">

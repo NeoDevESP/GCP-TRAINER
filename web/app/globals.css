@@ -1295,3 +1295,21 @@ body.cm main#main { overflow-x: clip; }
   .fx-cert, .fx-cert * { visibility: visible; }
   .fx-cert { position: absolute; left: 0; top: 0; right: 0; border-color: #000; }
 }
+
+/* Dashboard: the path from zero */
+.yp-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+.yp-step a { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; padding: 12px 6px; border-radius: 14px; border: 1px solid var(--cm-line); background: var(--cm-surface); color: var(--cm-ink) !important; text-align: center; }
+.yp-step.current a { border-color: var(--cm-accent); box-shadow: 0 0 0 2px var(--cm-accent-soft); }
+.yp-step.done a { background: var(--cm-sunk); }
+.yp-dot { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--cm-sunk); }
+.yp-step.current .yp-dot { background: var(--cm-accent); color: var(--cm-on-accent); }
+.yp-step.done .yp-dot { background: var(--cm-ok); color: #fff; }
+.yp-name { font-size: 13px; font-weight: 600; line-height: 17px; }
+.yp-count { font-size: 12px; color: var(--cm-muted); }
+.yp-next { margin: 10px 0 0; }
+@media (max-width: 560px) {
+  .yp-steps { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .yp-step a { padding: 8px 4px; gap: 2px; }
+  .yp-dot { width: 26px; height: 26px; font-size: 13px; }
+  .yp-name { font-size: 12px; line-height: 15px; }
+}

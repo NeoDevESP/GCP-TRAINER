@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { useI18n } from "@/lib/i18n";
 import { dimension, label, recKind } from "@/lib/labels";
-import type { LabSummary, Profile, Recommendation } from "@/lib/types";
+import type { LabSummary, Profile, Recommendation, Stage } from "@/lib/types";
 import { RouteLine, StepGuide, TrackBadge, labHref, nextLab, useProgress } from "@/components/learn";
 import { k } from "@/lib/i18n";
 import { planLocal, planStatus } from "@/lib/plan";
@@ -59,8 +59,8 @@ export default function Dashboard() {
   const [p, setP] = useState<Profile | null>(null);
   const [attempts, setAttempts] = useState<any[]>([]);
   const [err, setErr] = useState("");
-  const [track, setTrackState] = useState("ace-30");
-  const [tracks, setTracks] = useState<{ id: string; title: string; description?: string; labs: string[] }[]>([]);
+  const [track, setTrackState] = useState("zentra");
+  const [tracks, setTracks] = useState<{ id: string; title: string; description?: string; labs: string[]; stages?: Stage[] }[]>([]);
   const [labs, setLabs] = useState<Record<string, LabSummary>>({});
   const [q, setQ] = useState("");
   const { state, running: runningLab } = useProgress();
@@ -87,7 +87,7 @@ export default function Dashboard() {
     }
   };
   useEffect(() => {
-    api<{ tracks: { id: string; title: string; description?: string; labs: string[] }[]; labs: LabSummary[] }>("/api/catalog")
+    api<{ tracks: { id: string; title: string; description?: string; labs: string[]; stages?: Stage[] }[]; labs: LabSummary[] }>("/api/catalog")
       .then((c) => {
         setTracks(c.tracks ?? []);
         setLabs(Object.fromEntries((c.labs ?? []).map((l) => [l.id, l])));
@@ -125,6 +125,8 @@ export default function Dashboard() {
   const pday = plan?.days[plan.today];
   const zIds = (tracks.find((x) => x.id === "zentra")?.labs ?? []).filter((id) => labs[id]);
   const zNext = nextLab(zIds, state);
+  const zStages = tracks.find((x) => x.id === "zentra")?.stages ?? [];
+  const finalDone = !!study && !!loadRun<{ history: { passed: boolean }[] }>("cm-final")?.history?.some((h) => h.passed);
   const zDone = zIds.filter((id) => state[id] === "done").length;
   return (
     <>
@@ -149,6 +151,49 @@ export default function Dashboard() {
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Busca un laboratorio o un servicio")} aria-label={t("Buscar laboratorios")} />
           </form>
         </header>
+
+        {zStages.length > 0 && (
+          <section className="cm-section yp" aria-labelledby="yp-title" style={{ marginTop: 0 }}>
+            <div className="cm-section-head">
+              <div>
+                <h2 id="yp-title">{zDone === 0 ? t("Empieza aquí, desde cero") : t("Tu camino")}</h2>
+                <p className="muted small" style={{ margin: "4px 0 0", maxWidth: 760 }}>
+                  {zDone === 0
+                    ? t("No necesitas saber nada de la nube. Sigue el camino en orden: la Semana 0 te enseña lo básico con talleres guiados; después, siete semanas de casos reales en Zentra, de básico a profesional, y el examen final.")
+                    : t("Sigue en orden: cada semana termina con una prueba y la siguiente sube de nivel.")}
+                </p>
+              </div>
+              {zNext && (
+                <a className="cm-pillbtn ink sm" href={labHref(zNext, runningLab[zNext])}>
+                  {zDone === 0 ? t("Empezar el primer taller") : t("Siguiente paso")} →
+                </a>
+              )}
+            </div>
+            <ol className="yp-steps">
+              {zStages.map((s, i) => {
+                const done = s.labs.filter((id) => state[id] === "done").length;
+                const st = done === s.labs.length ? "done" : zNext && s.labs.includes(zNext) ? "current" : "todo";
+                return (
+                  <li key={s.id} className={`yp-step ${st}`}>
+                    <a href={`/catalog?track=zentra#${s.id}`} aria-current={st === "current" ? "step" : undefined}>
+                      <span className="yp-dot" aria-hidden="true">{st === "done" ? "✓" : i}</span>
+                      <span className="yp-name">{s.title.replace(/^[^·]*·\s*/, "")}</span>
+                      <span className="yp-count">{t("{done}/{total}", { done, total: s.labs.length })}</span>
+                    </a>
+                  </li>
+                );
+              })}
+              <li className={`yp-step ${finalDone ? "done" : !zNext ? "current" : "todo"}`}>
+                <a href="/final">
+                  <span className="yp-dot" aria-hidden="true">{finalDone ? "✓" : "★"}</span>
+                  <span className="yp-name">{t("Examen final")}</span>
+                  <span className="yp-count">{t("Soporte N2")}</span>
+                </a>
+              </li>
+            </ol>
+            {zNext && labs[zNext] && <p className="small yp-next">{t("Ahora toca: {title}", { title: labs[zNext].title })}</p>}
+          </section>
+        )}
 
         {plan && pday && (
           <section className="cm-section" aria-labelledby="today-title" style={{ marginTop: 0 }}>
