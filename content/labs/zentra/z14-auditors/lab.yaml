@@ -1,0 +1,173 @@
+id: zentra-z14-auditors
+title: 'REQ · Auditoría interna: acceso de solo lectura para revisar permisos'
+summary: Los auditores necesitan ver políticas y registros, no datos ni configuración. Crea su grupo y dale los roles de revisión justos.
+track: zentra
+day: 14
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- security.audit
+- iam.roles
+- iam.leastprivilege
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 25
+baseline:
+- zentra-core
+setup: |
+  gam create user lorena.gil@zentra.dev firstname Lorena lastname Gil org /Riesgo title "Auditora interna"
+  gcloud storage buckets create gs://zentra-extractos-clientes-{{.project}} --location=EU --uniform-bucket-level-access
+ticket:
+  id: REQ-21014
+  kind: REQ
+  priority: P3
+  sla: 2d
+  reporter: Irene Soler (Cumplimiento)
+  summary: Auditoría interna empieza la revisión anual de accesos. Irene Soler y Lorena Gil necesitan ver quién tiene qué permisos y los registros de auditoría. Con Viewer en el proyecto valdría, ¿no?
+actors:
+- role: compliance
+  name: Irene Soler (Cumplimiento)
+  persona: Responsable de Cumplimiento.
+  fallback: Solo necesitamos revisar permisos y registros; los datos de clientes no los queremos ver.
+  facts: []
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Permisos a grupos, nunca a personas, y nada de roles básicos.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`**.
+
+  > **REQ-21014** · *«Auditoría interna empieza la revisión anual de accesos. Irene Soler y Lorena Gil necesitan ver quién tiene qué permisos y los registros de auditoría. Con Viewer en el proyecto valdría, ¿no?»*
+
+  `roles/viewer` es un rol básico y deja leer mucho más de lo que hace falta (y en Zentra no se usan roles básicos). Para revisar accesos existen roles predefinidos de **revisión de seguridad** y de **lectura de registros**. Recuerda la norma: grupo, no personas.
+objectives:
+- Aclara qué necesitan ver
+- Crea el grupo de auditores con las dos personas
+- Roles de revisión de seguridad y lectura de registros al grupo
+- Sin acceso a datos de clientes
+hints:
+- text: '`roles/iam.securityReviewer` deja ver todas las políticas IAM; `roles/logging.viewer`, los registros.'
+- text: Crea `gcp-auditores@zentra.dev` con `gcloud identity groups create`.
+solution: |
+  ticket
+  ask compliance "¿qué tenéis que revisar exactamente?"
+  gcloud identity groups create gcp-auditores@zentra.dev --organization=zentra.dev --display-name="GCP Auditores" --labels=cloudidentity.googleapis.com/groups.security
+  gcloud identity groups memberships add --group-email=gcp-auditores@zentra.dev --member-email=irene.soler@zentra.dev
+  gcloud identity groups memberships add --group-email=gcp-auditores@zentra.dev --member-email=lorena.gil@zentra.dev
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-auditores@zentra.dev --role=roles/iam.securityReviewer
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-auditores@zentra.dev --role=roles/logging.viewer
+  ticket update "Hola Irene: hemos creado el grupo gcp-auditores con Lorena y contigo. Tiene roles/iam.securityReviewer (ver todas las políticas de permisos) y roles/logging.viewer (leer registros de auditoría). No damos Viewer: es un rol básico que además deja leer datos que no necesitáis."
+  ticket resolve "Creado gcp-auditores con securityReviewer y logging.viewer; sin roles básicos ni acceso a datos."
+shortcuts:
+- name: viewer to each auditor
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:irene.soler@zentra.dev --role=roles/viewer
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:lorena.gil@zentra.dev --role=roles/viewer
+    ticket resolve "Dado Viewer a las dos auditoras del proyecto."
+rubric:
+- name: Pueden auditar
+  validator: functional
+  points: 35
+  all: true
+  checks:
+  - type: iam
+    principal: user:lorena.gil@zentra.dev
+    permission: resourcemanager.projects.getIamPolicy
+    resource: project
+    desc: Ven las políticas de permisos
+  - type: iam
+    principal: user:irene.soler@zentra.dev
+    permission: logging.logEntries.list
+    resource: project
+    desc: Leen los registros
+- name: Mínimo privilegio
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Sin roles básicos
+  - type: iam
+    principal: user:lorena.gil@zentra.dev
+    permission: storage.objects.get
+    resource: bucket:zentra-extractos-clientes-{{.project}}
+    expect: false
+    desc: Sin acceso a datos de clientes
+  - type: exists
+    path: directory.groups["gcp-auditores@zentra.dev"]
+    expect:
+      allMembers:
+        regex: lorena.gil
+    desc: Acceso por grupo
+- name: Cierre
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - securityreviewer
+      - revisi
+      - review
+    - - viewer
+      - basico
+      - basic
+    desc: Explica los roles y por qué no Viewer
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: roles/iam.securityReviewer
+  title: El rol del auditor
+  why: Deja leer todas las políticas IAM sin poder cambiarlas ni ver datos.
+- match: roles/logging.viewer
+  title: ''
+  why: Con esto leen los registros de auditoría para comprobar quién hizo qué.
+en:
+  title: 'REQ · Internal audit: read-only access to review permissions'
+  summary: Auditors need to see policies and logs, not data or configuration. Create their group and give it the right review roles.
+  story: |-
+    **Project `{{.project}}`**.
+
+    > **REQ-21014** · *"Internal audit starts the annual access review. Irene Soler and Lorena Gil need to see who has which permissions and the audit logs. Viewer on the project would do, right?"*
+
+    `roles/viewer` is a basic role and allows reading far more than needed (and Zentra doesn't use basic roles). For access reviews there are predefined **security reviewer** and **log reader** roles. Remember the rule: group, not people.
+  objectives:
+  - Clarify what they need to see
+  - Create the auditors group with both people
+  - Security review and log read roles to the group
+  - No access to customer data
+  hints:
+  - '`roles/iam.securityReviewer` shows all IAM policies; `roles/logging.viewer`, the logs.'
+  - Create `gcp-auditores@zentra.dev` with `gcloud identity groups create`.
+  ticket:
+    summary: Internal audit starts the annual access review. Irene Soler and Lorena Gil need to see who has which permissions and the audit logs. Viewer on the project would do, right?
+  text:
+    Irene Soler (Cumplimiento): Irene Soler (Compliance)
+    Responsable de Cumplimiento.: Compliance lead.
+    Solo necesitamos revisar permisos y registros; los datos de clientes no los queremos ver.: We only need to review permissions and logs; we don't want to see customer data.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Permisos a grupos, nunca a personas, y nada de roles básicos.: Permissions to groups, never to people, and no basic roles.
+    Pueden auditar: They can audit
+    Ven las políticas de permisos: They see permission policies
+    Leen los registros: They read logs
+    Mínimo privilegio: Least privilege
+    Sin roles básicos: No basic roles
+    Sin acceso a datos de clientes: No access to customer data
+    Acceso por grupo: Access through a group
+    Cierre: Closure
+    Explica los roles y por qué no Viewer: Explains the roles and why not Viewer
+    Ticket cerrado: Ticket closed
+    El rol del auditor: The auditor's role
+    Deja leer todas las políticas IAM sin poder cambiarlas ni ver datos.: Lets you read every IAM policy without changing them or seeing data.
+    Con esto leen los registros de auditoría para comprobar quién hizo qué.: With this they read audit logs to check who did what.

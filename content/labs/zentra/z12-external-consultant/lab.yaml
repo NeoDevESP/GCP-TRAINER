@@ -1,0 +1,193 @@
+id: zentra-z12-external-consultant
+title: REQ · Un consultor externo necesita ver los registros durante la migración
+summary: 'Acceso para un externo: grupo propio que admite externos, rol de solo lectura y una condición IAM que caduca sola.'
+track: zentra
+day: 12
+level: intermediate
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.conditions
+- iam.leastprivilege
+- security.audit
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+ticket:
+  id: REQ-21012
+  kind: REQ
+  priority: P3
+  sla: 2d
+  reporter: Tomás Vidal (Red)
+  summary: Andrés Paredes (andres.paredes@consultora-norte.com) nos ayuda con la migración del CPD hasta el 31/12. Necesita leer los registros del proyecto. Lo más fácil sería meterlo en gcp-plataforma.
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red.
+  fallback: Solo necesita leer registros, nada más.
+  facts:
+  - keywords:
+    - - fecha
+      - hasta
+      - until
+      - end
+      - cuando
+      - date
+    answer: El contrato termina el 31 de diciembre de 2026.
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Externos jamás en grupos internos.
+  facts:
+  - keywords:
+    - - externo
+      - external
+      - consultor
+      - andres
+      - como
+    answer: Un grupo solo para externos de la migración, que admita miembros externos, con solo lectura de registros y caducidad el 31/12. Aprobado.
+story: |-
+  **Proyecto `{{.project}}`**.
+
+  > **REQ-21012** · *«Andrés Paredes (andres.paredes@consultora-norte.com) nos ayuda con la migración del CPD hasta el 31/12. Necesita leer los registros del proyecto. Lo más fácil sería meterlo en gcp-plataforma.»*
+
+  Los grupos `gcp-*` de Zentra son de seguridad y **no admiten externos**, y la política de dominios impide dar permisos a cuentas de fuera directamente. Hay un camino correcto: pregunta a Seguridad.
+
+  Pistas técnicas: `gcloud identity groups create`, `gam update group … allowexternalmembers true` y condiciones IAM con fecha de caducidad:
+  `--condition='expression=request.time < timestamp("2027-01-01T00:00:00Z"),title=fin-migracion'`.
+objectives:
+- Consulta con Seguridad cómo dar acceso a externos
+- Crea un grupo para externos de la migración
+- Solo lectura de registros, con caducidad
+- Ningún grupo interno abierto a externos
+hints:
+- text: '`gcloud identity groups create gcp-ext-migracion@zentra.dev --organization=zentra.dev --display-name="Externos migración"`.'
+- text: '`gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-ext-migracion@zentra.dev --role=roles/logging.viewer --condition=''expression=request.time < timestamp("2027-01-01T00:00:00Z"),title=fin-migracion''`.'
+solution: |
+  ticket
+  ask security "¿cómo damos acceso de solo lectura a un consultor externo?"
+  ask network "¿hasta qué fecha necesita el acceso?"
+  gcloud identity groups create gcp-ext-migracion@zentra.dev --organization=zentra.dev --display-name="Externos migracion CPD"
+  gam update group gcp-ext-migracion@zentra.dev allowexternalmembers true
+  gcloud identity groups memberships add --group-email=gcp-ext-migracion@zentra.dev --member-email=andres.paredes@consultora-norte.com
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-ext-migracion@zentra.dev --role=roles/logging.viewer --condition='expression=request.time < timestamp("2027-01-01T00:00:00Z"),title=fin-migracion'
+  ticket update "Hola Tomás: Andrés puede leer los registros del proyecto hasta el 31/12 a través del grupo gcp-ext-migracion (solo para externos de la migración). No lo metemos en gcp-plataforma: los grupos internos no admiten externos. El acceso caduca solo."
+  ticket resolve "Creado gcp-ext-migracion con Andrés; logging.viewer con condición de caducidad 2027-01-01, sin tocar grupos internos."
+shortcuts:
+- name: open gcp-plataforma to externals
+  run: |
+    gam update group gcp-plataforma@zentra.dev allowexternalmembers true
+    gam update group gcp-plataforma@zentra.dev add member user andres.paredes@consultora-norte.com
+    ticket resolve "Añadido Andrés al grupo de Plataforma como pidió Tomás."
+rubric:
+- name: Acceso del consultor
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: iam
+    principal: user:andres.paredes@consultora-norte.com
+    permission: logging.logEntries.list
+    resource: project
+    desc: Puede leer registros
+  - type: iam
+    principal: user:andres.paredes@consultora-norte.com
+    permission: run.services.update
+    resource: project
+    expect: false
+    desc: Y nada más
+- name: Grupos internos cerrados
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: directory.groups["gcp-plataforma@zentra.dev"]
+    expect:
+      allowExternalMembers: false
+    desc: gcp-plataforma no admite externos
+  - type: absent
+    path: directory.groups["gcp-plataforma@zentra.dev"].members["andres.paredes@consultora-norte.com"]
+    desc: Andrés no está en un grupo interno
+- name: Acceso que caduca
+  validator: security
+  points: 15
+  checks:
+  - type: exists
+    path: iamPolicy
+    expect:
+      bindings:
+        regex: request.time
+    desc: Condición de caducidad en el permiso
+- name: Cierre
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: asked
+    actor: security
+    min: 1
+    desc: Aprobación de Seguridad
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: groups create gcp-ext-migracion
+  title: Un grupo solo para externos
+  why: Separar a los externos permite revisarlos y retirarlos de un golpe, sin abrir los grupos internos.
+- match: --condition=
+  title: ''
+  why: La condición hace que el permiso deje de valer el 1 de enero aunque nadie se acuerde de quitarlo.
+en:
+  title: REQ · An external consultant needs to read logs during the migration
+  summary: 'Access for an outsider: their own group that allows externals, a read-only role and an IAM condition that expires by itself.'
+  story: |-
+    **Project `{{.project}}`**.
+
+    > **REQ-21012** · *"Andrés Paredes (andres.paredes@consultora-norte.com) is helping us with the data-centre migration until 31/12. He needs to read the project's logs. The easiest would be adding him to gcp-plataforma."*
+
+    Zentra's `gcp-*` groups are security groups and **don't accept externals**, and the domain policy blocks granting permissions to outside accounts directly. There's a right way: ask Security.
+
+    Technical hints: `gcloud identity groups create`, `gam update group … allowexternalmembers true` and IAM conditions with an expiry date:
+    `--condition='expression=request.time < timestamp("2027-01-01T00:00:00Z"),title=fin-migracion'`.
+  objectives:
+  - Ask Security how to grant access to externals
+  - Create a group for the migration's externals
+  - Log read-only, with an expiry
+  - No internal group opened to externals
+  hints:
+  - '`gcloud identity groups create gcp-ext-migracion@zentra.dev --organization=zentra.dev --display-name="Migration externals"`.'
+  - '`gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-ext-migracion@zentra.dev --role=roles/logging.viewer --condition=''expression=request.time < timestamp("2027-01-01T00:00:00Z"),title=fin-migracion''`.'
+  ticket:
+    summary: Andrés Paredes (andres.paredes@consultora-norte.com) is helping us with the data-centre migration until 31/12. He needs to read the project's logs. The easiest would be adding him to gcp-plataforma.
+  text:
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red.: Network architect.
+    Solo necesita leer registros, nada más.: He only needs to read logs, nothing more.
+    El contrato termina el 31 de diciembre de 2026.: The contract ends on 31 December 2026.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Externos jamás en grupos internos.: Externals never in internal groups.
+    ? Un grupo solo para externos de la migración, que admita miembros externos, con solo lectura de registros y caducidad el 31/12. Aprobado.
+    : A group just for the migration's externals, allowing external members, with log read-only access and expiring on 31/12. Approved.
+    Acceso del consultor: Consultant access
+    Puede leer registros: He can read logs
+    Y nada más: And nothing else
+    Grupos internos cerrados: Internal groups closed
+    gcp-plataforma no admite externos: gcp-plataforma doesn't allow externals
+    Andrés no está en un grupo interno: Andrés isn't in an internal group
+    Acceso que caduca: Expiring access
+    Condición de caducidad en el permiso: Expiry condition on the permission
+    Cierre: Closure
+    Aprobación de Seguridad: Security approval
+    Ticket cerrado: Ticket closed
+    Un grupo solo para externos: A group just for externals
+    Separar a los externos permite revisarlos y retirarlos de un golpe, sin abrir los grupos internos.: Keeping externals apart lets you review and remove them at once, without opening internal groups.
+    La condición hace que el permiso deje de valer el 1 de enero aunque nadie se acuerde de quitarlo.: The condition makes the permission stop working on 1 January even if nobody remembers to remove it.

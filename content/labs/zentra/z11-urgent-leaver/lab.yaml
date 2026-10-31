@@ -1,0 +1,182 @@
+id: zentra-z11-urgent-leaver
+title: 'REQ P2 · Baja urgente: un SRE despedido esta mañana'
+summary: 'Corta todo el acceso de inmediato: cuenta suspendida, sesiones cerradas, fuera de los grupos y sin permisos directos olvidados. Sin borrar la cuenta.'
+track: zentra
+day: 11
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- security.incident
+- iam.leastprivilege
+- security.audit
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gam create user raul.prieto@zentra.dev firstname Raul lastname Prieto org /Ingenieria/Plataforma title SRE
+  gcloud identity groups memberships add --group-email=gcp-sre@zentra.dev --member-email=raul.prieto@zentra.dev
+  gcloud identity groups memberships add --group-email=gcp-plataforma@zentra.dev --member-email=raul.prieto@zentra.dev
+  gcloud projects add-iam-policy-binding {{.project}} --member=user:raul.prieto@zentra.dev --role=roles/run.admin
+ticket:
+  id: REQ-21011
+  kind: REQ
+  priority: P2
+  sla: 1h
+  reporter: RR. HH. · Relaciones laborales
+  summary: Raúl Prieto (SRE) ha sido despedido esta mañana. Su acceso a todos los sistemas debe cortarse YA. Legal pide conservar su cuenta y sus datos.
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Permisos a grupos, nunca a personas, y nada de roles básicos.
+  facts: []
+- role: legal
+  name: Asesoría jurídica
+  persona: Departamento legal.
+  fallback: 'Nada de borrar: la cuenta y sus datos se conservan por si hay litigio.'
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`**.
+
+  > **REQ-21011 · P2** · *«Raúl Prieto (SRE) ha sido despedido esta mañana. Su acceso a todos los sistemas debe cortarse YA. Legal pide conservar su cuenta y sus datos.»*
+
+  Una baja hostil tiene cuatro capas: **la cuenta** (suspenderla, no borrarla), **las sesiones abiertas** (cerrarlas), **los grupos** (sacarle) y **los permisos directos** que alguien le diera fuera de la norma (búscalos en IAM). Herramientas: `gam`, `gcloud identity groups` y `gcloud projects get-iam-policy`.
+objectives:
+- Suspende la cuenta sin borrarla
+- Cierra sus sesiones
+- Sácale de todos los grupos
+- Retira los permisos directos y documenta
+hints:
+- text: '`gam update user raul.prieto@zentra.dev suspended on` y `gam user raul.prieto@zentra.dev signout`.'
+- text: '`gam print groups member raul.prieto@zentra.dev` y busca `user:raul.prieto` en la política IAM.'
+solution: |
+  ticket
+  gam info user raul.prieto@zentra.dev
+  gam update user raul.prieto@zentra.dev suspended on
+  gam user raul.prieto@zentra.dev signout
+  gam print groups member raul.prieto@zentra.dev
+  gcloud identity groups memberships delete --group-email=gcp-sre@zentra.dev --member-email=raul.prieto@zentra.dev
+  gcloud identity groups memberships delete --group-email=gcp-plataforma@zentra.dev --member-email=raul.prieto@zentra.dev
+  gcloud projects get-iam-policy {{.project}}
+  gcloud projects remove-iam-policy-binding {{.project}} --member=user:raul.prieto@zentra.dev --role=roles/run.admin
+  ticket comment "Baja de raul.prieto: cuenta suspendida (no borrada, por petición de Legal), sesiones cerradas, fuera de los grupos gcp-sre y gcp-plataforma, y retirado un permiso directo roles/run.admin en el proyecto que no debía existir. Aviso a Seguridad para revisar sus accesos de las últimas semanas."
+  ticket update "Acceso de Raúl Prieto cortado: cuenta suspendida y conservada, sesiones cerradas, sin grupos ni permisos en Google Cloud."
+  ticket resolve "Cuenta suspendida y sesiones cerradas, fuera de gcp-sre y gcp-plataforma y retirado run.admin directo."
+shortcuts:
+- name: delete the account
+  run: |
+    gam delete user raul.prieto@zentra.dev
+    ticket resolve "Borrada la cuenta de Raúl Prieto entera."
+- name: only groups
+  run: |
+    gcloud identity groups memberships delete --group-email=gcp-sre@zentra.dev --member-email=raul.prieto@zentra.dev
+    gcloud identity groups memberships delete --group-email=gcp-plataforma@zentra.dev --member-email=raul.prieto@zentra.dev
+    ticket resolve "Sacado de los grupos de SRE y Plataforma."
+rubric:
+- name: Cuenta suspendida y conservada
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: directory.users["raul.prieto@zentra.dev"]
+    expect:
+      suspended: true
+    desc: Cuenta suspendida (no borrada)
+  - type: command
+    regex: gam user raul.prieto@zentra.dev (signout|deprovision)
+    min: 1
+    desc: Sesiones cerradas
+- name: Sin grupos ni permisos directos
+  validator: security
+  points: 35
+  all: true
+  checks:
+  - type: absent
+    path: directory.groups["gcp-sre@zentra.dev"].members["raul.prieto@zentra.dev"]
+    desc: Fuera de gcp-sre
+  - type: absent
+    path: directory.groups["gcp-plataforma@zentra.dev"].members["raul.prieto@zentra.dev"]
+    desc: Fuera de gcp-plataforma
+  - type: command
+    regex: remove-iam-policy-binding .*raul.prieto
+    min: 1
+    desc: Permiso directo retirado
+- name: Documentado
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - suspend
+    - - grupo
+      - group
+    - - run.admin
+      - directo
+      - direct
+    desc: Nota con las cuatro capas
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: suspended on
+  title: Suspender, no borrar
+  why: Suspender corta el acceso al momento y conserva cuenta y datos, como pide Legal.
+- match: signout
+  title: ''
+  why: 'Una sesión abierta sigue viva un tiempo aunque cambies permisos: ciérrala.'
+- match: get-iam-policy
+  title: Busca lo que no debería estar
+  why: 'Aquí aparece user:raul.prieto con run.admin: un permiso directo que alguien dio saltándose la norma.'
+en:
+  title: 'REQ P2 · Urgent leaver: an SRE dismissed this morning'
+  summary: 'Cut all access immediately: account suspended, sessions closed, out of the groups and no forgotten direct permissions. Without deleting the account.'
+  story: |-
+    **Project `{{.project}}`**.
+
+    > **REQ-21011 · P2** · *"Raúl Prieto (SRE) was dismissed this morning. His access to every system must be cut NOW. Legal asks to keep his account and data."*
+
+    A hostile leaver has four layers: **the account** (suspend, don't delete), **open sessions** (close them), **groups** (remove him) and **direct permissions** someone gave him outside the rules (look for them in IAM). Tools: `gam`, `gcloud identity groups` and `gcloud projects get-iam-policy`.
+  objectives:
+  - Suspend the account without deleting it
+  - Sign out his sessions
+  - Remove him from every group
+  - Remove direct permissions and document
+  hints:
+  - '`gam update user raul.prieto@zentra.dev suspended on` and `gam user raul.prieto@zentra.dev signout`.'
+  - '`gam print groups member raul.prieto@zentra.dev` and look for `user:raul.prieto` in the IAM policy.'
+  ticket:
+    summary: Raúl Prieto (SRE) was dismissed this morning. His access to every system must be cut NOW. Legal asks to keep his account and data.
+  text:
+    RR. HH. · Relaciones laborales: HR · Employee relations
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Permisos a grupos, nunca a personas, y nada de roles básicos.: Permissions to groups, never to people, and no basic roles.
+    Asesoría jurídica: Legal
+    Departamento legal.: Legal department.
+    'Nada de borrar: la cuenta y sus datos se conservan por si hay litigio.': 'No deleting: the account and its data are kept in case of litigation.'
+    Cuenta suspendida y conservada: Account suspended and kept
+    Cuenta suspendida (no borrada): Account suspended (not deleted)
+    Sesiones cerradas: Sessions signed out
+    Sin grupos ni permisos directos: No groups or direct permissions
+    Fuera de gcp-sre: Out of gcp-sre
+    Fuera de gcp-plataforma: Out of gcp-plataforma
+    Permiso directo retirado: Direct permission removed
+    Documentado: Documented
+    Nota con las cuatro capas: Note with the four layers
+    Ticket cerrado: Ticket closed
+    Suspender, no borrar: Suspend, don't delete
+    Suspender corta el acceso al momento y conserva cuenta y datos, como pide Legal.: Suspending cuts access instantly and keeps account and data, as Legal asks.
+    'Una sesión abierta sigue viva un tiempo aunque cambies permisos: ciérrala.': 'An open session lives on for a while even if you change permissions: close it.'
+    Busca lo que no debería estar: Look for what shouldn't be there
+    'Aquí aparece user:raul.prieto con run.admin: un permiso directo que alguien dio saltándose la norma.': 'Here user:raul.prieto shows up with run.admin: a direct permission someone granted against the rules.'

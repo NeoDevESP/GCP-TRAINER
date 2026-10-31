@@ -1,0 +1,159 @@
+id: zentra-z13-enable-api
+title: REQ · «Activadme Vertex AI y hacedme Owner para no molestaros más»
+summary: Habilita la API que hace falta y da el rol justo de Vertex AI al grupo del equipo, no el rol Owner a una persona.
+track: zentra
+day: 13
+level: basic
+branch: foundations
+type: incident
+mode: production
+skills:
+- foundations.apis
+- iam.leastprivilege
+- data.ml
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 20
+baseline:
+- zentra-core
+ticket:
+  id: REQ-21013
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Omar Haddad (Antifraude ML)
+  summary: Quiero probar un endpoint de Vertex AI en este proyecto y me dice «API aiplatform.googleapis.com has not been used in project or it is disabled». ¿Me la activáis y me hacéis Owner para no tener que pediros más cosas?
+actors:
+- role: requester
+  name: Omar Haddad (Antifraude ML)
+  persona: Científico de datos.
+  fallback: Necesito crear endpoints y lanzar predicciones; lo demás me da igual.
+  facts: []
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Permisos a grupos, nunca a personas, y nada de roles básicos.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-ml-prod*).
+
+  > **REQ-21013** · *«Quiero probar un endpoint de Vertex AI en este proyecto y me dice «API aiplatform.googleapis.com has not been used in project or it is disabled». ¿Me la activáis y me hacéis Owner para no tener que pediros más cosas?»*
+
+  Son dos peticiones en una. La primera es razonable; la segunda, no (norma 3). Busca el rol predefinido de Vertex AI que cubre lo que necesita y dáselo **al grupo de su equipo**.
+objectives:
+- Comprueba qué APIs están habilitadas
+- Habilita la API de Vertex AI
+- Rol de Vertex AI al grupo del equipo, sin Owner
+- Explica y cierra
+hints:
+- text: '`gcloud services list --enabled` y `gcloud services enable aiplatform.googleapis.com`.'
+- text: '`roles/aiplatform.user` al grupo `gcp-datos@zentra.dev`.'
+solution: |
+  ticket
+  gcloud services list --enabled
+  ask requester "¿qué necesitas hacer exactamente con Vertex AI?"
+  gcloud services enable aiplatform.googleapis.com
+  gam info user omar.haddad@zentra.dev
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/aiplatform.user
+  ticket update "Hola Omar: hemos habilitado la API de Vertex AI y dado roles/aiplatform.user a tu equipo (grupo gcp-datos), que permite crear endpoints y lanzar predicciones. Owner no lo damos: en Zentra nadie lo tiene en proyectos de producción."
+  ticket resolve "Habilitada aiplatform.googleapis.com y concedido aiplatform.user al grupo gcp-datos; sin rol Owner."
+shortcuts:
+- name: owner as asked
+  run: |
+    gcloud services enable aiplatform.googleapis.com
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:omar.haddad@zentra.dev --role=roles/owner
+    ticket resolve "Habilitada la API y dado Owner a Omar."
+rubric:
+- name: API habilitada
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: exists
+    path: services
+    expect:
+      '["aiplatform.googleapis.com"]': true
+    desc: aiplatform.googleapis.com habilitada
+  - type: iam
+    principal: user:omar.haddad@zentra.dev
+    permission: aiplatform.endpoints.predict
+    resource: project
+    desc: Omar puede usar Vertex AI
+- name: Sin Owner
+  validator: security
+  points: 45
+  critical: true
+  all: true
+  checks:
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Sin roles básicos
+  - type: command
+    regex: add-iam-policy-binding .*user:omar
+    max: 0
+    desc: Nada directo a Omar
+- name: Explicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - owner
+    - - gcp-datos
+      - grupo
+      - group
+    desc: Explica por qué no Owner y qué se da
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: services enable aiplatform
+  title: Habilita la API
+  why: Cada producto es una API que hay que habilitar por proyecto; el error lo decía literalmente.
+- match: roles/aiplatform.user
+  title: ''
+  why: Un rol predefinido del producto cubre lo que necesita sin darle todo el proyecto.
+en:
+  title: REQ · "Turn on Vertex AI and make me Owner so I stop bothering you"
+  summary: Enable the needed API and give the team's group the right Vertex AI role, not Owner to one person.
+  story: |-
+    **Project `{{.project}}`** (*zentra-ml-prod*).
+
+    > **REQ-21013** · *"I want to try a Vertex AI endpoint in this project and it says "API aiplatform.googleapis.com has not been used in project or it is disabled". Can you enable it and make me Owner so I don't have to keep asking?"*
+
+    Two requests in one. The first is reasonable; the second isn't (rule 3). Find the predefined Vertex AI role covering what he needs and grant it **to his team's group**.
+  objectives:
+  - Check which APIs are enabled
+  - Enable the Vertex AI API
+  - Vertex AI role to the team's group, no Owner
+  - Explain and close
+  hints:
+  - '`gcloud services list --enabled` and `gcloud services enable aiplatform.googleapis.com`.'
+  - '`roles/aiplatform.user` to the `gcp-datos@zentra.dev` group.'
+  ticket:
+    summary: I want to try a Vertex AI endpoint in this project and it says "API aiplatform.googleapis.com has not been used in project or it is disabled". Can you enable it and make me Owner so I don't have to keep asking?
+  text:
+    Omar Haddad (Antifraude ML): Omar Haddad (Anti-fraud ML)
+    Científico de datos.: Data scientist.
+    Necesito crear endpoints y lanzar predicciones; lo demás me da igual.: I need to create endpoints and run predictions; I don't care about the rest.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Permisos a grupos, nunca a personas, y nada de roles básicos.: Permissions to groups, never to people, and no basic roles.
+    API habilitada: API enabled
+    aiplatform.googleapis.com habilitada: aiplatform.googleapis.com enabled
+    Omar puede usar Vertex AI: Omar can use Vertex AI
+    Sin Owner: No Owner
+    Sin roles básicos: No basic roles
+    Nada directo a Omar: Nothing direct to Omar
+    Explicación: Explanation
+    Explica por qué no Owner y qué se da: Explains why not Owner and what's granted
+    Ticket cerrado: Ticket closed
+    Habilita la API: Enable the API
+    Cada producto es una API que hay que habilitar por proyecto; el error lo decía literalmente.: Each product is an API that must be enabled per project; the error said so literally.
+    Un rol predefinido del producto cubre lo que necesita sin darle todo el proyecto.: A predefined product role covers what he needs without handing him the whole project.

@@ -1,0 +1,183 @@
+id: zentra-z17-push-backlog
+title: 'INC P2 · El panel de riesgo no se actualiza: mensajes atascados en Pub/Sub'
+summary: La suscripción push no consigue entregar al worker privado. Encuentra qué identidad usa el push y dale permiso para invocarlo.
+track: zentra
+day: 17
+level: intermediate
+branch: data
+type: incident
+mode: production
+skills:
+- data.pubsub
+- compute.serverless
+- iam.serviceaccounts
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCDE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create analitica-sa --display-name="worker de analitica"
+  gcloud iam service-accounts create push-sa --display-name="push de Pub/Sub"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql users create pagos --instance=ledger-db --password=pw-ledger-1
+  gcloud pubsub topics create transacciones
+  bq mk --dataset --location=EU analitica
+  bq mk --table analitica.transacciones id:STRING,importe:NUMERIC,fecha:TIMESTAMP
+  gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  bq add-iam-policy-binding --member=serviceAccount:analitica-sa@{{.project}}.iam.gserviceaccount.com --role=roles/bigquery.dataEditor analitica
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:ledger-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:ledger-db,DB_USER=pagos,DB_PASSWORD=pw-ledger-1,DB_NAME=ledger,DB_POOL_SIZE=5,TOPIC=transacciones --max-instances=5 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud run deploy analitica-worker --image=europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0 --region={{.region}} --service-account=analitica-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BQ_TABLE=analitica.transacciones --max-instances=3 --no-allow-unauthenticated
+  gcloud pubsub subscriptions create transacciones-analitica --topic=transacciones --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: clientes
+  target: run:pagos-api
+  path: /orders
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31017
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Riesgos · Analítica
+  summary: El panel de operaciones en tiempo real lleva desde ayer sin datos nuevos. Los pagos funcionan, pero en BigQuery no entra nada desde que se redesplegó el worker de analítica.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Redesplegamos analitica-worker desde cero, como privado.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **INC-31017 · P2** · *«El panel de operaciones en tiempo real lleva desde ayer sin datos nuevos. Los pagos funcionan, pero en BigQuery no entra nada desde que se redesplegó el worker de analítica.»*
+
+  Flujo afectado: `pagos-api` (Cloud Run) guarda cada pago en `ledger-db` y publica un evento en el tema **transacciones**; la suscripción push **transacciones-analitica** (autenticada como `push-sa`) lo entrega a `analitica-worker`, que lo escribe en BigQuery `analitica.transacciones`.
+
+  Mira la suscripción (`gcloud pubsub subscriptions describe`): a qué URL empuja y **con qué cuenta se autentica**. Un servicio privado solo acepta a quien tenga `run.invoker`.
+objectives:
+- Confirma que los mensajes se acumulan
+- Identifica la cuenta del push y por qué la rechazan
+- Permite a esa cuenta invocar el worker, sin hacerlo público
+- Comprueba que se vacía la cola y documenta
+hints:
+- text: '`gcloud pubsub subscriptions describe transacciones-analitica`.'
+- text: '`gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=serviceAccount:push-sa@… --role=roles/run.invoker`.'
+solution: |
+  ticket
+  gcloud pubsub subscriptions describe transacciones-analitica
+  gcloud run services get-iam-policy analitica-worker --region={{.region}}
+  gcloud logging read 'resource.type=cloud_run_revision resource.labels.service_name="analitica-worker"' --limit=5
+  gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  sleep 120
+  gcloud pubsub subscriptions describe transacciones-analitica
+  ticket comment "Causa: al redesplegar analitica-worker como privado no se volvió a dar run.invoker a push-sa, la identidad con la que la suscripción transacciones-analitica empuja; cada entrega recibía 403 y los mensajes se acumulaban. Concedido run.invoker solo a push-sa sobre el worker."
+  ticket update "Resuelto: el panel vuelve a recibir datos. Los eventos acumulados se están entregando y en unos minutos estará al día."
+  ticket resolve "Concedido run.invoker a push-sa sobre analitica-worker; la suscripción entrega y la cola se vacía."
+shortcuts:
+- name: open the worker to any authenticated user
+  run: |
+    gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=allAuthenticatedUsers --role=roles/run.invoker
+    ticket resolve "Abierto el worker a usuarios autenticados para que reciba."
+rubric:
+- name: Mensajes entregados
+  validator: functional
+  points: 40
+  checks:
+  - type: pubsub
+    subscription: transacciones-analitica
+    ackedMin: 10
+    backlogMax: 50
+    settle: 3
+    desc: La suscripción entrega y confirma
+- name: Worker privado
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:alguien@gmail.com
+    permission: run.routes.invoke
+    resource: run:analitica-worker
+    expect: false
+    desc: Nadie de fuera puede invocarlo
+  - type: iam
+    principal: serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com
+    permission: run.routes.invoke
+    resource: run:analitica-worker
+    desc: push-sa sí puede
+- name: Documentado
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - push-sa
+    - - invoker
+      - '403'
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: subscriptions describe
+  title: Mira cómo entrega
+  why: pushConfig dice a qué URL y con qué cuenta (oidcToken) se autentica la entrega.
+- match: add-iam-policy-binding analitica-worker
+  title: ''
+  why: 'run.invoker solo para push-sa: el worker sigue privado.'
+en:
+  title: 'INC P2 · The risk dashboard isn''t updating: messages stuck in Pub/Sub'
+  summary: The push subscription can't deliver to the private worker. Find which identity the push uses and let it invoke the worker.
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **INC-31017 · P2** · *"The real-time transactions dashboard has had no new data since yesterday. Payments work, but nothing reaches BigQuery since the analytics worker was redeployed."*
+
+    Affected flow: `pagos-api` (Cloud Run) stores each payment in `ledger-db` and publishes an event to the **transacciones** topic; the **transacciones-analitica** push subscription (authenticated as `push-sa`) delivers it to `analitica-worker`, which writes it to BigQuery `analitica.transacciones`.
+
+    Look at the subscription (`gcloud pubsub subscriptions describe`): which URL it pushes to and **which account it authenticates with**. A private service only accepts those with `run.invoker`.
+  objectives:
+  - Confirm messages are piling up
+  - Identify the push account and why it's rejected
+  - Let that account invoke the worker, without making it public
+  - Check the backlog drains and document
+  hints:
+  - '`gcloud pubsub subscriptions describe transacciones-analitica`.'
+  - '`gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=serviceAccount:push-sa@… --role=roles/run.invoker`.'
+  ticket:
+    summary: The real-time transactions dashboard has had no new data since yesterday. Payments work, but nothing reaches BigQuery since the analytics worker was redeployed.
+  text:
+    Riesgos · Analítica: Risk · Analytics
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Redesplegamos analitica-worker desde cero, como privado.: We redeployed analitica-worker from scratch, as private.
+    Mensajes entregados: Messages delivered
+    La suscripción entrega y confirma: The subscription delivers and acks
+    Worker privado: Private worker
+    Nadie de fuera puede invocarlo: Nobody outside can invoke it
+    push-sa sí puede: push-sa can
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Mira cómo entrega: See how it delivers
+    pushConfig dice a qué URL y con qué cuenta (oidcToken) se autentica la entrega.: pushConfig says which URL and which account (oidcToken) the delivery authenticates with.
+    'run.invoker solo para push-sa: el worker sigue privado.': 'run.invoker only for push-sa: the worker stays private.'

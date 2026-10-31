@@ -1,0 +1,270 @@
+id: zentra-z27-payday-boss
+title: 'JEFE FINAL · Día de la nómina: pagos y analítica caídos a la vez'
+summary: El día de más tráfico del mes fallan dos cosas distintas a la vez. Prioriza lo que afecta a los clientes, arregla cada causa, comunica y deja el post-mortem.
+track: zentra
+day: 27
+level: intermediate
+branch: observability
+type: boss
+mode: production
+skills:
+- observability.incident
+- data.pubsub
+- iam.serviceaccounts
+- observability.postmortem
+wellArchitected:
+- reliability
+- operations
+- security
+certs:
+- ACE
+- PCA
+difficulty: 5
+minutes: 50
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create analitica-sa --display-name="worker de analitica"
+  gcloud iam service-accounts create push-sa --display-name="push de Pub/Sub"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql users create pagos --instance=ledger-db --password=pw-ledger-1
+  gcloud pubsub topics create transacciones
+  bq mk --dataset --location=EU analitica
+  bq mk --table analitica.transacciones id:STRING,importe:NUMERIC,fecha:TIMESTAMP
+  gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  bq add-iam-policy-binding --member=serviceAccount:analitica-sa@{{.project}}.iam.gserviceaccount.com --role=roles/bigquery.dataEditor analitica
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:ledger-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:ledger-db,DB_USER=pagos,DB_PASSWORD=pw-ledger-1,DB_NAME=ledger,DB_POOL_SIZE=5,TOPIC=transacciones --max-instances=5 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud run deploy analitica-worker --image=europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0 --region={{.region}} --service-account=analitica-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BQ_TABLE=analitica.transacciones --max-instances=3 --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud pubsub subscriptions create transacciones-analitica --topic=transacciones --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+faults:
+- type: command
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+  run: |
+    gcloud pubsub topics remove-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+- type: pubsub_push_endpoint
+  subscription: transacciones-analitica
+  endpoint: https://analitica-worker-v1-legacy.a.run.app/push
+traffic:
+- name: nomina
+  target: run:pagos-api
+  path: /orders
+  rps: 60
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31027
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: Día de la nómina, 08:02. Los clientes no pueden enviar dinero (errores en /orders) y el panel de riesgo está congelado. Prensa y regulador preguntan. Puente de crisis abierto.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+- role: product
+  name: Carla Méndez (producto)
+  persona: Product owner de la app.
+  fallback: Los clientes se quejan en redes; necesito saber cuándo estará.
+  facts: []
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Anoche el pipeline aplicó la configuración nueva de Pub/Sub.
+  facts:
+  - keywords:
+    - - url
+      - endpoint
+      - push
+      - legacy
+    answer: analitica-worker-v1-legacy ya no existe; esa URL viene de la configuración antigua.
+  - keywords:
+    - - permiso
+      - publisher
+      - iam
+      - pipeline
+      - deploy-sa
+    answer: El pipeline (deploy-sa) reaplicó los permisos del tema desde una plantilla vieja.
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable.
+  fallback: 'Primero los clientes. Y actualiza el ticket cada poco: negocio está pegado a él.'
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*). Es el **día de la nómina**: el tráfico se triplica.
+
+  > **INC-31027 · P1** · *«Día de la nómina, 08:02. Los clientes no pueden enviar dinero (errores en /orders) y el panel de riesgo está congelado. Prensa y regulador preguntan. Puente de crisis abierto.»*
+
+  Flujo afectado: `pagos-api` (Cloud Run) guarda cada pago en `ledger-db` y publica un evento en el tema **transacciones**; la suscripción push **transacciones-analitica** (autenticada como `push-sa`) lo entrega a `analitica-worker`, que lo escribe en BigQuery `analitica.transacciones`.
+
+  Hay **dos síntomas**; pueden ser una causa o dos. Prioriza lo que afecta a clientes (pagos), pero no cierres hasta que todo funcione. Durante el incidente, **actualiza el ticket** para negocio (al menos dos veces) y deja al final una **nota interna de post-mortem** con las causas, qué hiciste y cómo evitarlo.
+objectives:
+- Restaura primero los pagos
+- Restaura después la analítica
+- Comunica al menos dos veces durante el incidente
+- Deja el post-mortem con causas y prevención
+hints:
+- text: Los registros de pagos-api dicen qué permiso falta; la suscripción dice a dónde empuja.
+- text: La auditoría (`protoPayload.authenticationInfo.principalEmail:deploy-sa`) muestra qué cambió el pipeline anoche.
+solution: |
+  ticket
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=5
+  gcloud logging read 'protoPayload.authenticationInfo.principalEmail:deploy-sa' --limit=5
+  gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  ticket update "08:15 · Pagos restablecidos: los clientes ya pueden enviar dinero. Seguimos con el panel de riesgo; próxima actualización en 15 minutos."
+  gcloud pubsub subscriptions describe transacciones-analitica
+  ask data "¿de dónde sale la URL analitica-worker-v1-legacy?"
+  gcloud pubsub subscriptions modify-push-config transacciones-analitica --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+  sleep 120
+  gcloud pubsub subscriptions describe transacciones-analitica
+  ticket update "08:31 · Panel de riesgo restablecido y recuperando los eventos acumulados. Todo el servicio funciona con normalidad."
+  ticket comment "Post-mortem: el pipeline (deploy-sa) reaplicó anoche una plantilla antigua de Pub/Sub que (1) quitó pubsub.publisher a pagos-sa sobre transacciones y (2) devolvió el push de transacciones-analitica a analitica-worker-v1-legacy, ya inexistente. Arreglado: publisher restaurado solo sobre el tema y push al worker actual con push-sa. Prevención: borrar la plantilla antigua del repositorio, revisar el plan de Terraform antes de aplicar y alertar de backlog en la suscripción."
+  ticket resolve "Restaurados publisher de pagos-sa y push de analítica tras el cambio del pipeline; post-mortem en nota interna."
+shortcuts:
+- name: fix payments only
+  run: |
+    gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+    ticket resolve "Restaurados los pagos de la nómina para los clientes."
+- name: pubsub admin everywhere
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.admin
+    gcloud pubsub subscriptions modify-push-config transacciones-analitica --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+    ticket update "Arreglado todo dando permisos de administración de Pub/Sub."
+    ticket resolve "Pagos y analítica funcionando con Pub/Sub Admin."
+rubric:
+- name: Pagos
+  validator: functional
+  points: 25
+  critical: true
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /orders
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: Los clientes pueden enviar dinero
+- name: Analítica
+  validator: functional
+  points: 20
+  checks:
+  - type: pubsub
+    subscription: transacciones-analitica
+    ackedMin: 10
+    backlogMax: 80
+    settle: 3
+    desc: El panel recibe eventos
+- name: Sin atajos de permisos
+  validator: security
+  points: 20
+  critical: true
+  checks:
+  - type: iam
+    principal: serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: pubsub.topics.delete
+    resource: project
+    expect: false
+    desc: pagos-sa sin administración de Pub/Sub
+- name: Comunicación durante el incidente
+  validator: evidence
+  points: 15
+  checks:
+  - type: ticket_update
+    min: 2
+    keywords:
+    - - pagos
+      - payments
+      - panel
+      - dashboard
+    desc: Al menos dos actualizaciones para negocio
+- name: Post-mortem
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - publisher
+      - publicar
+    - - push
+      - legacy
+    - - prevenc
+      - prevent
+      - evitar
+      - terraform
+      - alerta
+    desc: Nota con las dos causas y prevención
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: principalEmail:deploy-sa
+  title: ¿Qué cambió anoche?
+  why: 'Dos síntomas a la vez después de un despliegue: busca qué tocó el pipeline.'
+- match: topics add-iam-policy-binding transacciones
+  title: Primero los clientes
+  why: Restaurar el permiso de publicar devuelve los pagos; la analítica puede esperar unos minutos.
+- match: ^ticket update
+  title: ''
+  why: En un P1, negocio necesita saber qué funciona ya y cuándo habrá novedades.
+- match: modify-push-config
+  title: ''
+  why: 'El segundo arreglo: destino correcto y autenticación con push-sa.'
+en:
+  title: 'FINAL BOSS · Payday: payments and analytics down at once'
+  summary: On the busiest day of the month two different things fail at once. Prioritise what hits customers, fix each cause, communicate and leave the post-mortem.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*). It's **payday**: traffic triples.
+
+    > **INC-31027 · P1** · *"Payday, 08:02. Customers can't send money (errors on /orders) and the risk dashboard is frozen. Press and regulator are asking. Crisis bridge open."*
+
+    Affected flow: `pagos-api` (Cloud Run) stores each payment in `ledger-db` and publishes an event to the **transacciones** topic; the **transacciones-analitica** push subscription (authenticated as `push-sa`) delivers it to `analitica-worker`, which writes it to BigQuery `analitica.transacciones`.
+
+    There are **two symptoms**; they may be one cause or two. Prioritise what hits customers (payments), but don't close until everything works. During the incident, **update the ticket** for the business (at least twice) and leave at the end an **internal post-mortem note** with the causes, what you did and how to prevent it.
+  objectives:
+  - Restore payments first
+  - Then restore analytics
+  - Communicate at least twice during the incident
+  - Leave the post-mortem with causes and prevention
+  hints:
+  - pagos-api's logs say which permission is missing; the subscription says where it pushes.
+  - The audit log (`protoPayload.authenticationInfo.principalEmail:deploy-sa`) shows what the pipeline changed last night.
+  ticket:
+    summary: Payday, 08:02. Customers can't send money (errors on /orders) and the risk dashboard is frozen. Press and regulator are asking. Crisis bridge open.
+  text:
+    NOC 24x7: NOC 24x7
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Carla Méndez (producto): Carla Méndez (product)
+    Product owner de la app.: App product owner.
+    Los clientes se quejan en redes; necesito saber cuándo estará.: Customers are complaining online; I need to know when it'll be fixed.
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Anoche el pipeline aplicó la configuración nueva de Pub/Sub.: Last night the pipeline applied the new Pub/Sub configuration.
+    analitica-worker-v1-legacy ya no existe; esa URL viene de la configuración antigua.: analitica-worker-v1-legacy no longer exists; that URL comes from the old configuration.
+    El pipeline (deploy-sa) reaplicó los permisos del tema desde una plantilla vieja.: The pipeline (deploy-sa) re-applied the topic's permissions from an old template.
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Head of Platform)
+    Tu responsable.: Your manager.
+    'Primero los clientes. Y actualiza el ticket cada poco: negocio está pegado a él.': 'Customers first. And update the ticket often: the business is glued to it.'
+    Pagos: Payments
+    Los clientes pueden enviar dinero: Customers can send money
+    Analítica: Analytics
+    El panel recibe eventos: The dashboard receives events
+    Sin atajos de permisos: No permission shortcuts
+    pagos-sa sin administración de Pub/Sub: pagos-sa without Pub/Sub admin
+    Comunicación durante el incidente: Communication during the incident
+    Al menos dos actualizaciones para negocio: At least two business updates
+    Post-mortem: Post-mortem
+    Nota con las dos causas y prevención: Note with both causes and prevention
+    Ticket cerrado: Ticket closed
+    ¿Qué cambió anoche?: What changed last night?
+    'Dos síntomas a la vez después de un despliegue: busca qué tocó el pipeline.': 'Two symptoms at once after a deploy: look at what the pipeline touched.'
+    Primero los clientes: Customers first
+    Restaurar el permiso de publicar devuelve los pagos; la analítica puede esperar unos minutos.: Restoring the publish permission brings payments back; analytics can wait a few minutes.
+    En un P1, negocio necesita saber qué funciona ya y cuándo habrá novedades.: In a P1, the business needs to know what works now and when the next update is.
+    'El segundo arreglo: destino correcto y autenticación con push-sa.': 'The second fix: right endpoint and authentication with push-sa.'

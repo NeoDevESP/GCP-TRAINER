@@ -1,0 +1,210 @@
+id: zentra-z22-leaked-key
+title: SEC P1 · Una clave antigua del pipeline aparece en GitHub y alguien mina con GPU
+summary: 'Responde en orden: conserva evidencias, contén (VM y clave), elimina la persistencia del atacante y escala al CSIRT. Sin borrar la cuenta del pipeline.'
+track: zentra
+day: 22
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- security.incident
+- iam.serviceaccounts
+- security.audit
+wellArchitected:
+- security
+- cost
+certs:
+- ACE
+- PCDE
+difficulty: 4
+minutes: 40
+baseline:
+- zentra-core
+params:
+  suffix:
+  - 4c1e
+  - a9d2
+  - 7b30
+faults:
+- type: leaked_key_miner
+  serviceAccount: deploy-sa@{{.project}}.iam.gserviceaccount.com
+  zone: '{{.zone}}'
+  vm: gke-node-{{.suffix}}
+  gpus: 4
+- type: iam_add
+  resource: project
+  role: roles/editor
+  member: user:backup-ops@proton.example
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: SEC-4122
+  kind: SEC
+  priority: P1
+  sla: 15m
+  reporter: Escaneo de secretos de GitHub
+  summary: Detectada una clave de cuenta de servicio de Google (deploy-sa) en un repositorio público. Facturación avisa de gasto en GPU que no reconocemos en zentra-pagos-prod.
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Coordina la respuesta.
+  fallback: 'Orden: evidencias, contener, erradicar, escalar.'
+  facts:
+  - keywords:
+    - - evidencia
+      - evidence
+      - snapshot
+      - disco
+      - disk
+    answer: Snapshot del disco de la VM atacante antes de borrarla.
+  - keywords:
+    - - persist
+      - iam
+      - acceso
+      - backdoor
+      - volver
+    answer: 'Revisa la política IAM: suelen dejarse un acceso para volver.'
+- role: dev
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: ¡No borréis deploy-sa! El pipeline despliega con ella.
+  facts:
+  - keywords:
+    - - clave
+      - key
+      - json
+      - github
+    answer: Es una clave de 2023, de antes de que se prohibieran; alguien la subió en un repo de pruebas.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **SEC-4122 · P1** · *«Detectada una clave de cuenta de servicio de Google (deploy-sa) en un repositorio público. Facturación avisa de gasto en GPU que no reconocemos en zentra-pagos-prod.»*
+
+  Respuesta a incidentes en orden: **evidencias** (snapshot del disco antes de borrar), **contención** (parar la VM atacante y revocar la clave filtrada), **erradicación** (buscar accesos que el atacante se haya dejado) y **escalado** al CSIRT con todo lo encontrado (`ticket escalate csirt "…"`). La cuenta del pipeline se conserva.
+objectives:
+- Encuentra lo que creó la clave robada
+- Conserva la evidencia y elimina la VM atacante
+- Revoca la clave y quita la puerta trasera
+- Escala al CSIRT
+hints:
+- text: '`gcloud logging read ''protoPayload.authenticationInfo.principalEmail:deploy-sa'' --limit=10`.'
+- text: '`gcloud iam service-accounts keys list --iam-account=deploy-sa@…` y `gcloud projects get-iam-policy`.'
+solution: |
+  ticket
+  gcloud logging read 'protoPayload.authenticationInfo.principalEmail:deploy-sa' --limit=10
+  gcloud compute instances list
+  gcloud compute disks snapshot gke-node-{{.suffix}} --zone={{.zone}} --snapshot-names=evidencia-gke-node-{{.suffix}}
+  gcloud compute instances delete gke-node-{{.suffix}} --zone={{.zone}} --quiet
+  gcloud iam service-accounts keys list --iam-account=deploy-sa@{{.project}}.iam.gserviceaccount.com
+  gcloud iam service-accounts keys delete $(gcloud iam service-accounts keys list --iam-account=deploy-sa@{{.project}}.iam.gserviceaccount.com --format='value(name)' --limit=1) --iam-account=deploy-sa@{{.project}}.iam.gserviceaccount.com --quiet
+  gcloud projects get-iam-policy {{.project}}
+  gcloud projects remove-iam-policy-binding {{.project}} --member=user:backup-ops@proton.example --role=roles/editor
+  ticket escalate csirt "Contenido: la clave de deploy-sa filtrada en GitHub se usó para crear gke-node-{{.suffix}} (4 GPU, minería) y dar Editor a backup-ops@proton.example. Hecho snapshot evidencia-gke-node-{{.suffix}}, VM borrada, clave revocada y Editor externo retirado. deploy-sa se conserva para el pipeline. Pendiente: análisis forense del snapshot y revisión de otros proyectos."
+  ticket update "Actualización: incidente contenido. La clave filtrada está revocada, la máquina del atacante eliminada (con copia para el análisis) y su acceso retirado. Seguridad continúa la investigación."
+shortcuts:
+- name: delete the pipeline account
+  run: |
+    gcloud compute instances delete gke-node-{{.suffix}} --zone={{.zone}} --quiet
+    gcloud iam service-accounts delete deploy-sa@{{.project}}.iam.gserviceaccount.com --quiet
+    ticket resolve "Borrada la VM del minero y la cuenta comprometida."
+rubric:
+- name: Evidencias
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: count
+    collection: snapshots
+    where:
+      sourceDisk:
+        eq: gke-node-{{.suffix}}
+    min: 1
+    desc: Snapshot del disco atacante
+- name: Contención y erradicación
+  validator: security
+  points: 45
+  critical: true
+  all: true
+  checks:
+  - type: absent
+    path: instances["gke-node-{{.suffix}}"]
+    desc: VM atacante eliminada
+  - type: exists
+    path: serviceAccounts["deploy-sa@{{.project}}.iam.gserviceaccount.com"]
+    expect:
+      keys:
+        len: 0
+    desc: Clave revocada y cuenta conservada
+  - type: iam
+    principal: user:backup-ops@proton.example
+    permission: compute.instances.create
+    resource: project
+    expect: false
+    desc: Puerta trasera retirada
+- name: Escalado al CSIRT
+  validator: evidence
+  points: 40
+  checks:
+  - type: ticket_escalated
+    team: csirt|seguridad|security
+    keywords:
+    - - snapshot
+      - evidencia
+      - evidence
+    - - clave
+      - key
+    - - proton
+      - editor
+    desc: Escalado con evidencia, contención y persistencia
+tutor:
+- match: principalEmail:deploy-sa
+  title: Sigue a la clave
+  why: 'La auditoría muestra todo lo que hizo deploy-sa: crear una VM con GPU y dar Editor a una cuenta externa.'
+- match: disks snapshot
+  title: Primero, evidencias
+  why: 'Borrar la VM borra su disco: sin snapshot, el CSIRT no puede investigar.'
+- match: remove-iam-policy-binding .*proton
+  title: ''
+  why: 'La puerta trasera: sin quitarla, el atacante vuelve aunque revoques la clave.'
+en:
+  title: SEC P1 · An old pipeline key shows up on GitHub and someone is mining with GPUs
+  summary: 'Respond in order: preserve evidence, contain (VM and key), remove the attacker''s persistence and escalate to the CSIRT. Without deleting the pipeline''s account.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **SEC-4122 · P1** · *"Detected a Google service account key (deploy-sa) in a public repository. Billing reports GPU spend we don't recognise in zentra-pagos-prod."*
+
+    Incident response in order: **evidence** (disk snapshot before deleting), **containment** (stop the attacker VM and revoke the leaked key), **eradication** (look for access the attacker left behind) and **escalation** to the CSIRT with everything found (`ticket escalate csirt "…"`). The pipeline account is kept.
+  objectives:
+  - Find what the stolen key created
+  - Preserve evidence and remove the attacker VM
+  - Revoke the key and remove the backdoor
+  - Escalate to the CSIRT
+  hints:
+  - '`gcloud logging read ''protoPayload.authenticationInfo.principalEmail:deploy-sa'' --limit=10`.'
+  - '`gcloud iam service-accounts keys list --iam-account=deploy-sa@…` and `gcloud projects get-iam-policy`.'
+  ticket:
+    summary: Detected a Google service account key (deploy-sa) in a public repository. Billing reports GPU spend we don't recognise in zentra-pagos-prod.
+  text:
+    Escaneo de secretos de GitHub: GitHub secret scanning
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Coordina la respuesta.: Coordinates the response.
+    'Orden: evidencias, contener, erradicar, escalar.': 'Order: evidence, contain, eradicate, escalate.'
+    Snapshot del disco de la VM atacante antes de borrarla.: Snapshot the attacker VM's disk before deleting it.
+    'Revisa la política IAM: suelen dejarse un acceso para volver.': 'Check the IAM policy: they usually leave themselves a way back in.'
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tech lead de Pagos.: Payments tech lead.
+    ¡No borréis deploy-sa! El pipeline despliega con ella.: Don't delete deploy-sa! The pipeline deploys with it.
+    Es una clave de 2023, de antes de que se prohibieran; alguien la subió en un repo de pruebas.: It's a 2023 key, from before they were banned; someone pushed it in a test repo.
+    Evidencias: Evidence
+    Snapshot del disco atacante: Snapshot of the attacker disk
+    Contención y erradicación: Containment and eradication
+    VM atacante eliminada: Attacker VM removed
+    Clave revocada y cuenta conservada: Key revoked and account kept
+    Puerta trasera retirada: Backdoor removed
+    Escalado al CSIRT: CSIRT escalation
+    Escalado con evidencia, contención y persistencia: Escalated with evidence, containment and persistence
+    Sigue a la clave: Follow the key
+    'La auditoría muestra todo lo que hizo deploy-sa: crear una VM con GPU y dar Editor a una cuenta externa.': 'The audit log shows everything deploy-sa did: create a GPU VM and grant Editor to an external account.'
+    Primero, evidencias: Evidence first
+    'Borrar la VM borra su disco: sin snapshot, el CSIRT no puede investigar.': 'Deleting the VM deletes its disk: without a snapshot, the CSIRT can''t investigate.'
+    'La puerta trasera: sin quitarla, el atacante vuelve aunque revoques la clave.': 'The backdoor: without removing it, the attacker comes back even after you revoke the key.'

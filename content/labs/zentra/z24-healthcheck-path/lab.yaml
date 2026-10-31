@@ -1,0 +1,195 @@
+id: zentra-z24-healthcheck-path
+title: INC P1 · 502 en la web pública justo después de un cambio de monitorización
+summary: El balanceador marca el servidor como no sano porque la comprobación mira un puerto en el que no escucha nadie. Arréglalo sin exponer la VM.
+track: zentra
+day: 24
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.lb
+- observability.incident
+- compute.troubleshooting
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create web-zentra --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=web-zentra --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute firewall-rules create allow-health-checks --network=zentra-vpc --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=web-zentra
+  gcloud compute instance-groups unmanaged create web-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances web-ig --instances=web-zentra --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports web-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute health-checks create http web-hc --port=80 --request-path=/
+  gcloud compute backend-services create web-be --protocol=HTTP --port-name=http --health-checks=web-hc --global
+  gcloud compute backend-services add-backend web-be --instance-group=web-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create web-map --default-service=web-be
+  gcloud compute target-http-proxies create web-proxy --url-map=web-map
+  gcloud compute forwarding-rules create web-lb --global --target-http-proxy=web-proxy --ports=80
+faults:
+- type: health_check_path
+  name: web-hc
+  port: 8080
+traffic:
+- name: clientes
+  target: lb:web-lb
+  path: /
+  rps: 30
+ticket:
+  id: INC-31024
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: La web pública de Zentra devuelve 502 Bad Gateway. El servidor web-zentra está arriba y nginx responde en local. Hace 15 minutos SRE «estandarizó» las comprobaciones de estado.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+- role: web
+  name: Equipo web
+  persona: Mantienen web-zentra.
+  fallback: Nuestro nginx escucha en el 80, como siempre.
+  facts:
+  - keywords:
+    - - puerto
+      - port
+      - '8080'
+      - salud
+      - health
+    answer: web-zentra es un nginx en el puerto 80; en el 8080 no hay nada.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-app-prod*). Balanceador `web-lb` → `web-be` → `web-zentra` (VM privada), con la comprobación de estado `web-hc`.
+
+  > **INC-31024 · P1** · *«La web pública de Zentra devuelve 502 Bad Gateway. El servidor web-zentra está arriba y nginx responde en local. Hace 15 minutos SRE «estandarizó» las comprobaciones de estado.»*
+
+  El balanceador solo envía tráfico a backends **sanos**. Mira qué ve (`get-health`), qué pide la comprobación (`health-checks describe`) y qué sirve la aplicación.
+objectives:
+- Mira qué estado ve el balanceador
+- Encuentra qué comprueba la comprobación de estado
+- Corrige la comprobación sin exponer la VM
+- Valida y documenta
+hints:
+- text: '`gcloud compute backend-services get-health web-be --global` y `gcloud compute health-checks describe web-hc`.'
+- text: '`gcloud compute health-checks update http web-hc --port=80`.'
+solution: |
+  ticket
+  gcloud compute backend-services get-health web-be --global
+  gcloud compute health-checks describe web-hc
+  gcloud logging read 'protoPayload.methodName:"healthChecks"' --limit=3
+  ask web "¿en qué puerto escucha la web?"
+  gcloud compute health-checks update http web-hc --port=80
+  gcloud compute backend-services get-health web-be --global
+  curl -s http://$(gcloud compute forwarding-rules describe web-lb --global --format='value(IPAddress)')/
+  ticket comment "Causa: el cambio de estandarización puso el puerto 8080 en web-hc, pero web-zentra escucha en el 80; el backend quedó UNHEALTHY y el balanceador devolvía 502. Restaurado el puerto 80; backend HEALTHY. Propuesta: revisar cada servicio antes de estandarizar comprobaciones."
+  ticket update "Resuelto: la web pública vuelve a funcionar. Un cambio en la comprobación de estado hacía que el balanceador diera el servidor por caído."
+  ticket resolve "Comprobación de estado web-hc devuelta al puerto 80; backend HEALTHY y la web responde 200."
+shortcuts:
+- name: open port 80 to the internet
+  run: |
+    gcloud compute firewall-rules create web-abierta --network=zentra-vpc --allow=tcp:80 --source-ranges=0.0.0.0/0 --target-tags=web-zentra
+    ticket resolve "Abierto el puerto 80 de la web para todos."
+rubric:
+- name: Web restaurada
+  validator: functional
+  points: 40
+  checks:
+  - type: http
+    target: lb:web-lb
+    path: /
+    status: 200
+    desc: 200 a través del balanceador
+- name: Sin exponer la VM
+  validator: security
+  points: 30
+  critical: true
+  checks:
+  - type: count
+    collection: firewalls
+    where:
+      sourceRanges:
+        contains: 0.0.0.0/0
+      rules:
+        regex: '"80"'
+    max: 0
+    desc: Puerto 80 no abierto a internet
+- name: Diagnóstico
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: command
+    regex: get-health|health-checks describe
+    min: 1
+    desc: Salud y comprobación revisadas
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - puerto
+      - port
+      - '8080'
+    - - unhealthy
+      - no sano
+      - '502'
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: get-health
+  title: Lo que ve el balanceador
+  why: 'UNHEALTHY con nginx funcionando: o no llegan las sondas o piden algo que no existe.'
+- match: health-checks describe
+  title: ''
+  why: 'port: 8080, y nginx escucha en el 80: cada sonda se encuentra la puerta cerrada.'
+en:
+  title: INC P1 · 502 on the public website right after a monitoring change
+  summary: The load balancer marks the server unhealthy because the check probes a port nobody listens on. Fix it without exposing the VM.
+  story: |-
+    **Project `{{.project}}`** (*zentra-app-prod*). Load balancer `web-lb` → `web-be` → `web-zentra` (private VM), with the `web-hc` health check.
+
+    > **INC-31024 · P1** · *"Zentra's public website returns 502 Bad Gateway. The web-zentra server is up and nginx answers locally. 15 minutes ago SRE "standardised" the health checks."*
+
+    The load balancer only sends traffic to **healthy** backends. See what it sees (`get-health`), what the check requests (`health-checks describe`) and what the application serves.
+  objectives:
+  - See what health the load balancer sees
+  - Find what the health check probes
+  - Fix the check without exposing the VM
+  - Validate and document
+  hints:
+  - '`gcloud compute backend-services get-health web-be --global` and `gcloud compute health-checks describe web-hc`.'
+  - '`gcloud compute health-checks update http web-hc --port=80`.'
+  ticket:
+    summary: Zentra's public website returns 502 Bad Gateway. The web-zentra server is up and nginx answers locally. 15 minutes ago SRE "standardised" the health checks.
+  text:
+    NOC 24x7: NOC 24x7
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Equipo web: Web team
+    Mantienen web-zentra.: They maintain web-zentra.
+    Nuestro nginx escucha en el 80, como siempre.: Our nginx listens on 80, as always.
+    web-zentra es un nginx en el puerto 80; en el 8080 no hay nada.: web-zentra is nginx on port 80; there's nothing on 8080.
+    Web restaurada: Website restored
+    200 a través del balanceador: 200 through the load balancer
+    Sin exponer la VM: VM not exposed
+    Puerto 80 no abierto a internet: Port 80 not open to the internet
+    Diagnóstico: Diagnosis
+    Salud y comprobación revisadas: Health and check reviewed
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Lo que ve el balanceador: What the load balancer sees
+    'UNHEALTHY con nginx funcionando: o no llegan las sondas o piden algo que no existe.': 'UNHEALTHY with nginx working: either probes don''t arrive or they ask for something that doesn''t exist.'
+    'port: 8080, y nginx escucha en el 80: cada sonda se encuentra la puerta cerrada.': 'port: 8080, and nginx listens on 80: every probe hits a closed door.'

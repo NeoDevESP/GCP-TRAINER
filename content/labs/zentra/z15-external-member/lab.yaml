@@ -1,0 +1,171 @@
+id: zentra-z15-external-member
+title: SEC P2 · Una cuenta de Gmail dentro del grupo que da acceso a BigQuery
+summary: 'Contén sin destruir: saca al externo, cierra el grupo, averigua quién lo hizo con la auditoría de administración y escala a Seguridad.'
+track: zentra
+day: 15
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- security.incident
+- security.audit
+- data.bigquery
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  bq mk --dataset --location=EU clientes
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-datos@zentra.dev --role=roles/bigquery.dataViewer
+faults:
+- type: command
+  actor: sara.benitez@zentra.dev
+  run: |
+    gam update group gcp-datos@zentra.dev allowexternalmembers true
+    gam update group gcp-datos@zentra.dev add member user omar.haddad.casa@gmail.com
+ticket:
+  id: SEC-4105
+  kind: SEC
+  priority: P2
+  sla: 4h
+  reporter: Revisión automática de grupos
+  summary: 'El grupo gcp-datos@zentra.dev (acceso de lectura a BigQuery, datos de clientes) tiene un miembro externo: omar.haddad.casa@gmail.com.'
+actors:
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos, gestora del grupo.
+  fallback: Uy… Omar me pidió poder trabajar desde casa y lo añadí.
+  facts: []
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Permisos a grupos, nunca a personas, y nada de roles básicos.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **SEC-4105 · P2** · *«El grupo gcp-datos@zentra.dev (acceso de lectura a BigQuery, datos de clientes) tiene un miembro externo: omar.haddad.casa@gmail.com.»*
+
+  Una cuenta personal con acceso a datos de clientes es un **incidente de seguridad**. El orden: **contener** (sacarla y cerrar el grupo a externos), **averiguar** quién y cuándo (`gam report admin`), **no destruir** nada (ni el grupo ni los registros) y **escalar** a Seguridad con lo encontrado (`ticket escalate seguridad "…"`).
+objectives:
+- Comprueba el grupo y qué acceso da
+- Saca al externo y cierra el grupo a externos
+- Averigua quién lo añadió y cuándo
+- Escala a Seguridad con la evidencia
+hints:
+- text: '`gam info group gcp-datos@zentra.dev` y `gam report admin`.'
+- text: '`gam update group gcp-datos@zentra.dev remove member omar.haddad.casa@gmail.com` y `gam update group gcp-datos@zentra.dev allowexternalmembers false`.'
+solution: |
+  ticket
+  gam info group gcp-datos@zentra.dev
+  gcloud projects get-iam-policy {{.project}}
+  gam update group gcp-datos@zentra.dev remove member omar.haddad.casa@gmail.com
+  gam update group gcp-datos@zentra.dev allowexternalmembers false
+  gam report admin
+  ask data "¿añadiste tú la cuenta de Gmail al grupo gcp-datos?"
+  ticket escalate seguridad "Contenido: la cuenta personal omar.haddad.casa@gmail.com estaba en gcp-datos (bigquery.dataViewer sobre datos de clientes). La añadió sara.benitez@zentra.dev tras activar miembros externos, según gam report admin. Retirada y grupo cerrado a externos; no se ha borrado nada. Pendiente: revisar accesos de esa cuenta a BigQuery."
+  ticket update "El grupo gcp-datos ya no tiene miembros externos ni los admite. El caso queda en manos de Seguridad para revisar si esa cuenta llegó a consultar datos."
+shortcuts:
+- name: delete the whole group
+  run: |
+    gcloud identity groups delete gcp-datos@zentra.dev
+    ticket resolve "Borrado el grupo gcp-datos para eliminar el riesgo."
+- name: remove and close silently
+  run: |
+    gam update group gcp-datos@zentra.dev remove member omar.haddad.casa@gmail.com
+    ticket resolve "Quitado el miembro externo del grupo de datos."
+rubric:
+- name: Contención
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: absent
+    path: directory.groups["gcp-datos@zentra.dev"].members["omar.haddad.casa@gmail.com"]
+    desc: Externo fuera
+  - type: exists
+    path: directory.groups["gcp-datos@zentra.dev"]
+    expect:
+      allowExternalMembers: false
+      allMembers:
+        regex: sara.benitez
+    desc: Grupo cerrado a externos y conservado
+- name: Investigación
+  validator: diagnosis
+  points: 25
+  checks:
+  - type: command
+    regex: gam report admin
+    min: 1
+    desc: Auditoría de administración consultada
+- name: Escalado a Seguridad
+  validator: evidence
+  points: 35
+  checks:
+  - type: ticket_escalated
+    team: seguridad|security|csirt
+    keywords:
+    - - gmail
+      - externo
+      - external
+    - - sara
+    - - bigquery
+      - datos
+      - data
+    desc: Escalado con qué, quién y qué datos
+tutor:
+- match: gam info group gcp-datos
+  title: Mira el grupo
+  why: 'allowExternalMembers: true y un miembro marcado (external): así entró.'
+- match: allowexternalmembers false
+  title: ''
+  why: Sacar al externo sin cerrar la puerta deja el problema listo para repetirse.
+- match: gam report admin
+  title: Quién y cuándo
+  why: La auditoría de administración de Workspace registra cada cambio de grupo con su autor.
+en:
+  title: SEC P2 · A Gmail account inside the group that grants BigQuery access
+  summary: 'Contain without destroying: remove the outsider, close the group, find who did it with the admin audit log and escalate to Security.'
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **SEC-4105 · P2** · *"The gcp-datos@zentra.dev group (read access to BigQuery, customer data) has an external member: omar.haddad.casa@gmail.com."*
+
+    A personal account with access to customer data is a **security incident**. The order: **contain** (remove it and close the group to externals), **find out** who and when (`gam report admin`), **destroy nothing** (neither the group nor the logs) and **escalate** to Security with your findings (`ticket escalate seguridad "…"`).
+  objectives:
+  - Check the group and what access it grants
+  - Remove the outsider and close the group to externals
+  - Find out who added it and when
+  - Escalate to Security with the evidence
+  hints:
+  - '`gam info group gcp-datos@zentra.dev` and `gam report admin`.'
+  - '`gam update group gcp-datos@zentra.dev remove member omar.haddad.casa@gmail.com` and `gam update group gcp-datos@zentra.dev allowexternalmembers false`.'
+  ticket:
+    summary: 'The gcp-datos@zentra.dev group (read access to BigQuery, customer data) has an external member: omar.haddad.casa@gmail.com.'
+  text:
+    Revisión automática de grupos: Automated group review
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos, gestora del grupo.: Data engineer, group manager.
+    Uy… Omar me pidió poder trabajar desde casa y lo añadí.: Oops… Omar asked to work from home and I added him.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Permisos a grupos, nunca a personas, y nada de roles básicos.: Permissions to groups, never to people, and no basic roles.
+    Contención: Containment
+    Externo fuera: Outsider removed
+    Grupo cerrado a externos y conservado: Group closed to externals and kept
+    Investigación: Investigation
+    Auditoría de administración consultada: Admin audit consulted
+    Escalado a Seguridad: Escalation to Security
+    Escalado con qué, quién y qué datos: Escalated with what, who and which data
+    Mira el grupo: Look at the group
+    'allowExternalMembers: true y un miembro marcado (external): así entró.': 'allowExternalMembers: true and a member flagged (external): that''s how it got in.'
+    Sacar al externo sin cerrar la puerta deja el problema listo para repetirse.: Removing the outsider without closing the door leaves the problem ready to repeat.
+    Quién y cuándo: Who and when
+    La auditoría de administración de Workspace registra cada cambio de grupo con su autor.: Workspace's admin audit log records every group change with its author.

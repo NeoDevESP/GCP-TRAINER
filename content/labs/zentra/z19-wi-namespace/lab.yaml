@@ -1,0 +1,215 @@
+id: zentra-z19-wi-namespace
+title: INC P2 · Tarjetas en GKE no puede leer sus extractos tras moverse de namespace
+summary: Workload Identity une una cuenta de Kubernetes concreta (namespace incluido) con una de Google. Si cambia el namespace, el vínculo deja de valer.
+track: zentra
+day: 19
+level: intermediate
+branch: gke
+type: incident
+mode: production
+skills:
+- gke.identity
+- gke.troubleshooting
+- iam.serviceaccounts
+wellArchitected:
+- security
+certs:
+- ACE
+- PCDE
+difficulty: 4
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create gke-nodos-sa --display-name="nodos GKE"
+  gcloud iam service-accounts create tarjetas-sa --display-name="servicio de tarjetas"
+  gcloud storage buckets create gs://zentra-extractos-{{.project}} --location=EU --uniform-bucket-level-access
+  echo "fecha,importe" > extracto.csv
+  gcloud storage cp extracto.csv gs://zentra-extractos-{{.project}}/2026/09/extracto.csv
+  gcloud storage buckets add-iam-policy-binding gs://zentra-extractos-{{.project}} --member=serviceAccount:tarjetas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+  gcloud container clusters create tarjetas-gke --zone={{.zone}} --num-nodes=2 --machine-type=e2-standard-2 --network=zentra-vpc --subnetwork=gke --enable-private-nodes --service-account=gke-nodos-sa@{{.project}}.iam.gserviceaccount.com --workload-pool={{.project}}.svc.id.goog
+  gcloud container node-pools update default-pool --cluster=tarjetas-gke --zone={{.zone}} --workload-metadata=GKE_METADATA
+  gcloud iam service-accounts add-iam-policy-binding tarjetas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/extractos-ksa]"
+  gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+  kubectl create namespace tarjetas
+  cat > extractos.yaml <<'YAML'
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: extractos-ksa
+    namespace: tarjetas
+    annotations: {iam.gke.io/gcp-service-account: "tarjetas-sa@{{.project}}.iam.gserviceaccount.com"}
+  ---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata: {name: extractos, namespace: tarjetas}
+  spec:
+    replicas: 2
+    selector: {matchLabels: {app: extractos}}
+    template:
+      metadata: {labels: {app: extractos}}
+      spec:
+        serviceAccountName: extractos-ksa
+        containers:
+        - name: extractos
+          image: europe-docker.pkg.dev/gcplab-public/apps/reports-api:1.0
+          ports: [{containerPort: 8080}]
+          env: [{name: BUCKET, value: "zentra-extractos-{{.project}}"}]
+  ---
+  apiVersion: v1
+  kind: Service
+  metadata: {name: extractos, namespace: tarjetas}
+  spec:
+    type: LoadBalancer
+    selector: {app: extractos}
+    ports: [{port: 80, targetPort: 8080}]
+  YAML
+  kubectl apply -f extractos.yaml
+ticket:
+  id: INC-31019
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Hugo Martín (Tarjetas)
+  summary: Hemos pasado el servicio de extractos del namespace default a tarjetas (orden de PCI) y ahora /reports da 403 al leer el bucket. La cuenta tarjetas-sa tiene permiso, no hemos tocado nada más. ¿Le metemos una clave JSON como antes?
+actors:
+- role: dev
+  name: Hugo Martín (Tarjetas)
+  persona: Desarrollador de Tarjetas.
+  fallback: Mismo YAML, solo cambiamos el namespace.
+  facts: []
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Seguridad cloud.
+  fallback: Claves JSON prohibidas. Workload Identity sí.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-tarjetas-prod*, entorno PCI). Clúster `tarjetas-gke` (zona `{{.zone}}`).
+
+  > **INC-31019 · P2** · *«Hemos pasado el servicio de extractos del namespace default a tarjetas (orden de PCI) y ahora /reports da 403 al leer el bucket. La cuenta tarjetas-sa tiene permiso, no hemos tocado nada más. ¿Le metemos una clave JSON como antes?»*
+
+  Con **Workload Identity**, la cuenta de Kubernetes `NAMESPACE/KSA` se hace pasar por una cuenta de Google gracias a un permiso `roles/iam.workloadIdentityUser` sobre esa cuenta de Google… para un miembro **exacto**: `serviceAccount:{{.project}}.svc.id.goog[NAMESPACE/KSA]`. Revisa la anotación, la política IAM de `tarjetas-sa` y los registros del pod. Recuerda configurar `kubectl` con `get-credentials`.
+objectives:
+- Lee el error en los registros del pod
+- Revisa la anotación y el vínculo de Workload Identity
+- Corrige el vínculo para el namespace nuevo, sin claves
+- Comprueba y documenta
+hints:
+- text: '`gcloud iam service-accounts get-iam-policy tarjetas-sa@{{.project}}.iam.gserviceaccount.com` muestra `[default/extractos-ksa]`.'
+- text: El miembro correcto es `serviceAccount:{{.project}}.svc.id.goog[tarjetas/extractos-ksa]`.
+solution: |
+  ticket
+  gcloud container clusters get-credentials tarjetas-gke --zone={{.zone}}
+  kubectl logs deployment/extractos -n tarjetas
+  kubectl get serviceaccount extractos-ksa -n tarjetas -o yaml
+  gcloud iam service-accounts get-iam-policy tarjetas-sa@{{.project}}.iam.gserviceaccount.com
+  gcloud iam service-accounts add-iam-policy-binding tarjetas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[tarjetas/extractos-ksa]"
+  gcloud iam service-accounts remove-iam-policy-binding tarjetas-sa@{{.project}}.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="serviceAccount:{{.project}}.svc.id.goog[default/extractos-ksa]"
+  kubectl rollout restart deployment/extractos -n tarjetas
+  ticket comment "Causa: el vínculo de Workload Identity de tarjetas-sa era para [default/extractos-ksa]; al mover el servicio al namespace tarjetas, la KSA tarjetas/extractos-ksa ya no podía suplantar a tarjetas-sa. Creado el vínculo para [tarjetas/extractos-ksa] y retirado el antiguo. Sin claves JSON."
+  ticket update "Hola Hugo: los extractos vuelven a leerse. Workload Identity vincula namespace y cuenta exactos; lo hemos actualizado al namespace tarjetas. No hace falta (ni se permite) una clave JSON."
+  ticket resolve "Vínculo workloadIdentityUser actualizado a tarjetas/extractos-ksa; /reports responde 200 sin claves."
+shortcuts:
+- name: node account reads the bucket
+  run: |
+    gcloud storage buckets add-iam-policy-binding gs://zentra-extractos-{{.project}} --member=serviceAccount:gke-nodos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/storage.objectViewer
+    ticket resolve "Dado acceso al bucket a la cuenta de los nodos."
+rubric:
+- name: Extractos funcionando
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    target: k8s:tarjetas-gke/extractos
+    path: /reports
+    status: 200
+    desc: /reports responde 200
+- name: Identidad correcta
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: serviceAccount:gke-nodos-sa@{{.project}}.iam.gserviceaccount.com
+    permission: storage.objects.get
+    resource: bucket:zentra-extractos-{{.project}}
+    expect: false
+    desc: Los nodos no leen datos PCI
+  - type: command
+    regex: keys create
+    max: 0
+    desc: Ninguna clave JSON
+- name: Diagnóstico
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: command
+    regex: service-accounts get-iam-policy tarjetas-sa
+    min: 1
+    desc: Revisado el vínculo de WI
+- name: Documentado
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - namespace
+    - - workload identity
+      - workloadidentityuser
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: kubectl logs deployment/extractos
+  title: El error del pod
+  why: '403 de Cloud Storage para la identidad del pod: el pod no está actuando como tarjetas-sa.'
+- match: get-iam-policy tarjetas-sa
+  title: El vínculo
+  why: '[default/extractos-ksa]: el vínculo apunta al namespace antiguo.'
+- match: tarjetas/extractos-ksa
+  title: ''
+  why: 'Namespace y KSA exactos: así solo esa carga puede usar tarjetas-sa.'
+en:
+  title: INC P2 · Cards on GKE can't read its statements after changing namespace
+  summary: Workload Identity binds a specific Kubernetes account (namespace included) to a Google one. If the namespace changes, the binding stops working.
+  story: |-
+    **Project `{{.project}}`** (*zentra-tarjetas-prod*, PCI environment). Cluster `tarjetas-gke` (zone `{{.zone}}`).
+
+    > **INC-31019 · P2** · *"We moved the statements service from the default namespace to tarjetas (PCI requirement) and now /reports returns 403 reading the bucket. The tarjetas-sa account has permission, we didn't touch anything else. Shall we mount a JSON key like before?"*
+
+    With **Workload Identity**, the Kubernetes account `NAMESPACE/KSA` acts as a Google account thanks to a `roles/iam.workloadIdentityUser` permission on that Google account… for an **exact** member: `serviceAccount:{{.project}}.svc.id.goog[NAMESPACE/KSA]`. Check the annotation, `tarjetas-sa`'s IAM policy and the pod logs. Remember to configure `kubectl` with `get-credentials`.
+  objectives:
+  - Read the error in the pod logs
+  - Review the annotation and the Workload Identity binding
+  - Fix the binding for the new namespace, no keys
+  - Verify and document
+  hints:
+  - '`gcloud iam service-accounts get-iam-policy tarjetas-sa@{{.project}}.iam.gserviceaccount.com` shows `[default/extractos-ksa]`.'
+  - The correct member is `serviceAccount:{{.project}}.svc.id.goog[tarjetas/extractos-ksa]`.
+  ticket:
+    summary: We moved the statements service from the default namespace to tarjetas (PCI requirement) and now /reports returns 403 reading the bucket. The tarjetas-sa account has permission, we didn't touch anything else. Shall we mount a JSON key like before?
+  text:
+    Hugo Martín (Tarjetas): Hugo Martín (Cards)
+    Desarrollador de Tarjetas.: Cards developer.
+    Mismo YAML, solo cambiamos el namespace.: Same YAML, we only changed the namespace.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Seguridad cloud.: Cloud security.
+    Claves JSON prohibidas. Workload Identity sí.: JSON keys forbidden. Workload Identity yes.
+    Extractos funcionando: Statements working
+    /reports responde 200: /reports returns 200
+    Identidad correcta: Correct identity
+    Los nodos no leen datos PCI: The nodes don't read PCI data
+    Ninguna clave JSON: No JSON key
+    Diagnóstico: Diagnosis
+    Revisado el vínculo de WI: WI binding reviewed
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    El error del pod: The pod's error
+    '403 de Cloud Storage para la identidad del pod: el pod no está actuando como tarjetas-sa.': 'Cloud Storage 403 for the pod identity: the pod isn''t acting as tarjetas-sa.'
+    El vínculo: The binding
+    '[default/extractos-ksa]: el vínculo apunta al namespace antiguo.': '[default/extractos-ksa]: the binding points at the old namespace.'
+    'Namespace y KSA exactos: así solo esa carga puede usar tarjetas-sa.': 'Exact namespace and KSA: only that workload can use tarjetas-sa.'

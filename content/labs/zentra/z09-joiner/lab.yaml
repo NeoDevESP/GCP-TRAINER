@@ -1,0 +1,166 @@
+id: zentra-z09-joiner
+title: 'REQ · Alta: «dadle a Inés lo mismo que a mí»'
+summary: Una desarrolladora nueva necesita acceso. En Zentra eso es meterla en el grupo de su equipo, no copiar los permisos de otra persona.
+track: zentra
+day: 9
+level: basic
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.roles
+- iam.leastprivilege
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 20
+baseline:
+- zentra-core
+setup: |
+  gam create user ines.vega@zentra.dev firstname Ines lastname Vega org /Ingenieria/Producto title "Desarrolladora de Pagos" manager lucia.navarro@zentra.dev
+ticket:
+  id: REQ-21009
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Lucía Navarro (Pagos)
+  summary: Inés Vega empieza hoy en mi equipo. Dadle lo mismo que tengo yo en GCP, por favor; si es más rápido, ponedle Editor y luego lo afinamos.
+actors:
+- role: dev
+  name: Lucía Navarro (Pagos)
+  persona: Tech lead de Pagos.
+  fallback: Inés hará lo mismo que el resto del equipo de Pagos.
+  facts:
+  - keywords:
+    - - grupo
+      - group
+      - equipo
+      - team
+    answer: Todo el equipo de Pagos está en gcp-pagos-dev.
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Ingeniera de seguridad cloud.
+  fallback: Permisos a grupos, nunca a personas, y nada de roles básicos.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **REQ-21009** · *«Inés Vega empieza hoy en mi equipo. Dadle lo mismo que tengo yo en GCP, por favor; si es más rápido, ponedle Editor y luego lo afinamos.»*
+
+  «Lo mismo que yo» y «ponedle Editor» son las dos peticiones más peligrosas del oficio. Mira qué tiene Lucía y **por qué** (`gam info user`, `gcloud projects get-iam-policy`) y da el acceso como manda el manual de Zentra.
+objectives:
+- Averigua de dónde le vienen los permisos a Lucía
+- Da a Inés el acceso del equipo por su grupo
+- Sin permisos directos ni roles básicos
+- Explica a Lucía y cierra
+hints:
+- text: '`gam info user lucia.navarro@zentra.dev` muestra sus grupos.'
+- text: '`gcloud identity groups memberships add --group-email=gcp-pagos-dev@zentra.dev --member-email=ines.vega@zentra.dev`.'
+solution: |
+  ticket
+  gam info user lucia.navarro@zentra.dev
+  gcloud projects get-iam-policy {{.project}}
+  ask dev "¿Inés hará lo mismo que el resto del equipo de Pagos?"
+  gcloud identity groups memberships add --group-email=gcp-pagos-dev@zentra.dev --member-email=ines.vega@zentra.dev
+  gcloud identity groups memberships check-transitive-membership --group-email=gcp-producto@zentra.dev --member-email=ines.vega@zentra.dev
+  ticket update "Hola Lucía: Inés ya está en el grupo gcp-pagos-dev, igual que tú, y hereda los mismos permisos del equipo. No le damos Editor: en producción nadie lo tiene, y los cambios van por el pipeline."
+  ticket resolve "Añadida ines.vega a gcp-pagos-dev; hereda los permisos de gcp-producto sin roles directos ni básicos."
+shortcuts:
+- name: editor as asked
+  run: |
+    gcloud projects add-iam-policy-binding {{.project}} --member=user:ines.vega@zentra.dev --role=roles/editor
+    ticket resolve "Dado Editor a Inés como pidió Lucía."
+rubric:
+- name: Acceso del equipo
+  validator: functional
+  points: 35
+  all: true
+  checks:
+  - type: exists
+    path: directory.groups["gcp-pagos-dev@zentra.dev"]
+    expect:
+      allMembers:
+        regex: ines.vega@
+    desc: Inés está en gcp-pagos-dev
+  - type: iam
+    principal: user:ines.vega@zentra.dev
+    permission: run.services.get
+    resource: project
+    desc: Ve los servicios como el equipo
+- name: Mínimo privilegio
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: no_basic_roles
+    except:
+    - '*@gcplab.dev'
+    desc: Sin roles básicos en el proyecto
+  - type: command
+    regex: add-iam-policy-binding .*ines
+    max: 0
+    desc: Ningún permiso directo a Inés
+- name: Explicación
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - grupo
+      - group
+      - gcp-pagos-dev
+    - - editor
+    desc: Explica el grupo y por qué no Editor
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: gam info user lucia
+  title: Mira de dónde viene
+  why: 'Lucía no tiene permisos propios: los hereda de gcp-pagos-dev. Eso es lo que hay que replicar.'
+- match: memberships add --group-email=gcp-pagos-dev
+  title: ''
+  why: Meterla en el grupo le da exactamente lo del equipo, y cuando se vaya basta con sacarla.
+en:
+  title: 'REQ · Joiner: "give Inés the same as me"'
+  summary: A new developer needs access. At Zentra that means adding her to her team's group, not copying someone's permissions.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **REQ-21009** · *"Inés Vega starts in my team today. Please give her the same GCP access I have; if it's faster, give her Editor and we'll fine-tune later."*
+
+    "The same as me" and "give her Editor" are the two most dangerous requests in the job. See what Lucía has and **why** (`gam info user`, `gcloud projects get-iam-policy`) and grant access the way Zentra's handbook says.
+  objectives:
+  - Find where Lucía's permissions come from
+  - Give Inés the team's access through its group
+  - No direct permissions or basic roles
+  - Explain to Lucía and close
+  hints:
+  - '`gam info user lucia.navarro@zentra.dev` shows her groups.'
+  - '`gcloud identity groups memberships add --group-email=gcp-pagos-dev@zentra.dev --member-email=ines.vega@zentra.dev`.'
+  ticket:
+    summary: Inés Vega starts in my team today. Please give her the same GCP access I have; if it's faster, give her Editor and we'll fine-tune later.
+  text:
+    Lucía Navarro (Pagos): Lucía Navarro (Payments)
+    Tech lead de Pagos.: Payments tech lead.
+    Inés hará lo mismo que el resto del equipo de Pagos.: Inés will do the same as the rest of the Payments team.
+    Todo el equipo de Pagos está en gcp-pagos-dev.: The whole Payments team is in gcp-pagos-dev.
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Ingeniera de seguridad cloud.: Cloud security engineer.
+    Permisos a grupos, nunca a personas, y nada de roles básicos.: Permissions to groups, never to people, and no basic roles.
+    Acceso del equipo: Team access
+    Inés está en gcp-pagos-dev: Inés is in gcp-pagos-dev
+    Ve los servicios como el equipo: She sees the services like the team
+    Mínimo privilegio: Least privilege
+    Sin roles básicos en el proyecto: No basic roles on the project
+    Ningún permiso directo a Inés: No direct permission for Inés
+    Explicación: Explanation
+    Explica el grupo y por qué no Editor: Explains the group and why not Editor
+    Ticket cerrado: Ticket closed
+    Mira de dónde viene: See where it comes from
+    'Lucía no tiene permisos propios: los hereda de gcp-pagos-dev. Eso es lo que hay que replicar.': 'Lucía has no permissions of her own: she inherits them from gcp-pagos-dev. That''s what to replicate.'
+    Meterla en el grupo le da exactamente lo del equipo, y cuando se vaya basta con sacarla.: Adding her to the group gives her exactly the team's access, and when she leaves you just remove her.

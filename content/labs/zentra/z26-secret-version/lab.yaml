@@ -1,0 +1,198 @@
+id: zentra-z26-secret-version
+title: INC P1 · Seguridad desactiva una clave comprometida y los pagos se caen
+summary: El servicio estaba fijado a la versión que Seguridad ha desactivado. La salida es usar la versión nueva, no reactivar la comprometida.
+track: zentra
+day: 26
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- security.secrets
+- compute.serverless
+- observability.incident
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:1 --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  echo -n "psp_live_zentra_R8x" | gcloud secrets versions add proveedor-psp --data-file=-
+faults:
+- type: secret_version_disable
+  secret: proveedor-psp
+  version: '1'
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31026
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: Todos los pagos con tarjeta fallan desde hace 3 minutos. Coincide con una acción de Seguridad sobre la clave del proveedor de pagos.
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Seguridad cloud.
+  fallback: 'La versión 1 está comprometida: se queda desactivada.'
+  facts:
+  - keywords:
+    - - version
+      - clave
+      - key
+      - nueva
+      - new
+      - reactiv
+      - enable
+    answer: 'La versión 1 se filtró: NO la reactivéis. El proveedor ya nos dio la nueva, que es la versión 2 del secreto.'
+- role: product
+  name: Carla Méndez (producto)
+  persona: Product owner de la app.
+  fallback: Los clientes se quejan en redes; necesito saber cuándo estará.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31026 · P1** · *«Todos los pagos con tarjeta fallan desde hace 3 minutos. Coincide con una acción de Seguridad sobre la clave del proveedor de pagos.»*
+
+  Mira qué **versión** del secreto usa `pagos-api` y en qué estado está (`gcloud secrets versions list proveedor-psp`). Antes de deshacer nada de Seguridad, **pregunta**: quizá esa versión está desactivada por un buen motivo.
+objectives:
+- Encuentra qué versión usa el servicio y su estado
+- Pregunta a Seguridad antes de tocar el secreto
+- Pasa el servicio a la versión nueva
+- Mantén desactivada la comprometida y documenta
+hints:
+- text: '`gcloud run services describe pagos-api --region={{.region}}` muestra `API_KEY: proveedor-psp:1`.'
+- text: '`gcloud run services update pagos-api --region={{.region}} --update-secrets=API_KEY=proveedor-psp:2`.'
+solution: |
+  ticket
+  gcloud run services describe pagos-api --region={{.region}}
+  gcloud secrets versions list proveedor-psp
+  ask security "¿por qué está desactivada la versión 1 y cuál es la clave nueva?"
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:2 --no-allow-unauthenticated
+  gcloud run services describe pagos-api --region={{.region}}
+  ticket comment "Causa: Seguridad desactivó la versión 1 de proveedor-psp (filtrada) y pagos-api estaba fijado a :1. Pasado a :2 (clave nueva del proveedor) sin reactivar la 1. Propuesta: en rotaciones, cambiar primero el servicio y desactivar después, coordinando con Seguridad."
+  ticket update "Actualización: los pagos con tarjeta vuelven a funcionar con la clave nueva. La clave antigua sigue anulada."
+  ticket resolve "pagos-api pasado a proveedor-psp:2; la versión 1 comprometida sigue desactivada."
+shortcuts:
+- name: re-enable the compromised version
+  run: |
+    gcloud secrets versions enable 1 --secret=proveedor-psp
+    ticket resolve "Reactivada la versión 1 de la clave para que vuelvan los pagos."
+rubric:
+- name: Pagos restaurados
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: /pay responde 200
+- name: Clave comprometida anulada
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: secrets["proveedor-psp"]
+    expect:
+      versions:
+        regex: DISABLED
+    desc: La versión 1 sigue desactivada
+  - type: exists
+    path: runServices["pagos-api"]
+    expect:
+      secrets:
+        regex: proveedor-psp:(2|latest)
+    desc: El servicio usa la versión nueva
+- name: Coordinación
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: asked
+    actor: security
+    min: 1
+    desc: Consultado con Seguridad
+- name: Documentado
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - version
+      - versión
+      - :2
+    - - desactiv
+      - disabl
+      - filtrad
+      - leak
+    desc: Nota con la causa
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: secrets versions list
+  title: Estado de cada versión
+  why: '1 DISABLED, 2 ENABLED: el servicio sigue apuntando a la 1.'
+- match: ^ask security
+  title: ''
+  why: 'Reactivar la 1 «arreglaría» los pagos usando una clave filtrada: pregunta siempre antes.'
+en:
+  title: INC P1 · Security disables a compromised key and payments go down
+  summary: The service was pinned to the version Security disabled. The way out is to use the new version, not to re-enable the compromised one.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31026 · P1** · *"Every card payment has been failing for 3 minutes. It matches a Security action on the payment provider key."*
+
+    Check which **version** of the secret `pagos-api` uses and its state (`gcloud secrets versions list proveedor-psp`). Before undoing anything Security did, **ask**: that version may be disabled for a good reason.
+  objectives:
+  - Find which version the service uses and its state
+  - Ask Security before touching the secret
+  - Move the service to the new version
+  - Keep the compromised one disabled and document
+  hints:
+  - '`gcloud run services describe pagos-api --region={{.region}}` shows `API_KEY: proveedor-psp:1`.'
+  - '`gcloud run services update pagos-api --region={{.region}} --update-secrets=API_KEY=proveedor-psp:2`.'
+  ticket:
+    summary: Every card payment has been failing for 3 minutes. It matches a Security action on the payment provider key.
+  text:
+    NOC 24x7: NOC 24x7
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Seguridad cloud.: Cloud security.
+    'La versión 1 está comprometida: se queda desactivada.': 'Version 1 is compromised: it stays disabled.'
+    'La versión 1 se filtró: NO la reactivéis. El proveedor ya nos dio la nueva, que es la versión 2 del secreto.': 'Version 1 leaked: do NOT re-enable it. The provider already gave us the new one, which is version 2 of the secret.'
+    Carla Méndez (producto): Carla Méndez (product)
+    Product owner de la app.: App product owner.
+    Los clientes se quejan en redes; necesito saber cuándo estará.: Customers are complaining online; I need to know when it'll be fixed.
+    Pagos restaurados: Payments restored
+    /pay responde 200: /pay returns 200
+    Clave comprometida anulada: Compromised key stays off
+    La versión 1 sigue desactivada: Version 1 stays disabled
+    El servicio usa la versión nueva: The service uses the new version
+    Coordinación: Coordination
+    Consultado con Seguridad: Checked with Security
+    Documentado: Documented
+    Nota con la causa: Note with the cause
+    Ticket cerrado: Ticket closed
+    Estado de cada versión: Each version's state
+    '1 DISABLED, 2 ENABLED: el servicio sigue apuntando a la 1.': '1 DISABLED, 2 ENABLED: the service still points at 1.'
+    'Reactivar la 1 «arreglaría» los pagos usando una clave filtrada: pregunta siempre antes.': 'Re-enabling 1 would "fix" payments using a leaked key: always ask first.'

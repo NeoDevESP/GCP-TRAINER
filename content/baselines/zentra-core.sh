@@ -76,3 +76,4 @@ gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-seguridad
 gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-finops@zentra.dev --role=roles/billing.viewer
 gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-soporte@zentra.dev --role=roles/browser
 gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:deploy-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.admin
+gcloud projects remove-iam-policy-binding {{.project}} --member=serviceAccount:$(gcloud projects describe {{.project}} --format='value(projectNumber)')-compute@developer.gserviceaccount.com --role=roles/editor

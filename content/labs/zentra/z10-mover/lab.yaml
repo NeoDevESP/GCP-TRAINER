@@ -1,0 +1,153 @@
+id: zentra-z10-mover
+title: 'REQ · Cambio de equipo: Hugo pasa de Tarjetas a Pagos'
+summary: En un cambio de puesto hay que dar lo nuevo y quitar lo viejo. Dejar los permisos antiguos es el fallo más común en auditoría.
+track: zentra
+day: 10
+level: basic
+branch: iam
+type: incident
+mode: production
+skills:
+- iam.roles
+- iam.leastprivilege
+- gke.rbac
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 20
+baseline:
+- zentra-core
+setup: |
+  gcloud projects add-iam-policy-binding {{.project}} --member=group:gcp-tarjetas-dev@zentra.dev --role=roles/container.developer
+ticket:
+  id: REQ-21010
+  kind: REQ
+  priority: P3
+  sla: 1d
+  reporter: Marta Ibáñez (responsable de Plataforma)
+  summary: Hugo Martín se cambia de Tarjetas a Pagos desde el lunes. Dadle acceso a lo de Pagos.
+actors:
+- role: manager
+  name: Marta Ibáñez (responsable de Plataforma)
+  persona: Tu responsable.
+  fallback: En Tarjetas ya no va a trabajar.
+  facts:
+  - keywords:
+    - - tarjetas
+      - cards
+      - quitar
+      - remove
+      - antiguo
+      - old
+    answer: 'Sí, que deje de tener acceso a Tarjetas: es entorno PCI y en auditoría lo miran con lupa.'
+story: |-
+  **Proyecto `{{.project}}`**.
+
+  > **REQ-21010** · *«Hugo Martín se cambia de Tarjetas a Pagos desde el lunes. Dadle acceso a lo de Pagos.»*
+
+  El ticket solo pide **dar**. Pero un cambio de equipo (*mover*) siempre tiene dos partes. Revisa a qué grupos pertenece Hugo y qué da cada uno (`gam info user`, `gcloud projects get-iam-policy`).
+objectives:
+- Revisa los grupos actuales de Hugo
+- Dale el grupo de Pagos
+- Quítale el de Tarjetas
+- Documenta y cierra
+hints:
+- text: '`gam info user hugo.martin@zentra.dev`.'
+- text: '`gcloud identity groups memberships delete --group-email=gcp-tarjetas-dev@zentra.dev --member-email=hugo.martin@zentra.dev`.'
+solution: |
+  ticket
+  gam info user hugo.martin@zentra.dev
+  gcloud projects get-iam-policy {{.project}}
+  ask manager "¿Hugo debe dejar de tener acceso a Tarjetas?"
+  gcloud identity groups memberships add --group-email=gcp-pagos-dev@zentra.dev --member-email=hugo.martin@zentra.dev
+  gcloud identity groups memberships delete --group-email=gcp-tarjetas-dev@zentra.dev --member-email=hugo.martin@zentra.dev
+  gam info user hugo.martin@zentra.dev
+  ticket update "Hola Marta: Hugo ya está en gcp-pagos-dev y lo he sacado de gcp-tarjetas-dev, así que pierde el acceso al entorno de tarjetas (PCI) y mantiene el general de producto."
+  ticket resolve "Hugo movido de gcp-tarjetas-dev a gcp-pagos-dev; retirado su acceso al entorno de tarjetas."
+shortcuts:
+- name: only add
+  run: |
+    gcloud identity groups memberships add --group-email=gcp-pagos-dev@zentra.dev --member-email=hugo.martin@zentra.dev
+    ticket resolve "Añadido Hugo al grupo de Pagos como se pidió."
+rubric:
+- name: Nuevo acceso
+  validator: functional
+  points: 30
+  checks:
+  - type: exists
+    path: directory.groups["gcp-pagos-dev@zentra.dev"].members["hugo.martin@zentra.dev"]
+    desc: Hugo en gcp-pagos-dev
+- name: Acceso antiguo retirado
+  validator: security
+  points: 45
+  critical: true
+  all: true
+  checks:
+  - type: absent
+    path: directory.groups["gcp-tarjetas-dev@zentra.dev"].members["hugo.martin@zentra.dev"]
+    desc: Hugo fuera de gcp-tarjetas-dev
+  - type: iam
+    principal: user:hugo.martin@zentra.dev
+    permission: container.pods.exec
+    resource: project
+    expect: false
+    desc: Sin acceso a los clústeres de tarjetas
+- name: Cierre
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - tarjetas
+      - cards
+    - - pagos
+      - payments
+    desc: Explica lo que se da y lo que se quita
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: gam info user hugo
+  title: Mira lo que ya tiene
+  why: 'Antes de dar, mira qué tiene: aquí aparece gcp-tarjetas-dev, que da acceso a GKE de tarjetas.'
+- match: memberships delete --group-email=gcp-tarjetas-dev
+  title: ''
+  why: Quitar lo antiguo es la mitad que todos olvidan; en un entorno PCI es un hallazgo de auditoría seguro.
+en:
+  title: 'REQ · Team change: Hugo moves from Cards to Payments'
+  summary: On a role change you grant the new and remove the old. Leaving old permissions is the most common audit finding.
+  story: |-
+    **Project `{{.project}}`**.
+
+    > **REQ-21010** · *"Hugo Martín moves from Cards to Payments as of Monday. Give him access to Payments."*
+
+    The ticket only asks to **grant**. But a team change (*mover*) always has two parts. Check which groups Hugo belongs to and what each one grants (`gam info user`, `gcloud projects get-iam-policy`).
+  objectives:
+  - Review Hugo's current groups
+  - Give him the Payments group
+  - Remove the Cards group
+  - Document and close
+  hints:
+  - '`gam info user hugo.martin@zentra.dev`.'
+  - '`gcloud identity groups memberships delete --group-email=gcp-tarjetas-dev@zentra.dev --member-email=hugo.martin@zentra.dev`.'
+  ticket:
+    summary: Hugo Martín moves from Cards to Payments as of Monday. Give him access to Payments.
+  text:
+    Marta Ibáñez (responsable de Plataforma): Marta Ibáñez (Head of Platform)
+    Tu responsable.: Your manager.
+    En Tarjetas ya no va a trabajar.: He won't work on Cards anymore.
+    'Sí, que deje de tener acceso a Tarjetas: es entorno PCI y en auditoría lo miran con lupa.': 'Yes, remove his Cards access: it''s a PCI environment and audits scrutinise it.'
+    Nuevo acceso: New access
+    Hugo en gcp-pagos-dev: Hugo in gcp-pagos-dev
+    Acceso antiguo retirado: Old access removed
+    Hugo fuera de gcp-tarjetas-dev: Hugo out of gcp-tarjetas-dev
+    Sin acceso a los clústeres de tarjetas: No access to the cards clusters
+    Cierre: Closure
+    Explica lo que se da y lo que se quita: Explains what's granted and what's removed
+    Ticket cerrado: Ticket closed
+    Mira lo que ya tiene: See what he already has
+    'Antes de dar, mira qué tiene: aquí aparece gcp-tarjetas-dev, que da acceso a GKE de tarjetas.': 'Before granting, check what he has: here gcp-tarjetas-dev shows up, granting access to the cards GKE.'
+    Quitar lo antiguo es la mitad que todos olvidan; en un entorno PCI es un hallazgo de auditoría seguro.: Removing the old access is the half everyone forgets; in a PCI environment it's a guaranteed audit finding.

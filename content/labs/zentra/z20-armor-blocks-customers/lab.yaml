@@ -1,0 +1,211 @@
+id: zentra-z20-armor-blocks-customers
+title: INC P1 · La web de Zentra da 403 a miles de clientes tras frenar un ataque
+summary: Una regla de Cloud Armor escrita deprisa bloquea mucho más que el ataque. Afínala al rango atacante sin quitar la protección.
+track: zentra
+day: 20
+level: intermediate
+branch: security
+type: incident
+mode: production
+skills:
+- security.armor
+- networking.lb
+- observability.incident
+wellArchitected:
+- security
+- reliability
+certs:
+- ACE
+- PCDE
+difficulty: 4
+minutes: 35
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create web-zentra --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=web-zentra --metadata=sim-preinstalled=nginx,startup-script='apt-get install -y nginx'
+  gcloud compute firewall-rules create allow-health-checks --network=zentra-vpc --allow=tcp:80 --source-ranges=35.191.0.0/16,130.211.0.0/22 --target-tags=web-zentra
+  gcloud compute instance-groups unmanaged create web-ig --zone={{.zone}}
+  gcloud compute instance-groups unmanaged add-instances web-ig --instances=web-zentra --zone={{.zone}}
+  gcloud compute instance-groups set-named-ports web-ig --named-ports=http:80 --zone={{.zone}}
+  gcloud compute health-checks create http web-hc --port=80 --request-path=/
+  gcloud compute security-policies create zentra-armor --description="Proteccion web"
+  gcloud compute backend-services create web-be --protocol=HTTP --port-name=http --health-checks=web-hc --global
+  gcloud compute backend-services update web-be --global --security-policy=zentra-armor
+  gcloud compute backend-services add-backend web-be --instance-group=web-ig --instance-group-zone={{.zone}} --global
+  gcloud compute url-maps create web-map --default-service=web-be
+  gcloud compute target-http-proxies create web-proxy --url-map=web-map
+  gcloud compute forwarding-rules create web-lb --global --target-http-proxy=web-proxy --ports=80
+faults:
+- type: command
+  actor: nadia.kowalski@zentra.dev
+  run: |
+    gcloud compute security-policies rules create 1000 --security-policy=zentra-armor --action=deny-403 --src-ip-ranges=203.0.0.0/8 --description="bloqueo ataque bots"
+traffic:
+- name: clientes
+  target: lb:web-lb
+  path: /
+  rps: 30
+ticket:
+  id: INC-31020
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: 'Avalancha de quejas: la web de Zentra da «403 Forbidden» a clientes de toda Europa desde hace 10 minutos. Coincide con la mitigación del ataque de bots de esta mañana.'
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Seguridad cloud; aplicó la mitigación.
+  fallback: Bloqueé el ataque con una regla de Cloud Armor a toda prisa.
+  facts:
+  - keywords:
+    - - rango
+      - range
+      - ip
+      - atac
+      - attack
+      - bots
+    answer: Los bots venían todos de 198.51.100.0/24. ¿Puse otro rango? Puede que me equivocara al copiarlo…
+  - keywords:
+    - - quitar
+      - borrar
+      - remove
+      - delete
+      - desactivar
+    answer: ¡No la quites! El ataque sigue activo; solo hay que afinarla.
+- role: product
+  name: Carla Méndez (producto)
+  persona: Product owner de la app.
+  fallback: Los clientes se quejan en redes; necesito saber cuándo estará.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-app-prod*). Balanceador `web-lb` → servicio de backend `web-be`, protegido por la política de Cloud Armor `zentra-armor`.
+
+  > **INC-31020 · P1** · *«Avalancha de quejas: la web de Zentra da «403 Forbidden» a clientes de toda Europa desde hace 10 minutos. Coincide con la mitigación del ataque de bots de esta mañana.»*
+
+  Un 403 del balanceador con el servidor sano suele ser **Cloud Armor**. Revisa las reglas (`gcloud compute security-policies describe zentra-armor`): prioridad, acción y rango. Habla con quien la puso. El ataque **sigue activo**: quitar la protección no es una opción.
+objectives:
+- Confirma que el 403 lo da Cloud Armor
+- Encuentra la regla y el rango que sobra
+- Afina la regla al rango atacante, sin quitarla
+- Comunica y documenta
+hints:
+- text: '`gcloud compute security-policies describe zentra-armor` muestra 203.0.0.0/8: ¡un /8 son 16 millones de direcciones!'
+- text: '`gcloud compute security-policies rules update 1000 --security-policy=zentra-armor --src-ip-ranges=198.51.100.0/24`.'
+solution: |
+  ticket
+  curl -s -o /dev/null -w '%{http_code}' http://$(gcloud compute forwarding-rules describe web-lb --global --format='value(IPAddress)')/
+  gcloud compute backend-services get-health web-be --global
+  gcloud compute security-policies describe zentra-armor
+  ask security "¿de qué rango venía el ataque?"
+  gcloud compute security-policies rules update 1000 --security-policy=zentra-armor --src-ip-ranges=198.51.100.0/24
+  curl -s http://$(gcloud compute forwarding-rules describe web-lb --global --format='value(IPAddress)')/
+  ticket comment "Causa: la regla 1000 de zentra-armor (mitigación del ataque) bloqueaba 203.0.0.0/8 en lugar de 198.51.100.0/24, error al copiar el rango. Afinada a 198.51.100.0/24 con acuerdo de Seguridad; el ataque sigue bloqueado y los clientes vuelven a entrar."
+  ticket update "Actualización para negocio: la web vuelve a funcionar para todos los clientes. La regla de protección contra el ataque bloqueaba por error un rango muy amplio; está corregida y la protección sigue activa."
+  ticket resolve "Regla 1000 de Cloud Armor afinada al rango atacante 198.51.100.0/24; la web responde 200 y el ataque sigue bloqueado."
+shortcuts:
+- name: remove the rule
+  run: |
+    gcloud compute security-policies rules delete 1000 --security-policy=zentra-armor --quiet
+    ticket resolve "Quitada la regla de Cloud Armor que bloqueaba a los clientes."
+rubric:
+- name: Clientes dentro
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    target: lb:web-lb
+    path: /
+    status: 200
+    desc: La web responde 200
+- name: Ataque aún bloqueado
+  validator: security
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    path: securityPolicies["zentra-armor"]
+    expect:
+      rules:
+        regex: 198\.51\.100\.0/24
+    desc: Sigue habiendo una regla contra el rango atacante
+  - type: exists
+    path: backendServices["web-be"]
+    expect:
+      securityPolicy:
+        regex: zentra-armor
+    desc: La política sigue aplicada al backend
+- name: Diagnóstico
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: command
+    regex: security-policies describe
+    min: 1
+    desc: Reglas revisadas
+- name: Comunicación
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - clientes
+      - customers
+    - - protecci
+      - protection
+      - ataque
+      - attack
+    desc: Aviso a negocio
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: security-policies describe
+  title: Las reglas de Cloud Armor
+  why: '203.0.0.0/8 son 16 millones de IP: muchos operadores europeos entran en ese rango.'
+- match: rules update 1000
+  title: ''
+  why: 'Afinar en vez de borrar: los clientes vuelven y los bots siguen fuera.'
+en:
+  title: INC P1 · Zentra's website returns 403 to thousands of customers after stopping an attack
+  summary: A Cloud Armor rule written in a hurry blocks far more than the attack. Narrow it to the attacking range without removing the protection.
+  story: |-
+    **Project `{{.project}}`** (*zentra-app-prod*). Load balancer `web-lb` → backend service `web-be`, protected by the Cloud Armor policy `zentra-armor`.
+
+    > **INC-31020 · P1** · *"Flood of complaints: Zentra's website has been returning "403 Forbidden" to customers all over Europe for 10 minutes. It matches the bot-attack mitigation from this morning."*
+
+    A 403 from the load balancer with a healthy server is usually **Cloud Armor**. Check the rules (`gcloud compute security-policies describe zentra-armor`): priority, action and range. Talk to whoever added it. The attack **is still on**: removing the protection isn't an option.
+  objectives:
+  - Confirm Cloud Armor returns the 403
+  - Find the rule and the excess range
+  - Narrow the rule to the attacking range, without removing it
+  - Communicate and document
+  hints:
+  - '`gcloud compute security-policies describe zentra-armor` shows 203.0.0.0/8: a /8 is 16 million addresses!'
+  - '`gcloud compute security-policies rules update 1000 --security-policy=zentra-armor --src-ip-ranges=198.51.100.0/24`.'
+  ticket:
+    summary: 'Flood of complaints: Zentra''s website has been returning "403 Forbidden" to customers all over Europe for 10 minutes. It matches the bot-attack mitigation from this morning.'
+  text:
+    NOC 24x7: NOC 24x7
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Seguridad cloud; aplicó la mitigación.: Cloud security; applied the mitigation.
+    Bloqueé el ataque con una regla de Cloud Armor a toda prisa.: I blocked the attack with a Cloud Armor rule in a rush.
+    Los bots venían todos de 198.51.100.0/24. ¿Puse otro rango? Puede que me equivocara al copiarlo…: The bots all came from 198.51.100.0/24. Did I put another range? I may have miscopied it…
+    ¡No la quites! El ataque sigue activo; solo hay que afinarla.: Don't remove it! The attack is still on; it just needs narrowing.
+    Carla Méndez (producto): Carla Méndez (product)
+    Product owner de la app.: App product owner.
+    Los clientes se quejan en redes; necesito saber cuándo estará.: Customers are complaining online; I need to know when it'll be fixed.
+    Clientes dentro: Customers back in
+    La web responde 200: The website returns 200
+    Ataque aún bloqueado: Attack still blocked
+    Sigue habiendo una regla contra el rango atacante: There's still a rule against the attacking range
+    La política sigue aplicada al backend: The policy is still attached to the backend
+    Diagnóstico: Diagnosis
+    Reglas revisadas: Rules reviewed
+    Comunicación: Communication
+    Aviso a negocio: Business update
+    Ticket cerrado: Ticket closed
+    Las reglas de Cloud Armor: The Cloud Armor rules
+    '203.0.0.0/8 son 16 millones de IP: muchos operadores europeos entran en ese rango.': '203.0.0.0/8 is 16 million IPs: many European carriers fall in that range.'
+    'Afinar en vez de borrar: los clientes vuelven y los bots siguen fuera.': 'Narrow instead of delete: customers return and bots stay out.'

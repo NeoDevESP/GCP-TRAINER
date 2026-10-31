@@ -1,0 +1,198 @@
+id: zentra-z23-push-endpoint
+title: INC P2 · Las notificaciones de analítica se pierden tras un «arreglo» de la URL
+summary: La suscripción empuja a una dirección que ya no existe. Encuentra quién la cambió, ponla bien y comprueba que se vacía la cola.
+track: zentra
+day: 23
+level: intermediate
+branch: data
+type: incident
+mode: production
+skills:
+- data.pubsub
+- observability.incident
+- security.audit
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud iam service-accounts create analitica-sa --display-name="worker de analitica"
+  gcloud iam service-accounts create push-sa --display-name="push de Pub/Sub"
+  gcloud projects add-iam-policy-binding {{.project}} --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/cloudsql.client
+  gcloud sql instances create ledger-db --database-version=POSTGRES_15 --tier=db-g1-small --region={{.region}} --no-assign-ip --network=zentra-vpc
+  gcloud sql databases create ledger --instance=ledger-db
+  gcloud sql users create pagos --instance=ledger-db --password=pw-ledger-1
+  gcloud pubsub topics create transacciones
+  bq mk --dataset --location=EU analitica
+  bq mk --table analitica.transacciones id:STRING,importe:NUMERIC,fecha:TIMESTAMP
+  gcloud pubsub topics add-iam-policy-binding transacciones --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/pubsub.publisher
+  bq add-iam-policy-binding --member=serviceAccount:analitica-sa@{{.project}}.iam.gserviceaccount.com --role=roles/bigquery.dataEditor analitica
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/orders-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --add-cloudsql-instances={{.project}}:{{.region}}:ledger-db --set-env-vars=DB_HOST=/cloudsql/{{.project}}:{{.region}}:ledger-db,DB_USER=pagos,DB_PASSWORD=pw-ledger-1,DB_NAME=ledger,DB_POOL_SIZE=5,TOPIC=transacciones --max-instances=5 --network=zentra-vpc --subnet=apps --vpc-egress=private-ranges-only --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud run deploy analitica-worker --image=europe-docker.pkg.dev/gcplab-public/apps/orders-worker:1.0 --region={{.region}} --service-account=analitica-sa@{{.project}}.iam.gserviceaccount.com --set-env-vars=BQ_TABLE=analitica.transacciones --max-instances=3 --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding analitica-worker --region={{.region}} --member=serviceAccount:push-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+  gcloud pubsub subscriptions create transacciones-analitica --topic=transacciones --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+faults:
+- type: pubsub_push_endpoint
+  subscription: transacciones-analitica
+  endpoint: https://analitica-worker-v1-legacy.a.run.app/push
+traffic:
+- name: clientes
+  target: run:pagos-api
+  path: /orders
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31023
+  kind: INC
+  priority: P2
+  sla: 4h
+  reporter: Riesgos · Analítica
+  summary: El panel de operaciones se ha quedado congelado a las 07:40. Los pagos van bien. En Pub/Sub dicen que los mensajes se acumulan.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+- role: data
+  name: Sara Benítez (Datos)
+  persona: Ingeniera de datos.
+  fallback: Hoy no hemos desplegado nada en analítica.
+  facts:
+  - keywords:
+    - - url
+      - endpoint
+      - push
+      - legacy
+      - v1
+    answer: ¿analitica-worker-v1-legacy? Ese servicio lo borramos hace un mes; alguien habrá copiado una URL vieja de la documentación.
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-datos-prod*).
+
+  > **INC-31023 · P2** · *«El panel de operaciones se ha quedado congelado a las 07:40. Los pagos van bien. En Pub/Sub dicen que los mensajes se acumulan.»*
+
+  Flujo afectado: `pagos-api` (Cloud Run) guarda cada pago en `ledger-db` y publica un evento en el tema **transacciones**; la suscripción push **transacciones-analitica** (autenticada como `push-sa`) lo entrega a `analitica-worker`, que lo escribe en BigQuery `analitica.transacciones`.
+
+  Compara **a dónde empuja** la suscripción con **dónde está** de verdad el worker (`gcloud run services describe`). La auditoría te dirá quién la cambió.
+objectives:
+- Confirma la acumulación de mensajes
+- Compara la URL de la suscripción con la del worker
+- Corrige el destino conservando la autenticación
+- Comprueba la entrega y documenta
+hints:
+- text: '`gcloud pubsub subscriptions describe transacciones-analitica` y `gcloud run services describe analitica-worker --region={{.region}} --format=''value(status.url)''`.'
+- text: '`gcloud pubsub subscriptions modify-push-config transacciones-analitica --push-endpoint=URL/push --push-auth-service-account=push-sa@…`.'
+solution: |
+  ticket
+  gcloud pubsub subscriptions describe transacciones-analitica
+  gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)'
+  ask data "¿qué es analitica-worker-v1-legacy?"
+  gcloud pubsub subscriptions modify-push-config transacciones-analitica --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push --push-auth-service-account=push-sa@{{.project}}.iam.gserviceaccount.com
+  sleep 120
+  gcloud pubsub subscriptions describe transacciones-analitica
+  ticket comment "Causa: la suscripción transacciones-analitica empujaba a analitica-worker-v1-legacy, un servicio borrado hace un mes (URL antigua copiada de la documentación). Restaurado el destino al analitica-worker actual, manteniendo la autenticación con push-sa. Propuesta: actualizar la documentación y gestionar la suscripción en Terraform."
+  ticket update "Resuelto: el panel vuelve a actualizarse y está recuperando los eventos acumulados desde las 07:40."
+  ticket resolve "Corregido el push endpoint de transacciones-analitica al worker actual con push-sa; la cola se vacía."
+shortcuts:
+- name: push without authentication
+  run: |
+    gcloud pubsub subscriptions modify-push-config transacciones-analitica --push-endpoint=$(gcloud run services describe analitica-worker --region={{.region}} --format='value(status.url)')/push
+    ticket resolve "Corregida la URL de la suscripción de analítica."
+rubric:
+- name: Entrega restablecida
+  validator: functional
+  points: 45
+  critical: true
+  checks:
+  - type: pubsub
+    subscription: transacciones-analitica
+    ackedMin: 10
+    backlogMax: 50
+    settle: 3
+    desc: Mensajes entregados y confirmados
+- name: Diagnóstico
+  validator: diagnosis
+  points: 25
+  all: true
+  checks:
+  - type: command
+    regex: subscriptions describe
+    min: 1
+    desc: Configuración de la suscripción revisada
+  - type: asked
+    actor: data
+    min: 1
+    desc: Consultado con Datos
+- name: Documentado
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - legacy
+      - antigua
+      - old
+      - v1
+    - - push
+      - endpoint
+      - url
+    desc: Nota con la causa y la prevención
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: subscriptions describe transacciones-analitica
+  title: Mira el destino
+  why: 'pushEndpoint apunta a …v1-legacy…: un servicio que ya no existe.'
+- match: modify-push-config
+  title: ''
+  why: 'Cambia la URL sin perder la autenticación: sin --push-auth-service-account el worker privado rechazaría las entregas.'
+en:
+  title: INC P2 · Analytics notifications vanish after a URL "fix"
+  summary: The subscription pushes to an address that no longer exists. Find who changed it, set it right and check the backlog drains.
+  story: |-
+    **Project `{{.project}}`** (*zentra-datos-prod*).
+
+    > **INC-31023 · P2** · *"The transactions dashboard froze at 07:40. Payments are fine. Pub/Sub says messages are piling up."*
+
+    Affected flow: `pagos-api` (Cloud Run) stores each payment in `ledger-db` and publishes an event to the **transacciones** topic; the **transacciones-analitica** push subscription (authenticated as `push-sa`) delivers it to `analitica-worker`, which writes it to BigQuery `analitica.transacciones`.
+
+    Compare **where** the subscription pushes with **where** the worker really is (`gcloud run services describe`). The audit log tells you who changed it.
+  objectives:
+  - Confirm the message backlog
+  - Compare the subscription URL with the worker's
+  - Fix the endpoint keeping the authentication
+  - Check delivery and document
+  hints:
+  - '`gcloud pubsub subscriptions describe transacciones-analitica` and `gcloud run services describe analitica-worker --region={{.region}} --format=''value(status.url)''`.'
+  - '`gcloud pubsub subscriptions modify-push-config transacciones-analitica --push-endpoint=URL/push --push-auth-service-account=push-sa@…`.'
+  ticket:
+    summary: The transactions dashboard froze at 07:40. Payments are fine. Pub/Sub says messages are piling up.
+  text:
+    Riesgos · Analítica: Risk · Analytics
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Sara Benítez (Datos): Sara Benítez (Data)
+    Ingeniera de datos.: Data engineer.
+    Hoy no hemos desplegado nada en analítica.: We haven't deployed anything to analytics today.
+    ? ¿analitica-worker-v1-legacy? Ese servicio lo borramos hace un mes; alguien habrá copiado una URL vieja de la documentación.
+    : analitica-worker-v1-legacy? We deleted that service a month ago; someone must have copied an old URL from the docs.
+    Entrega restablecida: Delivery restored
+    Mensajes entregados y confirmados: Messages delivered and acked
+    Diagnóstico: Diagnosis
+    Configuración de la suscripción revisada: Subscription config reviewed
+    Consultado con Datos: Checked with Data
+    Documentado: Documented
+    Nota con la causa y la prevención: Note with cause and prevention
+    Ticket cerrado: Ticket closed
+    Mira el destino: Check the endpoint
+    'pushEndpoint apunta a …v1-legacy…: un servicio que ya no existe.': 'pushEndpoint points at …v1-legacy…: a service that no longer exists.'
+    'Cambia la URL sin perder la autenticación: sin --push-auth-service-account el worker privado rechazaría las entregas.': 'Change the URL without losing authentication: without --push-auth-service-account the private worker would reject deliveries.'

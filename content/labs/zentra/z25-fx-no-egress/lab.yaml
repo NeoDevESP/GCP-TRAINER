@@ -1,0 +1,186 @@
+id: zentra-z25-fx-no-egress
+title: 'INC P2 · Divisas sin cotizaciones: el cotizador no llega al proveedor'
+summary: Una VM privada sale a internet por Cloud NAT. Si el NAT desaparece, todo lo saliente falla. Restáuralo como estaba y averigua por qué se fue.
+track: zentra
+day: 25
+level: intermediate
+branch: networking
+type: incident
+mode: production
+skills:
+- networking.nat
+- networking.routing
+- security.audit
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCA
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  gcloud compute instances create divisas-cotizador --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=divisas --metadata=sim-preinstalled=docker-images,startup-script='docker run -d -p 8080:8080 europe-docker.pkg.dev/gcplab-public/apps/egress-app:1.0'
+  gcloud compute instances create ops-consola --zone={{.zone}} --machine-type=e2-small --subnet=apps --no-address --tags=ops
+  gcloud compute firewall-rules create allow-ops-to-divisas --network=zentra-vpc --allow=tcp:8080 --source-tags=ops --target-tags=divisas
+faults:
+- type: nat_delete
+  router: zentra-router
+  nat: zentra-nat
+  region: '{{.region}}'
+  actor: tomas.vidal@zentra.dev
+ticket:
+  id: INC-31025
+  kind: INC
+  priority: P2
+  sla: 1h
+  reporter: Equipo de Divisas
+  summary: El cambio de divisas muestra «cotización no disponible» desde las 10:05. El cotizador (divisas-cotizador) da timeout al llamar a la API del proveedor. Nosotros no hemos tocado nada.
+actors:
+- role: network
+  name: Tomás Vidal (Red)
+  persona: Arquitecto de red.
+  fallback: Estoy migrando el router de la región…
+  facts:
+  - keywords:
+    - - nat
+      - zentra-nat
+      - borr
+      - delete
+      - router
+    answer: '¡Vaya! Borré zentra-nat pensando que el nuevo ya estaba activo. Recréalo igual: todas las subredes y IP automáticas.'
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-divisas-prod*).
+
+  > **INC-31025 · P2** · *«El cambio de divisas muestra «cotización no disponible» desde las 10:05. El cotizador (divisas-cotizador) da timeout al llamar a la API del proveedor. Nosotros no hemos tocado nada.»*
+
+  `divisas-cotizador` es una VM **sin IP pública** en la subred `apps`; para hablar con el proveedor externo sale por **Cloud NAT** (`zentra-nat` en `zentra-router`). Un *timeout* hacia internet desde una VM privada suele ser la salida, no la aplicación.
+objectives:
+- Confirma que falla la salida a internet
+- Encuentra qué cambió en la red y quién
+- Restaura la salida sin dar IP pública
+- Valida y documenta
+hints:
+- text: '`gcloud compute routers nats list --router=zentra-router --region={{.region}}` y la auditoría de `routers`.'
+- text: '`gcloud compute routers nats create zentra-nat --router=zentra-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips`.'
+solution: |
+  ticket
+  gcloud compute routers nats list --router=zentra-router --region={{.region}}
+  gcloud logging read 'protoPayload.methodName:"routers"' --limit=5
+  ask network "¿habéis tocado zentra-nat esta mañana?"
+  gcloud compute routers nats create zentra-nat --router=zentra-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+  gcloud compute ssh divisas-cotizador --zone={{.zone}} --tunnel-through-iap --command='curl -s --max-time 5 https://api.exchangerate.example/latest'
+  ticket comment "Causa: tomas.vidal borró zentra-nat durante la migración del router creyendo que el nuevo estaba activo; sin NAT, las VMs privadas no salen a internet. Recreado igual (todas las subredes, IP automáticas). Ojo: si el proveedor de divisas filtra por IP, puede que haya que actualizar su lista con las nuevas."
+  ticket update "Resuelto: el cambio de divisas vuelve a mostrar cotizaciones. Se había eliminado por error la salida a internet de la red privada."
+  ticket resolve "Recreado zentra-nat en zentra-router; divisas-cotizador vuelve a llegar al proveedor."
+shortcuts:
+- name: public IP for the VM
+  run: |
+    gcloud resource-manager org-policies disable-enforce compute.vmExternalIpAccess --project={{.project}}
+    gcloud compute instances add-access-config divisas-cotizador --zone={{.zone}}
+    ticket resolve "Dada IP pública al cotizador para que salga."
+rubric:
+- name: Cotizaciones de vuelta
+  validator: functional
+  points: 35
+  checks:
+  - type: http
+    from: vm:ops-consola
+    target: vm:divisas-cotizador:8080
+    path: /fx
+    status: 200
+    desc: El cotizador obtiene precios
+- name: Salida privada
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: absent
+    path: instances["divisas-cotizador"].natIP
+    desc: La VM sigue sin IP pública
+  - type: org_policy
+    constraint: compute.vmExternalIpAccess
+    enforced: true
+    desc: Política de IP públicas intacta
+- name: Diagnóstico
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: command
+    regex: nats list|routers describe|logging read
+    min: 1
+    desc: Revisada la salida y la auditoría
+- name: Documentado
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    public: false
+    keywords:
+    - - nat
+    - - tomas
+      - borr
+      - delete
+    desc: Nota con quién y qué
+  - type: ticket_resolved
+    desc: Ticket cerrado
+tutor:
+- match: --max-time 5
+  title: Reproduce desde el origen
+  why: 'Timeout desde la propia VM: el problema es el camino de salida.'
+- match: nats list
+  title: ''
+  why: 'Lista vacía: no hay NAT, y una VM sin IP pública no tiene otra forma de salir.'
+- match: nats create zentra-nat
+  title: ''
+  why: 'Igual que estaba: así no hay que tocar nada más.'
+en:
+  title: 'INC P2 · FX without quotes: the pricer can''t reach the provider'
+  summary: A private VM reaches the internet through Cloud NAT. If NAT disappears, all egress fails. Restore it as it was and find out why it went.
+  story: |-
+    **Project `{{.project}}`** (*zentra-divisas-prod*).
+
+    > **INC-31025 · P2** · *"Currency exchange shows "quote unavailable" since 10:05. The pricer (divisas-cotizador) times out calling the provider's API. We haven't touched anything."*
+
+    `divisas-cotizador` is a VM **without a public IP** in the `apps` subnet; to talk to the external provider it goes out through **Cloud NAT** (`zentra-nat` on `zentra-router`). A *timeout* to the internet from a private VM is usually the egress, not the application.
+  objectives:
+  - Confirm internet egress is failing
+  - Find what changed in the network and who
+  - Restore egress without a public IP
+  - Validate and document
+  hints:
+  - '`gcloud compute routers nats list --router=zentra-router --region={{.region}}` and the `routers` audit log.'
+  - '`gcloud compute routers nats create zentra-nat --router=zentra-router --region={{.region}} --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips`.'
+  ticket:
+    summary: Currency exchange shows "quote unavailable" since 10:05. The pricer (divisas-cotizador) times out calling the provider's API. We haven't touched anything.
+  text:
+    Equipo de Divisas: FX team
+    Tomás Vidal (Red): Tomás Vidal (Network)
+    Arquitecto de red.: Network architect.
+    Estoy migrando el router de la región…: I'm migrating the region's router…
+    '¡Vaya! Borré zentra-nat pensando que el nuevo ya estaba activo. Recréalo igual: todas las subredes y IP automáticas.': 'Oh no! I deleted zentra-nat thinking the new one was already live. Recreate it the same: all subnets and automatic IPs.'
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Cotizaciones de vuelta: Quotes back
+    El cotizador obtiene precios: The pricer gets prices
+    Salida privada: Private egress
+    La VM sigue sin IP pública: The VM still has no public IP
+    Política de IP públicas intacta: Public IP policy intact
+    Diagnóstico: Diagnosis
+    Revisada la salida y la auditoría: Egress and audit reviewed
+    Documentado: Documented
+    Nota con quién y qué: Note with who and what
+    Ticket cerrado: Ticket closed
+    Reproduce desde el origen: Reproduce from the source
+    'Timeout desde la propia VM: el problema es el camino de salida.': 'Timeout from the VM itself: the problem is the egress path.'
+    'Lista vacía: no hay NAT, y una VM sin IP pública no tiene otra forma de salir.': 'Empty list: there''s no NAT, and a VM without a public IP has no other way out.'
+    'Igual que estaba: así no hay que tocar nada más.': 'Exactly as it was: nothing else needs changing.'

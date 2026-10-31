@@ -125,7 +125,7 @@ tracks:
     level: associate
     certs: [ACE, PCSE]
     phase: V3
-    labs: [zentra-z01-first-day, zentra-z02-who-is-who, zentra-z03-log-detective, zentra-z04-private-vm, zentra-z05-private-run, zentra-z06-secrets, zentra-z07-noc-alert, zentra-z08-finops-basics]
+    labs: [zentra-z01-first-day, zentra-z02-who-is-who, zentra-z03-log-detective, zentra-z04-private-vm, zentra-z05-private-run, zentra-z06-secrets, zentra-z07-noc-alert, zentra-z08-finops-basics, zentra-z09-joiner, zentra-z10-mover, zentra-z11-urgent-leaver, zentra-z12-external-consultant, zentra-z13-enable-api, zentra-z14-auditors, zentra-z15-external-member, zentra-z16-publish-denied, zentra-z17-push-backlog, zentra-z18-bq-denied, zentra-z19-wi-namespace, zentra-z20-armor-blocks-customers, zentra-z21-bad-release, zentra-z22-leaked-key, zentra-z23-push-endpoint, zentra-z24-healthcheck-path, zentra-z25-fx-no-egress, zentra-z26-secret-version, zentra-z27-payday-boss]
     en:
       title: 'Zentra: your first month at a digital bank'
       description: 'You join GCP Support at Zentra, a European digital bank that runs entirely on Google Cloud. A first week of guided tutorials from scratch; then real requests and incidents from every team and, at the end, the payday on-call shift.'

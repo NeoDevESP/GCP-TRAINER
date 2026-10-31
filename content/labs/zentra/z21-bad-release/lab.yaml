@@ -1,0 +1,196 @@
+id: zentra-z21-bad-release
+title: INC P1 · La versión 3.0 de pagos-api no arranca
+summary: Un despliegue roto en producción se arregla primero volviendo a la última versión buena; el arreglo de fondo va después, por el pipeline.
+track: zentra
+day: 21
+level: intermediate
+branch: devops
+type: incident
+mode: production
+skills:
+- devops.delivery
+- compute.serverless
+- observability.incident
+wellArchitected:
+- reliability
+certs:
+- ACE
+- PCDE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+setup: |
+  echo -n "psp_live_zentra_7Q2" | gcloud secrets create proveedor-psp --data-file=-
+  gcloud secrets add-iam-policy-binding proveedor-psp --member=serviceAccount:pagos-sa@{{.project}}.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --no-allow-unauthenticated
+  gcloud run services add-iam-policy-binding pagos-api --region={{.region}} --member=serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com --role=roles/run.invoker
+faults:
+- type: run_image
+  service: pagos-api
+  image: europe-docker.pkg.dev/gcplab-public/apps/payments-api:3.0-bad
+  actor: deploy-sa@{{.project}}.iam.gserviceaccount.com
+traffic:
+- name: pagos
+  target: run:pagos-api
+  path: /pay
+  rps: 20
+  principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+ticket:
+  id: INC-31021
+  kind: INC
+  priority: P1
+  sla: 15m
+  reporter: NOC 24x7
+  summary: Tras el despliegue automático de pagos-api 3.0 hace 5 minutos, todos los pagos fallan. Lucía está en un avión.
+actors:
+- role: sre
+  name: Diego Ferrer (SRE)
+  persona: SRE de guardia.
+  fallback: ¿Qué ha cambiado? Mira los registros y la auditoría.
+  facts: []
+- role: change
+  name: Javier Luna (gestor de cambios)
+  persona: Gestor de cambios.
+  fallback: Documenta en el ticket cualquier cambio que hagas.
+  facts:
+  - keywords:
+    - - rollback
+      - emergencia
+      - emergency
+      - volver
+      - anterior
+      - previous
+    answer: 'Sí: volver a la versión anterior es un cambio de emergencia permitido. Documéntalo en el ticket y lo revisamos en el próximo CAB.'
+- role: product
+  name: Carla Méndez (producto)
+  persona: Product owner de la app.
+  fallback: Los clientes se quejan en redes; necesito saber cuándo estará.
+  facts: []
+story: |-
+  **Proyecto `{{.project}}`** (*zentra-pagos-prod*).
+
+  > **INC-31021 · P1** · *«Tras el despliegue automático de pagos-api 3.0 hace 5 minutos, todos los pagos fallan. Lucía está en un avión.»*
+
+  En un P1 con un cambio reciente, lo primero es **volver atrás** (restaurar servicio) y lo segundo **entender** (con calma, en el equipo dueño). Mira las revisiones (`gcloud run revisions list --service=pagos-api --region={{.region}}`), qué imagen tenía la última que funcionaba y vuelve a ella. Es un **cambio de emergencia**: avisa al gestor de cambios.
+objectives:
+- Confirma qué cambió y cuándo
+- Vuelve a la última versión buena
+- Comprueba que los pagos funcionan
+- Registra el cambio de emergencia y escala a Pagos
+hints:
+- text: '`gcloud run revisions list --service=pagos-api --region={{.region}}` y `gcloud run services describe pagos-api --region={{.region}}`.'
+- text: Redespliega la imagen `payments-api:1.0` (o mueve el tráfico a la revisión anterior con `update-traffic`).
+solution: |
+  ticket
+  gcloud run services describe pagos-api --region={{.region}}
+  gcloud run revisions list --service=pagos-api --region={{.region}}
+  gcloud logging read 'resource.type=cloud_run_revision severity>=ERROR' --limit=3
+  ask change "¿puedo hacer el rollback como cambio de emergencia?"
+  gcloud run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0 --region={{.region}} --service-account=pagos-sa@{{.project}}.iam.gserviceaccount.com --set-secrets=API_KEY=proveedor-psp:latest --no-allow-unauthenticated
+  gcloud run services describe pagos-api --region={{.region}}
+  ticket comment "Cambio de emergencia: rollback de pagos-api a payments-api:1.0. La 3.0 (desplegada por deploy-sa) no arranca: «failed to start and listen on the port». Avisado Javier Luna (CAB)."
+  ticket escalate pagos "La versión 3.0 de pagos-api no arranca en producción (failed to start and listen on the port). Hemos vuelto a la 1.0 y los pagos funcionan. Pendiente: corregir la 3.0 y añadir una prueba de arranque al pipeline."
+  ticket update "Actualización: los pagos vuelven a funcionar con la versión anterior. El equipo de Pagos revisará la versión nueva antes de volver a desplegarla."
+shortcuts:
+- name: more instances
+  run: |
+    ticket escalate pagos "La version 3.0 de pagos-api no arranca, revisadlo vosotros cuando podais."
+rubric:
+- name: Pagos restaurados
+  validator: functional
+  points: 40
+  checks:
+  - type: http
+    target: run:pagos-api
+    path: /pay
+    principal: serviceAccount:app-gateway-sa@{{.project}}.iam.gserviceaccount.com
+    status: 200
+    desc: /pay responde 200
+- name: Vuelta a la versión buena
+  validator: state
+  points: 20
+  checks:
+  - type: exists
+    path: runServices["pagos-api"]
+    expect:
+      image:
+        regex: payments-api:1\.0
+    desc: Sirve la 1.0
+- name: Diagnóstico
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: command
+    regex: revisions list|services describe pagos-api
+    min: 1
+    desc: Revisado qué cambió
+- name: Cambio y escalado
+  validator: evidence
+  points: 30
+  all: true
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Gestor de cambios avisado
+  - type: ticket_escalated
+    team: pagos|payments
+    keywords:
+    - - '3.0'
+    - - '1.0'
+      - anterior
+      - previous
+      - rollback
+    desc: Escalado a Pagos con lo hecho
+tutor:
+- match: revisions list
+  title: Qué cambió
+  why: La revisión nueva usa payments-api:3.0-bad y no está lista; la anterior funcionaba.
+- match: run deploy pagos-api --image=europe-docker.pkg.dev/gcplab-public/apps/payments-api:1.0
+  title: ''
+  why: 'Rollback: restaura el servicio en minutos. El arreglo de la 3.0 es trabajo del equipo de Pagos.'
+en:
+  title: INC P1 · pagos-api release 3.0 won't start
+  summary: A broken production deploy is fixed first by going back to the last good version; the root fix comes later, through the pipeline.
+  story: |-
+    **Project `{{.project}}`** (*zentra-pagos-prod*).
+
+    > **INC-31021 · P1** · *"After the automatic deploy of pagos-api 3.0 five minutes ago, every payment fails. Lucía is on a plane."*
+
+    In a P1 with a recent change, first **roll back** (restore service) and second **understand** (calmly, with the owning team). Look at the revisions (`gcloud run revisions list --service=pagos-api --region={{.region}}`), which image the last working one had, and go back to it. It's an **emergency change**: tell the change manager.
+  objectives:
+  - Confirm what changed and when
+  - Go back to the last good version
+  - Check payments work
+  - Record the emergency change and escalate to Payments
+  hints:
+  - '`gcloud run revisions list --service=pagos-api --region={{.region}}` and `gcloud run services describe pagos-api --region={{.region}}`.'
+  - Redeploy the `payments-api:1.0` image (or move traffic to the previous revision with `update-traffic`).
+  ticket:
+    summary: After the automatic deploy of pagos-api 3.0 five minutes ago, every payment fails. Lucía is on a plane.
+  text:
+    NOC 24x7: NOC 24x7
+    Diego Ferrer (SRE): Diego Ferrer (SRE)
+    SRE de guardia.: On-call SRE.
+    ¿Qué ha cambiado? Mira los registros y la auditoría.: What changed? Check the logs and the audit trail.
+    Javier Luna (gestor de cambios): Javier Luna (change manager)
+    Gestor de cambios.: Change manager.
+    Documenta en el ticket cualquier cambio que hagas.: Document any change you make on the ticket.
+    ? 'Sí: volver a la versión anterior es un cambio de emergencia permitido. Documéntalo en el ticket y lo revisamos en el próximo CAB.'
+    : 'Yes: rolling back to the previous version is an allowed emergency change. Document it on the ticket and we''ll review it at the next CAB.'
+    Carla Méndez (producto): Carla Méndez (product)
+    Product owner de la app.: App product owner.
+    Los clientes se quejan en redes; necesito saber cuándo estará.: Customers are complaining online; I need to know when it'll be fixed.
+    Pagos restaurados: Payments restored
+    /pay responde 200: /pay returns 200
+    Vuelta a la versión buena: Back to the good version
+    Sirve la 1.0: Serving 1.0
+    Diagnóstico: Diagnosis
+    Revisado qué cambió: Reviewed what changed
+    Cambio y escalado: Change and escalation
+    Gestor de cambios avisado: Change manager informed
+    Escalado a Pagos con lo hecho: Escalated to Payments with what was done
+    Qué cambió: What changed
+    La revisión nueva usa payments-api:3.0-bad y no está lista; la anterior funcionaba.: The new revision uses payments-api:3.0-bad and isn't ready; the previous one worked.
+    'Rollback: restaura el servicio en minutos. El arreglo de la 3.0 es trabajo del equipo de Pagos.': 'Rollback: restores service in minutes. Fixing 3.0 is the Payments team''s job.'
