@@ -1,0 +1,924 @@
+# Quick diagnosis guide by symptom. Generated; every text is [es, en].
+runbooks:
+- id: permission-denied
+  area: access
+  symptom:
+  - Un usuario o servicio recibe 403 / PERMISSION_DENIED
+  - A user or service gets 403 / PERMISSION_DENIED
+  errors:
+  - 'PERMISSION_DENIED: Permission ''storage.objects.get'' denied on resource'
+  - 403 Forbidden
+  - does not have storage.objects.create access
+  means:
+  - La identidad que hace la llamada no tiene el permiso concreto sobre ese recurso. Lo primero es saber **quién** llama de verdad (usuario, cuenta de servicio de la VM, del pod, de Cloud Run…) y **qué permiso** falta.
+  - The calling identity lacks that specific permission on that resource. First find out **who** is really calling (user, the VM's, pod's or Cloud Run's service account…) and **which permission** is missing.
+  steps:
+  - text:
+    - 'Lee el error completo: suele nombrar el permiso y el recurso'
+    - 'Read the full error: it usually names the permission and the resource'
+    cmd: ''
+  - text:
+    - Pregunta a IAM por qué sí o por qué no
+    - Ask IAM why or why not
+    cmd: gcloud policy-intelligence troubleshoot-policy iam //cloudresourcemanager.googleapis.com/projects/PROYECTO --principal-email=EMAIL --permission=PERMISO
+  - text:
+    - Mira qué roles tiene esa identidad en el proyecto
+    - See which roles that identity has in the project
+    cmd: gcloud projects get-iam-policy PROYECTO --flatten='bindings[].members' --filter='bindings.members:EMAIL' --format='table(bindings.role)'
+  - text:
+    - Busca el rechazo en los registros
+    - Find the denial in the logs
+    cmd: gcloud logging read 'protoPayload.status.code=7' --limit=5
+  causes:
+  - - La llamada la hace otra identidad (la cuenta de servicio, no la persona)
+    - Another identity makes the call (the service account, not the person)
+  - - El permiso está en otro recurso (bucket, tema, secreto) y no en el proyecto, o al revés
+    - The permission is on another resource (bucket, topic, secret) and not the project, or the other way round
+  - - Le quitaron a la persona de un grupo, o la cuenta está suspendida
+    - The person was removed from a group, or the account is suspended
+  fix:
+  - Da el rol predefinido **más pequeño** que contenga ese permiso, al **grupo** adecuado y sobre el **recurso** concreto.
+  - Grant the **smallest** predefined role containing that permission, to the right **group** and on the specific **resource**.
+  avoid:
+  - Dar Editor u Owner «para que funcione». En un banco es un hallazgo de auditoría.
+  - Granting Editor or Owner "to make it work". In a bank that's an audit finding.
+  labs:
+  - zentra-z16-publish-denied
+  - zentra-z18-bq-denied
+  - bank-b25-wrong-identity
+  - ace-d11-app-403
+- id: run-403
+  area: access
+  symptom:
+  - Cloud Run responde 403 Forbidden al invocarlo
+  - Cloud Run answers 403 Forbidden when invoked
+  errors:
+  - 'Error: Forbidden. Your client does not have permission to get URL'
+  - 403 Forbidden
+  means:
+  - El servicio exige autenticación y quien llama no tiene `roles/run.invoker`, no envía un token de identidad o el *ingress* no deja pasar ese origen.
+  - The service requires authentication and the caller lacks `roles/run.invoker`, sends no identity token, or ingress doesn't allow that source.
+  steps:
+  - text:
+    - Mira quién puede invocarlo
+    - See who can invoke it
+    cmd: gcloud run services get-iam-policy SERVICIO --region=REGION
+  - text:
+    - Mira el ingress y la cuenta de servicio
+    - Check ingress and the service account
+    cmd: gcloud run services describe SERVICIO --region=REGION
+  - text:
+    - Prueba con token de identidad
+    - Test with an identity token
+    cmd: 'curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" URL'
+  causes:
+  - - Falta `run.invoker` para la cuenta que llama
+    - '`run.invoker` is missing for the calling account'
+  - - El cliente llama sin token de identidad (o con uno de acceso)
+    - The client calls without an identity token (or with an access token)
+  - - Ingress `internal` y la llamada viene de fuera de la VPC
+    - Ingress `internal` and the call comes from outside the VPC
+  fix:
+  - Da `roles/run.invoker` **en el servicio** a la cuenta concreta que llama.
+  - Grant `roles/run.invoker` **on the service** to the specific calling account.
+  avoid:
+  - Abrirlo a `allUsers`. Un microservicio bancario nunca es público.
+  - Opening it to `allUsers`. A banking microservice is never public.
+  labs:
+  - zentra-z05-private-run
+  - bank-b05-run-403
+- id: api-disabled
+  area: access
+  symptom:
+  - «API has not been used in project … or it is disabled»
+  - '"API has not been used in project … or it is disabled"'
+  errors:
+  - BigQuery API has not been used in project 123456789 before or it is disabled
+  - SERVICE_DISABLED
+  means:
+  - El servicio no está activado en ese proyecto. Desactivar una API **no borra datos**, pero todo lo que la usa falla.
+  - The service isn't enabled in that project. Disabling an API **deletes no data**, but everything that uses it fails.
+  steps:
+  - text:
+    - Mira qué APIs están activas
+    - See which APIs are enabled
+    cmd: gcloud services list --enabled
+  - text:
+    - Busca quién la desactivó
+    - Find who disabled it
+    cmd: gcloud logging read 'protoPayload.methodName:DisableService' --limit=3
+  causes:
+  - - Proyecto nuevo sin la API activada
+    - New project without the API enabled
+  - - Un script de limpieza o un Terraform la desactivó
+    - A clean-up script or Terraform disabled it
+  fix:
+  - '`gcloud services enable SERVICIO.googleapis.com` y, si la desactivó un proceso, que lo corrijan para que no se repita.'
+  - '`gcloud services enable SERVICE.googleapis.com` and, if a process disabled it, have it fixed so it doesn''t happen again.'
+  avoid:
+  - ''
+  - ''
+  labs:
+  - zentra-z13-enable-api
+  - zentra-z40-api-disabled
+- id: org-policy
+  area: access
+  symptom:
+  - '«Constraint … violated»: una política de organización lo prohíbe'
+  - '"Constraint … violated": an organization policy forbids it'
+  errors:
+  - Constraint constraints/compute.vmExternalIpAccess violated for project
+  - Constraint constraints/gcp.resourceLocations violated
+  - One or more users named in the policy do not belong to a permitted customer
+  means:
+  - 'No es un problema de permisos: la organización prohíbe esa configuración para todos (IP públicas, regiones fuera de la UE, claves de cuentas de servicio, miembros de otros dominios…).'
+  - 'It isn''t a permissions problem: the organization forbids that setting for everyone (public IPs, non-EU regions, service account keys, members from other domains…).'
+  steps:
+  - text:
+    - Mira qué políticas aplican al proyecto
+    - See which policies apply to the project
+    cmd: gcloud resource-manager org-policies list --project=PROYECTO
+  - text:
+    - Lee la política concreta
+    - Read the specific policy
+    cmd: gcloud resource-manager org-policies describe RESTRICCION --project=PROYECTO --effective
+  causes:
+  - - Se pide una VM con IP pública, un bucket público o una región no permitida
+    - Someone asks for a VM with a public IP, a public bucket or a disallowed region
+  - - Se intenta dar acceso a un correo de otro dominio
+    - Someone tries to grant access to an email from another domain
+  fix:
+  - Cumple la política con la alternativa segura (IAP, Cloud NAT, región de la UE, grupo del dominio…). Una excepción solo la aprueba Seguridad.
+  - Meet the policy with the safe alternative (IAP, Cloud NAT, an EU region, a domain group…). Only Security approves an exception.
+  avoid:
+  - Desactivar la restricción para salir del paso.
+  - Turning off the constraint to get past it.
+  labs:
+  - bank-b02-vm-policy
+  - bank-b16-region-policy
+  - zentra-z12-external-consultant
+  - zentra-z15-external-member
+- id: leaver
+  area: access
+  symptom:
+  - 'Baja urgente: una persona se va y hay que cortarle el acceso ya'
+  - 'Urgent leaver: someone is leaving and access must be cut now'
+  errors: []
+  means:
+  - El acceso a Google Cloud llega por grupos de Workspace. Hay que cortar la sesión y los grupos, y revisar lo que la persona tenía directamente o en claves.
+  - Google Cloud access comes through Workspace groups. Cut the session and the groups, and check what the person held directly or through keys.
+  steps:
+  - text:
+    - Mira sus grupos
+    - See their groups
+    cmd: gam info user EMAIL
+  - text:
+    - Busca permisos directos (no por grupo)
+    - Look for direct grants (not through a group)
+    cmd: gcloud projects get-iam-policy PROYECTO --flatten='bindings[].members' --filter='bindings.members:user:EMAIL'
+  - text:
+    - Revisa claves de cuentas de servicio que pudiera tener
+    - Check service account keys they might hold
+    cmd: gcloud iam service-accounts keys list --iam-account=SA
+  causes:
+  - - Accesos directos fuera de grupos
+    - Direct grants outside groups
+  - - Claves de cuentas de servicio descargadas
+    - Downloaded service account keys
+  fix:
+  - Suspende la cuenta y cierra sesiones (`gam update user EMAIL suspended on`, `gam user EMAIL signout`), quita permisos directos y deja constancia en el ticket.
+  - Suspend the account and sign it out (`gam update user EMAIL suspended on`, `gam user EMAIL signout`), remove direct grants and record it in the ticket.
+  avoid:
+  - 'Borrar la cuenta el primer día: se pierden sus datos y la auditoría.'
+  - 'Deleting the account on day one: its data and audit trail are lost.'
+  labs:
+  - zentra-z11-urgent-leaver
+  - bank-b12-leaver-joiner
+- id: vm-no-internet
+  area: network
+  symptom:
+  - Una VM sin IP pública no sale a internet (apt, APIs externas)
+  - A VM without a public IP can't reach the internet (apt, external APIs)
+  errors:
+  - 'Could not connect to deb.debian.org: Connection timed out'
+  - 'dial tcp: i/o timeout'
+  means:
+  - Sin IP pública, la única salida es **Cloud NAT** (más una ruta por defecto). Si el NAT no cubre esa subred o no existe, no hay camino.
+  - Without a public IP, the only way out is **Cloud NAT** (plus a default route). If NAT doesn't cover that subnet or doesn't exist, there's no path.
+  steps:
+  - text:
+    - Mira el router y su NAT
+    - Check the router and its NAT
+    cmd: gcloud compute routers nats describe NAT --router=ROUTER --region=REGION
+  - text:
+    - Comprueba la ruta por defecto
+    - Check the default route
+    cmd: gcloud compute routes list --filter='destRange=0.0.0.0/0'
+  - text:
+    - Busca quién lo cambió
+    - Find who changed it
+    cmd: gcloud logging read 'protoPayload.methodName:"routers"' --limit=5
+  causes:
+  - - Borraron o cambiaron el NAT
+    - The NAT was deleted or changed
+  - - El NAT solo cubre otras subredes
+    - The NAT only covers other subnets
+  - - Falta la ruta 0.0.0.0/0
+    - The 0.0.0.0/0 route is missing
+  fix:
+  - Restaura el NAT para esa subred (si debe tener salida).
+  - Restore NAT for that subnet (if it should have egress).
+  avoid:
+  - 'Darle IP pública a la VM: la política de la organización lo prohíbe y expone el servidor.'
+  - 'Giving the VM a public IP: the org policy forbids it and it exposes the server.'
+  labs:
+  - zentra-z25-fx-no-egress
+  - bank-b03-no-egress
+  - ace-d12-private-egress
+- id: nat-ports
+  area: network
+  symptom:
+  - Fallos intermitentes solo hacia internet con mucho tráfico
+  - Intermittent failures only to the internet under heavy traffic
+  errors:
+  - allocation_status=DROPPED reason=OUT_OF_RESOURCES
+  means:
+  - Cloud NAT da a cada VM un número fijo de puertos por destino (64 por defecto). Si abre más conexiones simultáneas, las que sobran se descartan.
+  - Cloud NAT gives each VM a fixed number of ports per destination (64 by default). If it opens more simultaneous connections, the extra ones are dropped.
+  steps:
+  - text:
+    - Busca OUT_OF_RESOURCES en los registros del NAT
+    - Look for OUT_OF_RESOURCES in the NAT logs
+    cmd: gcloud logging read 'logName:nat_flows' --limit=5
+  - text:
+    - Mira los puertos asignados
+    - See the allocated ports
+    cmd: gcloud compute routers get-nat-mapping-info ROUTER --region=REGION
+  causes:
+  - - La aplicación abre una conexión por petición en lugar de reutilizarlas
+    - The app opens one connection per request instead of reusing them
+  fix:
+  - Sube `--min-ports-per-vm` (o activa la asignación dinámica) y pide a la aplicación que reutilice conexiones.
+  - Raise `--min-ports-per-vm` (or enable dynamic allocation) and ask the app to reuse connections.
+  avoid:
+  - ''
+  - ''
+  labs:
+  - zentra-z28-nat-ports
+- id: private-google-access
+  area: network
+  symptom:
+  - Una VM privada no llega a Cloud Storage, BigQuery u otras APIs de Google
+  - A private VM can't reach Cloud Storage, BigQuery or other Google APIs
+  errors:
+  - 'dial tcp storage.googleapis.com:443: i/o timeout'
+  means:
+  - Sin IP pública ni NAT, las APIs de Google solo se alcanzan con **Private Google Access**, que se activa por subred.
+  - With no public IP or NAT, Google APIs are only reachable through **Private Google Access**, enabled per subnet.
+  steps:
+  - text:
+    - Mira si la subred lo tiene
+    - Check whether the subnet has it
+    cmd: gcloud compute networks subnets describe SUBRED --region=REGION --format='value(privateIpGoogleAccess)'
+  - text:
+    - Busca quién lo cambió
+    - Find who changed it
+    cmd: gcloud logging read 'protoPayload.methodName:"setPrivateIpGoogleAccess"' --limit=3
+  causes:
+  - - Un Terraform o un cambio manual lo desactivó
+    - A Terraform or manual change turned it off
+  fix:
+  - '`gcloud compute networks subnets update SUBRED --region=REGION --enable-private-ip-google-access`'
+  - '`gcloud compute networks subnets update SUBNET --region=REGION --enable-private-ip-google-access`'
+  avoid:
+  - 'Meter una subred de datos en el NAT: le das internet a lo que no debe tenerlo.'
+  - 'Adding a data subnet to NAT: you give internet to what shouldn''t have it.'
+  labs:
+  - zentra-z37-private-google-access
+- id: firewall-blocked
+  area: network
+  symptom:
+  - «Connection timed out» entre dos máquinas de la misma VPC
+  - '"Connection timed out" between two machines in the same VPC'
+  errors:
+  - Connection timed out
+  - 'curl: (28) Failed to connect'
+  means:
+  - Una regla de cortafuegos no deja pasar el tráfico. Cuando varias coinciden, **gana el número de prioridad más bajo**; una DENY con número más bajo que la ALLOW la anula.
+  - A firewall rule blocks the traffic. When several match, **the lowest priority number wins**; a DENY with a lower number than the ALLOW overrides it.
+  steps:
+  - text:
+    - Lista las reglas con prioridad, etiquetas y acción
+    - List rules with priority, tags and action
+    cmd: gcloud compute firewall-rules list --filter='network:RED' --sort-by=priority
+  - text:
+    - Comprueba las etiquetas de las VMs
+    - Check the VMs' tags
+    cmd: gcloud compute instances describe VM --zone=ZONA --format='value(tags.items)'
+  - text:
+    - Busca cambios recientes
+    - Find recent changes
+    cmd: gcloud logging read 'protoPayload.methodName:"firewalls"' --limit=5
+  causes:
+  - - Falta la regla ALLOW o el puerto
+    - The ALLOW rule or the port is missing
+  - - La VM perdió la etiqueta de red
+    - The VM lost its network tag
+  - - Una DENY ganó por prioridad
+    - A DENY won on priority
+  fix:
+  - Corrige la regla concreta (puerto, origen, etiqueta o prioridad) con el OK de Seguridad si es suya.
+  - Fix the specific rule (port, source, tag or priority) with Security's OK if it's theirs.
+  avoid:
+  - Abrir a 0.0.0.0/0 o borrar las reglas de Seguridad.
+  - Opening to 0.0.0.0/0 or deleting Security's rules.
+  labs:
+  - zentra-z38-firewall-priority
+  - ace-d18-api-db-firewall
+  - ace-d05-subnet-isolation
+- id: lb-502
+  area: network
+  symptom:
+  - El balanceador devuelve 502 / «no healthy upstream»
+  - The load balancer returns 502 / "no healthy upstream"
+  errors:
+  - 502 Bad Gateway
+  - no healthy upstream
+  - UNHEALTHY
+  means:
+  - Ningún backend está sano. El balanceador decide con su **health check**, que llega desde los rangos de Google `35.191.0.0/16` y `130.211.0.0/22`.
+  - No backend is healthy. The load balancer decides through its **health check**, which comes from Google's ranges `35.191.0.0/16` and `130.211.0.0/22`.
+  steps:
+  - text:
+    - Mira el estado de los backends
+    - Check backend health
+    cmd: gcloud compute backend-services get-health BACKEND --global
+  - text:
+    - Revisa el health check (puerto y ruta)
+    - Check the health check (port and path)
+    cmd: gcloud compute health-checks describe HC
+  - text:
+    - Comprueba que el cortafuegos deja pasar las sondas
+    - Check the firewall lets the probes in
+    cmd: gcloud compute firewall-rules list --filter='sourceRanges:35.191.0.0/16'
+  causes:
+  - - Cortafuegos sin los rangos de las sondas
+    - Firewall without the probe ranges
+  - - Health check al puerto o ruta equivocados
+    - Health check to the wrong port or path
+  - - Falta el *named port* del grupo
+    - The group's named port is missing
+  fix:
+  - Corrige el health check o la regla de las sondas; espera a que el backend pase a HEALTHY.
+  - Fix the health check or the probes' rule; wait for the backend to become HEALTHY.
+  avoid:
+  - ''
+  - ''
+  labs:
+  - zentra-z24-healthcheck-path
+  - bank-b21-lb-502-healthcheck
+  - ace-d09-health-check
+- id: dns-name
+  area: network
+  symptom:
+  - Por IP funciona, por nombre no
+  - It works by IP, not by name
+  errors:
+  - upstream request failed
+  - Could not resolve host
+  means:
+  - Es DNS. En una zona **privada** de Cloud DNS, el registro puede apuntar a una IP antigua o la zona no ser visible desde esa VPC.
+  - It's DNS. In a **private** Cloud DNS zone, the record may point to an old IP or the zone may not be visible from that VPC.
+  steps:
+  - text:
+    - Mira el registro
+    - Check the record
+    cmd: gcloud dns record-sets list --zone=ZONA
+  - text:
+    - Compara con la IP real
+    - Compare with the real IP
+    cmd: gcloud compute instances describe VM --zone=ZONA --format='value(networkInterfaces[0].networkIP)'
+  causes:
+  - - Migración que no actualizó el registro
+    - A migration that didn't update the record
+  - - Terraform antiguo reaplicado
+    - An old Terraform re-applied
+  fix:
+  - '`gcloud dns record-sets update NOMBRE. --zone=ZONA --type=A --ttl=60 --rrdatas=IP`'
+  - '`gcloud dns record-sets update NAME. --zone=ZONE --type=A --ttl=60 --rrdatas=IP`'
+  avoid:
+  - ''
+  - ''
+  labs:
+  - zentra-z39-private-dns
+  - ace-d13-lb-dns
+- id: ssh-iap
+  area: network
+  symptom:
+  - No puedo entrar por SSH a una VM sin IP pública
+  - I can't SSH into a VM without a public IP
+  errors:
+  - failed to connect to backend
+  - Permission denied (publickey)
+  means:
+  - 'Se entra por **IAP**: el tráfico llega desde `35.235.240.0/20` y necesitas permiso para el túnel y, con OS Login, para iniciar sesión.'
+  - 'You get in through **IAP**: traffic comes from `35.235.240.0/20` and you need permission for the tunnel and, with OS Login, to log in.'
+  steps:
+  - text:
+    - Prueba el túnel
+    - Try the tunnel
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap
+  - text:
+    - Regla para IAP en el puerto 22
+    - Rule for IAP on port 22
+    cmd: gcloud compute firewall-rules list --filter='sourceRanges:35.235.240.0/20'
+  causes:
+  - - Falta la regla de IAP
+    - The IAP rule is missing
+  - - Falta `iap.tunnelResourceAccessor` u `compute.osLogin`
+    - '`iap.tunnelResourceAccessor` or `compute.osLogin` is missing'
+  fix:
+  - Regla desde `35.235.240.0/20` al 22 y los roles al **grupo** del equipo.
+  - A rule from `35.235.240.0/20` to port 22 and the roles to the team's **group**.
+  avoid:
+  - Abrir el 22 a internet.
+  - Opening port 22 to the internet.
+  labs:
+  - zentra-z04-private-vm
+  - bank-b20-oslogin-ssh
+- id: disk-full
+  area: compute
+  symptom:
+  - «No space left on device»
+  - '"No space left on device"'
+  errors:
+  - No space left on device
+  - 'write error: No space left on device'
+  means:
+  - 'El sistema de archivos está lleno. Antes de borrar nada, **mide** qué ocupa y **pregunta**: puede ser evidencia que no se puede tocar.'
+  - 'The file system is full. Before deleting anything, **measure** what takes space and **ask**: it may be evidence that can''t be touched.'
+  steps:
+  - text:
+    - Cuánto queda
+    - How much is left
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command='df -h'
+  - text:
+    - Qué ocupa
+    - What takes it
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command='sudo du -sh /var/*'
+  - text:
+    - Ficheros grandes
+    - Big files
+    cmd: gcloud compute ssh VM --zone=ZONA --tunnel-through-iap --command='sudo find / -size +500M'
+  causes:
+  - - Registros sin rotar o de depuración
+    - Unrotated or debug logs
+  - - Datos que crecen y deben conservarse
+    - Data that grows and must be kept
+  fix:
+  - 'Si son registros: vaciar (`truncate`) y rotar. Si son datos: ampliar el disco (`gcloud compute disks resize`, y dentro `growpart` + `resize2fs`).'
+  - 'If it''s logs: empty them (`truncate`) and rotate. If it''s data: grow the disk (`gcloud compute disks resize`, then `growpart` + `resize2fs` inside).'
+  avoid:
+  - Borrar ficheros sin saber qué son, o borrar un log abierto con `rm` (el espacio no se libera).
+  - Deleting files without knowing what they are, or deleting an open log with `rm` (the space isn't freed).
+  labs:
+  - zentra-z36-disk-grow
+  - bank-b17-disk-full
+  - linux-l01-disk-full
+- id: zone-stockout
+  area: compute
+  symptom:
+  - «ZONE_RESOURCE_POOL_EXHAUSTED» al crear una VM
+  - '"ZONE_RESOURCE_POOL_EXHAUSTED" when creating a VM'
+  errors:
+  - ZONE_RESOURCE_POOL_EXHAUSTED
+  means:
+  - 'La **zona** no tiene máquinas de ese tipo libres ahora mismo. No es tu cuota: pedir más cuota no crea máquinas.'
+  - 'The **zone** has no free machines of that type right now. It isn''t your quota: more quota doesn''t create machines.'
+  steps:
+  - text:
+    - Confirma que la cuota no es el problema
+    - Confirm quota isn't the problem
+    cmd: gcloud compute regions describe REGION
+  causes:
+  - - Demanda alta de esa familia (GPU, n2…) en esa zona
+    - High demand for that family (GPU, n2…) in that zone
+  fix:
+  - Otra zona de la misma región (mismos datos, misma latencia) u otra familia de máquina.
+  - Another zone in the same region (same data, same latency) or another machine family.
+  avoid:
+  - Abrir un caso de cuota con Google.
+  - Opening a quota case with Google.
+  labs:
+  - zentra-z29-zone-stockout
+- id: quota-exceeded
+  area: compute
+  symptom:
+  - «Quota 'CPUS' exceeded»
+  - '"Quota ''CPUS'' exceeded"'
+  errors:
+  - 'Quota ''CPUS'' exceeded. Limit: 24.0 in region'
+  - QUOTA_EXCEEDED
+  means:
+  - 'Has llegado al límite del proyecto en esa región. Un aumento lo revisa Google y tarda: antes mira qué está gastando la cuota.'
+  - 'You''ve hit the project''s limit in that region. Google reviews an increase and it takes time: first see what''s using the quota.'
+  steps:
+  - text:
+    - Uso y límite
+    - Usage and limit
+    cmd: gcloud compute regions describe REGION
+  - text:
+    - Qué está encendido
+    - What's running
+    cmd: gcloud compute instances list --format='table(name,machineType,labels)'
+  causes:
+  - - Máquinas olvidadas de pruebas
+    - Forgotten test machines
+  - - Crecimiento real que necesita más cuota
+    - Real growth that needs more quota
+  fix:
+  - Libera lo que sobra (confirmándolo con su dueño) y, si hace falta, pide el aumento con `gcloud beta quotas preferences create`.
+  - Free what's left over (confirming with its owner) and, if needed, request the increase with `gcloud beta quotas preferences create`.
+  avoid:
+  - Borrar VMs ajenas sin preguntar.
+  - Deleting other people's VMs without asking.
+  labs:
+  - zentra-z30-cpu-quota
+- id: cost-spike
+  area: compute
+  symptom:
+  - La factura sube sin explicación
+  - The bill goes up with no explanation
+  errors: []
+  means:
+  - 'Casi siempre son recursos olvidados: GPU ociosas, discos sin VM, máquinas sobredimensionadas o consultas que leen tablas enteras.'
+  - 'It''s nearly always forgotten resources: idle GPUs, disks with no VM, oversized machines or queries that read whole tables.'
+  steps:
+  - text:
+    - Coste por recurso
+    - Cost by resource
+    cmd: gcloud billing report --group-by=resource
+  - text:
+    - Recomendaciones de recursos ociosos
+    - Idle resource recommendations
+    cmd: gcloud recommender recommendations list --recommender=google.compute.instance.IdleResourceRecommender --location=ZONA
+  - text:
+    - 'Etiquetas: de quién es cada cosa'
+    - 'Labels: whose each thing is'
+    cmd: gcloud compute instances list --format='table(name,machineType,labels)'
+  causes:
+  - - Experimentos que nadie apagó
+    - Experiments nobody switched off
+  - - Discos huérfanos
+    - Orphan disks
+  - - Recursos sin etiquetas ni dueño
+    - Resources without labels or owner
+  fix:
+  - Confirma con cada dueño; borra con instantánea si son datos; lo que no tiene dueño se **para**, no se borra. Deja un presupuesto con avisos.
+  - Confirm with each owner; delete with a snapshot if it's data; anything without an owner is **stopped**, not deleted. Leave a budget with alerts.
+  avoid:
+  - Borrar todo lo que parezca ocioso.
+  - Deleting everything that looks idle.
+  labs:
+  - zentra-z42-month-end-costs
+  - zentra-z08-finops-basics
+  - bank-b11-bill-spike
+  - finops-f01-bill-shock
+- id: run-bad-release
+  area: serverless
+  symptom:
+  - 'Cloud Run: tras un despliegue, errores 5xx o la revisión no arranca'
+  - 'Cloud Run: after a deployment, 5xx errors or the revision won''t start'
+  errors:
+  - Revision is not ready and cannot serve traffic
+  - container failed to start
+  means:
+  - 'La revisión nueva falla (configuración, imagen, variable que falta). Cloud Run guarda las anteriores: volver atrás es mover el tráfico.'
+  - 'The new revision fails (configuration, image, missing variable). Cloud Run keeps the previous ones: rolling back means moving traffic.'
+  steps:
+  - text:
+    - Revisiones y tráfico
+    - Revisions and traffic
+    cmd: gcloud run revisions list --service=SERVICIO --region=REGION
+  - text:
+    - Registros del servicio
+    - Service logs
+    cmd: gcloud logging read 'resource.type="cloud_run_revision" severity>=ERROR' --limit=5
+  causes:
+  - - Variable de entorno o secreto que falta
+    - Missing environment variable or secret
+  - - Imagen defectuosa
+    - Faulty image
+  fix:
+  - '`gcloud run services update-traffic SERVICIO --region=REGION --to-revisions=REVISION_BUENA=100` y luego se corrige con calma.'
+  - '`gcloud run services update-traffic SERVICE --region=REGION --to-revisions=GOOD_REVISION=100` and then fix it calmly.'
+  avoid:
+  - Arreglar en caliente en producción sin volver antes a la versión buena.
+  - Hot-fixing in production without first going back to the good version.
+  labs:
+  - zentra-z21-bad-release
+  - ace-d27-deploy-rollback
+- id: secret-access
+  area: serverless
+  symptom:
+  - La aplicación no puede leer un secreto
+  - The app can't read a secret
+  errors:
+  - Secret Version [...] is in DISABLED state
+  - Permission 'secretmanager.versions.access' denied
+  means:
+  - La cuenta de servicio necesita `secretmanager.secretAccessor` **en ese secreto**, y la versión que usa tiene que estar habilitada.
+  - The service account needs `secretmanager.secretAccessor` **on that secret**, and the version it uses must be enabled.
+  steps:
+  - text:
+    - Versiones y estado
+    - Versions and state
+    cmd: gcloud secrets versions list SECRETO
+  - text:
+    - Quién puede leerlo
+    - Who can read it
+    cmd: gcloud secrets get-iam-policy SECRETO
+  causes:
+  - - Versión desactivada o destruida
+    - Version disabled or destroyed
+  - - Falta el rol en el secreto
+    - The role on the secret is missing
+  fix:
+  - Habilita la versión correcta o da `secretAccessor` en el secreto a la cuenta del servicio.
+  - Enable the right version or grant `secretAccessor` on the secret to the service's account.
+  avoid:
+  - Copiar el secreto a una variable de entorno en claro.
+  - Copying the secret into a plain environment variable.
+  labs:
+  - zentra-z06-secrets
+  - zentra-z26-secret-version
+  - bank-b06-secret-access
+  - bank-b14-secret-rotation
+- id: sql-connections
+  area: data
+  symptom:
+  - 'Cloud SQL: «remaining connection slots are reserved» / too many connections'
+  - 'Cloud SQL: "remaining connection slots are reserved" / too many connections'
+  errors:
+  - 'FATAL: remaining connection slots are reserved for non-replication superuser connections'
+  - too many connections
+  means:
+  - 'La base de datos llegó a su `max_connections` (depende del tamaño). Suma las conexiones de todos los clientes: instancias × pool + otros.'
+  - 'The database hit its `max_connections` (it depends on the size). Add up every client''s connections: instances × pool + others.'
+  steps:
+  - text:
+    - El error en los registros
+    - The error in the logs
+    cmd: gcloud logging read 'resource.type="cloudsql_database" severity>=ERROR' --limit=3
+  - text:
+    - Tamaño de la instancia
+    - Instance size
+    cmd: gcloud sql instances describe INSTANCIA
+  - text:
+    - Pool y máximo de instancias del cliente
+    - Client pool and max instances
+    cmd: gcloud run services describe SERVICIO --region=REGION
+  causes:
+  - - Un despliegue subió el pool de conexiones
+    - A deployment raised the connection pool
+  - - Otro cliente (informes) se conecta a producción
+    - Another client (reports) connects to production
+  fix:
+  - Si es configuración, devuélvela. Si es demanda real, amplía el tier con un cambio aprobado y separa los informes en una réplica de lectura.
+  - If it's configuration, revert it. If it's real demand, grow the tier with an approved change and move reports to a read replica.
+  avoid:
+  - Subir `max_connections` sin más memoria.
+  - Raising `max_connections` without more memory.
+  labs:
+  - zentra-z35-sql-connections
+  - bank-b10-sql-connections
+  - ace-d20-sql-saturated
+- id: pubsub-backlog
+  area: data
+  symptom:
+  - 'Pub/Sub: los mensajes se acumulan y no llegan'
+  - 'Pub/Sub: messages pile up and don''t arrive'
+  errors: []
+  means:
+  - 'La suscripción no consigue entregar: el endpoint *push* falla o no existe, el consumidor no tiene permiso o no da *ack*.'
+  - 'The subscription can''t deliver: the push endpoint fails or doesn''t exist, the consumer has no permission or doesn''t ack.'
+  steps:
+  - text:
+    - Configuración de la suscripción
+    - Subscription settings
+    cmd: gcloud pubsub subscriptions describe SUSCRIPCION
+  - text:
+    - Errores del consumidor
+    - Consumer errors
+    cmd: gcloud logging read 'severity>=ERROR' --limit=5
+  causes:
+  - - Endpoint push cambiado o mal escrito
+    - Push endpoint changed or misspelled
+  - - Falta `run.invoker` para la cuenta del push
+    - '`run.invoker` is missing for the push account'
+  fix:
+  - Corrige el endpoint (`modify-push-config`) o el permiso; el atasco se vacía solo.
+  - Fix the endpoint (`modify-push-config`) or the permission; the backlog drains by itself.
+  avoid:
+  - 'Purgar la suscripción: se pierden pagos.'
+  - 'Purging the subscription: payments are lost.'
+  labs:
+  - zentra-z17-push-backlog
+  - zentra-z23-push-endpoint
+- id: bq-location
+  area: data
+  symptom:
+  - 'BigQuery: «Not found: Dataset … was not found in location»'
+  - 'BigQuery: "Not found: Dataset … was not found in location"'
+  errors:
+  - 'Not found: Dataset project:dataset was not found in location US'
+  means:
+  - La consulta se ejecuta en otra ubicación (US) que el dataset (EU). Una consulta corre donde están sus datos.
+  - The query runs in a different location (US) from the dataset (EU). A query runs where its data lives.
+  steps:
+  - text:
+    - Ubicación del dataset
+    - Dataset location
+    cmd: bq show --format=prettyjson DATASET
+  - text:
+    - Repite indicando la ubicación
+    - Retry with the location
+    cmd: bq query --location=EU 'SELECT 1'
+  causes:
+  - - Cliente o variable con la ubicación por defecto
+    - Client or variable with the default location
+  fix:
+  - Ejecuta en la ubicación del dataset (`--location=EU` / `BQ_LOCATION`).
+  - Run in the dataset's location (`--location=EU` / `BQ_LOCATION`).
+  avoid:
+  - Copiar los datos fuera de la UE.
+  - Copying the data outside the EU.
+  labs:
+  - zentra-z31-bq-location
+- id: gke-pods
+  area: gke
+  symptom:
+  - 'Pods que no arrancan: Pending, CrashLoopBackOff, ImagePullBackOff, OOMKilled'
+  - 'Pods that won''t start: Pending, CrashLoopBackOff, ImagePullBackOff, OOMKilled'
+  errors:
+  - CrashLoopBackOff
+  - ImagePullBackOff
+  - OOMKilled
+  - 0/3 nodes are available
+  means:
+  - 'El estado dice dónde mirar: **Pending** (no hay sitio), **ImagePullBackOff** (no puede bajar la imagen), **CrashLoopBackOff** (arranca y muere), **OOMKilled** (se queda sin memoria).'
+  - 'The status tells you where to look: **Pending** (no room), **ImagePullBackOff** (can''t pull the image), **CrashLoopBackOff** (starts and dies), **OOMKilled** (runs out of memory).'
+  steps:
+  - text:
+    - Estado de los pods
+    - Pod status
+    cmd: kubectl get pods
+  - text:
+    - Eventos del pod
+    - Pod events
+    cmd: kubectl describe pod POD
+  - text:
+    - Registros del intento anterior
+    - Logs of the previous attempt
+    cmd: kubectl logs POD --previous
+  causes:
+  - - Imagen o etiqueta inexistente, o nodos sin permiso para bajarla
+    - Missing image or tag, or nodes without permission to pull it
+  - - Límite de memoria demasiado bajo
+    - Memory limit too low
+  - - Peticiones de recursos que no caben
+    - Resource requests that don't fit
+  fix:
+  - Corrige la causa concreta; si vino con un despliegue, `kubectl rollout undo` primero.
+  - Fix the specific cause; if it came with a deployment, `kubectl rollout undo` first.
+  avoid:
+  - ''
+  - ''
+  labs:
+  - bank-b09-gke-crashloop
+  - bank-b19-gke-oomkilled
+  - bank-b24-gke-imagepull
+- id: gke-not-ready
+  area: gke
+  symptom:
+  - Pods «Running» pero 0/1 Ready; el Service no responde
+  - Pods "Running" but 0/1 Ready; the Service doesn't respond
+  errors:
+  - 'Readiness probe failed: HTTP probe failed with statuscode: 404'
+  means:
+  - Running solo dice que el contenedor arrancó. Un Service solo envía tráfico a pods **Ready**, y eso lo decide la sonda de preparación.
+  - Running only says the container started. A Service only sends traffic to **Ready** pods, and that's decided by the readiness probe.
+  steps:
+  - text:
+    - Columna READY
+    - READY column
+    cmd: kubectl get pods
+  - text:
+    - 'Eventos: «Readiness probe failed»'
+    - 'Events: "Readiness probe failed"'
+    cmd: kubectl describe pod -l app=APP
+  - text:
+    - Qué cambió
+    - What changed
+    cmd: kubectl rollout history deployment/APP
+  causes:
+  - - Sonda al puerto o ruta equivocados
+    - Probe to the wrong port or path
+  fix:
+  - '`kubectl rollout undo deployment/APP` y corregir la sonda en la siguiente versión.'
+  - '`kubectl rollout undo deployment/APP` and fix the probe in the next release.'
+  avoid:
+  - ''
+  - ''
+  labs:
+  - zentra-z41-readiness-probe
+- id: gke-wi
+  area: gke
+  symptom:
+  - Un pod recibe 403 al llamar a Google Cloud (Workload Identity)
+  - A pod gets 403 calling Google Cloud (Workload Identity)
+  errors: []
+  means:
+  - El pod usa su *Kubernetes service account*, que debe estar enlazada a una cuenta de servicio de Google con `roles/iam.workloadIdentityUser` **para ese namespace y nombre exactos**.
+  - The pod uses its Kubernetes service account, which must be bound to a Google service account with `roles/iam.workloadIdentityUser` **for that exact namespace and name**.
+  steps:
+  - text:
+    - La anotación de la KSA
+    - The KSA annotation
+    cmd: kubectl get serviceaccount KSA -n NS -o yaml
+  - text:
+    - El enlace en la GSA
+    - The binding on the GSA
+    cmd: gcloud iam service-accounts get-iam-policy GSA
+  causes:
+  - - El enlace apunta a otro namespace
+    - The binding points to another namespace
+  - - Falta la anotación
+    - The annotation is missing
+  fix:
+  - Enlaza `serviceAccount:PROYECTO.svc.id.goog[NS/KSA]` con `workloadIdentityUser`.
+  - Bind `serviceAccount:PROJECT.svc.id.goog[NS/KSA]` with `workloadIdentityUser`.
+  avoid:
+  - 'Dar permisos a la cuenta de los nodos: todos los pods los heredarían.'
+  - 'Granting permissions to the node account: every pod would inherit them.'
+  labs:
+  - zentra-z19-wi-namespace
+  - gke-k02-workload-identity
+- id: hpa-unknown
+  area: gke
+  symptom:
+  - El HPA muestra <unknown> y no escala
+  - The HPA shows <unknown> and doesn't scale
+  errors:
+  - <unknown>/50%
+  - 'failed to get cpu utilization: missing request for cpu'
+  means:
+  - El autoescalado calcula el % de CPU sobre las **requests** del contenedor. Sin requests no hay porcentaje.
+  - The autoscaler computes CPU % over the container's **requests**. Without requests there's no percentage.
+  steps:
+  - text:
+    - Estado del HPA
+    - HPA status
+    cmd: kubectl describe hpa APP
+  causes:
+  - - El despliegue no tiene requests de CPU
+    - The deployment has no CPU requests
+  fix:
+  - '`kubectl set resources deployment APP --requests=cpu=200m` y prueba con carga.'
+  - '`kubectl set resources deployment APP --requests=cpu=200m` and test under load.'
+  avoid:
+  - ''
+  - ''
+  labs:
+  - zentra-z34-hpa-unknown
+  - ace-d17-gke-hpa
+- id: leaked-key
+  area: security
+  symptom:
+  - Una clave de cuenta de servicio se ha filtrado / aparecen VMs desconocidas
+  - A service account key leaked / unknown VMs appear
+  errors: []
+  means:
+  - 'Es un incidente de seguridad: **contener** primero (desactivar la clave), conservar la evidencia y luego limpiar.'
+  - 'It''s a security incident: **contain** first (disable the key), keep the evidence and then clean up.'
+  steps:
+  - text:
+    - Quién creó qué y desde dónde
+    - Who created what and from where
+    cmd: gcloud logging read 'protoPayload.methodName:"instances.insert"' --limit=5
+  - text:
+    - Claves de la cuenta
+    - The account's keys
+    cmd: gcloud iam service-accounts keys list --iam-account=SA
+  causes:
+  - - Clave subida a un repositorio o compartida
+    - Key pushed to a repository or shared
+  fix:
+  - Desactiva la clave, instantánea del disco de la VM intrusa, bórrala y avisa al CSIRT. Después, sin claves (Workload Identity).
+  - Disable the key, snapshot the rogue VM's disk, delete it and tell the CSIRT. Afterwards, no keys (Workload Identity).
+  avoid:
+  - Borrar la VM sin guardar evidencia o dejar la clave activa «mientras investigamos».
+  - Deleting the VM without keeping evidence or leaving the key active "while we investigate".
+  labs:
+  - zentra-z22-leaked-key
+  - sec-s01-leaked-key

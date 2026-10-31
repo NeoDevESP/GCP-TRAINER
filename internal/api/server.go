@@ -213,6 +213,9 @@ func (s *Server) Handler() http.Handler {
 	h("GET /api/learn", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		return map[string]any{"topics": s.Cat.StudyView(s.lang(r)), "exams": s.Cat.ExamView(s.lang(r))}, nil
 	})
+	h("GET /api/runbooks", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		return map[string]any{"runbooks": s.cat(r).RunbookView(s.lang(r))}, nil
+	})
 	h("GET /api/worlds", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		return s.Cat.WorldList(s.lang(r)), nil
 	})

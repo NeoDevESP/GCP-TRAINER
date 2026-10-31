@@ -228,7 +228,7 @@ export default function ShiftPage() {
                 );
               })}
             </ol>
-            <p className="muted" style={{ fontSize: 14 }}>{t("Consejo: lee primero todos los tickets y empieza por el de mayor impacto. Un P4 resuelto rápido no compensa un P1 fuera de plazo.")}</p>
+            <p className="muted" style={{ fontSize: 14 }}>{t("Consejo: lee primero todos los tickets y empieza por el de mayor impacto. Un P4 resuelto rápido no compensa un P1 fuera de plazo.")} <a href="/guide">{t("Guía de diagnóstico")}</a></p>
           </>
         )}
         {doc.history.length > 0 && (

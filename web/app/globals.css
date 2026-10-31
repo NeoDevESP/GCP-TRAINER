@@ -1192,3 +1192,35 @@ body.cm main#main { overflow-x: clip; }
 .db-kick { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--cm-accent); }
 .db-meter { display: block; height: 6px; border-radius: 3px; background: var(--cm-sunk); margin-top: auto; overflow: hidden; }
 .db-meter span { display: block; height: 100%; background: var(--cm-accent); }
+
+/* Quick diagnosis guide */
+.gd-tools { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.gd-search { width: 100%; max-width: 640px; }
+.gd-search input { flex: 1; min-width: 0; }
+.gd-areas { display: flex; flex-wrap: wrap; gap: 8px; }
+.gd-areas .res-skill { border: 1px solid transparent; cursor: pointer; }
+.gd-areas .res-skill.on { background: var(--cm-accent); color: var(--cm-on-accent) !important; }
+.gd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.gd-list > li { scroll-margin-top: 16px; }
+.card.gd-card { padding: 0; overflow: hidden; }
+.gd-card summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 16px 20px; cursor: pointer; list-style: none; }
+.gd-card summary::-webkit-details-marker { display: none; }
+.gd-card summary::after { content: "+"; margin-left: auto; font-size: 20px; line-height: 1; color: var(--cm-muted); }
+.gd-card[open] summary::after { content: "–"; }
+.gd-area { flex: 0 0 100%; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--cm-accent); }
+.gd-symptom { flex: 1; font-weight: 600; font-size: 16px; line-height: 22px; min-width: 0; }
+.gd-body { padding: 0 20px 20px; border-top: 1px solid var(--cm-line); }
+.gd-body h3 { font-size: 14px; margin: 18px 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--cm-muted); }
+.gd-errors { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.gd-errors code { background: var(--cm-sunk); padding: 4px 8px; border-radius: 6px; font-size: 13px; overflow-wrap: anywhere; }
+.gd-steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.gd-cmd { display: flex; align-items: flex-start; gap: 8px; margin-top: 4px; }
+.gd-cmd code { flex: 1; min-width: 0; display: block; background: var(--cm-sunk); padding: 8px 10px; border-radius: 8px; font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.gd-copy { flex: none; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--cm-line); background: var(--cm-surface); color: var(--cm-ink); font-size: 13px; cursor: pointer; }
+.gd-causes { margin: 0; padding-left: 22px; }
+.gd-fix, .gd-avoid { margin-top: 16px; padding: 12px 14px; border-radius: 10px; }
+.gd-fix { background: var(--cm-accent-soft); }
+.gd-avoid { background: var(--cm-amber-soft); color: var(--cm-amber-ink); }
+.gd-fix p, .gd-avoid p { margin: 4px 0 0; }
+.gd-labs { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.gd-labs .pill { margin-left: 8px; }

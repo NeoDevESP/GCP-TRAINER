@@ -27,6 +27,7 @@ const ICONS: Record<string, ReactNode> = {
   bank: S(<><path d="M3 10l9-6 9 6" /><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8" /><path d="M3 20h18" /></>),
   calendar: S(<><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>),
   headset: S(<><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><rect x="3" y="14" width="4" height="6" rx="1.5" /><rect x="17" y="14" width="4" height="6" rx="1.5" /><path d="M19 20a3 3 0 0 1-3 2h-3" /></>),
+  lifebuoy: S(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" /><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9" /></>),
   teacher: S(<><circle cx="12" cy="7" r="3.5" /><path d="M5 21v-1a7 7 0 0 1 14 0v1" /></>),
 };
 
@@ -37,6 +38,7 @@ const links: [string, string, string][] = [
   ["/learn", k("Aprende"), "book"],
   ["/plan", k("Plan"), "calendar"],
   ["/shift", k("Turno"), "headset"],
+  ["/guide", k("Guía"), "lifebuoy"],
   ["/incidents", k("Incidencias"), "alert"],
   ["/company", k("Empresa"), "company"],
   ["/skills", k("Habilidades"), "graph"],
