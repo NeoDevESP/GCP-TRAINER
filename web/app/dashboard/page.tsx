@@ -10,6 +10,8 @@ import { dimension, label, recKind } from "@/lib/labels";
 import type { LabSummary, Profile, Recommendation } from "@/lib/types";
 import { RouteLine, StepGuide, TrackBadge, labHref, nextLab, useProgress } from "@/components/learn";
 import { k } from "@/lib/i18n";
+import { planLocal, planStatus } from "@/lib/plan";
+import { dueKeys, loadReview, loadRun, syncStudy } from "@/lib/study";
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -62,6 +64,12 @@ export default function Dashboard() {
   const [labs, setLabs] = useState<Record<string, LabSummary>>({});
   const [q, setQ] = useState("");
   const { state, running: runningLab } = useProgress();
+  const [study, setStudy] = useState<ReturnType<typeof planLocal> & { due: number; lastShift?: number } | null>(null);
+  useEffect(() => {
+    syncStudy()
+      .catch(() => {})
+      .finally(() => setStudy({ ...planLocal(), due: dueKeys(loadReview()).length, lastShift: loadRun<{ history: { score: number }[] }>("cm-shift")?.history?.[0]?.score }));
+  }, []);
   useEffect(() => {
     try {
       const saved = localStorage.getItem("gcplab.track");
@@ -113,6 +121,11 @@ export default function Dashboard() {
   const doneN = pathLabs.filter((l) => state[l.id] === "done").length;
   const nextId = nextLab(pathLabs.map((l) => l.id), state);
   const next = nextId ? labs[nextId] : undefined;
+  const plan = study && Object.keys(labs).length ? planStatus({ labs, state, ...study }) : null;
+  const pday = plan?.days[plan.today];
+  const zIds = Object.values(labs).filter((l) => l.track === "zentra").sort((a, b) => a.day - b.day).map((l) => l.id);
+  const zNext = nextLab(zIds, state);
+  const zDone = zIds.filter((id) => state[id] === "done").length;
   return (
     <>
       <Nav active="/dashboard" />
@@ -136,6 +149,47 @@ export default function Dashboard() {
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Busca un laboratorio o un servicio")} aria-label={t("Buscar laboratorios")} />
           </form>
         </header>
+
+        {plan && pday && (
+          <section className="cm-section" aria-labelledby="today-title" style={{ marginTop: 0 }}>
+            <div className="cm-section-head">
+              <h2 id="today-title">{t("Hoy toca")}</h2>
+            </div>
+            <ul className="db-today">
+              <li>
+                <a className="cm-card" href="/plan">
+                  <span className="db-kick">{t("Plan de 10 días")}</span>
+                  <strong>{plan.done === plan.total ? t("¡Plan completado!") : t(pday.title)}</strong>
+                  <span className="muted small">{t("{done} de {total} tareas del día", { done: plan.counts[plan.today], total: pday.items.length })}</span>
+                  <span className="db-meter" aria-hidden="true"><span style={{ width: `${(100 * plan.done) / Math.max(1, plan.total)}%` }} /></span>
+                </a>
+              </li>
+              <li>
+                <a className="cm-card" href={study!.due ? "/learn?review=1" : "/learn"}>
+                  <span className="db-kick">{t("Repaso")}</span>
+                  <strong>{study!.due ? t("{n} preguntas para repasar hoy", { n: study!.due }) : t("Repaso al día")}</strong>
+                  <span className="muted small">{study!.due ? t("Las que fallaste, justo cuando toca repasarlas.") : t("Haz un cuestionario: lo que falles volverá aquí.")}</span>
+                </a>
+              </li>
+              {zIds.length > 0 && (
+                <li>
+                  <a className="cm-card" href={zNext ? labHref(zNext, runningLab[zNext]) : "/zentra"}>
+                    <span className="db-kick">{t("Zentra · {done} de {total}", { done: zDone, total: zIds.length })}</span>
+                    <strong>{zNext ? labs[zNext]?.title : t("Ruta de Zentra completada")}</strong>
+                    <span className="muted small">{zNext && labs[zNext]?.ticket ? `${labs[zNext].ticket!.priority} · ${labs[zNext].ticket!.id}` : t("Tu primer mes en Soporte GCP")}</span>
+                  </a>
+                </li>
+              )}
+              <li>
+                <a className="cm-card" href="/shift">
+                  <span className="db-kick">{t("Turno de soporte")}</span>
+                  <strong>{study!.shifts ? t("{n} turnos hechos", { n: study!.shifts }) : t("Tu primer turno")}</strong>
+                  <span className="muted small">{study!.lastShift != null ? t("Última nota: {n}", { n: study!.lastShift }) : t("Varios tickets a la vez con su SLA")}</span>
+                </a>
+              </li>
+            </ul>
+          </section>
+        )}
 
         {cur && (
           <div className="cm-hero-row">
