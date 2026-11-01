@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import CommandSearch, { type SearchItem } from "@/components/CommandSearch";
 import { getDensity, getTheme, setDensity, setTheme, type Density, type Theme } from "@/lib/prefs";
-import { api, setToken } from "@/lib/api";
+import { api, signOut } from "@/lib/api";
 import { changeLang, k, useI18n, type Lang } from "@/lib/i18n";
 import type { User } from "@/lib/types";
 import SaveStatus from "@/components/SaveStatus";
@@ -218,8 +218,8 @@ export default function Nav({ active }: { active?: string }) {
                   type="button"
                   className="btn secondary"
                   style={{ width: "100%" }}
-                  onClick={() => {
-                    setToken("");
+                  onClick={async () => {
+                    await signOut();
                     window.location.href = "/";
                   }}
                 >

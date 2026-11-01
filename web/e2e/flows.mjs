@@ -225,8 +225,8 @@ Object.assign(flows, {
     const h1 = await p.locator("h1").innerText();
     check("onboarding: 4 of 6 places the learner on 'basics'", /Ya tienes una base/.test(h1), h1);
     await p.waitForTimeout(2500);
-    const tok = await p.evaluate(() => localStorage.getItem("gcplab.token"));
-    const study = await (await call(tok, "/api/me/study")).json();
+    // the browser's own session (HttpOnly cookie) reads the account
+    const study = await (await p.request.get(base + "/api/me/study")).json();
     const prefs = study.runs?.["cm-plan"]?.prefs ?? {};
     check("onboarding: the plan gets the chosen time and skips Week 0", prefs.minutesPerDay === 90 && prefs.skipBasics === true, JSON.stringify(prefs));
     check("onboarding: the result is saved on the account", study.runs?.["cm-onboarding"]?.level === "basics");
@@ -338,6 +338,39 @@ Object.assign(flows, {
       check(`a11y ${scheme} lab workspace: no WCAG A/AA violations`, lv.length === 0, lv.join(", "));
       await ctx.close();
     }
+  },
+});
+
+Object.assign(flows, {
+  // The session is an HttpOnly cookie: scripts never see the token, the
+  // pages carry a CSP, and signing out ends the session on the server.
+  async sessionSecurity(browser) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const p = await ctx.newPage();
+    const csp = [];
+    p.on("console", (m) => /Content Security Policy|Refused to/i.test(m.text()) && csp.push(m.text().slice(0, 160)));
+    await uiRegister(p, "sec");
+    await p.waitForURL("**/start");
+    const stored = await p.evaluate(() => Object.keys(localStorage).filter((k) => /token/i.test(k) && localStorage.getItem(k)));
+    const cookies = await ctx.cookies();
+    const sess = cookies.find((c) => c.name === "cm_session");
+    check("session: no token in localStorage", stored.length === 0, stored.join(","));
+    check("session: HttpOnly, SameSite=Strict cookie", !!sess && sess.httpOnly && sess.sameSite === "Strict");
+    check("session: document.cookie cannot read it", !(await p.evaluate(() => document.cookie)).includes("cm_session"));
+    const head = await p.request.get(base + "/dashboard");
+    check("headers: CSP and frame protection on pages", /default-src 'self'/.test(head.headers()["content-security-policy"] ?? "") && head.headers()["x-frame-options"] === "DENY");
+    // a forged cross-site change (no CSRF header) is refused, the session stays
+    const forged = await p.request.put(base + "/api/me/study/runs/cm-plan", { data: { x: 1 } });
+    check("csrf: a change without the client header is refused (403)", forged.status() === 403, String(forged.status()));
+    // pages with Mermaid, video, the lab and the editor load without CSP blocks
+    for (const path of ["/dashboard", "/learn", "/zentra", "/guide", "/catalog"]) await p.goto(base + path, { waitUntil: "networkidle" });
+    check("csp: main pages load with no CSP violation", csp.length === 0, csp.join(" | "));
+    await p.locator(".cm-avatar").first().click();
+    await p.getByRole("button", { name: "Cerrar sesión" }).click();
+    await p.waitForURL(base + "/");
+    const after = await p.request.get(base + "/api/me");
+    check("session: signing out removes the session cookie", after.status() === 401, String(after.status()));
+    await ctx.close();
   },
 });
 

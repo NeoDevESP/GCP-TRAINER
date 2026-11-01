@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { getToken } from "@/lib/api";
+import { isSignedIn } from "@/lib/api";
 
-// useAuth sends visitors without a token back to the sign-in page.
+// useAuth sends visitors without a session back to the sign-in page.
 export function useAuth() {
   useEffect(() => {
-    if (!getToken()) window.location.href = "/";
+    if (!isSignedIn()) window.location.href = "/";
   }, []);
 }

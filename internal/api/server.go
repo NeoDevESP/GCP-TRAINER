@@ -76,7 +76,12 @@ func (s *Server) Handler() http.Handler {
 				var err error
 				u, err = s.authenticate(r)
 				if err != nil {
-					writeErr(w, s.lang(r), http.StatusUnauthorized, err)
+					code := http.StatusUnauthorized
+					var he httpErr
+					if errors.As(err, &he) {
+						code = he.code // e.g. 403 for a missing CSRF header: the session is fine
+					}
+					writeErr(w, s.lang(r), code, err)
 					return
 				}
 				if len(roles) > 0 && !contains(roles, u.Role) {
@@ -109,6 +114,10 @@ func (s *Server) Handler() http.Handler {
 	// ---- auth -----------------------------------------------------------------
 	h("POST /api/auth/register", s.register)
 	h("POST /api/auth/login", s.login)
+	h("POST /api/auth/logout", func(w http.ResponseWriter, r *http.Request) (any, error) {
+		s.setSession(w, r, "")
+		return map[string]bool{"ok": true}, nil
+	})
 	h("GET /api/auth/oidc/login", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		if s.OIDC == nil {
 			return nil, httpErr{404, "OIDC not configured"}
@@ -135,7 +144,9 @@ func (s *Server) Handler() http.Handler {
 				return nil, err
 			}
 		}
-		http.Redirect(w, r, "/#token="+s.Tokens.Issue(*u), http.StatusFound)
+		// the session goes in an HttpOnly cookie, never in the URL
+		s.setSession(w, r, s.Tokens.Issue(*u))
+		http.Redirect(w, r, "/dashboard", http.StatusFound)
 		return nil, nil
 	})
 	// ---- profile ---------------------------------------------------------------
@@ -469,19 +480,45 @@ func (s *Server) Handler() http.Handler {
 					r.URL.Path = "/"
 				}
 			}
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("X-Frame-Options", "DENY")
+			securityHeaders(w, r)
 			fs.ServeHTTP(w, r)
 		})
 	}
 	return cors(mux)
 }
 
+// CSP for the web app. 'unsafe-inline' scripts are needed by the static
+// export (Next.js inlines its page data) and the theme boot script; external
+// scripts are limited to the Monaco editor's CDN. Styles inline for Mermaid.
+// Videos come from youtube-nocookie. Nothing may frame the app.
+const contentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+	"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+	"font-src 'self' data: https://cdn.jsdelivr.net; " +
+	"img-src 'self' data: blob: https://i.ytimg.com; " +
+	"connect-src 'self'; " +
+	"worker-src 'self' blob:; " +
+	"frame-src https://www.youtube-nocookie.com https://www.youtube.com; " +
+	"frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+
+func securityHeaders(w http.ResponseWriter, r *http.Request) {
+	h := w.Header()
+	h.Set("Content-Security-Policy", contentSecurityPolicy)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Referrer-Policy", "strict-origin-when-cross-origin") // YouTube embeds need the origin
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+	h.Set("Cross-Origin-Opener-Policy", "same-origin")
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	}
+}
+
 func cors(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if o := os.Getenv("CORS_ORIGIN"); o != "" {
 			w.Header().Set("Access-Control-Allow-Origin", o)
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Lang, X-Run-Base")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
 			if r.Method == http.MethodOptions {
 				return
@@ -500,6 +537,8 @@ func (e httpErr) Error() string { return e.msg }
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store") // personal data: never cached
 	_ = json.NewEncoder(w).Encode(v)
 }
 
@@ -563,10 +602,40 @@ func (s *Server) allow(r *http.Request) bool {
 	return true
 }
 
+// SessionCookie holds the web session. It is HttpOnly (scripts cannot read
+// it), SameSite=Strict and Secure over HTTPS. API clients keep using the
+// Authorization: Bearer header; the token is never accepted in the URL.
+const SessionCookie = "cm_session"
+
+// CSRFHeader must come with every state-changing request authenticated by
+// the cookie: a cross-site form or image cannot add a custom header, and a
+// cross-site script would need a CORS preflight that the server does not grant.
+const CSRFHeader = "X-CM-Client"
+
+func (s *Server) setSession(w http.ResponseWriter, r *http.Request, tok string) {
+	c := &http.Cookie{Name: SessionCookie, Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode,
+		Secure: r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")}
+	if tok == "" {
+		c.MaxAge = -1
+	} else {
+		c.MaxAge = int(s.Tokens.TTL.Seconds())
+	}
+	http.SetCookie(w, c)
+}
+
 func (s *Server) authenticate(r *http.Request) (*learning.User, error) {
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if tok == "" {
-		tok = r.URL.Query().Get("token")
+		if ck, err := r.Cookie(SessionCookie); err == nil {
+			tok = ck.Value
+			switch r.Method {
+			case http.MethodGet, http.MethodHead, http.MethodOptions:
+			default:
+				if r.Header.Get(CSRFHeader) == "" {
+					return nil, httpErr{403, "missing " + CSRFHeader + " header"}
+				}
+			}
+		}
 	}
 	c, err := s.Tokens.Verify(tok)
 	if err != nil {
@@ -624,7 +693,9 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) (any, error) {
 		return nil, err
 	}
 	u.PasswordHash = ""
-	return map[string]any{"token": s.Tokens.Issue(u), "user": u}, nil
+	tok := s.Tokens.Issue(u)
+	s.setSession(w, r, tok)
+	return map[string]any{"token": tok, "user": u}, nil
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) (any, error) {
@@ -637,7 +708,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) (any, error) {
 		return nil, httpErr{401, "invalid credentials"}
 	}
 	u.PasswordHash = ""
-	return map[string]any{"token": s.Tokens.Issue(*u), "user": u}, nil
+	tok := s.Tokens.Issue(*u)
+	s.setSession(w, r, tok)
+	return map[string]any{"token": tok, "user": u}, nil
 }
 
 func (s *Server) attemptsOf(userID string) ([]learning.Attempt, error) {

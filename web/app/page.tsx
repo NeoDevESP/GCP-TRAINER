@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, getToken, setToken } from "@/lib/api";
+import { api, isSignedIn, keepBearer, setToken } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { LangSwitch } from "@/components/Nav";
 
@@ -17,14 +17,14 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    // OIDC callback lands here with #token=...
+    // older OIDC callbacks landed here with #token=... (now the server sets the cookie)
     const m = window.location.hash.match(/token=([^&]+)/);
     if (m) {
-      setToken(decodeURIComponent(m[1]));
+      keepBearer(decodeURIComponent(m[1]));
       window.location.replace("/dashboard");
       return;
     }
-    if (getToken()) window.location.replace("/dashboard");
+    if (isSignedIn()) window.location.replace("/dashboard");
     // A public deployment may require an invitation code to sign up.
     api<{ invite?: boolean }>("/api/health").then((h) => setNeedInvite(!!h.invite)).catch(() => {});
   }, []);
