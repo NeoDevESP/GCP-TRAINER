@@ -57,8 +57,8 @@ type Attempt struct {
 	// Mode is the learning mode the attempt runs in (see AttemptModes):
 	// explorer and assisted allow help; independent allows none; production
 	// allows hints but neither the tutor nor the solution. Empty = assisted.
-	Mode string `json:"mode,omitempty"`
-	SessionID     string            `json:"sessionId,omitempty"`
+	Mode      string `json:"mode,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
 }
 
 // AttemptModes are the four learning modes.
