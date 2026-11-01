@@ -338,7 +338,7 @@ export default function LearnPage() {
                   <div className="ln-hero-side">
                     <button type="button" className="cm-pillbtn light sm" onClick={() => go("", "concepts", "full")}>{t("Simulacro completo")}</button>
                     <button type="button" className="cm-pillbtn dark sm" onClick={() => go("", "concepts", "quick")}>{t("Simulacro rápido (20)")}</button>
-                    {cur.guide && <a className="cm-sub" href={cur.guide} target="_blank" rel="noreferrer" style={{ color: "#C9D6FF" }}>{t("Guía oficial del examen")} ↗</a>}
+                    {cur.guide && <a className="cm-sub cm-link" href={cur.guide} target="_blank" rel="noreferrer" style={{ color: "#C9D6FF" }}>{t("Guía oficial del examen")}<svg className="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg></a>}
                   </div>
                 </section>
                 <dl className="ln-facts">

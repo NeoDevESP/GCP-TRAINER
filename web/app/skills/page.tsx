@@ -93,7 +93,7 @@ export default function Skills() {
                   <div className="muted small">{t("Etapa {n}", { n: i + 1 })}</div>
                   <strong>{s.name}</strong>
                   <p className="small muted">{s.scenario}</p>
-                  {s.capstones?.length ? <div className="small">{t("Proyectos finales:")} {s.capstones.map((c: string) => <a key={c} href={`/lab?id=${encodeURIComponent(c)}`} style={{ marginRight: 6 }}>{c.split("/").pop()}</a>)}</div> : null}
+                  {s.capstones?.length ? <div className="small lab-chips">{t("Proyectos finales:")} {s.capstones.map((c: string) => <a key={c} href={`/lab?id=${encodeURIComponent(c)}`} style={{ marginRight: 6 }}>{c.split("/").pop()}</a>)}</div> : null}
                 </div>
               ))}
             </div>

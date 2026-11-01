@@ -1313,3 +1313,28 @@ body.cm main#main { overflow-x: clip; }
   .yp-dot { width: 26px; height: 26px; font-size: 13px; }
   .yp-name { font-size: 12px; line-height: 15px; }
 }
+
+/* ---- UI pass (ui-ux-pro-max checklist): touch targets, focus, readability ---- */
+/* Readable small text: 12px was below the comfortable minimum. */
+.small { font-size: 13px; line-height: 18px; }
+/* Search fields hide the input outline: show the ring on the whole field. */
+.cm-search:focus-within, .gsearch:focus-within, .cc .cc-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Prose at a comfortable line length (about 70 characters). */
+.md p, .md li, .gd-steps li, .st-body p, .ln-start-text p, .zt-intro p { max-width: 72ch; }
+/* External-link icon next to link text. */
+.ext-icon { display: inline-block; width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; }
+.cm-link { display: inline-flex; align-items: center; min-height: 44px; }
+/* Phones and touch screens: every target at least 44x44 px. */
+@media (max-width: 640px), (pointer: coarse) {
+  body.cm { font-size: 16px; line-height: 24px; }
+  .cm-avatar { width: 44px; height: 44px; }
+  .gd-copy, .res-skill { min-height: 44px; height: auto; padding: 0 16px; border-radius: 22px; }
+  .pl-check { min-height: 44px; }
+  .pl-check input { width: 24px; height: 24px; }
+  select, .cm-section-head select { min-height: 44px !important; }
+  summary:not([class]), summary.small { padding-block: 14px; }
+  .lab-chips a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
+}
+/* Ticket quotes and callouts in mission texts: a side bar instead of a deep indent. */
+.md blockquote { margin: 12px 0; padding: 10px 14px; border-left: 4px solid var(--accent); background: var(--accent-bg, #EEF2FF); border-radius: 0 12px 12px 0; color: inherit; }
+.md blockquote p { margin: 4px 0; }

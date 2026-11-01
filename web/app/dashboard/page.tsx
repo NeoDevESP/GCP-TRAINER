@@ -302,7 +302,7 @@ export default function Dashboard() {
                 <select id="track" value={cur.id} onChange={(e) => setTrack(e.target.value)}>
                   {tracks.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
                 </select>
-                <a href={`/catalog?track=${encodeURIComponent(cur.id)}`} style={{ fontWeight: 500 }}>{t("Ver las {n} etapas", { n: pathLabs.length })}</a>
+                <a className="cm-link" href={`/catalog?track=${encodeURIComponent(cur.id)}`} style={{ fontWeight: 500 }}>{t("Ver las {n} etapas", { n: pathLabs.length })}</a>
               </div>
             </div>
             <RouteLine labs={pathLabs} state={state} running={runningLab} />
