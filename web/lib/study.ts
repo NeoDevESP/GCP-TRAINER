@@ -7,6 +7,7 @@
 // moved to the server, so nothing studied earlier is lost.
 
 import { api } from "@/lib/api";
+import { enqueue, flush, setRunRevs } from "@/lib/sync";
 import { topicReadiness, type QuizScore } from "@/lib/model";
 
 export interface Concept {
@@ -105,13 +106,12 @@ export const loadHistory = () => read<ExamRecord[]>("cm-learn-exams", []);
 // saveProgress caches the progress and saves the topics that changed.
 export function saveProgress(p: Progress, changed?: string[]) {
   write("cm-learn", p);
-  const body = Object.fromEntries((changed ?? Object.keys(p)).filter((id) => p[id]).map((id) => [id, p[id]]));
-  if (Object.keys(body).length) api("/api/me/study/progress", { body }).catch(() => {});
+  for (const id of (changed ?? Object.keys(p)).filter((x) => p[x])) enqueue({ id: "progress:" + id, path: "/api/me/study/progress", method: "POST", body: { [id]: p[id] } });
 }
 
 export function addHistory(r: ExamRecord) {
   write("cm-learn-exams", [r, ...loadHistory().filter((x) => !(x.at === r.at && x.cert === r.cert))].slice(0, 50));
-  api("/api/me/study/exams", { body: r }).catch(() => {});
+  enqueue({ id: `exam:${r.cert}:${r.at}`, path: "/api/me/study/exams", method: "POST", body: r });
 }
 
 // Practice exams in progress: cached locally, mirrored to the account.
@@ -126,7 +126,10 @@ export function saveRun(key: string, run: unknown | null, now = false): Promise<
   if (run) {
     write(key, run);
     serverRuns[key] = run;
-    const put = () => api(`/api/me/study/runs/${key}`, { method: "PUT", body: run }).catch(() => {});
+    const put = () => {
+      enqueue({ id: "run:" + key, path: `/api/me/study/runs/${key}`, method: "PUT", body: run, run: key });
+      return flush();
+    };
     if (now) return put();
     runTimers[key] = setTimeout(put, 800);
   } else {
@@ -136,7 +139,8 @@ export function saveRun(key: string, run: unknown | null, now = false): Promise<
       /* ignore */
     }
     delete serverRuns[key];
-    return api(`/api/me/study/runs/${key}`, { method: "DELETE" }).catch(() => {});
+    enqueue({ id: "run:" + key, path: `/api/me/study/runs/${key}`, method: "DELETE" });
+    return flush();
   }
   return Promise.resolve();
 }
@@ -161,7 +165,7 @@ function pushReview(changed: Record<string, ReviewItem | null>) {
   const keys = Object.keys(changed);
   for (let i = 0; i < keys.length; i += 200) {
     const body = Object.fromEntries(keys.slice(i, i + 200).map((k) => [k, changed[k]]));
-    api("/api/me/study/review", { body }).catch(() => {});
+    enqueue({ id: `review:${Date.now()}:${i}`, path: "/api/me/study/review", method: "POST", body });
   }
 }
 
@@ -216,6 +220,7 @@ export function questionByKey(byId: Record<string, Topic>, key: string): Questio
 }
 
 interface StudyDoc {
+  runRevs?: Record<string, number>;
   user: string;
   progress: Progress;
   exams: ExamRecord[];
@@ -229,6 +234,7 @@ interface StudyDoc {
 // learner's cache is discarded instead.
 export async function syncStudy(): Promise<{ progress: Progress; history: ExamRecord[] }> {
   const doc = await api<StudyDoc>("/api/me/study");
+  setRunRevs(doc.runRevs);
   const owner = read<string>("cm-learn-owner", "");
   let progress = doc.progress ?? {};
   let history = doc.exams ?? [];
@@ -248,10 +254,10 @@ export async function syncStudy(): Promise<{ progress: Progress; history: ExamRe
       if (JSON.stringify(m) !== JSON.stringify(sp)) changed.push(id);
       merged[id] = m;
     }
-    if (changed.length) await api("/api/me/study/progress", { body: Object.fromEntries(changed.map((id) => [id, merged[id]])) }).catch(() => {});
+    for (const id of changed) enqueue({ id: "progress:" + id, path: "/api/me/study/progress", method: "POST", body: { [id]: merged[id] } });
     for (const r of loadHistory()) {
       if (!history.some((x) => x.at === r.at && x.cert === r.cert)) {
-        await api("/api/me/study/exams", { body: r }).catch(() => {});
+        enqueue({ id: `exam:${r.cert}:${r.at}`, path: "/api/me/study/exams", method: "POST", body: r });
         history = [r, ...history];
       }
     }
@@ -269,7 +275,7 @@ export async function syncStudy(): Promise<{ progress: Progress; history: ExamRe
       if (finished) localStorage.removeItem(k);
       else {
         runs[k] = local;
-        api(`/api/me/study/runs/${k}`, { method: "PUT", body: local }).catch(() => {});
+        enqueue({ id: "run:" + k, path: `/api/me/study/runs/${k}`, method: "PUT", body: local, run: k });
       }
     }
   }

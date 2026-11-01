@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/neodevesp/gcp-trainer/internal/i18n"
@@ -95,12 +96,22 @@ type Study struct {
 	User     string                     `json:"user"`
 	Progress map[string]StudyTopic      `json:"progress"`
 	Exams    []StudyExam                `json:"exams"`
-	Runs     map[string]json.RawMessage `json:"runs"`   // practice exams in progress, by client key
-	Review   map[string]ReviewItem      `json:"review"` // spaced repetition, by "topic:q3" / "topic:s1"
-	Updated  time.Time                  `json:"updated"`
+	Runs     map[string]json.RawMessage `json:"runs"` // practice exams in progress, by client key
+	// RunRevs counts the saves of each run. A client that sends the revision
+	// it last saw (X-Run-Base) is refused with 409 and the current copy when
+	// another device saved in between, so it can merge instead of overwrite.
+	RunRevs map[string]int64      `json:"runRevs,omitempty"`
+	Review  map[string]ReviewItem `json:"review"` // spaced repetition, by "topic:q3" / "topic:s1"
+	Updated time.Time             `json:"updated"`
 }
 
 const maxReviewItems = 3000
+
+// httpErrBody is the current copy of a run returned with a 409.
+type httpErrBody struct {
+	Run json.RawMessage
+	Rev int64
+}
 
 var reviewKey = regexp.MustCompile(`^([a-z0-9-]+):[qs]\d{1,3}$`)
 
@@ -300,16 +311,42 @@ func (s *Server) studyRoutes(h func(string, func(http.ResponseWriter, *http.Requ
 		if err := decodeBody(r, &raw); err != nil || len(raw) > maxRunBytes || !json.Valid(raw) {
 			return nil, bad(r, "simulacro no válido", "invalid practice exam")
 		}
+		var rev int64
+		var conflict *httpErrBody
 		_, err := s.updateStudy(userOf(r).ID, func(st *Study) error {
+			if st.RunRevs == nil {
+				st.RunRevs = map[string]int64{}
+			}
+			cur := st.RunRevs[key]
+			if base := r.Header.Get("X-Run-Base"); base != "" {
+				if b, perr := strconv.ParseInt(base, 10, 64); perr == nil && b != cur && st.Runs[key] != nil {
+					conflict = &httpErrBody{Run: st.Runs[key], Rev: cur}
+					return nil
+				}
+			}
 			st.Runs[key] = raw
+			rev = cur + 1
+			st.RunRevs[key] = rev
 			return nil
 		})
-		return map[string]bool{"ok": err == nil}, err
+		if err != nil {
+			return nil, err
+		}
+		if conflict != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": i18n.P(s.lang(r), "otro dispositivo guardó antes: se han combinado los cambios", "another device saved first: changes were merged"), "run": conflict.Run, "rev": conflict.Rev})
+			return nil, nil
+		}
+		return map[string]any{"ok": true, "rev": rev}, nil
 	})
 	h("DELETE /api/me/study/runs/{key}", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		key := r.PathValue("key")
 		_, err := s.updateStudy(userOf(r).ID, func(st *Study) error {
 			delete(st.Runs, key)
+			if st.RunRevs != nil {
+				st.RunRevs[key]++
+			}
 			return nil
 		})
 		return map[string]bool{"ok": err == nil}, err

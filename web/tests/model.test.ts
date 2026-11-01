@@ -70,3 +70,29 @@ test("mastery needs two strong quizzes on different days", () => {
   p = addScore(p, 50, 3 * day);
   assert.equal(topicMastered(p), false, "a recent drop removes mastery");
 });
+
+import { schedule, type PlanEntry } from "../lib/model.ts";
+
+test("the schedule never exceeds the daily budget (except one long activity alone)", () => {
+  const e = (key: string, minutes: number, priority: PlanEntry["priority"] = "essential", done = false): PlanEntry => ({ key, minutes, priority, done });
+  const entries = [e("a", 30), e("b", 40), e("c", 50, "recommended"), e("d", 200), e("e", 20, "optional"), e("f", 10, "essential", true), e("g", 60)];
+  const s = schedule(entries, { minutesPerDay: 90, recommended: true, optional: false });
+  for (const day of s) assert.ok(day.minutes <= 90 || (day.long && day.entries.length === 1), JSON.stringify(day));
+  const keys = s.flatMap((d) => d.entries.map((x) => x.key));
+  assert.deepEqual(keys, ["a", "b", "c", "d", "g"], "keeps order, skips done and optional");
+  assert.equal(s.find((d) => d.long)?.entries[0].key, "d");
+  const lean = schedule(entries, { minutesPerDay: 90, recommended: false, optional: true });
+  assert.deepEqual(lean.flatMap((d) => d.entries.map((x) => x.key)), ["a", "b", "d", "e", "g"]);
+});
+
+import { mergeRun } from "../lib/model.ts";
+
+test("merging runs after a conflict keeps both devices' work", () => {
+  const server = { history: [{ at: 1, score: 50 }, { at: 3, score: 80 }], checked: { a: true }, current: { id: "srv" } };
+  const local = { history: [{ at: 2, score: 70 }, { at: 3, score: 80 }], checked: { b: true, c: false }, current: { id: "here" } };
+  const m = mergeRun(server, local);
+  assert.deepEqual(m.history.map((h: any) => h.at), [3, 2, 1]);
+  assert.deepEqual(m.checked, { a: true, b: true });
+  assert.equal(m.current.id, "here");
+  assert.equal(mergeRun(null, local), local);
+});

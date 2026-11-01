@@ -135,3 +135,38 @@ func TestStudyQuizHistory(t *testing.T) {
 		t.Fatalf("history not capped: %d", n)
 	}
 }
+
+// Two devices editing the same run: the one that saves with a stale revision
+// gets 409 and the current copy instead of silently overwriting it.
+func TestStudyRunConflict(t *testing.T) {
+	ts, _ := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+	var auth struct {
+		Token string `json:"token"`
+	}
+	c.do("POST", "/api/auth/register", map[string]string{"email": "rc@example.com", "name": "Rc", "password": "correct horse battery"}, &auth)
+	c.token = auth.Token
+	var r1 struct {
+		Rev int64 `json:"rev"`
+	}
+	c.hdr = map[string]string{"X-Run-Base": "0"}
+	if code := c.do("PUT", "/api/me/study/runs/cm-plan", map[string]any{"checked": map[string]bool{"a": true}}, &r1); code != 200 || r1.Rev != 1 {
+		t.Fatalf("first save: %d %+v", code, r1)
+	}
+	// device B saves on top of rev 1
+	c.hdr = map[string]string{"X-Run-Base": "1"}
+	c.do("PUT", "/api/me/study/runs/cm-plan", map[string]any{"checked": map[string]bool{"b": true}}, nil)
+	// device A still thinks the run is at rev 1
+	var conflict struct {
+		Run map[string]any `json:"run"`
+		Rev int64          `json:"rev"`
+	}
+	if code := c.do("PUT", "/api/me/study/runs/cm-plan", map[string]any{"checked": map[string]bool{"c": true}}, &conflict); code != 409 || conflict.Rev != 2 || conflict.Run == nil {
+		t.Fatalf("stale save not refused: %d %+v", code, conflict)
+	}
+	// old clients (no header) keep working
+	c.hdr = nil
+	if code := c.do("PUT", "/api/me/study/runs/cm-plan", map[string]any{"checked": map[string]bool{}}, nil); code != 200 {
+		t.Fatalf("save without revision: %d", code)
+	}
+}

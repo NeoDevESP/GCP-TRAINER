@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, setToken } from "@/lib/api";
 import { changeLang, k, useI18n, type Lang } from "@/lib/i18n";
 import type { User } from "@/lib/types";
+import SaveStatus from "@/components/SaveStatus";
 
 const S = (d: ReactNode) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -90,6 +91,7 @@ export default function Nav({ active }: { active?: string }) {
       <a className="skip-link" href="#main">
         {t("Saltar al contenido")}
       </a>
+      <SaveStatus />
       <nav className="cm-rail" aria-label={t("Principal")}>
         <a className="cm-logo" href="/dashboard" aria-label="Cloud Mastery">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

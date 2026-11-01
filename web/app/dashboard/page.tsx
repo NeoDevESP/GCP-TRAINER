@@ -10,7 +10,7 @@ import { dimension, label, recKind } from "@/lib/labels";
 import type { LabSummary, Profile, Recommendation, Stage } from "@/lib/types";
 import { RouteLine, StepGuide, TrackBadge, labHref, nextLab, useProgress } from "@/components/learn";
 import { k } from "@/lib/i18n";
-import { planLocal, planStatus } from "@/lib/plan";
+import { planLocal, planSchedule } from "@/lib/plan";
 import { dueKeys, loadReview, loadRun, syncStudy } from "@/lib/study";
 
 const greeting = () => {
@@ -121,8 +121,8 @@ export default function Dashboard() {
   const doneN = pathLabs.filter((l) => state[l.id] === "done").length;
   const nextId = nextLab(pathLabs.map((l) => l.id), state);
   const next = nextId ? labs[nextId] : undefined;
-  const plan = study && Object.keys(labs).length ? planStatus({ labs, state, ...study }) : null;
-  const pday = plan?.days[plan.today];
+  const plan = study && Object.keys(labs).length ? planSchedule({ labs, state, ...study }, {}, study.prefs) : null;
+  const pday = plan?.sessions[0];
   const zIds = (tracks.find((x) => x.id === "zentra")?.labs ?? []).filter((id) => labs[id]);
   const zNext = nextLab(zIds, state);
   const zStages = tracks.find((x) => x.id === "zentra")?.stages ?? [];
@@ -195,7 +195,7 @@ export default function Dashboard() {
           </section>
         )}
 
-        {plan && pday && (
+        {plan && (pday || plan.done === plan.total) && (
           <section className="cm-section" aria-labelledby="today-title" style={{ marginTop: 0 }}>
             <div className="cm-section-head">
               <h2 id="today-title">{t("Hoy toca")}</h2>
@@ -203,9 +203,9 @@ export default function Dashboard() {
             <ul className="db-today">
               <li>
                 <a className="cm-card" href="/plan">
-                  <span className="db-kick">{t("Plan de 10 días")}</span>
-                  <strong>{plan.done === plan.total ? t("¡Plan completado!") : t(pday.title)}</strong>
-                  <span className="muted small">{t("{done} de {total} tareas del día", { done: plan.counts[plan.today], total: pday.items.length })}</span>
+                  <span className="db-kick">{t("Tu plan de estudio")}</span>
+                  <strong>{pday ? t("La sesión de hoy") : t("¡Plan completado!")}</strong>
+                  {pday && <span className="muted small">{t("{n} actividades · {m}", { n: pday.entries.length, m: pday.minutes + " min" })}</span>}
                   <span className="db-meter" aria-hidden="true"><span style={{ width: `${(100 * plan.done) / Math.max(1, plan.total)}%` }} /></span>
                 </a>
               </li>

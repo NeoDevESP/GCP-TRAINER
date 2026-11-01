@@ -1349,3 +1349,27 @@ body.cm main#main { overflow-x: clip; }
 .mode-card:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mode-name { font-weight: 600; }
 .mode-desc { font-size: 13px; line-height: 18px; color: var(--muted); }
+/* Dynamic study plan */
+.pl-prefs { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; margin-bottom: 16px; }
+.pl-pref { display: flex; align-items: center; gap: 10px; }
+.pl-pref label { margin: 0; font-weight: 600; }
+.pl-pref select { width: auto; min-width: 120px; }
+.pl-toggle { display: inline-flex; align-items: center; gap: 8px; margin: 0; min-height: 44px; cursor: pointer; }
+.pl-toggle input { width: 20px; height: 20px; }
+.pl-summary { flex-basis: 100%; margin: 0; font-weight: 500; }
+.pl-dsub { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+.pl-module { font-size: 15px; margin: 16px 0 4px; }
+.pl-prio { font-weight: 600; }
+.pl-prio.essential { color: var(--accent-2, var(--accent)); }
+.pl-prio.optional { color: var(--muted); }
+/* Save status (bottom-right; above the phone tab bar) */
+.save-status { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: none; align-items: center; gap: 10px; max-width: min(92vw, 460px); padding: 10px 14px; border-radius: 14px; background: var(--panel, #fff); color: var(--text); border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12); font-size: 14px; line-height: 20px; }
+.save-status.show { display: flex; }
+.save-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--muted); }
+.save-status.saving .save-dot { background: var(--accent); animation: save-pulse 1s ease-in-out infinite; }
+.save-status.saved .save-dot { background: var(--ok); }
+.save-status.offline .save-dot { background: var(--warn); }
+.save-status.error .save-dot { background: var(--bad); }
+.save-retry { min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; font: inherit; font-weight: 600; flex: none; }
+@keyframes save-pulse { 50% { opacity: 0.35; } }
+@media (max-width: 640px) { .save-status { bottom: 84px; left: 16px; right: 16px; max-width: none; } }

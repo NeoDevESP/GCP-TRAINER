@@ -53,6 +53,7 @@ type client struct {
 	base  string
 	token string
 	lang  string // X-Lang header when set
+	hdr   map[string]string
 }
 
 func (c *client) do(method, path string, body any, out any) int {
@@ -68,6 +69,9 @@ func (c *client) do(method, path string, body any, out any) int {
 	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	for k, v := range c.hdr {
+		req.Header.Set(k, v)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

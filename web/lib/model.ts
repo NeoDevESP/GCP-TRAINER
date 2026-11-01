@@ -151,3 +151,78 @@ export function topicMastered(p?: TopicScores): boolean {
   const prevDay = s.slice(0, -1).reverse().find((x) => Math.abs(last.at - x.at) >= 20 * 3600 * 1000);
   return !!prevDay && last.score >= 85 && prevDay.score >= 85 && (recentScore(p) ?? 0) >= 85;
 }
+
+// ---- Study plan scheduling -------------------------------------------------------
+
+export type Priority = "essential" | "recommended" | "optional";
+export interface PlanEntry {
+  key: string;
+  minutes: number;
+  priority: Priority;
+  done: boolean;
+}
+export interface PlanSettings {
+  /** minutes the learner can study per day */
+  minutesPerDay: number;
+  recommended: boolean;
+  optional: boolean;
+}
+export const DEFAULT_PLAN: PlanSettings = { minutesPerDay: 120, recommended: true, optional: false };
+
+export interface Session<T extends PlanEntry> {
+  entries: T[];
+  minutes: number;
+  /** a single activity longer than the daily budget (do it in two sittings) */
+  long: boolean;
+}
+
+/**
+ * schedule packs the pending activities, in curriculum order, into sessions
+ * that fit the daily budget. Done or excluded activities are skipped; an
+ * activity longer than the budget takes a session of its own (flagged).
+ */
+export function schedule<T extends PlanEntry>(entries: T[], s: PlanSettings): Session<T>[] {
+  const budget = Math.max(15, s.minutesPerDay);
+  const wanted = entries.filter((e) => !e.done && (e.priority === "essential" || (e.priority === "recommended" && s.recommended) || (e.priority === "optional" && s.optional)));
+  const out: Session<T>[] = [];
+  let cur: Session<T> = { entries: [], minutes: 0, long: false };
+  for (const e of wanted) {
+    if (cur.entries.length && cur.minutes + e.minutes > budget) {
+      out.push(cur);
+      cur = { entries: [], minutes: 0, long: false };
+    }
+    cur.entries.push(e);
+    cur.minutes += e.minutes;
+    if (e.minutes > budget) cur.long = true;
+  }
+  if (cur.entries.length) out.push(cur);
+  return out;
+}
+
+// ---- Merging a saved run after a conflict between devices ---------------------
+
+type Json = Record<string, any>;
+
+/**
+ * mergeRun combines the copy of a study run saved by another device (server)
+ * with this device's one (local) so nothing done on either is lost:
+ * histories are joined (by their `at` time), ticked tasks are OR-ed, and this
+ * device's current activity and preferences win.
+ */
+export function mergeRun(server: Json | null | undefined, local: Json): Json {
+  if (!server || typeof server !== "object") return local;
+  const out: Json = { ...server, ...local };
+  if (Array.isArray(server.history) || Array.isArray(local.history)) {
+    const seen = new Set<number>();
+    out.history = [...(local.history ?? []), ...(server.history ?? [])]
+      .filter((h: Json) => {
+        const k = Number(h?.at);
+        if (!k || seen.has(k)) return !k;
+        seen.add(k);
+        return true;
+      })
+      .sort((a: Json, b: Json) => (b?.at ?? 0) - (a?.at ?? 0));
+  }
+  if (server.checked || local.checked) out.checked = { ...(server.checked ?? {}), ...Object.fromEntries(Object.entries(local.checked ?? {}).filter(([, v]) => v)) };
+  return out;
+}

@@ -23,13 +23,13 @@ export function setToken(t: string) {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public data?: any) {
     super(message);
   }
 }
 
-export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json", "X-Lang": getLang() };
+export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", "X-Lang": getLang(), ...(opts.headers ?? {}) };
   const t = getToken();
   if (t) headers.Authorization = `Bearer ${t}`;
   const res = await fetch(BASE + path, {
@@ -49,7 +49,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
       setToken("");
       window.location.href = "/";
     }
-    throw new ApiError(res.status, (data && data.error) || res.statusText);
+    throw new ApiError(res.status, (data && data.error) || res.statusText, data);
   }
   return data as T;
 }

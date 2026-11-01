@@ -4,7 +4,7 @@
 import { k } from "@/lib/i18n";
 import { loadHistory, loadProgress, loadRun, type ExamRecord, type Progress } from "@/lib/study";
 import type { LabSummary } from "@/lib/types";
-import { TOPIC_PASS, examPassed, lastScore, shiftPassed } from "@/lib/model";
+import { DEFAULT_PLAN, TOPIC_PASS, examPassed, lastScore, schedule, shiftPassed, type PlanEntry, type PlanSettings, type Priority } from "@/lib/model";
 
 export type Item = { lab: string } | { topic: string } | { exam: string } | { shift: number } | { task: string; text: string; href?: string };
 export interface Day {
@@ -45,6 +45,69 @@ export const DAYS: Day[] = [
 export const key = (it: Item) => ("lab" in it ? "lab:" + it.lab : "topic" in it ? "topic:" + it.topic : "exam" in it ? "exam:" + it.exam : "shift" in it ? "shift:" + it.shift : "task:" + it.task);
 
 
+// ---- Real durations and priorities (the dynamic plan) ------------------------
+// The ten modules above are the curriculum order. How many days it takes is
+// computed from the real duration of every activity and the time the learner
+// chooses per day (see schedule in lib/model.ts).
+
+const TASK_MINUTES: Record<string, number> = { "d1-handbook": 20, "d5-repeat": 45, "d10-review": 30, "d10-final": 120 };
+const TASK_PRIORITY: Record<string, Priority> = { "d1-handbook": "recommended", "d5-repeat": "optional", "d10-review": "recommended", "d10-final": "essential" };
+
+/** topicMinutes: reading the concepts (4 min each) and answering its questions (1 min each). */
+export const topicMinutes = (t?: { concepts: unknown[]; quiz: unknown[]; scenarios: unknown[] }) => (t ? 5 + 4 * t.concepts.length + t.quiz.length + t.scenarios.length : 30);
+
+export function itemMinutes(it: Item, labs: Record<string, LabSummary>, topics: Record<string, { concepts: unknown[]; quiz: unknown[]; scenarios: unknown[] }>): number {
+  if ("lab" in it) return labs[it.lab]?.minutes || 30;
+  if ("topic" in it) return topicMinutes(topics[it.topic]);
+  if ("exam" in it) return 120;
+  if ("shift" in it) return 60;
+  return TASK_MINUTES[it.task] ?? 15;
+}
+
+/**
+ * itemPriority: the Zentra route, theory, the practice exam and the final are
+ * essential; ACE and Banco Atlas labs, shifts and reading tasks are
+ * recommended; repeating labs is optional. With skipBasics (the learner already
+ * knows the basics) the from-zero workshops become optional.
+ */
+export function itemPriority(it: Item, skipBasics = false): Priority {
+  if ("lab" in it) {
+    if (it.lab.startsWith("zentra-t")) return skipBasics ? "optional" : "essential";
+    return it.lab.startsWith("zentra-") ? "essential" : "recommended";
+  }
+  if ("topic" in it || "exam" in it) return "essential";
+  if ("shift" in it) return "recommended";
+  return TASK_PRIORITY[it.task] ?? "recommended";
+}
+
+export interface PlanPrefs extends PlanSettings {
+  skipBasics: boolean;
+}
+export const DEFAULT_PREFS: PlanPrefs = { ...DEFAULT_PLAN, skipBasics: false };
+
+export interface PlanItem extends PlanEntry {
+  item: Item;
+  module: number;
+}
+
+/** planEntries lists every activity of the curriculum with its minutes, priority and state. */
+export function planEntries(s: PlanState, topics: Record<string, { concepts: unknown[]; quiz: unknown[]; scenarios: unknown[] }>, prefs: PlanPrefs): PlanItem[] {
+  return DAYS.flatMap((d, mi) =>
+    d.items
+      .filter((it) => !("lab" in it) || s.labs[it.lab])
+      .map((it) => ({ key: key(it), item: it, module: mi, minutes: itemMinutes(it, s.labs, topics), priority: itemPriority(it, prefs.skipBasics), done: itemDone(it, s) })),
+  );
+}
+
+/** planSchedule returns the pending sessions and the totals of the plan. */
+export function planSchedule(s: PlanState, topics: Record<string, { concepts: unknown[]; quiz: unknown[]; scenarios: unknown[] }>, prefs: PlanPrefs) {
+  const entries = planEntries(s, topics, prefs);
+  const sessions = schedule(entries, prefs);
+  const included = entries.filter((e) => e.priority === "essential" || (e.priority === "recommended" && prefs.recommended) || (e.priority === "optional" && prefs.optional));
+  const pendingMin = included.filter((e) => !e.done).reduce((a, e) => a + e.minutes, 0);
+  return { entries, sessions, total: included.length, done: included.filter((e) => e.done).length, pendingMin };
+}
+
 export interface PlanState {
   labs: Record<string, LabSummary>;
   state: Record<string, string>;
@@ -59,6 +122,7 @@ export const planLocal = () => ({
   prog: loadProgress(),
   hist: loadHistory(),
   checked: loadRun<{ checked: Record<string, boolean> }>("cm-plan")?.checked ?? {},
+  prefs: { ...DEFAULT_PREFS, ...(loadRun<{ prefs?: Partial<PlanPrefs> }>("cm-plan")?.prefs ?? {}) } as PlanPrefs,
   // only passed shifts count towards the plan
   shifts: (loadRun<{ history: { score: number; passed?: boolean }[] }>("cm-shift")?.history ?? []).filter(shiftPassed).length,
 });
