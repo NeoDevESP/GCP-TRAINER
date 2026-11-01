@@ -17,17 +17,29 @@ import { Icon } from "@/components/console/icons";
 import type { SessionInfo } from "@/lib/types";
 
 
+type LearnMode = "explorer" | "assisted" | "independent" | "production";
+const MODES: { id: LearnMode; name: string; desc: string }[] = [
+  { id: "explorer", name: k("Explorador"), desc: k("El profesor te explica cada paso. Ideal si es nuevo para ti; cuenta como hecho con ayuda.") },
+  { id: "assisted", name: k("Asistido"), desc: k("Trabajas tú y pides pistas graduales si te atascas. Cada pista resta autonomía.") },
+  { id: "independent", name: k("Independiente"), desc: k("Sin pistas ni profesor. Así demuestras que lo dominas.") },
+];
+
 function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionInfo, tutor?: boolean) => void }) {
   const { t, lang } = useI18n();
   const [lab, setLab] = useState<any>(null);
   const [fidelity, setFidelity] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // exam cases are independent and shift tickets production: not negotiable
+  const locked: LearnMode | "" = qs("exam") === "1" ? "independent" : qs("mode") === "production" ? "production" : "";
+  const [mode, setMode] = useState<LearnMode>(locked || (qs("tutor") === "1" ? "explorer" : "assisted"));
   useEffect(() => {
     api(`/api/labs/${encodeURIComponent(labId)}`)
       .then((l) => {
         setLab(l);
         setFidelity(l.defaultFidelity || "F0");
+        if (!locked && l.type === "guided" && qs("tutor") !== "0") setMode("explorer");
+        if (l.type === "boss") setMode("independent");
       })
       .catch((e) => setErr(e.message));
   }, [labId, lang]);
@@ -35,7 +47,7 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
     setBusy(true);
     setErr("");
     try {
-      const s = await api<SessionInfo>(`/api/labs/${encodeURIComponent(labId)}/start`, { body: { fidelity } });
+      const s = await api<SessionInfo>(`/api/labs/${encodeURIComponent(labId)}/start`, { body: { fidelity, mode } });
       onStarted(s, tutor);
     } catch (e: any) {
       setErr(e.message);
@@ -85,38 +97,34 @@ function Briefing({ labId, onStarted }: { labId: string; onStarted: (s: SessionI
           </table>
         </details>
       ) : null}
-      {qs("exam") === "1" && (
+      {locked === "independent" && (
         <p className="lp-note" style={{ marginTop: 16 }}>
           <Icon name="shield" size={18} />
           <span>{t("Modo examen: este caso forma parte de tu examen final. Sin profesor ni pistas; trabaja como en una guardia real.")}</span>
         </p>
       )}
+      {locked === "production" && (
+        <p className="lp-note" style={{ marginTop: 16 }}>
+          <Icon name="shield" size={18} />
+          <span>{t("Turno de soporte: pistas sí, solución y profesor no. Escalar bien también es una resolución válida.")}</span>
+        </p>
+      )}
+      {!locked && (
+        <fieldset className="mode-pick">
+          <legend>{t("¿Cómo quieres trabajarlo?")}</legend>
+          {MODES.filter((m) => lab.type !== "boss" || m.id === "independent").map((m) => (
+            <label key={m.id} className={`mode-card${mode === m.id ? " on" : ""}`}>
+              <input type="radio" name="mode" value={m.id} checked={mode === m.id} onChange={() => setMode(m.id)} />
+              <span className="mode-name">{t(m.name)}</span>
+              <span className="mode-desc">{t(m.desc)}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       <div className="row" style={{ marginTop: 20 }}>
-        {qs("exam") === "1" ? (
-          <button className="btn" onClick={() => start()} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
-            {busy ? t("Preparando el entorno…") : t("Empezar el caso del examen")}
-          </button>
-        ) : qs("tutor") === "1" && lab.type !== "boss" ? (
-          <>
-            <button className="btn" onClick={() => start(true)} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
-              <Icon name="school" size={18} /> {busy ? t("Preparando el entorno…") : t("Empezar con el profesor")}
-            </button>
-            <button className="btn secondary" onClick={() => start()} disabled={busy} style={{ height: 44 }}>
-              {t("Empezar sin profesor")}
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="btn" onClick={() => start()} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
-              {busy ? t("Preparando el entorno…") : t("Empezar laboratorio")}
-            </button>
-            {lab.type !== "boss" && (
-              <button className="btn secondary" onClick={() => start(true)} disabled={busy} style={{ height: 44 }}>
-                <Icon name="school" size={18} /> {t("Empezar con el profesor")}
-              </button>
-            )}
-          </>
-        )}
+        <button className="btn" onClick={() => start(mode === "explorer")} disabled={busy} style={{ height: 44, padding: "0 24px" }}>
+          {busy ? t("Preparando el entorno…") : locked === "independent" ? t("Empezar el caso del examen") : mode === "explorer" ? t("Empezar con el profesor") : t("Empezar laboratorio")}
+        </button>
         <span className="muted small">{t("No puedes romper nada: es un proyecto de prácticas que se crea solo para ti.")}</span>
       </div>
       <details style={{ marginTop: 12 }}>
@@ -518,8 +526,10 @@ function Result({ out, session }: { out: any; session: SessionInfo }) {
 function Workspace({ session }: { session: SessionInfo }) {
   const { t: tr } = useI18n();
   const [tick, setTick] = useState(0);
-  const exam = qs("exam") === "1";
-  const tutorAuto = qs("tutor") === "1" && !exam;
+  // the server enforces the mode; the interface only hides what it would refuse
+  const exam = qs("exam") === "1" || session.learnMode === "independent";
+  const noTutor = exam || session.learnMode === "production";
+  const tutorAuto = qs("tutor") === "1" && !noTutor;
   const [panel, setPanel] = useState<"guide" | "desk" | "submit" | "tutor">(tutorAuto ? "tutor" : "guide");
   const [hints, setHints] = useState<any[]>([]);
   const [check, setCheck] = useState<any>(null);
@@ -624,7 +634,7 @@ function Workspace({ session }: { session: SessionInfo }) {
 
   const tabs: ["guide" | "desk" | "submit" | "tutor", string][] = [
     ...(hasDesk ? ([["desk", tr("Ticket")]] as ["desk", string][]) : []),
-    ...(session.type !== "boss" && !exam ? ([["tutor", tr("Profesor")]] as ["tutor", string][]) : []),
+    ...(session.type !== "boss" && !noTutor ? ([["tutor", tr("Profesor")]] as ["tutor", string][]) : []),
     ["guide", tr("Instrucciones")],
     ["submit", tr("Entrega")],
   ];

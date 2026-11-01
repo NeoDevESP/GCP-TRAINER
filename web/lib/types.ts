@@ -116,6 +116,8 @@ export interface Question {
 
 export interface SessionInfo {
   id: string;
+  /** learning mode of the attempt: explorer, assisted, independent, production */
+  learnMode?: string;
   labId: string;
   project: string;
   region: string;

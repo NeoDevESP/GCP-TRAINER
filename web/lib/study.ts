@@ -7,6 +7,7 @@
 // moved to the server, so nothing studied earlier is lost.
 
 import { api } from "@/lib/api";
+import { topicReadiness, type QuizScore } from "@/lib/model";
 
 export interface Concept {
   id: string;
@@ -65,7 +66,10 @@ export interface Cert {
 export interface TopicProgress {
   seen?: string[];
   known?: string[];
+  /** best quiz score ever (kept for older data and as a record) */
   best?: number;
+  /** recent quiz scores, oldest first (the last 12) */
+  scores?: QuizScore[];
 }
 export type Progress = Record<string, TopicProgress>;
 
@@ -239,6 +243,7 @@ export async function syncStudy(): Promise<{ progress: Progress; history: ExamRe
         seen: Array.from(new Set([...(sp.seen ?? []), ...(lp.seen ?? [])])),
         known: Array.from(new Set([...(sp.known ?? []), ...(lp.known ?? [])])),
         best: Math.max(sp.best ?? 0, lp.best ?? 0) || (sp.best ?? lp.best),
+        scores: [...(sp.scores ?? []), ...(lp.scores ?? []).filter((x) => !(sp.scores ?? []).some((y) => y.at === x.at))].sort((a, b) => a.at - b.at).slice(-12),
       };
       if (JSON.stringify(m) !== JSON.stringify(sp)) changed.push(id);
       merged[id] = m;
@@ -305,10 +310,11 @@ export function isRight(q: Question, sel: number[]) {
   return sel.length === q.answers.length && q.answers.every((a) => sel.includes(a));
 }
 
-// Topic readiness 0..1: concepts understood (40 %) + best quiz score (60 %).
+// Topic readiness 0..1: mostly the recent quiz performance (see lib/model.ts);
+// reading or marking concepts only counts 10 %.
 export function readiness(t: Topic, p?: TopicProgress) {
   const seen = (p?.seen ?? []).filter((id) => t.concepts.some((c) => c.id === id)).length;
-  return 0.4 * (seen / Math.max(1, t.concepts.length)) + 0.6 * ((p?.best ?? 0) / 100);
+  return topicReadiness(seen, t.concepts.length, p);
 }
 
 // Weight of each topic in an exam: each domain shares its weight among its topics.

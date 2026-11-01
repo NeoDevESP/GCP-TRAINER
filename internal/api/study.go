@@ -29,6 +29,37 @@ type StudyTopic struct {
 	Seen  []string `json:"seen,omitempty"`
 	Known []string `json:"known,omitempty"`
 	Best  *int     `json:"best,omitempty"`
+	// Scores are the recent quiz results (oldest first, the last 12). The
+	// latest one decides whether the topic is learnt, so a drop shows.
+	Scores []QuizScore `json:"scores,omitempty"`
+}
+
+// QuizScore is one quiz result on a topic.
+type QuizScore struct {
+	At    int64 `json:"at"`
+	Score int   `json:"score"`
+}
+
+const maxQuizScores = 12
+
+// mergeScores keeps every distinct result of both sides (by time), so two
+// devices never erase each other's quizzes.
+func mergeScores(old, add []QuizScore) []QuizScore {
+	seen := map[int64]bool{}
+	var out []QuizScore
+	for _, q := range append(append([]QuizScore{}, old...), add...) {
+		if seen[q.At] || q.At <= 0 {
+			continue
+		}
+		seen[q.At] = true
+		q.Score = min(100, max(0, q.Score))
+		out = append(out, q)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
+	if len(out) > maxQuizScores {
+		out = out[len(out)-maxQuizScores:]
+	}
+	return out
 }
 
 // StudyDomain is the result of one exam section in a practice exam.
@@ -183,6 +214,7 @@ func (s *Server) studyRoutes(h func(string, func(http.ResponseWriter, *http.Requ
 				} else {
 					p.Best = st.Progress[id].Best
 				}
+				p.Scores = mergeScores(st.Progress[id].Scores, p.Scores)
 				st.Progress[id] = p
 			}
 			return nil

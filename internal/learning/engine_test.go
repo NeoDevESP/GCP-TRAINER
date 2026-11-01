@@ -191,3 +191,26 @@ func TestAdaptiveStealthRetention(t *testing.T) {
 		t.Fatalf("generated incident %s should exercise %s (skills %v)", l.ID, stealth.Skill, l.Skills)
 	}
 }
+
+// A recent failure lowers mastery (the best score no longer hides it) and an
+// attempt that saw the solution counts half of one solved alone.
+func TestMasteryRecentAndGuided(t *testing.T) {
+	c := loadCat(t)
+	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	e := &Engine{Cat: c, Now: func() time.Time { return now }}
+	lab := "ace-d11-app-403"
+	good := e.Mastery([]Attempt{att("1", lab, 100, true, 0, now.Add(-48*time.Hour))})
+	worse := e.Mastery([]Attempt{att("1", lab, 100, true, 0, now.Add(-48*time.Hour)), att("2", lab, 20, false, 0, now.Add(-time.Hour))})
+	if len(good) == 0 || len(worse) == 0 || worse[0].Correctness >= good[0].Correctness {
+		t.Fatalf("a recent failure should lower correctness: %v -> %v", good, worse)
+	}
+	helped := att("3", lab, 100, true, 0, now.Add(-time.Hour))
+	helped.SolutionShown = true
+	guided := e.Mastery([]Attempt{helped})
+	if guided[0].Correctness > 60 || guided[0].Independence != 0 {
+		t.Fatalf("a solved-with-solution attempt must count half and show no independence: %+v", guided[0])
+	}
+	if got := RecentWeighted([]float64{100, 0}); got != 37.5 {
+		t.Fatalf("recent weighting: %v", got)
+	}
+}

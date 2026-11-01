@@ -243,8 +243,13 @@ func (s *Server) Handler() http.Handler {
 	// ---- lab sessions ---------------------------------------------------------
 	h("POST /api/labs/{id}/start", s.start)
 	h("GET /api/sessions/{id}", func(w http.ResponseWriter, r *http.Request) (any, error) {
-		_, info, err := s.ownSession(r)
-		return info, err
+		a, info, err := s.ownSession(r)
+		if err != nil || a == nil {
+			return info, err
+		}
+		cp := *info
+		cp.LearnMode = a.Mode
+		return &cp, nil
 	})
 	h("POST /api/sessions/{id}/exec", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		_, info, err := s.ownSession(r)
@@ -694,13 +699,27 @@ func (s *Server) start(w http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	var req struct {
 		Fidelity string `json:"fidelity"`
+		Mode     string `json:"mode"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	return s.startLab(userOf(r), l, req.Fidelity, s.lang(r))
+	mode := req.Mode
+	if mode == "" {
+		mode = "assisted"
+		if l.Type == "guided" {
+			mode = "explorer"
+		}
+	}
+	if !contains(learning.AttemptModes, mode) {
+		return nil, httpErr{400, i18n.P(s.lang(r), "modo de aprendizaje desconocido", "unknown learning mode")}
+	}
+	if l.Type == "boss" && (mode == "explorer" || mode == "assisted") {
+		mode = "independent" // boss battles never had help
+	}
+	return s.startLab(userOf(r), l, req.Fidelity, s.lang(r), mode)
 }
 
 // startLab creates an attempt and provisions a session (catalog or generated lab).
-func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity, lang string) (any, error) {
+func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity, lang, mode string) (*orchestrator.SessionInfo, error) {
 	prior, _ := s.attemptsOf(u.ID)
 	running := 0
 	for _, a := range prior {
@@ -727,7 +746,7 @@ func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity, lang stri
 	if l.Generated != nil {
 		seed = l.Generated.Seed
 	}
-	att := learning.Attempt{ID: learning.NewID("a-"), UserID: u.ID, LabID: l.ID, Track: l.Track, Seed: seed, Started: time.Now(), Status: "running", HintsUsed: []int{}}
+	att := learning.Attempt{ID: learning.NewID("a-"), UserID: u.ID, LabID: l.ID, Track: l.Track, Seed: seed, Started: time.Now(), Status: "running", HintsUsed: []int{}, Mode: mode}
 	info, err := s.Labs.Start(orchestrator.StartRequest{UserID: u.ID, LabID: l.ID, Fidelity: fidelity, Seed: seed, AttemptID: att.ID, Gen: l.Generated, Lang: lang})
 	if err != nil {
 		att.Status = "error"
@@ -737,6 +756,7 @@ func (s *Server) startLab(u *learning.User, l *scenario.Lab, fidelity, lang stri
 		return nil, err
 	}
 	att.Fidelity, att.Params, att.ProvisionMs, att.SessionID = info.Fidelity, info.Params, info.ProvisionMs, info.ID
+	info.LearnMode = mode
 	if err := s.Store.Put("attempts", att.ID, att); err != nil {
 		return nil, err
 	}
@@ -761,7 +781,7 @@ func (s *Server) generateIncident(w http.ResponseWriter, r *http.Request) (any, 
 	}
 	s.Cat.AddGenerated(l)
 	_ = s.Store.Put("genlabs", l.ID, spec)
-	return s.startLab(userOf(r), l, "F0", s.lang(r))
+	return s.startLab(userOf(r), l, "F0", s.lang(r), "assisted")
 }
 
 // LoadGenerated re-registers generated labs persisted in the store (after a restart).
@@ -830,6 +850,9 @@ func (s *Server) tutorOn(w http.ResponseWriter, r *http.Request) (any, error) {
 	if l := s.Cat.Lab(info.LabID); l != nil && l.Type == "boss" {
 		return nil, httpErr{403, "boss battles have no tutor"}
 	}
+	if !learning.ModeAllows(att.Mode, "tutor") {
+		return nil, httpErr{403, i18n.P(s.lang(r), "en este modo no hay tutor: se evalúa tu autonomía", "no tutor in this mode: your autonomy is being assessed")}
+	}
 	if !att.Tutor {
 		att.Tutor, att.SolutionShown = true, true
 		if err := s.Store.Put("attempts", att.ID, att); err != nil {
@@ -851,10 +874,16 @@ func (s *Server) hint(w http.ResponseWriter, r *http.Request) (any, error) {
 	if l.Type == "boss" {
 		return nil, httpErr{403, "boss battles have no hints"}
 	}
+	if !learning.ModeAllows(att.Mode, "hint") {
+		return nil, httpErr{403, i18n.P(s.lang(r), "en modo independiente no hay pistas: se evalúa tu autonomía", "no hints in independent mode: your autonomy is being assessed")}
+	}
 	n := len(att.HintsUsed)
 	h, err := s.Labs.Hint(info.ID, n)
 	if err != nil {
 		return nil, err
+	}
+	if h.Kind == "solution" && !learning.ModeAllows(att.Mode, "solution") {
+		return nil, httpErr{403, i18n.P(s.lang(r), "en modo producción no se muestra la solución: escala o sigue investigando", "no solution in production mode: escalate or keep investigating")}
 	}
 	att.HintsUsed = append(att.HintsUsed, n)
 	att.HintCost += h.Cost

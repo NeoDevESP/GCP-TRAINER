@@ -54,7 +54,26 @@ type Attempt struct {
 	Errors        int               `json:"errors"`
 	ProvisionMs   int64             `json:"provisionMs"`
 	Status        string            `json:"status"` // running, submitted, expired, abandoned
+	// Mode is the learning mode the attempt runs in (see AttemptModes):
+	// explorer and assisted allow help; independent allows none; production
+	// allows hints but neither the tutor nor the solution. Empty = assisted.
+	Mode string `json:"mode,omitempty"`
 	SessionID     string            `json:"sessionId,omitempty"`
+}
+
+// AttemptModes are the four learning modes.
+var AttemptModes = []string{"explorer", "assisted", "independent", "production"}
+
+// ModeAllows reports whether a mode allows a kind of help: "hint" (graded
+// hints), "solution" (the last hint, the full answer) or "tutor".
+func ModeAllows(mode, help string) bool {
+	switch mode {
+	case "independent":
+		return false
+	case "production":
+		return help == "hint"
+	}
+	return true
 }
 
 // DurationSec returns the attempt duration.
@@ -287,7 +306,7 @@ func submitted(attempts []Attempt) []Attempt {
 func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 	att := submitted(attempts)
 	type acc struct {
-		bestByLab                            map[string]int
+		scoresByLab                          map[string][]float64
 		indep                                []float64
 		diff                                 []float64
 		incident                             []float64
@@ -305,13 +324,17 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 		for _, sk := range lab.Skills {
 			s := per[sk]
 			if s == nil {
-				s = &acc{bestByLab: map[string]int{}}
+				s = &acc{scoresByLab: map[string][]float64{}}
 				per[sk] = s
 			}
 			s.n++
-			if a.Score > s.bestByLab[a.LabID] {
-				s.bestByLab[a.LabID] = a.Score
+			// An attempt that saw the answer (solution or tutor walkthrough)
+			// counts half: it shows the learner can follow, not solve.
+			credit := float64(a.Score)
+			if a.SolutionShown || a.Tutor {
+				credit *= 0.5
 			}
+			s.scoresByLab[a.LabID] = append(s.scoresByLab[a.LabID], credit)
 			ind := 100.0
 			if len(lab.Hints) > 0 {
 				ind = 100 * (1 - float64(len(a.HintsUsed))/float64(len(lab.Hints)+1))
@@ -352,11 +375,11 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 	var out []SkillScore
 	for sk, s := range per {
 		var sum float64
-		for _, v := range s.bestByLab {
-			sum += float64(v)
+		for _, v := range s.scoresByLab {
+			sum += RecentWeighted(v)
 		}
 		ss := SkillScore{Skill: sk, Branch: e.Cat.BranchOf(sk), Attempts: s.n}
-		ss.Correctness = sum / float64(max(1, len(s.bestByLab)))
+		ss.Correctness = sum / float64(max(1, len(s.scoresByLab)))
 		ss.Independence = avg(s.indep)
 		switch {
 		case s.retest30:
@@ -372,6 +395,22 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Skill < out[j].Skill })
 	return out
+}
+
+// RecentWeighted scores a lab by its latest attempts, oldest first: the last
+// counts 50 %, the one before 30 % and the one before that 20 %. Unlike the
+// best score, a recent drop shows (and recovers once the learner improves).
+func RecentWeighted(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	w := []float64{0.5, 0.3, 0.2}
+	var sum, ws float64
+	for i := 0; i < len(w) && i < len(v); i++ {
+		sum += v[len(v)-1-i] * w[i]
+		ws += w[i]
+	}
+	return sum / ws
 }
 
 func avg(v []float64) float64 {
@@ -498,12 +537,26 @@ func (e *Engine) Streak(attempts []Attempt) int {
 	return n
 }
 
+// Credited reports whether a passed attempt earns the lab for badges and
+// counts: solved without seeing the answer, or a guided workshop (designed
+// to be followed with the tutor).
+func (e *Engine) Credited(a Attempt) bool {
+	if !a.Passed {
+		return false
+	}
+	if !a.SolutionShown && !a.Tutor {
+		return true
+	}
+	l := e.Cat.Lab(a.LabID)
+	return l != nil && l.Type == "guided"
+}
+
 // Badges evaluates badge rules.
 func (e *Engine) Badges(skills []SkillScore, branches map[string]float64, attempts []Attempt) []Badge {
 	passed := map[string]bool{}
 	branchPassed := map[string]int{}
 	for _, a := range submitted(attempts) {
-		if a.Passed && !passed[a.LabID] {
+		if e.Credited(a) && !passed[a.LabID] {
 			passed[a.LabID] = true
 			if l := e.Cat.Lab(a.LabID); l != nil {
 				branchPassed[l.Branch]++
@@ -637,7 +690,7 @@ func (e *Engine) Profile(u User, attempts []Attempt, trackID string) Profile {
 		p.XP += a.XP + a.Bonus
 		p.BonusXP += a.Bonus
 		p.Attempts++
-		if a.Passed {
+		if e.Credited(a) {
 			passed[a.LabID] = true
 		}
 	}

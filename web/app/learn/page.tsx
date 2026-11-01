@@ -7,6 +7,7 @@
 // practice exam reproduces the real one (see components/Exam.tsx).
 // Progress is saved in the learner's account (see lib/study.ts).
 
+import { TOPIC_PASS, addScore, lastScore, topicMastered } from "@/lib/model";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Nav from "@/components/Nav";
 import Exam, { Choices } from "@/components/Exam";
@@ -15,7 +16,7 @@ import { api, qs } from "@/lib/api";
 import { useAuth } from "@/components/useAuth";
 import { k, useI18n } from "@/lib/i18n";
 import type { LabSummary } from "@/lib/types";
-import { TypeTag, labHref, useProgress } from "@/components/learn";
+import { StatusPill, TypeTag, labHref, useProgress } from "@/components/learn";
 import { dueKeys, fmtTime, isRight, loadHistory, loadProgress, loadReview, mix, questionByKey, recordAnswers, withKeys, type Review, readiness, saveProgress, shuffle, syncStudy, topicWeights, type Cert, type Concept, type ExamInfo, type ExamRecord, type Progress, type Question, type Topic, type TopicProgress } from "@/lib/study";
 
 const TABS: [string, string][] = [
@@ -59,7 +60,7 @@ export default function LearnPage() {
   const [rv, setRv] = useState<Review>({});
   const [reviewing, setReviewing] = useState(false);
   const [err, setErr] = useState("");
-  const { state, running } = useProgress();
+  const { state, status, running } = useProgress();
 
   useEffect(() => {
     setProg(loadProgress());
@@ -214,7 +215,13 @@ export default function LearnPage() {
                 <span className="cm-prog" style={{ width: 220 }}>
                   <div><span style={{ width: `${readiness(tp, prog[tp.id]) * 100}%` }} /></div>
                 </span>
-                {prog[tp.id]?.best != null && <div className="cm-sub">{t("Mejor nota: {n} %", { n: prog[tp.id]?.best ?? 0 })}</div>}
+                {lastScore(prog[tp.id]) != null && (
+                  <div className="cm-sub">
+                    {t("Último cuestionario: {n} %", { n: lastScore(prog[tp.id]) ?? 0 })}
+                    {topicMastered(prog[tp.id]) ? <> · <span className="cm-dark-chip">{t("Dominado")}</span></> : (lastScore(prog[tp.id]) ?? 0) >= TOPIC_PASS ? <> · {t("aprobado")}</> : <> · {t("por repasar")}</>}
+                  </div>
+                )}
+                {!topicMastered(prog[tp.id]) && (lastScore(prog[tp.id]) ?? 0) >= TOPIC_PASS && <div className="cm-sub small">{t("Para «Dominado»: otro cuestionario de 85 % o más otro día.")}</div>}
                 <div className="cm-sub small">{t("{a} conceptos · {b} preguntas", { a: tp.concepts.length, b: tp.quiz.length + tp.scenarios.length })}</div>
               </div>
             </section>
@@ -239,7 +246,7 @@ export default function LearnPage() {
               {tab === "match" && <Match key={tp.id + round} concepts={tp.concepts} next={() => go(tp.id, "which")} />}
               {tab === "which" && <Quiz key={tp.id + "w" + round} questions={tp.scenarios} short onDone={() => {}} restart={() => go(tp.id, "which")} next={() => go(tp.id, "quiz")} nextLabel={t("Ir al cuestionario")} />}
               {tab === "quiz" && (
-                <Quiz key={tp.id + "q" + round} questions={shuffle([...tp.quiz, ...tp.scenarios]).slice(0, 12)} onDone={(pct) => update(tp.id, (p) => ({ ...p, best: Math.max(p.best ?? 0, pct) }))} restart={() => go(tp.id, "concepts")} restartLabel={t("Repasar los conceptos")} next={() => go(tp.id, "quiz")} nextLabel={t("Otro cuestionario")} />
+                <Quiz key={tp.id + "q" + round} questions={shuffle([...tp.quiz, ...tp.scenarios]).slice(0, 12)} onDone={(pct) => update(tp.id, (p) => addScore(p, pct))} restart={() => go(tp.id, "concepts")} restartLabel={t("Repasar los conceptos")} next={() => go(tp.id, "quiz")} nextLabel={t("Otro cuestionario")} />
               )}
             </section>
             {tpLabs.length > 0 && (
@@ -250,7 +257,7 @@ export default function LearnPage() {
                 <div className="cm-grid3">
                   {tpLabs.map((l) => (
                     <a key={l.id} className="cm-card" href={labHref(l.id, running[l.id])}>
-                      <span className="row small"><TypeTag type={l.type} />{state[l.id] === "done" && <span className="pill ok">{t("superado")}</span>}</span>
+                      <span className="row small"><TypeTag type={l.type} /><StatusPill status={status[l.id]?.status} /></span>
                       <h3 style={{ fontSize: 17, lineHeight: "22px" }}>{l.title}</h3>
                       <p>{l.summary}</p>
                     </a>

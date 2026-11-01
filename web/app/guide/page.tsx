@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import Nav from "@/components/Nav";
 import Markdown from "@/components/Markdown";
 import { useAuth } from "@/components/useAuth";
-import { labHref, useProgress } from "@/components/learn";
+import { StatusPill, labHref, useProgress } from "@/components/learn";
 import { api, qs } from "@/lib/api";
 import { k, useI18n } from "@/lib/i18n";
 
@@ -62,7 +62,7 @@ function Copy({ text }: { text: string }) {
 export default function GuidePage() {
   useAuth();
   const { t, lang } = useI18n();
-  const { state, running } = useProgress();
+  const { state, status, running } = useProgress();
   const [list, setList] = useState<Runbook[] | null>(null);
   const [q, setQ] = useState("");
   const [area, setArea] = useState("");
@@ -174,7 +174,7 @@ export default function GuidePage() {
                             {r.labs.map((l) => (
                               <li key={l.id}>
                                 <a href={labHref(l.id, running[l.id])}>{l.title}</a>
-                                {state[l.id] === "done" && <span className="pill ok">{t("superado")}</span>}
+                                <StatusPill status={status[l.id]?.status} />
                               </li>
                             ))}
                           </ul>

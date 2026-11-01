@@ -102,3 +102,36 @@ func TestStudyReview(t *testing.T) {
 		t.Fatal("mastered question should be removed")
 	}
 }
+
+// Quiz results are kept as a history merged across devices: the latest one
+// shows a drop that the best score hides, and neither device erases the other.
+func TestStudyQuizHistory(t *testing.T) {
+	ts, _ := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+	var auth struct {
+		Token string `json:"token"`
+	}
+	c.do("POST", "/api/auth/register", map[string]string{"email": "qh@example.com", "name": "Qh", "password": "correct horse battery"}, &auth)
+	c.token = auth.Token
+	c.do("POST", "/api/me/study/progress", map[string]any{"iam": map[string]any{"best": 100, "scores": []any{map[string]any{"at": 1, "score": 100}}}}, nil)
+	// another device that never saw the first quiz
+	c.do("POST", "/api/me/study/progress", map[string]any{"iam": map[string]any{"best": 40, "scores": []any{map[string]any{"at": 2, "score": 40}, map[string]any{"at": 3, "score": 150}}}}, nil)
+	var st Study
+	c.do("GET", "/api/me/study", nil, &st)
+	p := st.Progress["iam"]
+	if len(p.Scores) != 3 || p.Scores[0].Score != 100 || p.Scores[2].Score != 100 || p.Scores[1].Score != 40 {
+		t.Fatalf("scores not merged and clamped: %+v", p.Scores)
+	}
+	if p.Best == nil || *p.Best != 100 {
+		t.Fatalf("best lost: %+v", p.Best)
+	}
+	many := []any{}
+	for i := 10; i < 40; i++ {
+		many = append(many, map[string]any{"at": i, "score": 50})
+	}
+	c.do("POST", "/api/me/study/progress", map[string]any{"iam": map[string]any{"scores": many}}, nil)
+	c.do("GET", "/api/me/study", nil, &st)
+	if n := len(st.Progress["iam"].Scores); n != maxQuizScores {
+		t.Fatalf("history not capped: %d", n)
+	}
+}

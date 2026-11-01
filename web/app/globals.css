@@ -100,6 +100,7 @@ a.card:hover { box-shadow: var(--shadow); text-decoration: none; }
 .pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
 .pill.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .pill.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.pill.info { color: var(--accent-2, var(--accent)); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); padding: 0 16px; border-radius: 4px; cursor: pointer; font: 500 14px/20px var(--sans); letter-spacing: 0.25px; white-space: nowrap; }
 .btn:hover { background: var(--accent-2); border-color: var(--accent-2); text-decoration: none; box-shadow: var(--shadow); }
 .btn.secondary { background: var(--panel); color: var(--accent-2); border-color: var(--border); }
@@ -1338,3 +1339,13 @@ body.cm main#main { overflow-x: clip; }
 /* Ticket quotes and callouts in mission texts: a side bar instead of a deep indent. */
 .md blockquote { margin: 12px 0; padding: 10px 14px; border-left: 4px solid var(--accent); background: var(--accent-bg, #EEF2FF); border-radius: 0 12px 12px 0; color: inherit; }
 .md blockquote p { margin: 4px 0; }
+/* Learning-mode picker on the lab briefing */
+.mode-pick { border: 0; padding: 0; margin: 20px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.mode-pick legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.mode-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; cursor: pointer; background: var(--panel); min-height: 44px; transition: border-color 150ms, background 150ms; }
+.mode-card:hover { border-color: var(--accent); }
+.mode-card.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); box-shadow: 0 0 0 1px var(--accent); }
+.mode-card input { position: absolute; opacity: 0; pointer-events: none; }
+.mode-card:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mode-name { font-weight: 600; }
+.mode-desc { font-size: 13px; line-height: 18px; color: var(--muted); }

@@ -6,6 +6,7 @@
 // The shift lives in the learner's account (study runs) so it survives a
 // reload or a change of device; case grades come from the lab attempts.
 
+import { SHIFT_PASS, shiftPassed } from "@/lib/model";
 import { useEffect, useMemo, useState } from "react";
 import Nav from "@/components/Nav";
 import { useAuth } from "@/components/useAuth";
@@ -34,6 +35,8 @@ interface ShiftResult {
   score: number;
   sla: number;
   order: number;
+  /** passed the shift (score >= 70); older records lack it and are judged by score */
+  passed?: boolean;
 }
 interface ShiftDoc {
   current?: Shift | null;
@@ -47,7 +50,11 @@ interface Attempt {
   passed: boolean;
   status?: string;
   sessionId?: string;
+  tutor?: boolean;
+  solutionShown?: boolean;
 }
+
+const helpedAttempt = (a: Attempt) => !!(a.tutor || a.solutionShown);
 
 const loadShifts = () => loadRun<ShiftDoc>(KEY) ?? { history: [] };
 
@@ -106,35 +113,43 @@ export default function ShiftPage() {
     return saveRun(KEY, d, now);
   };
 
-  // Result of each case of the current shift: best finished attempt since it started.
+  // Result of each case of the current shift since it started. A ticket is
+  // solved only by a passed hand-in; one passed with the solution or the
+  // tutor counts half. A failed hand-in is "tried", never solved.
   const results = useMemo(() => {
-    const r: Record<string, { score: number; finished: number; running?: string }> = {};
+    const r: Record<string, { score: number; finished: number; passed: boolean; helped: boolean; tried: boolean; running?: string }> = {};
     if (!cur) return r;
+    const rank = (x?: { passed: boolean; helped: boolean; score: number }) => (x ? (x.passed ? (x.helped ? 2 : 3) : 1) * 1000 + x.score : -1);
     for (const a of atts) {
       if (!cur.ids.includes(a.labId) || Date.parse(a.started) < cur.started) continue;
-      if (a.status === "running" && a.sessionId) r[a.labId] = { ...(r[a.labId] ?? { score: -1, finished: 0 }), running: a.sessionId };
-      if (a.finished && a.score > (r[a.labId]?.score ?? -1)) r[a.labId] = { ...r[a.labId], score: a.score, finished: Date.parse(a.finished) };
+      const prev = r[a.labId];
+      if (a.status === "running" && a.sessionId) r[a.labId] = { ...(prev ?? { score: 0, finished: 0, passed: false, helped: false, tried: false }), running: a.sessionId };
+      if (!a.finished) continue;
+      const cand = { score: a.score, finished: Date.parse(a.finished), passed: !!a.passed, helped: helpedAttempt(a), tried: true };
+      if (rank(cand) > rank(r[a.labId]?.tried ? r[a.labId] : undefined)) r[a.labId] = { ...r[a.labId], ...cand };
     }
     return r;
   }, [atts, cur]);
 
   const deadline = (id: string) => (cur ? cur.started + (SLA_MIN[byId[id]?.ticket?.priority ?? "P4"] ?? 180) * 60000 : 0);
-  const solved = (id: string) => (results[id]?.score ?? -1) >= 0;
+  const solved = (id: string) => !!results[id]?.passed;
 
   const summary = (s: Shift): ShiftResult => {
-    const scores = s.ids.map((id) => Math.max(0, results[id]?.score ?? 0));
+    const scores = s.ids.map((id) => (solved(id) ? results[id].score * (results[id].helped ? 0.5 : 1) : 0));
     const done = s.ids.filter(solved);
     const slaOk = done.filter((id) => results[id].finished <= deadline(id)).length;
     const order = orderScore(s.opened, prio);
     const avg = scores.reduce((a, b) => a + b, 0) / Math.max(1, scores.length);
     const sla = slaOk / Math.max(1, s.ids.length);
-    return { at: Date.now(), cases: s.ids.length, solved: done.length, sla: Math.round(sla * 100), order: Math.round(order * 100), score: Math.round(0.6 * avg + 25 * sla + 15 * order) };
+    const score = Math.round(0.6 * avg + 25 * sla + 15 * order);
+    return { at: Date.now(), cases: s.ids.length, solved: done.length, sla: Math.round(sla * 100), order: Math.round(order * 100), score, passed: score >= SHIFT_PASS && done.length > 0 };
   };
 
   const start = () => labs && save({ ...doc, current: { started: Date.now(), ids: pick(labs.filter((l) => POOLS[pool].includes(l.track)), size), opened: [] } });
   const open = async (id: string) => {
     if (cur && !cur.opened.includes(id)) await save({ ...doc, current: { ...cur, opened: [...cur.opened, id] } }, true);
-    window.location.href = labHref(id, results[id]?.running);
+    // shift tickets run in production mode (hints yes; solution and tutor no)
+    window.location.href = labHref(id, results[id]?.running) + (results[id]?.running ? "" : "&mode=production");
   };
   const finish = () => {
     if (!cur) return;
@@ -214,7 +229,9 @@ export default function ShiftPage() {
                     </div>
                     <div className="sh-sla">
                       {done ? (
-                        <span className={met ? "sh-ok" : "sh-late"}>{met ? t("SLA cumplido") : t("SLA incumplido")} · {res.score}</span>
+                        <span className={met ? "sh-ok" : "sh-late"}>{met ? t("SLA cumplido") : t("SLA incumplido")} · {res.score}{res.helped ? " · " + t("con ayuda") : ""}</span>
+                      ) : res?.tried ? (
+                        <span className="sh-late">{t("Entregado sin resolver ({n}): vuelve a intentarlo", { n: res.score })}</span>
                       ) : left > 0 ? (
                         <span className={left < 600 ? "sh-late" : ""}>{t("SLA en {time}", { time: fmtTime(left) })}</span>
                       ) : (
@@ -248,7 +265,7 @@ export default function ShiftPage() {
                 {doc.history.map((h) => (
                   <tr key={h.at}>
                     <td>{new Date(h.at).toLocaleString()}</td>
-                    <td><strong>{h.score}</strong></td>
+                    <td><strong>{h.score}</strong> {shiftPassed(h) ? <span className="pill ok">{t("superado")}</span> : <span className="pill bad">{t("no superado")}</span>}</td>
                     <td>{h.solved}/{h.cases}</td>
                     <td>{h.sla} %</td>
                     <td>{h.order} %</td>

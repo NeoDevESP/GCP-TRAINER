@@ -51,6 +51,7 @@ type SessionInfo struct {
 	UserID       string                   `json:"userId"`
 	LabID        string                   `json:"labId"`
 	AttemptID    string                   `json:"attemptId"`
+	LearnMode    string                   `json:"learnMode,omitempty"` // learning mode of the attempt
 	Project      string                   `json:"project"`
 	Region       string                   `json:"region"`
 	Zone         string                   `json:"zone"`

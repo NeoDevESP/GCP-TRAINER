@@ -4,6 +4,7 @@
 import { k } from "@/lib/i18n";
 import { loadHistory, loadProgress, loadRun, type ExamRecord, type Progress } from "@/lib/study";
 import type { LabSummary } from "@/lib/types";
+import { TOPIC_PASS, examPassed, lastScore, shiftPassed } from "@/lib/model";
 
 export type Item = { lab: string } | { topic: string } | { exam: string } | { shift: number } | { task: string; text: string; href?: string };
 export interface Day {
@@ -58,13 +59,16 @@ export const planLocal = () => ({
   prog: loadProgress(),
   hist: loadHistory(),
   checked: loadRun<{ checked: Record<string, boolean> }>("cm-plan")?.checked ?? {},
-  shifts: loadRun<{ history: unknown[] }>("cm-shift")?.history?.length ?? 0,
+  // only passed shifts count towards the plan
+  shifts: (loadRun<{ history: { score: number; passed?: boolean }[] }>("cm-shift")?.history ?? []).filter(shiftPassed).length,
 });
 
 export function itemDone(it: Item, s: PlanState): boolean {
   if ("lab" in it) return s.state[it.lab] === "done";
-  if ("topic" in it) return (s.prog[it.topic]?.best ?? 0) >= 70;
-  if ("exam" in it) return s.hist.some((h) => h.cert === it.exam && h.full);
+  // the latest quiz decides (a past high score doesn't hide a recent drop)
+  if ("topic" in it) return (lastScore(s.prog[it.topic]) ?? 0) >= TOPIC_PASS;
+  // a practice exam counts only when it's a full one and it's passed
+  if ("exam" in it) return s.hist.some((h) => h.cert === it.exam && h.full && examPassed(h));
   if ("shift" in it) return s.shifts >= it.shift;
   return !!s.checked[it.task];
 }

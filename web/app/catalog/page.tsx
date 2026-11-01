@@ -8,7 +8,8 @@ import { k, useI18n } from "@/lib/i18n";
 import { label, labLevel } from "@/lib/labels";
 import type { LabSummary, Stage } from "@/lib/types";
 import { Icon } from "@/components/console/icons";
-import { PathMap, StageList, TrackBadge, TypeLegend, TypeTag, labHref, nextLab, useProgress } from "@/components/learn";
+import { PathMap, StageList, StatusPill, TrackBadge, TypeLegend, TypeTag, labHref, nextLab, useProgress } from "@/components/learn";
+import type { ActivityStatus } from "@/lib/model";
 
 interface Track {
   id: string;
@@ -32,15 +33,14 @@ const TIERS: [string, string][] = [
   ["professional", k("Profesional")],
 ];
 
-function LabCard({ l, trackTitle, st, running }: { l: LabSummary; trackTitle?: string; st?: string; running?: string }) {
+function LabCard({ l, trackTitle, st, running }: { l: LabSummary; trackTitle?: string; st?: ActivityStatus; running?: string }) {
   const { t } = useI18n();
   return (
     <a href={labHref(l.id, running)} className="card" style={{ color: "inherit", textDecoration: "none", display: "flex", flexDirection: "column", gap: 6 }}>
       <div className="row small muted">
         <TypeTag type={l.type} />
         <span className="pill">{label(labLevel, l.level, t)}</span>
-        {st === "done" && <span className="pill ok">{t("superado")}</span>}
-        {st === "doing" && <span className="pill warn">{t("empezado")}</span>}
+        <StatusPill status={st} />
       </div>
       <h3 style={{ margin: 0 }}>{l.title}</h3>
       <p className="small muted" style={{ margin: 0, flex: 1 }}>{l.summary}</p>
@@ -63,7 +63,7 @@ export default function CatalogPage() {
   const [tier, setTier] = useState("");
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
-  const { state, running } = useProgress();
+  const { state, status, running } = useProgress();
   useEffect(() => {
     setQ(qs("q"));
     setTrack(qs("track"));
@@ -128,7 +128,7 @@ export default function CatalogPage() {
             </div>
             <p className="muted small">{t("{n} laboratorios", { n: filtered.length })}</p>
             <div className="grid three">
-              {filtered.map((l) => <LabCard key={l.id} l={l} trackTitle={trackTitle[l.track] ?? l.track} st={state[l.id]} running={running[l.id]} />)}
+              {filtered.map((l) => <LabCard key={l.id} l={l} trackTitle={trackTitle[l.track] ?? l.track} st={status[l.id]?.status} running={running[l.id]} />)}
             </div>
           </>
         ) : cur ? (

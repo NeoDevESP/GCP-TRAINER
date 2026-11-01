@@ -10,29 +10,53 @@ import { api } from "@/lib/api";
 import { k, useI18n } from "@/lib/i18n";
 import { Icon } from "@/components/console/icons";
 import type { LabSummary, Stage } from "@/lib/types";
+import { isDone, progressByLab, type ActivityStatus, type LabProgress } from "@/lib/model";
 
 export type LabState = "done" | "doing" | "new";
 
-/** useProgress returns the state of every lab the user has touched. */
+/**
+ * useProgress returns the state of every lab the user has touched: `status`
+ * is the full model (passed, completed with help, failed, needs review…) and
+ * `state` the coarse view used to move along a route (done / doing).
+ */
 export function useProgress() {
   const [state, setState] = useState<Record<string, LabState>>({});
+  const [status, setStatus] = useState<Record<string, LabProgress>>({});
   const [running, setRunning] = useState<Record<string, string>>({});
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     api<any[]>("/api/me/attempts")
       .then((as) => {
+        const prog = progressByLab(as ?? []);
         const s: Record<string, LabState> = {};
+        for (const [id, p] of Object.entries(prog)) s[id] = isDone(p.status) ? "done" : "doing";
         const r: Record<string, string> = {};
-        for (const a of as ?? []) {
-          if (a.passed) s[a.labId] = "done";
-          else if (!s[a.labId]) s[a.labId] = "doing";
-          if (a.status === "running" && a.sessionId) r[a.labId] = a.sessionId;
-        }
+        for (const a of as ?? []) if (a.status === "running" && a.sessionId) r[a.labId] = a.sessionId;
         setState(s);
+        setStatus(prog);
         setRunning(r);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
-  return { state, running };
+  return { state, status, running, loaded };
+}
+
+const STATUS_PILL: Record<ActivityStatus, [string, string] | null> = {
+  not_started: null,
+  in_progress: ["warn", k("empezado")],
+  failed: ["bad", k("suspendido")],
+  completed: ["info", k("hecho con ayuda")],
+  passed: ["ok", k("superado")],
+  needs_review: ["warn", k("repasar")],
+};
+
+/** StatusPill names an activity's status in words (never colour alone). */
+export function StatusPill({ status }: { status?: ActivityStatus }) {
+  const { t } = useI18n();
+  const p = status ? STATUS_PILL[status] : null;
+  if (!p) return null;
+  return <span className={`pill ${p[0]}`}>{t(p[1])}</span>;
 }
 
 const TRACK_ICON: Record<string, string> = {
