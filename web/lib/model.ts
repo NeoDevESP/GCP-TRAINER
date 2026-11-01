@@ -251,3 +251,40 @@ export const PLACEMENT_START: Record<Placement, { lab: string; skipBasics: boole
   basics: { lab: "zentra-s01-triage", skipBasics: true },
   intermediate: { lab: "zentra-z01-first-day", skipBasics: true },
 };
+
+// ---- weekly goal -----------------------------------------------------------
+
+/** start of the week (Monday 00:00, local time) that contains `now` */
+export function weekStart(now: number): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.getTime();
+}
+
+/**
+ * weeklyMinutes is the practice time of this week: each lab attempt handed in
+ * counts its real duration (capped at twice the lab's estimate, so a tab left
+ * open all night does not count) and each quiz 5 minutes.
+ */
+export function weeklyMinutes(
+  attempts: { status?: string; started?: string; finished?: string; labId: string }[],
+  labMinutes: Record<string, number>,
+  quizTimes: number[],
+  now: number,
+): number {
+  const from = weekStart(now);
+  let min = 0;
+  for (const a of attempts) {
+    if (a.status !== "submitted" || !a.started || !a.finished) continue;
+    const end = Date.parse(a.finished);
+    if (end < from || end > now) continue;
+    const real = Math.max(0, (end - Date.parse(a.started)) / 60000);
+    min += Math.min(real, 2 * (labMinutes[a.labId] || 60));
+  }
+  min += 5 * quizTimes.filter((t) => t >= from && t <= now).length;
+  return Math.round(min);
+}
+
+/** the weekly goal: the daily time on five days */
+export const weeklyGoal = (minutesPerDay: number) => minutesPerDay * 5;

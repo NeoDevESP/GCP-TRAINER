@@ -13,6 +13,7 @@ import { k } from "@/lib/i18n";
 import { planLocal, planSchedule } from "@/lib/plan";
 import { dueKeys, loadReview, loadRun, syncStudy } from "@/lib/study";
 import type { SkillScore } from "@/lib/types";
+import { weeklyGoal, weeklyMinutes } from "@/lib/model";
 
 // the five competencies of a skill: [measured key, column name, field]
 const COMPS: [string, string, keyof SkillScore][] = [
@@ -138,6 +139,11 @@ export default function Dashboard() {
   const zStages = tracks.find((x) => x.id === "zentra")?.stages ?? [];
   const finalDone = !!study && !!loadRun<{ history: { passed: boolean }[] }>("cm-final")?.history?.some((h) => h.passed);
   const zDone = zIds.filter((id) => state[id] === "done").length;
+  // this week's practice against the weekly goal (daily time × 5)
+  const weekGoal = weeklyGoal(study?.prefs?.minutesPerDay ?? 120);
+  const weekMin = study
+    ? weeklyMinutes(attempts, Object.fromEntries(Object.values(labs).map((l) => [l.id, l.minutes])), Object.values(study.prog ?? {}).flatMap((x) => (x.scores ?? []).map((q) => q.at)), Date.now())
+    : 0;
   // the one thing to do next, most urgent first
   const onboarded = !!study && !!loadRun("cm-onboarding");
   const runningId = Object.keys(runningLab).find((id) => labs[id]);
@@ -240,6 +246,14 @@ export default function Dashboard() {
               <h2 id="today-title">{t("Hoy toca")}</h2>
             </div>
             <ul className="db-today">
+              <li>
+                <a className="cm-card" href="/plan">
+                  <span className="db-kick">{t("Objetivo semanal")}</span>
+                  <strong>{t("{m} de {g} min esta semana", { m: weekMin, g: weekGoal })}</strong>
+                  <span className="muted small">{weekMin >= weekGoal ? t("¡Objetivo cumplido! Lo que hagas ahora es extra.") : t("Cuenta el tiempo real de los laboratorios entregados y 5 min por cuestionario.")}</span>
+                  <span className="db-meter" aria-hidden="true"><span style={{ width: `${Math.min(100, (100 * weekMin) / Math.max(1, weekGoal))}%` }} /></span>
+                </a>
+              </li>
               <li>
                 <a className="cm-card" href="/plan">
                   <span className="db-kick">{t("Tu plan de estudio")}</span>

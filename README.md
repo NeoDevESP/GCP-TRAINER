@@ -56,7 +56,7 @@ comparan con un glosario bilingüe). CI falla si falta una traducción
 
 ## Puesta en marcha rápida
 
-Requisitos: Go 1.25 y Node 22 (solo para construir la web).
+Requisitos: Go 1.26 (ver `go.mod`) y Node 22 (solo para construir la web).
 
 ```sh
 # cliente web (archivos estáticos en web/out)
@@ -209,14 +209,31 @@ traducciones.
 ```sh
 go vet ./... && go test -race ./...
 go run ./cmd/labctl validate && go run ./cmd/labctl test
+(cd web && npm run lint)              # tsc + traducciones + pruebas del modelo (node --test)
 (cd web && npm run build)             # incluye npm run check:i18n
 ```
+
+Pruebas de navegador (Playwright + Chromium, contra un servidor en marcha con
+la web construida; usan cuentas nuevas en cada ejecución):
+
+```sh
+go run ./cmd/gcplab &                 # o el binario: ADDR=127.0.0.1:8099 …
+node web/e2e/flows.mjs http://localhost:8080            # todas
+node web/e2e/flows.mjs http://localhost:8080 onboarding # una sola
+```
+
+Cubren plan y guardado sin conexión, exámenes aprobados y suspendidos,
+pistas por niveles, modo independiente, diagnóstico e informe post-incidente,
+competencias y objetivo semanal, bienvenida con diagnóstico, navegación en
+escritorio y móvil, búsqueda y atajos, tema e idioma, sesión por cookie y
+accesibilidad (axe, WCAG 2.2 A/AA) en claro y oscuro.
 
 CI (`.github/workflows/ci.yml`) ejecuta las mismas comprobaciones más
 `terraform validate` y la construcción de la imagen.
 
 ## Documentación
 
+- [CloudMastery 2.0: informe de entrega](docs/cloudmastery-2.0-informe.md) y [auditoría de partida](docs/cloudmastery-2.0-auditoria.md)
 - [Blueprint maestro de implementación](docs/blueprint/01-master-implementation-blueprint.md): arquitectura, contratos, esquema, DSL, fases y registro de cambios
 - [Auditoría del repositorio](docs/blueprint/00-repository-audit.md)
 - [Registros de decisiones de arquitectura (ADR)](docs/adr/)

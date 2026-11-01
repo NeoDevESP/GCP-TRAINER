@@ -2391,4 +2391,8 @@ export const en: Record<string, string> = {
   "Retómalo donde lo dejaste: el entorno sigue como estaba.": "Pick it up where you left it: the environment is as you left it.",
   "Sigue la ruta en orden: cada paso se apoya en el anterior.": "Follow the route in order: each step builds on the last.",
   "Siguiente paso de tu ruta": "Next step of your route",
+  "Objetivo semanal": "Weekly goal",
+  "{m} de {g} min esta semana": "{m} of {g} min this week",
+  "¡Objetivo cumplido! Lo que hagas ahora es extra.": "Goal reached! Anything more is a bonus.",
+  "Cuenta el tiempo real de los laboratorios entregados y 5 min por cuestionario.": "Counts the real time of the labs you handed in and 5 min per quiz.",
 };

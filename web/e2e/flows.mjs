@@ -179,12 +179,17 @@ Object.assign(flows, {
     await exec(tok, s.id, "gcloud compute backend-services list");
     await exec(tok, s.id, `gcloud compute firewall-rules update ${s.params?.rule} --source-ranges=35.191.0.0/16,130.211.0.0/22`);
     await call(tok, `/api/sessions/${s.id}/submit`, { evidence: {} });
+    // a quiz taken now (5 min towards the weekly goal)
+    const topics = (await (await call(tok, "/api/learn")).json()).topics;
+    await call(tok, "/api/me/study/progress", { [topics[0].id]: { scores: [{ at: Date.now(), score: 80 }], best: 80 } });
     const { ctx, p } = await page(browser, tok);
     await p.goto(base + "/dashboard", { waitUntil: "networkidle" });
     await p.getByText("Estadísticas detalladas", { exact: false }).click();
     const head = await p.locator(".comp-table thead").innerText().catch(() => "");
     const cells = await p.locator(".comp-table tbody tr").first().innerText().catch(() => "");
     check("competencies: five columns on the dashboard", ["Comprensión", "Ejecución", "Autonomía", "Retención", "Transferencia"].every((c) => head.includes(c)), head.replace(/\s+/g, " "));
+    const week = await p.locator(".db-today .cm-card", { hasText: "Objetivo semanal" }).innerText().catch(() => "");
+    check("weekly goal: counts this week's practice (the quiz: 5 min)", /\b([5-9]|[1-9]\d+) de 600 min esta semana/.test(week), week.replace(/\s+/g, " "));
     check("competencies: unmeasured shown as —, scores as 0..100 (not ×100)", cells.includes("—") && !/\d{4}/.test(cells), cells.replace(/\s+/g, " "));
     await ctx.close();
   },

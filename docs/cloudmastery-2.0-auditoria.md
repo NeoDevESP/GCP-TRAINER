@@ -47,6 +47,34 @@ La consola y la terminal comparten **un único `sim.State` por sesión** (orches
 
 Ya correcto (no se toca): Monaco y Mermaid ya se cargan de forma diferida; el detalle de laboratorio (`GET /api/labs/{id}`) no incluye la solución; el examen final de Zentra ya anula los casos con tutor o solución; el servidor ya tiene limitación de peticiones.
 
+### Estado tras la 2.0
+
+| # | Estado | Cómo quedó |
+|---|---|---|
+| 1 | Corregido | El plan solo marca un simulacro completo **aprobado** (`examPassed`, ≥ 70 %). Prueba unitaria y e2e. |
+| 2 | Corregido | Un ticket entregado sin resolver cuenta como «entregado sin resolver»; con ayuda puntúa la mitad. |
+| 3 | Corregido | Estados `passed` (solo), `completed` (con ayuda), `needs_review`, `failed`… (`labProgress`). |
+| 4 | Corregido | Los modos se aplican en la API: independiente sin pistas ni tutor (403), producción sin solución ni tutor. |
+| 5 | Corregido | Nota reciente ponderada (50/30/20) en vez de la mejor; con solución o tutor cuenta la mitad. |
+| 6 | Corregido | La preparación es 10 % conceptos + 90 % nota reciente; «Dominado» pide dos tests ≥ 85 % en días distintos. |
+| 7 | Corregido | El plan reparte lo pendiente en sesiones con la duración real y el tiempo diario que elige la persona. |
+| 8 | Corregido | Cola de guardado con reintentos, aviso visible y fusión de conflictos (409). |
+| 9 | Corregido | `?token=` ya no autentica; el retorno OIDC no pone el token en la URL. |
+| 10 | Corregido | Sesión en cookie HttpOnly + SameSite=Strict, con cabecera anti-CSRF. Bearer sigue para clientes de API. |
+| 11 | Corregido | CSP y cabeceras de seguridad en todas las páginas (ver límites en el informe). |
+| 12 | Corregido | Cinco destinos; idioma, tema y densidad en el menú de cuenta en todos los tamaños. |
+| 13 | Corregido | Un script en `<head>` aplica idioma, tema y densidad antes de pintar. |
+
+Fallos encontrados durante el trabajo (no estaban en la lista inicial), todos corregidos con prueba:
+
+| Dónde | Problema |
+|---|---|
+| `web/app/lab/page.tsx`, `web/app/dashboard/page.tsx` | Los factores del proceso y las dimensiones del alumno ya vienen en 0–100 y la web los multiplicaba por 100 (8500 %). |
+| `internal/grader/process.go` | Quitar un permiso público (`remove-iam-policy-binding … allUsers`) contaba como «permiso arriesgado» y bajaba la nota de seguridad de la solución correcta. |
+| `internal/tutor/tutor.go` | Los comandos `gam info/print` (solo lectura) se trataban como cambios. |
+| `web/components/Mermaid.tsx` | En modo oscuro las etiquetas de los diagramas no llegaban al contraste mínimo (axe). |
+| `web/app/plan/page.tsx` | La fecha estimada salía con el formato del navegador, no del idioma elegido. |
+
 ## 3. Estrategia de migración segura
 
 1. **Sin romper datos**: los intentos (`attempts`) y el documento de estudio conservan sus campos. Los nuevos (`mode`, `last`, `history` de notas, estados) son opcionales y se derivan de lo que ya existe; los perfiles antiguos se leen igual.

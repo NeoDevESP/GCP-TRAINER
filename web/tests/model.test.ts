@@ -108,3 +108,19 @@ test("the starting diagnosis places the learner and never rewards blanks", () =>
   assert.equal(placement(6, 6), "intermediate");
   assert.equal(placement(0, 0), "zero");
 });
+
+import { weekStart, weeklyMinutes } from "../lib/model.ts";
+
+test("the weekly goal counts this week's real practice, capped", () => {
+  const now = new Date(2026, 10, 4, 12).getTime(); // Wednesday
+  const mon = weekStart(now);
+  assert.equal(new Date(mon).getDay(), 1);
+  const iso = (t: number) => new Date(t).toISOString();
+  const atts = [
+    { labId: "a", status: "submitted", started: iso(mon + 3600e3), finished: iso(mon + 3600e3 + 30 * 60e3) }, // 30 min
+    { labId: "b", status: "submitted", started: iso(mon + 7200e3), finished: iso(mon + 7200e3 + 600 * 60e3) }, // 10 h → capped 2×20
+    { labId: "a", status: "submitted", started: iso(mon - 86400e3), finished: iso(mon - 86000e3) }, // last week
+    { labId: "a", status: "running", started: iso(mon + 1000) },
+  ];
+  assert.equal(weeklyMinutes(atts, { a: 30, b: 20 }, [mon + 1, mon - 5], now), 30 + 40 + 5);
+});

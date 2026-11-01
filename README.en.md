@@ -54,7 +54,7 @@ glossary). CI fails when a translation is missing (`labctl validate`,
 
 ## Quick start
 
-Requirements: Go 1.25 and Node 22 (only to build the web client).
+Requirements: Go 1.26 (see `go.mod`) and Node 22 (only to build the web client).
 
 ```sh
 # web client (static files in web/out)
@@ -199,7 +199,17 @@ and company missions.
 ```sh
 go vet ./... && go test -race ./...
 go run ./cmd/labctl validate && go run ./cmd/labctl test
+(cd web && npm run lint)    # tsc + translations + model tests (node --test)
 (cd web && npm run build)
+```
+
+Browser tests (Playwright + Chromium, against a running server with the web
+built; each run uses fresh accounts):
+
+```sh
+go run ./cmd/gcplab &
+node web/e2e/flows.mjs http://localhost:8080             # all of them
+node web/e2e/flows.mjs http://localhost:8080 onboarding  # just one
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same checks plus `terraform validate`
@@ -207,6 +217,7 @@ and an image build.
 
 ## Documentation
 
+- [CloudMastery 2.0 delivery report](docs/cloudmastery-2.0-informe.md) (Spanish) and [starting audit](docs/cloudmastery-2.0-auditoria.md)
 - [Master implementation blueprint](docs/blueprint/01-master-implementation-blueprint.md): architecture, contracts, schema, DSL, phases, changelog
 - [Repository audit](docs/blueprint/00-repository-audit.md)
 - [Architecture decision records](docs/adr/)
