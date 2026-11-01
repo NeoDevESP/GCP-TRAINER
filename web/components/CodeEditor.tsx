@@ -1,5 +1,6 @@
 "use client";
 
+import { isDark } from "@/lib/prefs";
 import dynamic from "next/dynamic";
 import { getLang, translate } from "@/lib/i18n";
 
@@ -20,7 +21,7 @@ function language(path: string): string {
 }
 
 export default function CodeEditor({ path, value, onChange }: { path: string; value: string; onChange: (v: string) => void }) {
-  const dark = typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const dark = isDark();
   return (
     <Monaco
       height="100%"

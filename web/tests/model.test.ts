@@ -96,3 +96,15 @@ test("merging runs after a conflict keeps both devices' work", () => {
   assert.equal(m.current.id, "here");
   assert.equal(mergeRun(null, local), local);
 });
+
+import { placement } from "../lib/model.ts";
+
+test("the starting diagnosis places the learner and never rewards blanks", () => {
+  assert.equal(placement(0, 6), "zero");
+  assert.equal(placement(2, 6), "zero");
+  assert.equal(placement(3, 6), "basics");
+  assert.equal(placement(4, 6), "basics");
+  assert.equal(placement(5, 6), "intermediate");
+  assert.equal(placement(6, 6), "intermediate");
+  assert.equal(placement(0, 0), "zero");
+});

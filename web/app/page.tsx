@@ -37,7 +37,8 @@ export default function Home() {
       const body = mode === "login" ? { email, password } : { email, name, password, invite };
       const res = await api<{ token: string }>(`/api/auth/${mode}`, { body });
       setToken(res.token);
-      window.location.href = "/dashboard";
+      // a new account starts with the welcome and the starting diagnosis
+      window.location.href = mode === "register" ? "/start" : "/dashboard";
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -91,7 +92,7 @@ export default function Home() {
           {mode === "register" && (
             <div>
               <label htmlFor="name">{t("Nombre visible")}</label>
-              <input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+              <input id="name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
           )}
           <div>

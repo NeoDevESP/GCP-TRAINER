@@ -1,5 +1,6 @@
 "use client";
 
+import { isDark } from "@/lib/prefs";
 import { useEffect, useId, useRef, useState } from "react";
 
 // Mermaid renders a diagram definition client-side. securityLevel "strict"
@@ -13,8 +14,9 @@ export default function Mermaid({ chart }: { chart: string }) {
     (async () => {
       if (!chart || !ref.current) return;
       const mermaid = (await import("mermaid")).default;
-      const dark = typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default" });
+      const dark = isDark();
+      // dark: edge labels on the default grey fail contrast (WCAG 1.4.3)
+      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default", ...(dark ? { themeVariables: { edgeLabelBackground: "#1B1E24", textColor: "#ECEDEF" } } : {}) });
       try {
         const { svg } = await mermaid.render(id, chart);
         if (!cancelled && ref.current) {

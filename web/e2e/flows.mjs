@@ -190,6 +190,157 @@ Object.assign(flows, {
   },
 });
 
+// ---- 2.0 shell: onboarding, navigation, search, shortcuts, theme, language, a11y
+
+async function uiRegister(p, tag) {
+  await p.goto(base + "/", { waitUntil: "networkidle" });
+  await p.getByRole("button", { name: "Crear cuenta" }).first().click();
+  await p.fill("#email", `${tag}-${Date.now()}@e2e.dev`);
+  await p.fill("#name", "Lucía E2E");
+  await p.fill("#pw", "pass-12345678");
+  await p.getByRole("button", { name: "Crear cuenta" }).last().click();
+}
+
+Object.assign(flows, {
+  // A new account lands on the welcome, takes the diagnosis and gets a plan
+  // that matches: someone who knows the basics skips Week 0.
+  async onboarding(browser) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const p = await ctx.newPage();
+    const errors = [];
+    p.on("pageerror", (e) => errors.push(e.message));
+    await uiRegister(p, "ob");
+    await p.waitForURL("**/start", { timeout: 15000 });
+    check("onboarding: a new account opens the welcome", true);
+    await p.getByLabel(/Aprobar la certificación/).check();
+    await p.getByText("1,5 h").click();
+    await p.getByRole("button", { name: /Siguiente: diagnóstico/ }).click();
+    // right answers to 4 of 6, "I don't know" to the rest → basics
+    const right = ["El contenedor donde viven", "Que está en una zona de la región", "Qué identidad hace la llamada", "Cloud NAT para esa red"];
+    for (const r of right) await p.getByLabel(new RegExp(r)).check();
+    const blanks = await p.getByLabel("No lo sé").all();
+    await blanks[4].check();
+    await blanks[5].check();
+    await p.getByRole("button", { name: /Ver mi punto de partida/ }).click();
+    const h1 = await p.locator("h1").innerText();
+    check("onboarding: 4 of 6 places the learner on 'basics'", /Ya tienes una base/.test(h1), h1);
+    await p.waitForTimeout(2500);
+    const tok = await p.evaluate(() => localStorage.getItem("gcplab.token"));
+    const study = await (await call(tok, "/api/me/study")).json();
+    const prefs = study.runs?.["cm-plan"]?.prefs ?? {};
+    check("onboarding: the plan gets the chosen time and skips Week 0", prefs.minutesPerDay === 90 && prefs.skipBasics === true, JSON.stringify(prefs));
+    check("onboarding: the result is saved on the account", study.runs?.["cm-onboarding"]?.level === "basics");
+    await p.getByRole("link", { name: "Empezar ahora" }).click();
+    await p.waitForURL(/lab\?id=zentra-s01-triage/);
+    check("onboarding: 'start now' opens the first activity of the level", true);
+    check("onboarding: no page errors", errors.length === 0, errors.join("; "));
+    await ctx.close();
+  },
+
+  // Five destinations everywhere; the phone bar does not overflow.
+  async navigation(browser) {
+    const tok = await account("nav");
+    for (const phone of [false, true]) {
+      const { ctx, p } = await page(browser, tok, { phone });
+      await p.goto(base + "/guide", { waitUntil: "networkidle" });
+      const dests = await p.locator(".cm-rail-links a").allInnerTexts();
+      const cur = await p.locator('.cm-rail-links a[aria-current="page"]').innerText();
+      const tabs = await p.locator(".cm-tabs a").allInnerTexts();
+      const ov = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      const tag = phone ? "phone" : "desktop";
+      check(`nav (${tag}): five destinations`, dests.length === 5 && dests.join("|") === "Inicio|Aprender|Practicar|Trabajo|Perfil", dests.join("|"));
+      check(`nav (${tag}): the current destination and its pages are marked`, cur === "Aprender" && tabs.includes("Guía de diagnóstico"), `${cur} / ${tabs.join(", ")}`);
+      check(`nav (${tag}): no horizontal overflow`, ov <= 0, `${ov}px`);
+      await ctx.close();
+    }
+  },
+
+  // Ctrl+K opens the search, typing filters, Enter goes; g+letter jumps.
+  async searchAndShortcuts(browser) {
+    const tok = await account("kbd");
+    const { ctx, p } = await page(browser, tok);
+    await p.goto(base + "/dashboard", { waitUntil: "networkidle" });
+    await p.keyboard.press("Control+k");
+    const dlg = p.getByRole("dialog", { name: "Buscar" });
+    check("search: Ctrl+K opens the search dialog", await dlg.isVisible());
+    await p.keyboard.type("emparejamiento");
+    await p.waitForSelector(".cs-list li[aria-selected=true]");
+    const first = await p.locator(".cs-list li[aria-selected=true]").innerText();
+    await p.keyboard.press("Enter");
+    await p.waitForURL(/\/lab\?id=/);
+    check("search: Enter opens the selected lab", /emparejamiento/i.test(first), first.replace(/\s+/g, " "));
+    await p.goto(base + "/dashboard", { waitUntil: "networkidle" });
+    await p.keyboard.press("g");
+    await p.keyboard.press("a");
+    await p.waitForURL(/\/learn/);
+    check("shortcuts: g a goes to Aprender", true);
+    await p.keyboard.press("?");
+    check("shortcuts: ? lists the shortcuts", await p.getByRole("dialog", { name: "Atajos de teclado" }).isVisible());
+    await p.keyboard.press("Escape");
+    await ctx.close();
+  },
+
+  // Theme and density are kept after a reload and applied before paint.
+  async themeAndLanguage(browser) {
+    const tok = await account("thm");
+    const { ctx, p } = await page(browser, tok, { phone: true });
+    await p.goto(base + "/dashboard", { waitUntil: "networkidle" });
+    await p.locator(".cm-avatar").first().click();
+    await p.getByRole("radio", { name: "Oscuro" }).click();
+    await p.getByRole("radio", { name: "Compacta" }).click();
+    await p.reload({ waitUntil: "domcontentloaded" });
+    // set before paint, by the inline boot script
+    const attrs = await p.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.dataset.density]);
+    await p.waitForSelector("body.cm");
+    const bg = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    check("theme: dark and compact survive a reload", attrs[0] === "dark" && attrs[1] === "compact", attrs.join(","));
+    check("theme: the dark palette is applied", bg === "rgb(17, 19, 24)", bg);
+    // language from the account menu, on a phone
+    await p.waitForLoadState("networkidle");
+    await p.locator(".cm-avatar").first().click();
+    await p.getByRole("button", { name: "EN", exact: true }).click();
+    await p.waitForLoadState("networkidle");
+    await p.waitForTimeout(500);
+    const lang = await p.evaluate(() => document.documentElement.lang);
+    const home = await p.locator(".cm-rail-links a").first().innerText();
+    check("language: switched on a phone, <html lang> follows", lang === "en" && home === "Start", `${lang} ${home}`);
+    await ctx.close();
+  },
+
+  // axe-core (WCAG 2.x A/AA rules) on the main pages, light and dark.
+  async accessibility(browser) {
+    let axe;
+    try {
+      axe = require("axe-core").source;
+    } catch {
+      check("a11y: axe-core installed (npm i in web/)", false);
+      return;
+    }
+    const tok = await account("a11y");
+    for (const scheme of ["light", "dark"]) {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: scheme });
+      await ctx.addInitScript((t) => localStorage.setItem("gcplab.token", t), tok);
+      const p = await ctx.newPage();
+      for (const path of ["/dashboard", "/plan", "/learn", "/start", "/shift", "/skills", "/catalog", "/zentra", "/incidents", "/company", "/guide", "/leaderboard", "/"]) {
+        await p.goto(base + path, { waitUntil: "networkidle" });
+        await p.waitForTimeout(400);
+        await p.addScriptTag({ content: axe });
+        const res = await p.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } })).violations.map((v) => `${v.id}(${v.nodes.length})`));
+        check(`a11y ${scheme} ${path}: no WCAG A/AA violations`, res.length === 0, res.join(", "));
+      }
+      // the lab workspace (console replica, panel and Cloud Shell)
+      const lab = await (await call(tok, "/api/labs/ace-d09-health-check/start", { mode: "assisted" })).json();
+      await p.goto(`${base}/lab?session=${lab.id}&id=ace-d09-health-check`, { waitUntil: "networkidle" });
+      await skipTour(p);
+      await p.waitForTimeout(400);
+      await p.addScriptTag({ content: axe });
+      const lv = await p.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } })).violations.map((v) => `${v.id}(${v.nodes.length})`));
+      check(`a11y ${scheme} lab workspace: no WCAG A/AA violations`, lv.length === 0, lv.join(", "));
+      await ctx.close();
+    }
+  },
+});
+
 const only = process.argv[3];
 const browser = await chromium.launch();
 for (const [name, fn] of Object.entries(flows)) {

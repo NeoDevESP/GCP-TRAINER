@@ -73,7 +73,7 @@ export default function Dashboard() {
   const [tracks, setTracks] = useState<{ id: string; title: string; description?: string; labs: string[]; stages?: Stage[] }[]>([]);
   const [labs, setLabs] = useState<Record<string, LabSummary>>({});
   const [q, setQ] = useState("");
-  const { state, running: runningLab } = useProgress();
+  const { state, status: labStatus, running: runningLab } = useProgress();
   const [study, setStudy] = useState<ReturnType<typeof planLocal> & { due: number; lastShift?: number } | null>(null);
   useEffect(() => {
     syncStudy()
@@ -138,6 +138,24 @@ export default function Dashboard() {
   const zStages = tracks.find((x) => x.id === "zentra")?.stages ?? [];
   const finalDone = !!study && !!loadRun<{ history: { passed: boolean }[] }>("cm-final")?.history?.some((h) => h.passed);
   const zDone = zIds.filter((id) => state[id] === "done").length;
+  // the one thing to do next, most urgent first
+  const onboarded = !!study && !!loadRun("cm-onboarding");
+  const runningId = Object.keys(runningLab).find((id) => labs[id]);
+  const reviewId = Object.entries(labStatus).find(([id, x]) => x.status === "needs_review" && labs[id])?.[0];
+  const firstToday = pday?.entries.find((e) => !e.done);
+  const action: { kick: string; title: string; why: string; href: string; cta: string } | null = !study
+    ? null
+    : runningId
+      ? { kick: t("Lo tienes a medias"), title: labs[runningId].title, why: t("Retómalo donde lo dejaste: el entorno sigue como estaba."), href: labHref(runningId, runningLab[runningId]), cta: t("Continuar") }
+      : !onboarded && zDone === 0
+        ? { kick: t("2 minutos"), title: t("Ajusta tu ruta"), why: t("Dinos tu objetivo y tu tiempo, y haz un diagnóstico de seis preguntas: el plan se adapta a tu punto de partida."), href: "/start", cta: t("Empezar") }
+        : study.due
+          ? { kick: t("Repaso"), title: t("{n} preguntas para repasar hoy", { n: study.due }), why: t("Las que fallaste vuelven justo cuando estás a punto de olvidarlas."), href: "/learn?review=1", cta: t("Repasar") }
+          : reviewId
+            ? { kick: t("Por repasar"), title: labs[reviewId].title, why: t("Lo superaste antes, pero el último intento falló: repítelo para fijarlo."), href: labHref(reviewId), cta: t("Repetir") }
+            : zNext
+              ? { kick: t("Siguiente paso de tu ruta"), title: labs[zNext].title, why: firstToday ? t("Forma parte de la sesión de hoy de tu plan.") : t("Sigue la ruta en orden: cada paso se apoya en el anterior."), href: labHref(zNext, runningLab[zNext]), cta: t("Empezar") }
+              : null;
   return (
     <>
       <Nav active="/dashboard" />
@@ -161,6 +179,17 @@ export default function Dashboard() {
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Busca un laboratorio o un servicio")} aria-label={t("Buscar laboratorios")} />
           </form>
         </header>
+
+        {action && (
+          <section className="db-next" aria-labelledby="db-next-title">
+            <div>
+              <span className="db-kick">{action.kick}</span>
+              <h2 id="db-next-title">{action.title}</h2>
+              <p className="muted" style={{ margin: 0 }}>{action.why}</p>
+            </div>
+            <a className="cm-pillbtn ink" href={action.href}>{action.cta} →</a>
+          </section>
+        )}
 
         {zStages.length > 0 && (
           <section className="cm-section yp" aria-labelledby="yp-title" style={{ marginTop: 0 }}>

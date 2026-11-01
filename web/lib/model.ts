@@ -226,3 +226,28 @@ export function mergeRun(server: Json | null | undefined, local: Json): Json {
   if (server.checked || local.checked) out.checked = { ...(server.checked ?? {}), ...Object.fromEntries(Object.entries(local.checked ?? {}).filter(([, v]) => v)) };
   return out;
 }
+
+// ---- onboarding placement -------------------------------------------------
+
+export type Placement = "zero" | "basics" | "intermediate";
+
+/**
+ * placement turns the starting diagnosis into a level: under 40 % starts from
+ * zero (Week 0), under 80 % skips the cloud basics but does the support craft
+ * (Week 1), and 80 % or more goes straight to the Zentra cases. Questions left
+ * unanswered ("no lo sé") count as wrong: guessing is not rewarded.
+ */
+export function placement(correct: number, total: number): Placement {
+  if (total <= 0) return "zero";
+  const r = correct / total;
+  if (r < 0.4) return "zero";
+  if (r < 0.8) return "basics";
+  return "intermediate";
+}
+
+/** where each level starts, and whether Week 0 becomes optional in the plan */
+export const PLACEMENT_START: Record<Placement, { lab: string; skipBasics: boolean }> = {
+  zero: { lab: "zentra-t01-what-is-cloud", skipBasics: false },
+  basics: { lab: "zentra-s01-triage", skipBasics: true },
+  intermediate: { lab: "zentra-z01-first-day", skipBasics: true },
+};

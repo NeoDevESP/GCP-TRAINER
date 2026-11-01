@@ -170,3 +170,22 @@ func TestStudyRunConflict(t *testing.T) {
 		t.Fatalf("save without revision: %d", code)
 	}
 }
+
+// Every run key the web saves is accepted; anything else is refused.
+func TestStudyRunKeys(t *testing.T) {
+	ts, _ := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+	var auth struct {
+		Token string `json:"token"`
+	}
+	c.do("POST", "/api/auth/register", map[string]string{"email": "rk@example.com", "name": "Rk", "password": "correct horse battery"}, &auth)
+	c.token = auth.Token
+	for _, k := range []string{"cm-plan", "cm-shift", "cm-final", "cm-onboarding", "cm-exam-run-ACE-full"} {
+		if code := c.do("PUT", "/api/me/study/runs/"+k, map[string]any{"x": 1}, nil); code != 200 {
+			t.Errorf("run %s refused: %d", k, code)
+		}
+	}
+	if code := c.do("PUT", "/api/me/study/runs/anything-else", map[string]any{"x": 1}, nil); code == 200 {
+		t.Error("unknown run key accepted")
+	}
+}

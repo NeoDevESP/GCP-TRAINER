@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "@xterm/xterm/css/xterm.css";
+import { PREFS_BOOT } from "@/lib/prefs";
 
 export const metadata: Metadata = {
   title: "Cloud Mastery — Simulador de laboratorios de Google Cloud",
@@ -12,8 +13,10 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
+        {/* language, theme and density before the first paint (lib/prefs.ts) */}
+        <script dangerouslySetInnerHTML={{ __html: PREFS_BOOT }} />
         {/* Fonts ship with the app (public/fonts): Roboto for the Google Cloud console replica,
             Bricolage Grotesque and IBM Plex for the learning pages. They work offline. */}
         <link rel="stylesheet" href="/fonts/fonts.css" />

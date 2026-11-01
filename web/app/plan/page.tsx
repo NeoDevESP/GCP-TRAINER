@@ -27,7 +27,7 @@ const moduleTitle = (s: string) => s.replace(/^[^·]*·\s*/, "");
 
 export default function PlanPage() {
   useAuth();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { state, running } = useProgress();
   const [labs, setLabs] = useState<Record<string, LabSummary>>({});
   const [topics, setTopics] = useState<Record<string, Topic>>({});
@@ -146,7 +146,7 @@ export default function PlanPage() {
               <label className="pl-toggle"><input type="checkbox" checked={prefs.skipBasics} onChange={(e) => setPref({ skipBasics: e.target.checked })} /> {t("Ya sé lo básico (la Semana 0 pasa a opcional)")}</label>
               <p className="pl-summary" role="status">
                 {plan.sessions.length
-                  ? t("Te quedan {h} de estudio: {n} sesiones de hasta {m}. A este ritmo terminas hacia el {date}.", { h: fmtMin(plan.pendingMin), n: plan.sessions.length, m: fmtMin(prefs.minutesPerDay), date: finish.toLocaleDateString() })
+                  ? t("Te quedan {h} de estudio: {n} sesiones de hasta {m}. A este ritmo terminas hacia el {date}.", { h: fmtMin(plan.pendingMin), n: plan.sessions.length, m: fmtMin(prefs.minutesPerDay), date: finish.toLocaleDateString(lang === "en" ? "en-GB" : "es-ES", { day: "numeric", month: "long", year: "numeric" }) })
                   : t("¡No te queda nada pendiente en el plan!")}
               </p>
             </section>
