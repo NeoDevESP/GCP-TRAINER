@@ -1373,3 +1373,12 @@ body.cm main#main { overflow-x: clip; }
 .save-retry { min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; font: inherit; font-weight: 600; flex: none; }
 @keyframes save-pulse { 50% { opacity: 0.35; } }
 @media (max-width: 640px) { .save-status { bottom: 84px; left: 16px; right: 16px; max-width: none; } }
+
+/* diagnostic tutor: kinds of mistake after a hand-in */
+.res-diag { border-left: 4px solid var(--warn, #b45309); }
+.res-diag-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.res-diag-list > li { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.res-diag-list > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.res-diag-list code { word-break: break-all; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.comp-table th.num, .comp-table td.num { text-align: right; white-space: nowrap; }

@@ -106,7 +106,8 @@ func AssessProcess(lab *scenario.Lab, sess *cli.Session, res *Result, sub Submis
 		if reDestructive.MatchString(line) {
 			pr.Destructive = append(pr.Destructive, line)
 		}
-		if reRiskyGrant.MatchString(line) {
+		// taking a broad grant away is the fix, not the risk
+		if reRiskyGrant.MatchString(line) && !strings.Contains(line, "remove-iam-policy-binding") && !strings.Contains(line, "remove-member") {
 			pr.RiskyGrants = append(pr.RiskyGrants, line)
 		}
 		if reRestart.MatchString(line) && evidenceBefore < 2 {

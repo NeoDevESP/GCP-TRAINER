@@ -482,6 +482,46 @@ function Result({ out, session }: { out: any; session: SessionInfo }) {
         </section>
       ) : null}
 
+      {r.report && r.report.parts.some((x: any) => x.score > 0) ? (
+        <section className="res-card" aria-labelledby="res-report-title">
+          <h2 id="res-report-title" style={{ fontSize: "1.05rem", margin: "0 0 8px" }}>{t("Informe post-incidente")} · {Math.round(r.report.overall)} %</h2>
+          <p className="small muted" style={{ marginTop: 0 }}>{t("Se puntúa aparte de la nota del laboratorio.")}</p>
+          <table className="comp-table">
+            <tbody>
+              {r.report.parts.map((x: any) => {
+                const name = REPORT.find(([f]) => f === x.field)?.[1] ?? x.field;
+                return (
+                  <tr key={x.field}>
+                    <td style={{ width: 150 }}>{t(name)}</td>
+                    <td style={{ minWidth: 90 }}><Bar value={x.score} label={t(name)} /></td>
+                    <td className="small">{x.note}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+      {r.diagnosis?.length ? (
+        <section className="res-card res-diag" aria-labelledby="res-diag-title">
+          <h2 id="res-diag-title" style={{ fontSize: "1.05rem", margin: "0 0 8px" }}>{t("Qué ha fallado en tu forma de resolverlo")}</h2>
+          <ul className="res-diag-list">
+            {r.diagnosis.map((m: any) => (
+              <li key={m.kind}>
+                <strong>{m.title}</strong>
+                <p className="small" style={{ margin: "4px 0" }}>{m.why}</p>
+                <p className="small" style={{ margin: "4px 0" }}><strong>{t("Siguiente paso:")}</strong> {m.next}</p>
+                {m.commands?.length ? (
+                  <details className="small">
+                    <summary>{t("Tus comandos ({n})", { n: m.commands.length })}</summary>
+                    <ul>{m.commands.map((c: string, i: number) => <li key={i}><code>{c}</code></li>)}</ul>
+                  </details>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {r.process && (
         <details className="res-card">
           <summary><strong>{t("Cómo has trabajado")}</strong> <span className="muted small">{t("diagnóstico, seguridad, coste, comunicación…")}</span></summary>
@@ -490,9 +530,9 @@ function Result({ out, session }: { out: any; session: SessionInfo }) {
               <div key={f.name}>
                 <div className="row" style={{ justifyContent: "space-between" }}>
                   <span>{label(factor, f.name, t)}</span>
-                  <span className="muted small">{Math.round(f.score * 100)}%</span>
+                  <span className="muted small">{Math.round(f.score)}%</span>
                 </div>
-                <Bar value={f.score * 100} label={label(factor, f.name, t)} />
+                <Bar value={f.score} label={label(factor, f.name, t)} />
                 {f.signals?.length ? <div className="muted small">{f.signals.join("; ")}</div> : null}
               </div>
             ))}
@@ -717,13 +757,16 @@ function Workspace({ session }: { session: SessionInfo }) {
             {hints.map((h) => (
               <div key={h.index} className="lp-hint">
                 <Icon name="bulb" size={18} />
-                <span><span className="cc-pill">{label(hintKind, h.kind, tr)} · −{h.cost}</span> {h.text}</span>
+                <span>
+                  <span className="cc-pill">{h.level ? tr("Nivel {n} de {t}: {name}", { n: h.level, t: h.index + 1 + h.remaining, name: h.name }) : label(hintKind, h.kind, tr)} · −{h.cost}</span>{" "}
+                  {String(h.text).split(/(`[^`]+`)/).map((part: string, i: number) => (part.startsWith("`") && part.endsWith("`") ? <code key={i}>{part.slice(1, -1)}</code> : <span key={i} style={{ whiteSpace: "pre-line" }}>{part}</span>))}
+                </span>
               </div>
             ))}
             <div className="lp-actions">
               {!exam && (
                 <button className="cc-btn" onClick={hint} disabled={session.hintCount === 0 || (hints.length > 0 && hints[hints.length - 1].remaining <= 0)}>
-                  <Icon name="bulb" size={18} /> {tr("Pista (quedan {n})", { n: Math.max(0, session.hintCount - hints.length) })}
+                  <Icon name="bulb" size={18} /> {hints.length === 0 ? tr("Pedir una pista ({n} niveles)", { n: session.hintCount }) : tr("Siguiente pista (quedan {n})", { n: Math.max(0, session.hintCount - hints.length) })}
                 </button>
               )}
               <button className="cc-btn" onClick={doCheck} disabled={busy}>
@@ -759,6 +802,19 @@ function Workspace({ session }: { session: SessionInfo }) {
                   </div>
                 ))}
               </>
+            )}
+            {session.report && (
+              <details className="lp-report" open={!session.evidence}>
+                <summary><h3 style={{ display: "inline" }}>{tr("Informe post-incidente")}</h3> <span className="muted small">{tr("recomendado · se puntúa aparte")}</span></summary>
+                <p className="cc-help">{tr("Cuenta el incidente como lo harías en un banco: del síntoma a la prevención. Cada apartado se comprueba con lo que hiciste en la sesión: la evidencia debe citar lo que consultaste y la validación, una comprobación posterior al cambio.")}</p>
+                {REPORT.filter(([f]) => !session.evidence?.fields.includes(f)).map(([f, name, help]) => (
+                  <div key={f} className="cc-field" style={{ marginBottom: 12 }}>
+                    <label htmlFor={`rp-${f}`}>{tr(name)}</label>
+                    <span className="cc-help" id={`rp-${f}-help`}>{tr(help)}</span>
+                    <textarea id={`rp-${f}`} aria-describedby={`rp-${f}-help`} rows={2} value={evidence[f] ?? ""} onChange={(e) => setEvidence({ ...evidence, [f]: e.target.value })} />
+                  </div>
+                ))}
+              </details>
             )}
             {session.quiz?.filter((q) => !q.after).length ? (
               <>
@@ -869,6 +925,18 @@ function LabPage() {
     </>
   );
 }
+
+
+// the post-incident report, in order: [field, name, help]
+const REPORT: [string, string, string][] = [
+  ["symptom", k("Síntoma"), k("Qué falla, para quién y desde cuándo.")],
+  ["evidenceSeen", k("Evidencia"), k("Qué consultaste y qué mostraba (nombre del recurso, comando, línea de registro).")],
+  ["hypothesis", k("Hipótesis"), k("La causa que sospechaste y cómo la comprobaste.")],
+  ["rootCause", k("Causa raíz"), k("Qué estaba mal y por qué producía el síntoma.")],
+  ["action", k("Acción"), k("El cambio exacto que hiciste, y por qué el mínimo.")],
+  ["validation", k("Validación"), k("Cómo demostraste que vuelve a funcionar para quien lo usa.")],
+  ["prevention", k("Prevención"), k("Qué evitaría que se repita: alerta, política, revisión, prueba.")],
+];
 
 export default function Page() {
   return (

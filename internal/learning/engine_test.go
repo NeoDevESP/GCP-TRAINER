@@ -214,3 +214,50 @@ func TestMasteryRecentAndGuided(t *testing.T) {
 		t.Fatalf("recent weighting: %v", got)
 	}
 }
+
+// The five competencies: transfer needs a first-try pass in a new lab after
+// another lab of the skill; comprehension comes from questions and written
+// explanations; unmeasured competencies are reported as such.
+func TestCompetencies(t *testing.T) {
+	c := loadCat(t)
+	now := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	e := &Engine{Cat: c, Now: func() time.Time { return now }}
+	find := func(ss []SkillScore, sk string) SkillScore {
+		for _, s := range ss {
+			if s.Skill == sk {
+				return s
+			}
+		}
+		t.Fatalf("skill %s missing", sk)
+		return SkillScore{}
+	}
+	sk := "iam.leastprivilege"
+	one := att("1", "zentra-z18-bq-denied", 90, true, 0, now.Add(-72*time.Hour))
+	one.Result.Validators["evidence"] = [2]float64{10, 20}
+	s := find(e.Mastery([]Attempt{one}), sk)
+	if s.Transfer != 0 || contains(s.Measured, "transfer") {
+		t.Fatalf("one lab shows no transfer: %+v", s)
+	}
+	if s.Comprehension != 50 || !contains(s.Measured, "comprehension") {
+		t.Fatalf("comprehension from the written evidence: %+v", s)
+	}
+	two := att("2", "zentra-z64-invoker-removed", 85, true, 0, now.Add(-24*time.Hour))
+	s = find(e.Mastery([]Attempt{one, two}), sk)
+	if s.Transfer != 50 {
+		t.Fatalf("a first-try pass in a new lab is transfer: %+v", s)
+	}
+	helped := att("3", "zentra-z56-access-review", 100, true, 0, now.Add(-time.Hour))
+	helped.SolutionShown = true
+	if s2 := find(e.Mastery([]Attempt{one, two, helped}), sk); s2.Transfer != 50 {
+		t.Fatalf("a pass with the solution is not transfer: %+v", s2)
+	}
+}
+
+func contains(l []string, v string) bool {
+	for _, x := range l {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}

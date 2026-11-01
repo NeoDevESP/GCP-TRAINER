@@ -117,6 +117,12 @@ func attach(s *Step, n Note) {
 	}
 }
 
+// the explanation of a command the tutor knows nothing about
+const (
+	genericWhyES = "Comando de la plataforma o del sistema; escríbelo en Cloud Shell."
+	genericWhyEN = "Platform or system command; type it in Cloud Shell."
+)
+
 var reAssign = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
 
 // explain turns one command into a step.
@@ -312,9 +318,23 @@ func explainCmd(cmd string, en bool) (Step, bool) {
 			return st, true
 		}
 		return Step{}, false
+	case tool == "gam":
+		// the Workspace directory CLI: info/print/show/report only read
+		st.Where = Where{Page: "groups", Path: L("Consola de administración de Workspace › Directorio", "Workspace Admin console › Directory"), Action: "shell"}
+		st.Match = prefixMatch(ws[:min(3, len(ws))])
+		st.Title = L("Directorio: ", "Directory: ") + strings.Join(ws[1:min(4, len(ws))], " ")
+		st.Why = L("gam gestiona el directorio de Workspace desde la línea de comandos; lo mismo se ve en la consola de administración.", "gam manages the Workspace directory from the command line; the Admin console shows the same.")
+		st.Concept = L("Las cuentas y grupos de Google Workspace / Cloud Identity son las identidades que IAM autoriza: el directorio dice quién es quién.", "Google Workspace / Cloud Identity accounts and groups are the identities IAM authorizes: the directory says who is who.")
+		switch arg(ws, 1) {
+		case "info", "print", "show", "report", "check":
+			st.Phase = Investigate
+		}
+		if arg(ws, 1) == "user" && (arg(ws, 3) == "show" || arg(ws, 3) == "print" || arg(ws, 3) == "check") {
+			st.Phase = Investigate
+		}
 	default:
 		st.Title = L("Ejecuta: ", "Run: ") + strings.Join(ws[:min(3, len(ws))], " ")
-		st.Why = L("Comando de la plataforma o del sistema; escríbelo en Cloud Shell.", "Platform or system command; type it in Cloud Shell.")
+		st.Why = L(genericWhyES, genericWhyEN)
 		st.Where = shell
 		st.Match = prefixMatch(ws[:min(2, len(ws))])
 		readVerb(&st, arg(ws, 1))

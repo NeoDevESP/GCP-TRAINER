@@ -12,6 +12,16 @@ import { RouteLine, StepGuide, TrackBadge, labHref, nextLab, useProgress } from 
 import { k } from "@/lib/i18n";
 import { planLocal, planSchedule } from "@/lib/plan";
 import { dueKeys, loadReview, loadRun, syncStudy } from "@/lib/study";
+import type { SkillScore } from "@/lib/types";
+
+// the five competencies of a skill: [measured key, column name, field]
+const COMPS: [string, string, keyof SkillScore][] = [
+  ["comprehension", k("Comprensión"), "comprehension"],
+  ["execution", k("Ejecución"), "correctness"],
+  ["autonomy", k("Autonomía"), "independence"],
+  ["retention", k("Retención"), "retention"],
+  ["transfer", k("Transferencia"), "transfer"],
+];
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -408,8 +418,8 @@ export default function Dashboard() {
                 {p.student.dimensions.map((d) => (
                   <tr key={d.dimension}>
                     <td style={{ width: 170 }}>{label(dimension, d.dimension, t)}</td>
-                    <td><Bar value={d.score * 100} label={label(dimension, d.dimension, t)} /></td>
-                    <td className="muted small" style={{ width: 110 }}>{t("{pct}% · {n} evid.", { pct: Math.round(d.score * 100), n: d.evidence })}</td>
+                    <td><Bar value={d.score} label={label(dimension, d.dimension, t)} /></td>
+                    <td className="muted small" style={{ width: 110 }}>{t("{pct}% · {n} evid.", { pct: Math.round(d.score), n: d.evidence })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -469,18 +479,25 @@ export default function Dashboard() {
           <div className="card">
             <h2>{t("Habilidades")}</h2>
             {p.skills?.length ? (
-              <table>
-                <thead><tr><th>{t("Habilidad")}</th><th>{t("Dominio")}</th><th></th></tr></thead>
+              <>
+              <p className="small muted" style={{ marginTop: 0 }}>{t("Cinco competencias por habilidad: entenderla (preguntas y explicaciones), ejecutarla, hacerlo sin ayuda, recordarla con el tiempo y aplicarla en un caso nuevo. «—» es que aún no hay pruebas, no que esté mal.")}</p>
+              <div className="table-scroll">
+              <table className="comp-table">
+                <thead><tr><th>{t("Habilidad")}</th><th>{t("Dominio")}</th>{COMPS.map(([, name]) => <th key={name} className="num">{t(name)}</th>)}</tr></thead>
                 <tbody>
                   {[...p.skills].sort((a, b) => b.mastery - a.mastery).map((s) => (
                     <tr key={s.skill}>
                       <td>{s.skill} {s.masteryBadge && <span className="pill ok">{t("dominada")}</span>}</td>
-                      <td style={{ width: "40%" }}><Bar value={s.mastery} label={s.skill} /></td>
-                      <td className="small muted">{Math.round(s.mastery)}</td>
+                      <td style={{ minWidth: 110 }}><Bar value={s.mastery} label={s.skill} /> <span className="small muted">{Math.round(s.mastery)}</span></td>
+                      {COMPS.map(([key, name, field]) => (
+                        <td key={key} className="num small">{!s.measured || s.measured.includes(key) ? Math.round(Number(s[field] ?? 0)) : <span className="muted" title={t("sin datos aún")}>—</span>}</td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
+              </div>
+              </>
             ) : (
               <p className="muted">{t("Todavía no hay habilidades medidas.")}</p>
             )}

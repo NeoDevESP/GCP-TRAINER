@@ -112,6 +112,11 @@ type Hint struct {
 	Text string `yaml:"text" json:"text"`
 	Cost int    `yaml:"cost" json:"cost"`
 	Kind string `yaml:"kind" json:"kind"` // hint, partial, solution
+	// Level and Name are set when the hint comes from the five-level ladder
+	// (tutor.Ladder): 1 question, 2 concept, 3 where to look, 4 example, 5 solution.
+	Level int    `yaml:"-" json:"level,omitempty"`
+	Name  string `yaml:"-" json:"name,omitempty"`
+	Total int    `yaml:"-" json:"total,omitempty"` // levels available
 }
 
 // Evidence configures the explanation / postmortem requirement.

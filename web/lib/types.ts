@@ -17,6 +17,10 @@ export interface SkillScore {
   incidentPerformance: number;
   attempts: number;
   masteryBadge: boolean;
+  comprehension?: number;
+  transfer?: number;
+  /** competencies with evidence behind them */
+  measured?: string[];
 }
 
 export interface Readiness {
@@ -131,6 +135,8 @@ export interface SessionInfo {
   timeline: { at: string; from: string; text: string }[] | null;
   constraints: string[] | null;
   hintCount: number;
+  /** asks for the post-incident report */
+  report?: boolean;
   evidence?: { prompt: string; fields: string[]; minWords: number };
   quiz?: Question[];
   expires: string;

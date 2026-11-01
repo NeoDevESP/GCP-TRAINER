@@ -88,6 +88,13 @@ func Verify(l *scenario.Lab, seed int64) Report {
 	if after.Process != nil && len(after.Process.Violations) > 0 {
 		r.Problems = append(r.Problems, "official solution violates lab constraints: "+strings.Join(after.Process.Violations, "; "))
 	}
+	// the diagnostic tutor must not blame the official solution for using
+	// the wrong identity or resource
+	for _, m := range after.Diagnosis {
+		if m.Kind == grader.WrongIdentity || m.Kind == grader.WrongResource || m.Kind == grader.UnsafeChange {
+			r.Problems = append(r.Problems, fmt.Sprintf("diagnosis flags the official solution as %s: %v", m.Kind, m.Commands))
+		}
+	}
 	if !after.Passed || after.Score < 90 {
 		r.Problems = append(r.Problems, fmt.Sprintf("official solution scores %d (critical failed=%v)", after.Score, after.CriticalFailed))
 	}

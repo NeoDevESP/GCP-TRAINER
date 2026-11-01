@@ -664,7 +664,7 @@ func (s *Server) activeTrack(r *http.Request) string {
 func labSummary(l *scenario.Lab) map[string]any {
 	return map[string]any{"id": l.ID, "title": l.Title, "summary": l.Summary, "track": l.Track, "day": l.Day, "level": l.Level, "branch": l.Branch, "type": l.Type,
 		"skills": l.Skills, "wellArchitected": l.WellArchitected, "certs": l.Certs, "difficulty": l.Difficulty, "minutes": l.Minutes, "fidelity": l.Fidelity.Supported,
-		"defaultFidelity": l.Fidelity.Default, "hints": len(l.Hints), "retestOf": l.RetestOf, "ticket": ticketSummary(l)}
+		"defaultFidelity": l.Fidelity.Default, "hints": len(orchestrator.HintLadder(l, i18n.ES)), "retestOf": l.RetestOf, "ticket": ticketSummary(l)}
 }
 
 // ticketSummary is the service-desk framing of a lab, used to build support shifts.
@@ -893,7 +893,11 @@ func (s *Server) hint(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err := s.Store.Put("attempts", att.ID, att); err != nil {
 		return nil, err
 	}
-	return map[string]any{"index": n, "text": h.Text, "cost": h.Cost, "kind": h.Kind, "remaining": len(l.Hints) - n - 1, "totalCost": att.HintCost}, nil
+	total := h.Total
+	if total == 0 {
+		total = len(l.Hints)
+	}
+	return map[string]any{"index": n, "text": h.Text, "cost": h.Cost, "kind": h.Kind, "level": h.Level, "name": h.Name, "remaining": total - n - 1, "totalCost": att.HintCost}, nil
 }
 
 func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {

@@ -226,6 +226,16 @@ type SkillScore struct {
 	Incident     float64 `json:"incidentPerformance"`
 	Attempts     int     `json:"attempts"`
 	MasteryBadge bool    `json:"masteryBadge"`
+	// The five competencies (0..100). Execution is Correctness, autonomy is
+	// Independence and retention is Retention; these two complete them:
+	// Comprehension — the lab questions and written explanations (root
+	// cause, evidence); Transfer — solved on the first try, without the
+	// answer, in a lab not practised before, after learning it in another.
+	Comprehension float64 `json:"comprehension"`
+	Transfer      float64 `json:"transfer"`
+	// Measured says which competencies have evidence behind them; the rest
+	// are 0 because nothing has shown them yet, not because they failed.
+	Measured []string `json:"measured"`
 }
 
 // Readiness is certification readiness with an explanation.
@@ -314,6 +324,9 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 		retest30                             bool
 		n                                    int
 		hasChallenge, hasIncident, hasRetest bool
+		comp                                 []float64
+		labsPassed                           map[string]bool
+		transfers                            int
 	}
 	per := map[string]*acc{}
 	for _, a := range att {
@@ -324,10 +337,30 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 		for _, sk := range lab.Skills {
 			s := per[sk]
 			if s == nil {
-				s = &acc{scoresByLab: map[string][]float64{}}
+				s = &acc{scoresByLab: map[string][]float64{}, labsPassed: map[string]bool{}}
 				per[sk] = s
 			}
 			s.n++
+			// comprehension: questions and written explanations of the attempt
+			if a.Result != nil {
+				var e, m float64
+				for _, v := range []string{"quiz", "evidence", "diagnosis"} {
+					x := a.Result.Validators[v]
+					e += x[0]
+					m += x[1]
+				}
+				if m > 0 {
+					s.comp = append(s.comp, 100*e/m)
+				}
+			}
+			// transfer: first attempt at this lab, passed without the answer,
+			// after passing another lab of the same skill
+			if a.Passed && !a.SolutionShown && !a.Tutor && len(s.scoresByLab[a.LabID]) == 0 && len(s.labsPassed) > 0 {
+				s.transfers++
+			}
+			if a.Passed {
+				s.labsPassed[a.LabID] = true
+			}
 			// An attempt that saw the answer (solution or tutor walkthrough)
 			// counts half: it shows the learner can follow, not solve.
 			credit := float64(a.Score)
@@ -335,10 +368,7 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 				credit *= 0.5
 			}
 			s.scoresByLab[a.LabID] = append(s.scoresByLab[a.LabID], credit)
-			ind := 100.0
-			if len(lab.Hints) > 0 {
-				ind = 100 * (1 - float64(len(a.HintsUsed))/float64(len(lab.Hints)+1))
-			}
+			ind := HintAutonomy(len(lab.Hints), lab.Type, len(a.HintsUsed))
 			if a.SolutionShown {
 				ind = 0
 			}
@@ -391,10 +421,33 @@ func (e *Engine) Mastery(attempts []Attempt) []SkillScore {
 		ss.Incident = avg(s.incident)
 		ss.Mastery = round1(0.40*ss.Correctness + 0.20*ss.Independence + 0.15*ss.Retention + 0.15*ss.Difficulty + 0.10*ss.Incident)
 		ss.MasteryBadge = s.hasChallenge && s.hasIncident && s.hasRetest
+		ss.Measured = []string{"execution", "autonomy"}
+		if len(s.comp) > 0 {
+			ss.Comprehension = round1(RecentWeighted(s.comp))
+			ss.Measured = append(ss.Measured, "comprehension")
+		}
+		if s.hasRetest {
+			ss.Measured = append(ss.Measured, "retention")
+		}
+		if len(s.labsPassed) > 1 || s.transfers > 0 {
+			ss.Transfer = round1(100 * math.Min(1, float64(s.transfers)/2))
+			ss.Measured = append(ss.Measured, "transfer")
+		}
 		out = append(out, ss)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Skill < out[j].Skill })
 	return out
+}
+
+// HintAutonomy is how independent an attempt was given the hints it used
+// (0..100). Every lab offers the five-level hint ladder (or its own hints when
+// it has more); each level asked lowers it. Boss battles have no hints.
+func HintAutonomy(authored int, labType string, used int) float64 {
+	if labType == "boss" || used == 0 {
+		return 100
+	}
+	steps := max(authored, 5)
+	return 100 * (1 - float64(min(used, steps))/float64(steps+1))
 }
 
 // RecentWeighted scores a lab by its latest attempts, oldest first: the last

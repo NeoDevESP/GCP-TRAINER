@@ -73,6 +73,7 @@ type SessionInfo struct {
 	Timeline     []scenario.TimelineEvent `json:"timeline"`
 	Constraints  []string                 `json:"constraints"`
 	HintCount    int                      `json:"hintCount"`
+	Report       bool                     `json:"report,omitempty"` // asks for the post-incident report
 	Evidence     *scenario.Evidence       `json:"evidence,omitempty"`
 	Quiz         []scenario.Question      `json:"quiz,omitempty"`
 	Live         map[string]any           `json:"live"`
@@ -248,7 +249,8 @@ func (s *Service) ttlFor(l *scenario.Lab) time.Duration {
 func (s *Service) fillStatic(se *Session) {
 	l := se.Lab
 	se.Info.Title, se.Info.Story, se.Info.Instructions, se.Info.Objectives = l.Title, l.Story, l.Instructions, l.Objectives
-	se.Info.Timeline, se.Info.Constraints, se.Info.HintCount = l.Timeline, l.Constraints, len(l.Hints)
+	se.Info.Timeline, se.Info.Constraints, se.Info.HintCount = l.Timeline, l.Constraints, len(HintLadder(l, se.Info.Lang))
+	se.Info.Report = grader.WantsReport(l)
 	if l.Evidence != nil {
 		ev := *l.Evidence
 		ev.Keywords, ev.Sample = nil, nil
@@ -373,11 +375,41 @@ func (s *Service) Hint(id string, n int) (*scenario.Hint, error) {
 	if err != nil {
 		return nil, err
 	}
-	if n < 0 || n >= len(se.Lab.Hints) {
+	hs := HintLadder(se.Lab, se.Info.Lang)
+	if n < 0 || n >= len(hs) {
 		return nil, fmt.Errorf("no more hints")
 	}
-	h := se.Lab.Hints[n]
+	h := hs[n]
+	h.Total = len(hs)
 	return &h, nil
+}
+
+// HintLadder returns the hints of a lab in the order they are given: the
+// five-level ladder (tutor.Ladder) built from the lab's own hints and its
+// solution, or the lab's hints as written when no ladder can be built. Boss
+// battles have none, and neither do generated variants whose difficulty
+// leaves them without hints.
+func HintLadder(l *scenario.Lab, lang string) []scenario.Hint {
+	if l.Type == "boss" || (l.Generated != nil && len(l.Hints) == 0) {
+		return nil
+	}
+	var auth []tutor.Authored
+	for _, h := range l.Hints {
+		auth = append(auth, tutor.Authored{Text: h.Text, Kind: h.Kind})
+	}
+	var notes []tutor.Note
+	for _, n := range l.Tutor {
+		notes = append(notes, tutor.Note{Match: n.Match, Title: n.Title, Why: n.Why})
+	}
+	rungs := tutor.Ladder(auth, l.Solution, notes, lang)
+	if rungs == nil {
+		return l.Hints
+	}
+	out := make([]scenario.Hint, len(rungs))
+	for i, r := range rungs {
+		out[i] = scenario.Hint{Text: r.Text, Cost: r.Cost, Kind: r.Kind, Level: r.Level, Name: r.Name}
+	}
+	return out
 }
 
 // View returns the console/telemetry views of the session.

@@ -199,10 +199,7 @@ func (e *Engine) dimensionsOf(a Attempt) map[string]float64 {
 			out[DimOperations] = v
 		}
 	}
-	aut := 100.0
-	if len(lab.Hints) > 0 {
-		aut = 100 * (1 - float64(len(a.HintsUsed))/float64(len(lab.Hints)+1))
-	}
+	aut := HintAutonomy(len(lab.Hints), lab.Type, len(a.HintsUsed))
 	if a.SolutionShown {
 		aut = 0
 	}

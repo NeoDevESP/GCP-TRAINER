@@ -67,6 +67,8 @@ type Result struct {
 	Validators     map[string][2]float64 `json:"validators"` // earned, max
 	Feedback       []string              `json:"feedback"`
 	Process        *ProcessReport        `json:"process,omitempty"`
+	Diagnosis      []Mistake             `json:"diagnosis,omitempty"` // kinds of mistake found (diagnose.go)
+	Report         *Report               `json:"report,omitempty"`    // post-incident report (report.go)
 }
 
 // Context is everything the grader can observe.
@@ -136,6 +138,8 @@ func Grade(lab *scenario.Lab, st *sim.State, sess *cli.Session, project string, 
 	if n := len(res.Process.BlindFixes); n > 0 {
 		res.Feedback = append(res.Feedback, fmt.Sprintf(i18n.P(sub.Lang, "[Proceso] %d cambio(s) hecho(s) antes de reunir evidencias: formula antes una hipótesis", "[Process] %d change(s) made before gathering evidence — form a hypothesis first"), n))
 	}
+	res.Diagnosis = Diagnose(lab, sess, res, res.Process, sub.Lang)
+	res.Report = ScoreReport(lab, sess, sub)
 	return res
 }
 
