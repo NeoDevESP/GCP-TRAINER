@@ -52,7 +52,7 @@ interface Dest {
 const DESTS: Dest[] = [
   { id: "home", label: k("Inicio"), icon: "home", key: "h", pages: [["/dashboard", k("Inicio")]] },
   { id: "learn", label: k("Aprender"), icon: "book", key: "a", pages: [["/learn", k("Lecciones")], ["/plan", k("Plan de estudio")], ["/guide", k("Guía de diagnóstico")]] },
-  { id: "practice", label: k("Practicar"), icon: "practice", key: "p", pages: [["/catalog", k("Rutas y laboratorios")], ["/zentra", k("Zentra")], ["/incidents", k("Incidencias")]] },
+  { id: "practice", label: k("Practicar"), icon: "practice", key: "p", pages: [["/catalog", k("Rutas y laboratorios")], ["/zentra", k("Zentra")], ["/incidents", k("Incidencias")], ["/sandbox", k("Consola libre")]] },
   { id: "work", label: k("Trabajo"), icon: "headset", key: "t", pages: [["/shift", k("Turno de soporte")], ["/company", k("Empresa")]] },
   { id: "profile", label: k("Perfil"), icon: "teacher", key: "u", pages: [["/skills", k("Habilidades")], ["/leaderboard", k("Ligas")]] },
 ];

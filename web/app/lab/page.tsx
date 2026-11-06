@@ -563,6 +563,53 @@ function Result({ out, session }: { out: any; session: SessionInfo }) {
 }
 
 
+/** FreePanel is the side panel of the free console: what it is, ideas, save. */
+function FreePanel({ session }: { session: SessionInfo }) {
+  const { t, lang } = useI18n();
+  const [saved, setSaved] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await api<{ savedAt: string }>("/api/sandbox/save", { body: {} });
+      setSaved(new Date(r.savedAt).toLocaleTimeString(lang === "en" ? "en-GB" : "es-ES", { hour: "2-digit", minute: "2-digit" }));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <p style={{ marginTop: 0 }}>{session.instructions}</p>
+      <p className="small muted">{t("Proyecto: {p} · región {r}. No cuenta para tu progreso ni para tu nota.", { p: session.project, r: session.region })}</p>
+      <div className="lp-actions" style={{ flexWrap: "wrap" }}>
+        <button type="button" className="cc-btn primary" onClick={save} disabled={busy}>
+          <Icon name="check" size={18} /> {t("Guardar este mundo")}
+        </button>
+        <a className="cc-btn" href="/sandbox">{t("Empezar otro mundo")}</a>
+      </div>
+      <p className="small" role="status" aria-live="polite" style={{ minHeight: 20 }}>
+        {saved ? t("Guardado a las {h}. Puedes continuarlo otro día desde Practicar › Consola libre.", { h: saved }) : ""}
+      </p>
+      {err && <p className="error small">{err}</p>}
+      <h3>{t("Ideas para probar")}</h3>
+      <ul className="lp-list">
+        <li>{t("Crea una VM sin IP pública y haz que salga a internet con Cloud NAT.")}</li>
+        <li>{t("Monta un bucket, sube un archivo y da acceso de lectura solo a un grupo.")}</li>
+        <li>{t("Rompe algo a propósito (una regla de cortafuegos, un rol) y mira qué error aparece.")}</li>
+        <li>{t("Usa «whatif» antes de un cambio y «why» sobre un recurso para que el simulador te lo explique.")}</li>
+      </ul>
+      <div className="lp-note">
+        <Icon name="info" size={18} />
+        <span>{t("La consola y Cloud Shell comparten el mismo estado: lo que hagas en una aparece en la otra. Escribe «help» en la terminal para ver los comandos.")}</span>
+      </div>
+    </>
+  );
+}
+
 function Workspace({ session }: { session: SessionInfo }) {
   const { t: tr } = useI18n();
   const [tick, setTick] = useState(0);
@@ -672,12 +719,16 @@ function Workspace({ session }: { session: SessionInfo }) {
     );
   }
 
-  const tabs: ["guide" | "desk" | "submit" | "tutor", string][] = [
-    ...(hasDesk ? ([["desk", tr("Ticket")]] as ["desk", string][]) : []),
-    ...(session.type !== "boss" && !noTutor ? ([["tutor", tr("Profesor")]] as ["tutor", string][]) : []),
-    ["guide", tr("Instrucciones")],
-    ["submit", tr("Entrega")],
-  ];
+  // free console: no mission, no teacher, no hand-in
+  const free = session.type === "sandbox";
+  const tabs: ["guide" | "desk" | "submit" | "tutor", string][] = free
+    ? [["guide", tr("Consola libre")]]
+    : [
+        ...(hasDesk ? ([["desk", tr("Ticket")]] as ["desk", string][]) : []),
+        ...(session.type !== "boss" && !noTutor ? ([["tutor", tr("Profesor")]] as ["tutor", string][]) : []),
+        ["guide", tr("Instrucciones")],
+        ["submit", tr("Entrega")],
+      ];
 
   const aside = (
     <div className="lp">
@@ -718,7 +769,8 @@ function Workspace({ session }: { session: SessionInfo }) {
             }}
           />
         )}
-        {panel === "guide" && (
+        {panel === "guide" && free && <FreePanel session={session} />}
+        {panel === "guide" && !free && (
           <>
             <StepGuide compact />
             <Markdown text={session.story} />

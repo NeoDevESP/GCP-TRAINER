@@ -1480,3 +1480,10 @@ kbd { font-family: var(--mono); font-size: 12px; padding: 1px 6px; border: 1px s
 .db-next h2 { margin: 4px 0 6px; }
 .db-next .cm-pillbtn { flex: none; }
 @media (max-width: 760px) { .db-next { flex-direction: column; align-items: stretch; padding: 20px; } .db-next .cm-pillbtn { justify-content: center; } }
+
+/* free console */
+.sb-resume { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.sb-resume h2 { margin: 4px 0 12px; }
+.sb-worlds { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.sb-worlds .card { display: flex; flex-direction: column; }
+.sb-worlds .card .btn { margin-top: auto; align-self: flex-start; }

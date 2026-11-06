@@ -91,8 +91,9 @@ const flows = {
 // same simulator state, so the page sees exactly what a typed command does.
 // the first-visit tour of the lab covers the page: skip it like a person would
 async function skipTour(p) {
+  // the tour can appear a moment after the page loads
   const skip = p.getByRole("button", { name: "Saltar" });
-  if (await skip.isVisible().catch(() => false)) await skip.click();
+  await skip.waitFor({ state: "visible", timeout: 3000 }).then(() => skip.click()).catch(() => {});
 }
 const exec = (tok, sid, line) => call(tok, `/api/sessions/${sid}/exec`, { line });
 
@@ -326,7 +327,7 @@ Object.assign(flows, {
       const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: scheme });
       await ctx.addInitScript((t) => localStorage.setItem("gcplab.token", t), tok);
       const p = await ctx.newPage();
-      for (const path of ["/dashboard", "/plan", "/learn", "/start", "/shift", "/skills", "/catalog", "/zentra", "/incidents", "/company", "/guide", "/leaderboard", "/"]) {
+      for (const path of ["/dashboard", "/plan", "/learn", "/start", "/shift", "/skills", "/catalog", "/zentra", "/incidents", "/company", "/guide", "/leaderboard", "/sandbox", "/"]) {
         await p.goto(base + path, { waitUntil: "networkidle" });
         await p.waitForTimeout(400);
         await p.addScriptTag({ content: axe });
@@ -375,6 +376,51 @@ Object.assign(flows, {
     await p.waitForURL(base + "/");
     const after = await p.request.get(base + "/api/me");
     check("session: signing out removes the session cookie", after.status() === 401, String(after.status()));
+    await ctx.close();
+  },
+});
+
+Object.assign(flows, {
+  // Free console: open a world from Practicar, type in Cloud Shell, save it,
+  // and continue it later. No hand-in, no teacher, nothing in the progress.
+  async freeConsole(browser) {
+    const tok = await account("free");
+    const { ctx, p, errors } = await page(browser, tok);
+    p.on("dialog", (d) => d.accept());
+    await p.goto(base + "/catalog", { waitUntil: "networkidle" });
+    await p.locator(".cm-tabs a", { hasText: "Consola libre" }).click();
+    await p.waitForURL("**/sandbox");
+    await p.getByRole("button", { name: "Abrir «Proyecto nuevo»" }).click();
+    await p.waitForURL(/\/lab\?session=.*id=sandbox-default-network/, { timeout: 30000 });
+    await skipTour(p);
+    const sid = new URL(p.url()).searchParams.get("session");
+    const tabs = await p.getByRole("tab").allInnerTexts();
+    check("free console: only its own panel (no hand-in, no teacher)", tabs.join("|") === "Consola libre", tabs.join("|"));
+    // type in Cloud Shell (xterm)
+    await p.locator(".xterm-rows", { hasText: "student@cloudshell" }).waitFor({ timeout: 15000 });
+    await p.locator(".xterm-screen").first().click();
+    await p.keyboard.type("gcloud compute instances create juguete-1 --zone=europe-west1-b");
+    await p.keyboard.press("Enter");
+    await p.locator(".xterm-rows", { hasText: "juguete-1" }).last().waitFor({ timeout: 15000 }).catch(() => {});
+    let list = { output: "" };
+    for (let i = 0; i < 10 && !list.output.includes("juguete-1"); i++) {
+      list = await (await exec(tok, sid, "gcloud compute instances list")).json();
+      if (!list.output.includes("juguete-1")) await p.waitForTimeout(500);
+    }
+    check("free console: a command typed in Cloud Shell changes the project", list.output.includes("juguete-1"), list.output.split("\n")[1] ?? "");
+    await p.getByRole("button", { name: "Guardar este mundo" }).click();
+    await p.waitForSelector("text=Guardado a las");
+    check("free console: the world is saved", true);
+    await p.goto(base + "/sandbox", { waitUntil: "networkidle" });
+    check("free console: the saved world and the open one are offered", (await p.getByText("Mundo guardado").count()) === 1 && (await p.getByText("Abierta ahora").count()) === 1);
+    await p.getByRole("button", { name: "Continuar donde lo dejé" }).click();
+    await p.waitForURL(/\/lab\?session=/, { timeout: 30000 });
+    const sid2 = new URL(p.url()).searchParams.get("session");
+    const again = await (await exec(tok, sid2, "gcloud compute instances list")).json();
+    check("free console: continuing brings the saved world back", sid2 !== sid && again.output.includes("juguete-1"));
+    const atts = (await (await call(tok, "/api/me/attempts")).json()) ?? [];
+    check("free console: nothing counts towards progress", atts.length === 0, `${atts.length} attempts`);
+    check("free console: no page errors", errors.length === 0, errors.join("; "));
     await ctx.close();
   },
 });

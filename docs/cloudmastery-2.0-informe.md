@@ -155,6 +155,26 @@ VERSION=2.0.0 ./deploy/windows/build-msi.sh    # instalador de Windows
 VERSION=2.0.0 ./deploy/portable/build-zip.sh   # ZIP portable
 ```
 
+## 6 bis. Añadido en 2.1: consola libre
+
+Practicar › Consola libre abre la misma consola y Cloud Shell de los
+laboratorios **sin misión, sin nota, sin pistas y sin reloj**, con permisos
+de propietario, para probar lo que se quiera. Se elige el punto de partida:
+proyecto vacío, proyecto nuevo (red default), Zentra, Banco Atlas,
+aplicación de tres capas o tienda online. El mundo se puede **guardar** y
+continuar otro día (uno por persona); abrir otro cierra el anterior. No crea
+intentos, así que no toca progreso, notas, plan ni estadísticas, y la API se
+niega a evaluarla.
+
+- Código: `internal/scenario/sandbox.go` (mundos), `internal/api/sandbox.go`
+  (`GET /api/sandbox`, `POST /api/sandbox/start`, `POST /api/sandbox/save`,
+  `DELETE /api/sandbox/saved`), `web/app/sandbox/page.tsx` y el panel
+  `FreePanel` en `web/app/lab/page.tsx`.
+- Pruebas: `TestSandbox` (todos los mundos arrancan, propietario puede crear,
+  guardar y continuar, sin evaluación, sin intentos) y la prueba de navegador
+  `freeConsole` (desde el menú, comando escrito en Cloud Shell, guardar,
+  continuar). Batería completa: 86/86.
+
 ## 7. Pendiente (lo que no se completó y por qué)
 
 - **CSP con `'unsafe-inline'` en scripts.** La exportación estática de Next.js

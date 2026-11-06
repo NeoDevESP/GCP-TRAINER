@@ -222,6 +222,7 @@ func (s *Server) Handler() http.Handler {
 		return map[string]any{"branches": cat.Branches, "tracks": cat.Tracks, "certs": cat.Certs, "badges": cat.Badges, "labs": labs, "levels": learning.LevelNames(s.lang(r)), "lang": s.lang(r)}, nil
 	})
 	s.studyRoutes(h)
+	s.sandboxRoutes(h)
 	h("GET /api/learn", func(w http.ResponseWriter, r *http.Request) (any, error) {
 		return map[string]any{"topics": s.Cat.StudyView(s.lang(r)), "exams": s.Cat.ExamView(s.lang(r))}, nil
 	})
@@ -977,6 +978,9 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) (any, error) {
 	att, info, err := s.ownSession(r)
 	if err != nil {
 		return nil, err
+	}
+	if scenario.IsSandbox(info.LabID) {
+		return nil, httpErr{400, i18n.P(s.lang(r), "la consola libre no se evalúa", "the free console is not graded")}
 	}
 	if att == nil || att.Status != "running" {
 		return nil, fmt.Errorf("attempt already submitted")

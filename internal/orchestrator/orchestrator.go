@@ -43,6 +43,8 @@ type StartRequest struct {
 	// Lang is the learner's language (es primary, en); content and the
 	// platform's own terminal commands follow it.
 	Lang string `json:"lang,omitempty"`
+	// SandboxState continues a saved free-console world (scenario.Sandbox*).
+	SandboxState []byte `json:"sandboxState,omitempty"`
 }
 
 // SessionInfo is the public view of a session.
@@ -197,6 +199,13 @@ func (s *Service) Start(req StartRequest) (*SessionInfo, error) {
 		}
 		l = company.MissionLab(s.Company, base, req.Mission.Params, req.Mission.State)
 		mission = &MissionStart{ID: req.Mission.ID, Params: req.Mission.Params}
+	}
+	if l == nil && scenario.IsSandbox(req.LabID) {
+		// free console: built on demand, optionally from a saved world
+		l = scenario.SandboxLab(req.LabID)
+		if l != nil && len(req.SandboxState) > 0 {
+			l.InitialState = req.SandboxState
+		}
 	}
 	if l == nil {
 		return nil, fmt.Errorf("lab %s not found", req.LabID)
@@ -657,6 +666,9 @@ func (s *Service) restore(id string) (*Session, error) {
 		if m := s.Company.Missions[snap.Info.Mission.ID]; m != nil {
 			base = company.MissionLab(s.Company, m, snap.Info.Mission.Params, nil)
 		}
+	}
+	if base == nil && scenario.IsSandbox(snap.Info.LabID) {
+		base = scenario.SandboxLab(snap.Info.LabID) // its world is in the snapshot
 	}
 	if base == nil {
 		return nil, ErrNotFound
