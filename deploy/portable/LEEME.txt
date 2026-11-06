@@ -70,3 +70,22 @@ REQUISITOS
 Windows 10/11 (64 bits) · macOS 11 o posterior (Apple Silicon o Intel) ·
 Linux de 64 bits (x64 o ARM). Un navegador actual (Chrome, Edge, Firefox o
 Safari). Unos 200 MB de disco.
+
+
+USARLO DESDE VS CODE O ANTIGRAVITY
+----------------------------------
+
+«cm» conecta tu editor con el simulador (con Cloud Mastery abierto). En una
+terminal, dentro de esta carpeta:
+
+   WINDOWS  .\cm.exe login            MAC/LINUX  ./bin/<tu sistema>/cm login
+            .\cm.exe vscode C:\ruta\a\tu\proyecto
+
+«cm vscode» añade a esa carpeta dos terminales («Cloud Mastery», una Cloud
+Shell; y «Cloud Mastery (gcloud)», tu terminal con gcloud, kubectl… que van
+al simulador) y el servidor MCP para el agente de VS Code. También muestra
+lo que hay que pegar en Antigravity (Manage MCP Servers › View raw config).
+
+Otros: «cm sandbox» abre una consola libre, «cm attach <sesión>» se une a un
+laboratorio abierto, «cm push carpeta» sube archivos a Cloud Shell. Más en
+docs/editores.md del proyecto, o con «cm help».

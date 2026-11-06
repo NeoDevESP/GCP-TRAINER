@@ -217,6 +217,7 @@ and an image build.
 
 ## Documentation
 
+- [Connect VS Code and Antigravity to the simulator](docs/editores.md) (Spanish)
 - [CloudMastery 2.0 delivery report](docs/cloudmastery-2.0-informe.md) (Spanish) and [starting audit](docs/cloudmastery-2.0-auditoria.md)
 - [Master implementation blueprint](docs/blueprint/01-master-implementation-blueprint.md): architecture, contracts, schema, DSL, phases, changelog
 - [Repository audit](docs/blueprint/00-repository-audit.md)

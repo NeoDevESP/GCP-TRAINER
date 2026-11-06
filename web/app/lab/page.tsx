@@ -606,6 +606,12 @@ function FreePanel({ session }: { session: SessionInfo }) {
         <Icon name="info" size={18} />
         <span>{t("La consola y Cloud Shell comparten el mismo estado: lo que hagas en una aparece en la otra. Escribe «help» en la terminal para ver los comandos.")}</span>
       </div>
+      <h3>{t("Desde VS Code o Antigravity")}</h3>
+      <p className="small" style={{ margin: "0 0 6px" }}>{t("Con el programa «cm» (viene con Cloud Mastery), en la terminal de tu editor:")}</p>
+      <pre className="small" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{`cm login
+cm attach ${session.id}
+cm shell`}</pre>
+      <p className="small muted" style={{ margin: 0 }}>{t("«cm vscode» prepara el editor (terminal y servidor MCP para su agente).")}</p>
     </>
   );
 }

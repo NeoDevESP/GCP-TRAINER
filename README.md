@@ -233,6 +233,7 @@ CI (`.github/workflows/ci.yml`) ejecuta las mismas comprobaciones más
 
 ## Documentación
 
+- [Conectar VS Code y Antigravity con el simulador](docs/editores.md)
 - [CloudMastery 2.0: informe de entrega](docs/cloudmastery-2.0-informe.md) y [auditoría de partida](docs/cloudmastery-2.0-auditoria.md)
 - [Blueprint maestro de implementación](docs/blueprint/01-master-implementation-blueprint.md): arquitectura, contratos, esquema, DSL, fases y registro de cambios
 - [Auditoría del repositorio](docs/blueprint/00-repository-audit.md)

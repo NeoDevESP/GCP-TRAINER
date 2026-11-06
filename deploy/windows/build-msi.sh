@@ -43,6 +43,8 @@ go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --out cmd/gcplab/r
   --copyright "NeoDevESP" --original-filename gcplab.exe
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$STAGE/gcplab.exe" ./cmd/gcplab
 rm -f "$SYSO"
+# cm: connects VS Code, Antigravity or any terminal to the simulator (cmd/cm)
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$STAGE/cm.exe" ./cmd/cm
 cp -r content "$STAGE/content"
 cp -r web/out "$STAGE/web"
 

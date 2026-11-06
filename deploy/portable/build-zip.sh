@@ -40,12 +40,15 @@ go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --out cmd/gcplab/r
   --copyright "NeoDevESP" --original-filename CloudMastery.exe
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$STAGE/CloudMastery.exe" ./cmd/gcplab
 rm -f "$SYSO"
+# cm: connects VS Code, Antigravity or any terminal to the simulator (cmd/cm)
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o "$STAGE/cm.exe" ./cmd/cm
 
 for target in darwin/arm64:mac-arm64 darwin/amd64:mac-intel linux/amd64:linux-x64 linux/arm64:linux-arm64; do
   platform="${target%%:*}"; dir="${target##*:}"
   echo "==> Compilando para $dir"
   mkdir -p "$STAGE/bin/$dir"
   GOOS="${platform%/*}" GOARCH="${platform#*/}" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$STAGE/bin/$dir/gcplab" ./cmd/gcplab
+  GOOS="${platform%/*}" GOARCH="${platform#*/}" CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$STAGE/bin/$dir/cm" ./cmd/cm
 done
 
 cp -r content "$STAGE/content"
@@ -53,7 +56,7 @@ cp -r web/out "$STAGE/web"
 cp deploy/portable/LEEME.txt "$STAGE/LEEME.txt"
 cp deploy/portable/portable.txt "$STAGE/portable.txt"
 cp "deploy/portable/Abrir en Mac.command" "deploy/portable/Abrir en Linux.sh" "$STAGE/"
-chmod +x "$STAGE/Abrir en Mac.command" "$STAGE/Abrir en Linux.sh" "$STAGE"/bin/*/gcplab
+chmod +x "$STAGE/Abrir en Mac.command" "$STAGE/Abrir en Linux.sh" "$STAGE"/bin/*/gcplab "$STAGE"/bin/*/cm
 
 echo "==> Empaquetando $OUT"
 rm -f "$OUT"

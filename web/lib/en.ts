@@ -2417,4 +2417,7 @@ export const en: Record<string, string> = {
   "Volver a la consola": "Back to the console",
   "Ya tienes una consola libre abierta. Si empiezas otra, la abierta se cierra (lo que no hayas guardado se pierde). ¿Seguir?": "You already have a free console open. Starting another closes it (anything not saved is lost). Continue?",
   "¿Borrar el mundo guardado? No se puede deshacer.": "Delete the saved world? This cannot be undone.",
+  "Desde VS Code o Antigravity": "From VS Code or Antigravity",
+  "Con el programa «cm» (viene con Cloud Mastery), en la terminal de tu editor:": "With the \"cm\" program (it comes with Cloud Mastery), in your editor's terminal:",
+  "«cm vscode» prepara el editor (terminal y servidor MCP para su agente).": "\"cm vscode\" sets up the editor (terminal and MCP server for its agent).",
 };

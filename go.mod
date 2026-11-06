@@ -9,6 +9,7 @@ require (
 	github.com/open-policy-agent/opa v1.4.2
 	github.com/zclconf/go-cty v1.19.0
 	golang.org/x/crypto v0.43.0
+	golang.org/x/term v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )
