@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -374,6 +375,11 @@ func policyView(p *sim.Policy) Obj {
 	return Obj{V: map[string]any{"bindings": p.Bindings, "etag": "BwY" + strconv.Itoa(len(p.Bindings)*7919), "version": max(1, p.Version)}}
 }
 
+var (
+	reLabel    = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,62}$`)
+	reLabelVal = regexp.MustCompile(`^[a-z0-9_-]{0,63}$`)
+)
+
 func init() {
 	// ---- config / auth / projects -----------------------------------------
 	reg("config set", func(c *Cmd) (any, error) {
@@ -526,6 +532,43 @@ func init() {
 		}
 		parentType, parentID, _ := strings.Cut(p.Parent, "/")
 		return Obj{V: map[string]any{"createTime": "2026-08-30T08:00:00.000Z", "lifecycleState": p.State, "name": p.Name, "parent": map[string]any{"id": parentID, "type": strings.TrimSuffix(parentType, "s")}, "projectId": p.ID, "projectNumber": p.Number, "labels": p.Labels}}, nil
+	})
+	reg("projects update", func(c *Cmd) (any, error) {
+		id, err := c.Arg(0, "PROJECT_ID")
+		if err != nil {
+			return nil, err
+		}
+		p := c.S.State.Projects[id]
+		if p == nil || !c.S.State.Allowed(c.Principal(), "resourcemanager.projects.get", sim.ProjectResource(id)) {
+			return nil, fmt.Errorf("PERMISSION_DENIED: The caller does not have permission")
+		}
+		if err := c.Need("resourcemanager.projects.update", sim.ProjectResource(id)); err != nil {
+			return nil, err
+		}
+		if !c.Has("update-labels") && !c.Has("remove-labels") && !c.Has("clear-labels") && !c.Has("name") {
+			return nil, fmt.Errorf("Nothing to update: use --name, --update-labels, --remove-labels or --clear-labels.")
+		}
+		if c.Has("name") {
+			p.Name = c.Str("name", p.Name)
+		}
+		if p.Labels == nil {
+			p.Labels = map[string]string{}
+		}
+		if c.Bool("clear-labels") {
+			p.Labels = map[string]string{}
+		}
+		for _, k := range c.List("remove-labels") {
+			delete(p.Labels, k)
+		}
+		for k, v := range c.KV("update-labels") {
+			// label keys and values: lowercase letters, digits, _ and -
+			if !reLabel.MatchString(k) || (v != "" && !reLabelVal.MatchString(v)) {
+				return nil, fmt.Errorf("INVALID_ARGUMENT: Invalid label %s=%s: use lowercase letters, digits, underscores and hyphens (keys start with a letter, up to 63 characters).", k, v)
+			}
+			p.Labels[k] = v
+		}
+		c.Audit("cloudresourcemanager.googleapis.com", "UpdateProject", "projects/"+id)
+		return fmt.Sprintf("Updated [https://cloudresourcemanager.googleapis.com/v1/projects/%s].\n", id), nil
 	})
 	reg("projects get-iam-policy", func(c *Cmd) (any, error) {
 		id, err := c.Arg(0, "PROJECT_ID")

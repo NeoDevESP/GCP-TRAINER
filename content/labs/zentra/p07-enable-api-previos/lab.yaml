@@ -1,0 +1,187 @@
+id: zentra-p07-enable-api-previos
+title: REQ · Habilitar Secret Manager en DEV y AU del backend
+summary: 'El backend de asesores va a leer secretos y la API está deshabilitada. Habilítala en los entornos que piden (DEV y AU) y no en PRO, que va con su propio cambio.'
+track: zentra
+day: 97
+level: professional
+branch: foundations
+type: challenge
+mode: production
+skills:
+- foundations.apis
+- foundations.hierarchy
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 2
+minutes: 15
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+setup: |
+  gcloud services disable secretmanager.googleapis.com --project=dev-zentra-asesores-sp
+  gcloud services disable secretmanager.googleapis.com --project=au-zentra-asesores-sp
+  gcloud services disable secretmanager.googleapis.com --project=zentra-asesores-sp
+ticket:
+  id: REQ-41297
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Hugo Martín (Asesores)
+  summary: 'Al desplegar en DEV nos sale «API [secretmanager.googleapis.com] not enabled on project [287419653021]». ¿Podéis habilitar Secret Manager en el backend, en DEV y AU? PRO lo pediremos con el pase.'
+story: |-
+  > **REQ-41297 · P4** · Asesores: *«Al desplegar en DEV nos sale `API [secretmanager.googleapis.com] not enabled on project [287419653021]`. ¿Podéis habilitar Secret Manager en el backend, en DEV y AU?»*
+
+  El error trae el **número** del proyecto, no su ID: `287419653021`. Búscalo en el selector de proyectos para saber de cuál se trata (el backend es el `-sp`, no el frontend).
+
+  **En la consola**, en DEV y luego en AU:
+  1. **Selector de proyectos** › el proyecto (comprueba el número).
+  2. **Menú › APIs y servicios** › busca **Secret Manager API** › **Habilitar**.
+
+  PRO no se pide: no se toca. Responde y resuelve.
+objectives:
+- Identifica el proyecto por su número
+- Habilitada en DEV del backend
+- Habilitada en AU del backend
+- PRO sin tocar
+- Responde y resuelve
+hints:
+- text: '287419653021 es dev-zentra-asesores-sp. APIs y servicios › Secret Manager API › Habilitar, y lo mismo en au-zentra-asesores-sp.'
+quiz:
+- id: q1
+  question: Un error dice «not enabled on project [287419653021]». ¿Qué es ese número?
+  options:
+  - El número del proyecto; con el selector sabes qué proyecto es
+  - El ID de la API
+  - El número del error
+  - El ID de la organización
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud projects list --filter=projectNumber=287419653021
+  gcloud config set project dev-zentra-asesores-sp
+  gcloud services enable secretmanager.googleapis.com
+  gcloud config set project au-zentra-asesores-sp
+  gcloud services enable secretmanager.googleapis.com
+  gcloud services list --enabled --project=au-zentra-asesores-sp
+  ticket update "Hola Hugo: habilitada la API de Secret Manager en dev-zentra-asesores-sp (el 287419653021 del error) y en au-zentra-asesores-sp. PRO (zentra-asesores-sp) no se ha tocado: pedidlo con el pase."
+  ticket resolve "Secret Manager habilitado en DEV y AU del backend de asesores; PRO sin cambios."
+shortcuts:
+- name: enable it on the frontend projects
+  run: |
+    gcloud services enable secretmanager.googleapis.com --project=dev-zentra-asesores
+    gcloud services enable secretmanager.googleapis.com --project=au-zentra-asesores
+    ticket update "Hola Hugo: habilitada Secret Manager en DEV y AU de asesores."
+    ticket resolve "Secret Manager habilitado en DEV y AU de asesores."
+- name: enable it everywhere
+  run: |
+    gcloud services enable secretmanager.googleapis.com --project=dev-zentra-asesores-sp
+    gcloud services enable secretmanager.googleapis.com --project=au-zentra-asesores-sp
+    gcloud services enable secretmanager.googleapis.com --project=zentra-asesores-sp
+    ticket update "Hola Hugo: habilitada Secret Manager en DEV, AU y PRO del backend."
+    ticket resolve "Secret Manager habilitado en los tres entornos del backend."
+rubric:
+- name: API habilitada donde se pide
+  validator: functional
+  points: 50
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: dev-zentra-asesores-sp
+    path: services
+    expect:
+      '["secretmanager.googleapis.com"]': true
+    desc: Habilitada en dev-zentra-asesores-sp
+  - type: exists
+    on: au-zentra-asesores-sp
+    path: services
+    expect:
+      '["secretmanager.googleapis.com"]': true
+    desc: Habilitada en au-zentra-asesores-sp
+- name: Solo lo pedido
+  validator: security
+  points: 20
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: zentra-asesores-sp
+    path: services
+    expect:
+      '["secretmanager.googleapis.com"]': false
+    desc: PRO sin cambios
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - dev-zentra-asesores-sp
+      - '287419653021'
+    - - au-zentra-asesores-sp
+    desc: Dice en qué proyectos
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: projects list --filter
+  title: Del número al proyecto
+  why: Los errores de las APIs dan el número del proyecto; el selector y projects list te dicen cuál es.
+- match: services enable
+  title: Habilitar la API
+  why: En la consola, APIs y servicios › la API › Habilitar. Se hace por proyecto.
+en:
+  title: REQ · Enable Secret Manager in the backend DEV and AU
+  summary: 'The asesores backend will read secrets and the API is disabled. Enable it in the environments requested (DEV and AU) and not in PRO, which goes with its own change.'
+  story: |-
+    > **REQ-41297 · P4** · Asesores: *"When deploying to DEV we get `API [secretmanager.googleapis.com] not enabled on project [287419653021]`. Can you enable Secret Manager in the backend, in DEV and AU?"*
+
+    The error carries the project **number**, not its ID: `287419653021`. Look it up in the project picker to know which one it is (the backend is the `-sp` one, not the frontend).
+
+    **In the console**, in DEV and then in AU:
+    1. **Project picker** › the project (check the number).
+    2. **Menu › APIs & Services** › search **Secret Manager API** › **Enable**.
+
+    PRO is not requested: don't touch it. Reply and resolve.
+  objectives:
+  - Identify the project by its number
+  - Enabled in the backend DEV
+  - Enabled in the backend AU
+  - PRO untouched
+  - Reply and resolve
+  hints:
+  - '287419653021 is dev-zentra-asesores-sp. APIs & Services › Secret Manager API › Enable, and the same in au-zentra-asesores-sp.'
+  ticket:
+    summary: 'When deploying to DEV we get "API [secretmanager.googleapis.com] not enabled on project [287419653021]". Can you enable Secret Manager in the backend, in DEV and AU? We will request PRO with the release.'
+  text:
+    Hugo Martín (Asesores): Hugo Martín (Asesores)
+    Un error dice «not enabled on project [287419653021]». ¿Qué es ese número?: An error says "not enabled on project [287419653021]". What is that number?
+    El número del proyecto; con el selector sabes qué proyecto es: The project number; the picker tells you which project it is
+    El ID de la API: The API ID
+    El número del error: The error number
+    El ID de la organización: The organisation ID
+    API habilitada donde se pide: API enabled where requested
+    Habilitada en dev-zentra-asesores-sp: Enabled in dev-zentra-asesores-sp
+    Habilitada en au-zentra-asesores-sp: Enabled in au-zentra-asesores-sp
+    Solo lo pedido: Only what was asked
+    PRO sin cambios: PRO unchanged
+    Respuesta: Reply
+    Dice en qué proyectos: Says in which projects
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    Del número al proyecto: From the number to the project
+    Los errores de las APIs dan el número del proyecto; el selector y projects list te dicen cuál es.: API errors give the project number; the picker and projects list tell you which it is.
+    Habilitar la API: Enable the API
+    En la consola, APIs y servicios › la API › Habilitar. Se hace por proyecto.: In the console, APIs & Services › the API › Enable. It's done per project.

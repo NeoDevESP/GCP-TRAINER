@@ -1,0 +1,179 @@
+id: zentra-p09-revoke-consultant
+title: 'REQ · Fin de contrato: retirar todos los accesos de un consultor'
+summary: 'Termina el contrato con Consultora Norte. Hay que quitar los accesos de su consultor en todos los proyectos de cartera, incluido uno que no aparece en el ticket, sin tocar los del equipo.'
+track: zentra
+day: 99
+level: professional
+branch: iam
+type: challenge
+mode: production
+skills:
+- iam.leastprivilege
+- security.audit
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+setup: |
+  gcloud projects add-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+  gcloud projects add-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/viewer
+  gcloud projects add-iam-policy-binding au-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+  gcloud projects add-iam-policy-binding zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/viewer
+ticket:
+  id: REQ-41322
+  kind: REQ
+  priority: P3
+  sla: 2d
+  reporter: Marta Ibáñez (Plataforma)
+  summary: 'El viernes termina el contrato con Consultora Norte. Retirad los accesos de andres.paredes@consultora-norte.com en DEV y AU de cartera. Que no quede nada.'
+story: |-
+  > **REQ-41322 · P3** · Plataforma: *«Termina el contrato con Consultora Norte. Retirad los accesos de `andres.paredes@consultora-norte.com` en DEV y AU de cartera. Que no quede nada.»*
+
+  «Que no quede nada» manda sobre «DEV y AU»: un acceso olvidado de un externo es un hallazgo de auditoría. Revisa **los tres entornos** (DEV, AU **y PRO**) y quita **todos** sus roles. Los del equipo (`gcp-cartera-dev@zentra.dev`) se quedan.
+
+  **En la consola**, en cada proyecto de cartera:
+  1. **Selector de proyectos** › el proyecto.
+  2. **Menú › IAM y administración › IAM**: filtra por `andres` y quita cada rol que tenga (el lápiz o «Quitar acceso»).
+
+  Responde indicando qué has encontrado en cada entorno (también lo que no venía en el ticket) y resuelve.
+objectives:
+- Revisa DEV, AU y PRO
+- Sin accesos del consultor en ningún entorno
+- Los del equipo intactos
+- Responde con lo encontrado
+hints:
+- text: 'IAM › filtro «andres». En PRO tiene un rol de lector que el ticket no menciona.'
+quiz:
+- id: q1
+  question: El ticket dice «DEV y AU», pero el consultor también tiene un rol en PRO. ¿Qué haces?
+  options:
+  - Lo quito también y lo cuento en el ticket
+  - Lo dejo, el ticket no lo pide
+  - Abro otro ticket y espero
+  - Le quito solo los roles de escritura
+  answer:
+  - 0
+solution: |
+  ticket
+  for p in dev-zentra-cartera au-zentra-cartera zentra-cartera; do gcloud projects get-iam-policy $p --flatten=bindings[].members --filter=bindings.members:andres.paredes --format='value(bindings.role)'; done
+  gcloud projects remove-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+  gcloud projects remove-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/viewer
+  gcloud projects remove-iam-policy-binding au-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+  gcloud projects remove-iam-policy-binding zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/viewer
+  ticket update "Hola Marta: retirados todos los accesos de andres.paredes@consultora-norte.com en cartera. DEV: storage.objectAdmin y viewer. AU: storage.objectAdmin. Además, en PRO (zentra-cartera) tenía viewer, que no venía en el ticket: también retirado. Los permisos del equipo gcp-cartera-dev no se han tocado."
+  ticket resolve "Accesos del consultor retirados en DEV, AU y PRO de cartera; equipo intacto."
+shortcuts:
+- name: only what the ticket lists
+  run: |
+    gcloud projects remove-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+    gcloud projects remove-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/viewer
+    gcloud projects remove-iam-policy-binding au-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+    ticket update "Hola Marta: retirados los accesos de andres.paredes en DEV y AU."
+    ticket resolve "Accesos del consultor retirados en DEV y AU de cartera."
+- name: remove every viewer binding
+  run: |
+    gcloud projects remove-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+    gcloud projects remove-iam-policy-binding au-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/storage.objectAdmin
+    gcloud projects remove-iam-policy-binding dev-zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/viewer
+    gcloud projects remove-iam-policy-binding zentra-cartera --member=user:andres.paredes@consultora-norte.com --role=roles/viewer
+    gcloud projects remove-iam-policy-binding dev-zentra-cartera --member=group:gcp-cartera-dev@zentra.dev --role=roles/viewer
+    gcloud projects remove-iam-policy-binding au-zentra-cartera --member=group:gcp-cartera-dev@zentra.dev --role=roles/viewer
+    ticket update "Hola Marta: limpiados todos los lectores de cartera, consultor incluido, en DEV, AU y PRO."
+    ticket resolve "Lectores retirados de los proyectos de cartera en todos los entornos."
+rubric:
+- name: Sin accesos del consultor
+  validator: security
+  points: 50
+  critical: true
+  all: true
+  checks:
+  - {type: iam, on: dev-zentra-cartera, principal: user:andres.paredes@consultora-norte.com, permission: resourcemanager.projects.get, resource: project, expect: false, desc: Nada en DEV}
+  - {type: iam, on: au-zentra-cartera, principal: user:andres.paredes@consultora-norte.com, permission: storage.objects.get, resource: project, expect: false, desc: Nada en AU}
+  - {type: iam, on: zentra-cartera, principal: user:andres.paredes@consultora-norte.com, permission: resourcemanager.projects.get, resource: project, expect: false, desc: Nada en PRO}
+- name: El equipo sigue trabajando
+  validator: functional
+  points: 20
+  critical: true
+  all: true
+  checks:
+  - {type: iam, on: dev-zentra-cartera, principal: user:sara.benitez@zentra.dev, permission: resourcemanager.projects.get, resource: project, desc: El equipo conserva el acceso en DEV}
+  - {type: iam, on: au-zentra-cartera, principal: user:sara.benitez@zentra.dev, permission: resourcemanager.projects.get, resource: project, desc: El equipo conserva el acceso en AU}
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - pro
+      - zentra-cartera
+    - - andres
+    desc: Cuenta lo encontrado, PRO incluido
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: get-iam-policy
+  title: Busca en todos los entornos
+  why: 'En la consola: IAM con el filtro del correo, proyecto por proyecto. Lo que no busques no lo encontrarás.'
+- match: remove-iam-policy-binding
+  title: Quitar un rol
+  why: Cada rol es una entrada; si tiene varios, quita todos.
+en:
+  title: 'REQ · End of contract: remove every access of a consultant'
+  summary: 'The contract with Consultora Norte ends. Remove its consultant''s access in every cartera project, including one not in the ticket, without touching the team''s.'
+  story: |-
+    > **REQ-41322 · P3** · Platform: *"The contract with Consultora Norte ends. Remove the access of `andres.paredes@consultora-norte.com` in cartera DEV and AU. Leave nothing."*
+
+    "Leave nothing" rules over "DEV and AU": a forgotten external access is an audit finding. Check **the three environments** (DEV, AU **and PRO**) and remove **all** their roles. The team's (`gcp-cartera-dev@zentra.dev`) stay.
+
+    **In the console**, in each cartera project:
+    1. **Project picker** › the project.
+    2. **Menu › IAM & Admin › IAM**: filter by `andres` and remove each role they have (the pencil or "Remove access").
+
+    Reply saying what you found in each environment (including what wasn't in the ticket) and resolve.
+  objectives:
+  - Check DEV, AU and PRO
+  - No consultant access in any environment
+  - The team's untouched
+  - Reply with what you found
+  hints:
+  - 'IAM › filter "andres". In PRO they have a viewer role the ticket doesn''t mention.'
+  ticket:
+    summary: 'The contract with Consultora Norte ends on Friday. Remove the access of andres.paredes@consultora-norte.com in cartera DEV and AU. Leave nothing.'
+  text:
+    Marta Ibáñez (Plataforma): Marta Ibáñez (Platform)
+    El ticket dice «DEV y AU», pero el consultor también tiene un rol en PRO. ¿Qué haces?: The ticket says "DEV and AU", but the consultant also has a role in PRO. What do you do?
+    Lo quito también y lo cuento en el ticket: I remove it too and say so on the ticket
+    Lo dejo, el ticket no lo pide: I leave it, the ticket doesn't ask
+    Abro otro ticket y espero: I open another ticket and wait
+    Le quito solo los roles de escritura: I remove only the write roles
+    Sin accesos del consultor: No consultant access
+    Nada en DEV: Nothing in DEV
+    Nada en AU: Nothing in AU
+    Nada en PRO: Nothing in PRO
+    El equipo sigue trabajando: The team keeps working
+    El equipo conserva el acceso en DEV: The team keeps access in DEV
+    El equipo conserva el acceso en AU: The team keeps access in AU
+    Respuesta: Reply
+    Cuenta lo encontrado, PRO incluido: Reports what was found, PRO included
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    Busca en todos los entornos: Search every environment
+    'En la consola: IAM con el filtro del correo, proyecto por proyecto. Lo que no busques no lo encontrarás.': 'In the console: IAM with the email filter, project by project. What you don''t look for you won''t find.'
+    Quitar un rol: Remove a role
+    Cada rol es una entrada; si tiene varios, quita todos.: Each role is an entry; if they have several, remove them all.

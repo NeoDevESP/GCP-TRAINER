@@ -55,6 +55,7 @@ type SessionInfo struct {
 	AttemptID    string                   `json:"attemptId"`
 	LearnMode    string                   `json:"learnMode,omitempty"` // learning mode of the attempt
 	Project      string                   `json:"project"`
+	ShellProject string                   `json:"shellProject,omitempty"` // gcloud config project, when switched to another one
 	Region       string                   `json:"region"`
 	Zone         string                   `json:"zone"`
 	Fidelity     string                   `json:"fidelity"`
@@ -315,6 +316,9 @@ func (s *Service) info(se *Session) SessionInfo {
 	i := se.Info
 	i.SimTime = se.Env.World.State.Clock.Format(time.RFC3339)
 	i.Live = s.live(se)
+	if cur := se.Env.World.Session.Project; cur != "" && cur != i.Project {
+		i.ShellProject = cur
+	}
 	return i
 }
 
@@ -430,7 +434,12 @@ func (s *Service) View(id, kind string, params map[string]string) (any, error) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	st := se.Env.World.State
+	// the console follows the project chosen in the project picker (it runs
+	// "gcloud config set project", shared with Cloud Shell)
 	p := se.Info.Project
+	if cur := se.Env.World.Session.Project; cur != "" && st.Projects[cur] != nil {
+		p = cur
+	}
 	switch kind {
 	case "tutor":
 		var notes []tutor.Note
@@ -452,6 +461,8 @@ func (s *Service) View(id, kind string, params map[string]string) (any, error) {
 	case "console":
 		v := st.ProjectView(p)
 		delete(v, "findings")
+		v["currentProject"] = p
+		v["projects"] = accessibleProjects(st, se.Lab.Student.Account, se.Info.Project)
 		if rs, ok := v["redis"].(map[string]any); ok {
 			for _, r := range rs {
 				if m, ok := r.(map[string]any); ok {
@@ -781,4 +792,25 @@ func HandleGrade(labs map[string]*scenario.Lab, lib *scenario.Library, co *compa
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(res)
 	}
+}
+
+// accessibleProjects lists the projects the student can open in the project
+// picker (as gcloud projects list would), plus the lab's own project.
+func accessibleProjects(st *sim.State, account, labProject string) []map[string]string {
+	var out []map[string]string
+	for _, id := range sim.SortedKeys(st.Projects) {
+		pr := st.Projects[id]
+		if pr.State != "" && pr.State != "ACTIVE" {
+			continue
+		}
+		// what "gcloud projects list" shows: inherited and group roles count
+		if id == labProject || st.Allowed("user:"+account, "resourcemanager.projects.get", sim.ProjectResource(id)) {
+			name := pr.Name
+			if name == "" {
+				name = id
+			}
+			out = append(out, map[string]string{"id": id, "name": name, "number": pr.Number})
+		}
+	}
+	return out
 }

@@ -1,0 +1,209 @@
+id: zentra-p08-app-id-labels
+title: REQ · Identificador de aplicación en los proyectos de frontend y backend
+summary: 'El inventario de aplicaciones necesita que los seis proyectos de asesores (frontend y backend, en DEV, AU y PRO) lleven el identificador de aplicación y su capa. Etiquétalos sin perder las etiquetas que ya tienen.'
+track: zentra
+day: 98
+level: professional
+branch: foundations
+type: challenge
+mode: production
+skills:
+- foundations.hierarchy
+- architecture.governance
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 2
+minutes: 25
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+ticket:
+  id: REQ-41310
+  kind: REQ
+  priority: P4
+  sla: 5d
+  reporter: Irene Soler (Cumplimiento)
+  summary: 'Para el inventario de aplicaciones, etiquetad los proyectos de asesores con su identificador de aplicación ASES-0420. Frontend: dev-zentra-asesores, au-zentra-asesores, zentra-asesores. Backend: dev-zentra-asesores-sp, au-zentra-asesores-sp, zentra-asesores-sp. Indicad también si es frontend o backend.'
+actors:
+- role: requester
+  name: Irene Soler (Cumplimiento)
+  persona: Cumplimiento. Lleva el inventario de aplicaciones.
+  fallback: 'Las claves que usa el inventario son app-id y capa.'
+  facts:
+  - keywords:
+    - - clave
+      - key
+      - etiqueta
+      - label
+      - mayuscula
+      - mayúscula
+      - formato
+      - capa
+    answer: 'El inventario lee las etiquetas app-id y capa. Valores en minúsculas, que las etiquetas no admiten mayúsculas: app-id=ases-0420 y capa=frontend o capa=backend.'
+story: |-
+  > **REQ-41310 · P4** · Cumplimiento: *«Etiquetad los proyectos de asesores con su identificador de aplicación ASES-0420 e indicad si es frontend o backend.»*
+
+  | Capa | DEV | AU | PRO |
+  |---|---|---|---|
+  | Frontend | `dev-zentra-asesores` | `au-zentra-asesores` | `zentra-asesores` |
+  | Backend | `dev-zentra-asesores-sp` | `au-zentra-asesores-sp` | `zentra-asesores-sp` |
+
+  Las **etiquetas** de un proyecto son pares `clave=valor` que leen la facturación y los inventarios. Reglas: **minúsculas**, números, `_` y `-` (así que `ASES-0420` se escribe `ases-0420`). Pregunta qué claves usa el inventario.
+
+  Cada proyecto ya tiene `app` y `env`: **no las borres**.
+
+  **En la consola**, en cada uno de los seis proyectos:
+  1. **Selector de proyectos** › el proyecto.
+  2. **Menú › IAM y administración › Etiquetas › Añadir etiqueta**: la del identificador y la de la capa.
+
+  Responde con lo hecho y resuelve.
+objectives:
+- Pregunta qué claves usa el inventario
+- Los tres proyectos de frontend etiquetados
+- Los tres proyectos de backend etiquetados
+- Sin perder app y env
+- Responde y resuelve
+hints:
+- text: 'Claves app-id y capa, en minúsculas: app-id=ases-0420; capa=frontend en los tres sin -sp y capa=backend en los tres -sp.'
+quiz:
+- id: q1
+  question: El ticket dice ASES-0420. ¿Qué valor pones en la etiqueta?
+  options:
+  - ases-0420
+  - ASES-0420
+  - Ases_0420
+  - '"ASES-0420"'
+  answer:
+  - 0
+solution: |
+  ticket
+  ask requester "¿Qué claves de etiqueta usa el inventario para el identificador y la capa?"
+  for p in dev-zentra-asesores au-zentra-asesores zentra-asesores; do gcloud projects update $p --update-labels=app-id=ases-0420,capa=frontend; done
+  for p in dev-zentra-asesores-sp au-zentra-asesores-sp zentra-asesores-sp; do gcloud projects update $p --update-labels=app-id=ases-0420,capa=backend; done
+  gcloud projects describe zentra-asesores-sp --format='value(labels)'
+  ticket update "Hola Irene: etiquetados los seis proyectos de asesores con app-id=ases-0420 (en minúsculas: las etiquetas no admiten mayúsculas) y capa=frontend (dev-zentra-asesores, au-zentra-asesores, zentra-asesores) o capa=backend (los tres -sp). Se mantienen las etiquetas app y env."
+  ticket resolve "Etiquetas app-id y capa añadidas a los seis proyectos de asesores."
+shortcuts:
+- name: only the frontend projects
+  run: |
+    for p in dev-zentra-asesores au-zentra-asesores zentra-asesores; do gcloud projects update $p --update-labels=app-id=ases-0420,capa=frontend; done
+    ticket update "Hola Irene: etiquetados los proyectos de asesores con app-id=ases-0420."
+    ticket resolve "Etiquetas app-id añadidas a los proyectos de asesores."
+- name: replace all the labels
+  run: |
+    for p in dev-zentra-asesores au-zentra-asesores zentra-asesores; do gcloud projects update $p --clear-labels --update-labels=app-id=ases-0420,capa=frontend; done
+    for p in dev-zentra-asesores-sp au-zentra-asesores-sp zentra-asesores-sp; do gcloud projects update $p --clear-labels --update-labels=app-id=ases-0420,capa=backend; done
+    ticket update "Hola Irene: etiquetados los seis proyectos con app-id=ases-0420 y capa."
+    ticket resolve "Etiquetas app-id y capa en los seis proyectos de asesores."
+rubric:
+- name: Frontend etiquetado
+  validator: functional
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - {type: exists, on: dev-zentra-asesores, path: labels, expect: {app-id: ases-0420, capa: frontend}, desc: dev-zentra-asesores}
+  - {type: exists, on: au-zentra-asesores, path: labels, expect: {app-id: ases-0420, capa: frontend}, desc: au-zentra-asesores}
+  - {type: exists, on: zentra-asesores, path: labels, expect: {app-id: ases-0420, capa: frontend}, desc: zentra-asesores}
+- name: Backend etiquetado
+  validator: functional
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - {type: exists, on: dev-zentra-asesores-sp, path: labels, expect: {app-id: ases-0420, capa: backend}, desc: dev-zentra-asesores-sp}
+  - {type: exists, on: au-zentra-asesores-sp, path: labels, expect: {app-id: ases-0420, capa: backend}, desc: au-zentra-asesores-sp}
+  - {type: exists, on: zentra-asesores-sp, path: labels, expect: {app-id: ases-0420, capa: backend}, desc: zentra-asesores-sp}
+- name: Sin perder lo que había
+  validator: state
+  points: 20
+  critical: true
+  all: true
+  checks:
+  - {type: exists, on: zentra-asesores, path: labels, expect: {env: pro, app: asesores}, desc: PRO de frontend conserva app y env}
+  - {type: exists, on: dev-zentra-asesores-sp, path: labels, expect: {env: dev, app: asesores-sp}, desc: DEV de backend conserva app y env}
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - ases-0420
+    - - frontend
+    - - backend
+    desc: Valores y proyectos
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: projects update
+  title: Etiquetas del proyecto
+  why: '--update-labels añade o cambia solo esas claves; las demás se quedan. En la consola: IAM y administración › Etiquetas.'
+en:
+  title: REQ · Application identifier on the frontend and backend projects
+  summary: 'The application inventory needs the six asesores projects (frontend and backend, in DEV, AU and PRO) to carry the application identifier and their layer. Label them without losing the labels they already have.'
+  story: |-
+    > **REQ-41310 · P4** · Compliance: *"Label the asesores projects with their application identifier ASES-0420 and say whether each is frontend or backend."*
+
+    | Layer | DEV | AU | PRO |
+    |---|---|---|---|
+    | Frontend | `dev-zentra-asesores` | `au-zentra-asesores` | `zentra-asesores` |
+    | Backend | `dev-zentra-asesores-sp` | `au-zentra-asesores-sp` | `zentra-asesores-sp` |
+
+    A project's **labels** are `key=value` pairs read by billing and inventories. Rules: **lowercase**, digits, `_` and `-` (so `ASES-0420` is written `ases-0420`). Ask which keys the inventory uses.
+
+    Each project already has `app` and `env`: **don't remove them**.
+
+    **In the console**, in each of the six projects:
+    1. **Project picker** › the project.
+    2. **Menu › IAM & Admin › Labels › Add label**: the identifier one and the layer one.
+
+    Reply with what you did and resolve.
+  objectives:
+  - Ask which keys the inventory uses
+  - The three frontend projects labelled
+  - The three backend projects labelled
+  - Without losing app and env
+  - Reply and resolve
+  hints:
+  - 'Keys app-id and capa, lowercase: app-id=ases-0420; capa=frontend on the three without -sp and capa=backend on the three -sp.'
+  ticket:
+    summary: 'For the application inventory, label the asesores projects with their application identifier ASES-0420. Frontend: dev-zentra-asesores, au-zentra-asesores, zentra-asesores. Backend: dev-zentra-asesores-sp, au-zentra-asesores-sp, zentra-asesores-sp. Also say whether it is frontend or backend.'
+  text:
+    Irene Soler (Cumplimiento): Irene Soler (Compliance)
+    Cumplimiento. Lleva el inventario de aplicaciones.: Compliance. Runs the application inventory.
+    'Las claves que usa el inventario son app-id y capa.': 'The keys the inventory uses are app-id and capa.'
+    'El inventario lee las etiquetas app-id y capa. Valores en minúsculas, que las etiquetas no admiten mayúsculas: app-id=ases-0420 y capa=frontend o capa=backend.': 'The inventory reads the app-id and capa labels. Lowercase values, as labels don''t allow capitals: app-id=ases-0420 and capa=frontend or capa=backend.'
+    El ticket dice ASES-0420. ¿Qué valor pones en la etiqueta?: The ticket says ASES-0420. What value do you put in the label?
+    ases-0420: ases-0420
+    ASES-0420: ASES-0420
+    Ases_0420: Ases_0420
+    '"ASES-0420"': '"ASES-0420"'
+    Frontend etiquetado: Frontend labelled
+    dev-zentra-asesores: dev-zentra-asesores
+    au-zentra-asesores: au-zentra-asesores
+    zentra-asesores: zentra-asesores
+    Backend etiquetado: Backend labelled
+    dev-zentra-asesores-sp: dev-zentra-asesores-sp
+    au-zentra-asesores-sp: au-zentra-asesores-sp
+    zentra-asesores-sp: zentra-asesores-sp
+    Sin perder lo que había: Without losing what was there
+    PRO de frontend conserva app y env: Frontend PRO keeps app and env
+    DEV de backend conserva app y env: Backend DEV keeps app and env
+    Respuesta: Reply
+    Valores y proyectos: Values and projects
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    Etiquetas del proyecto: Project labels
+    '--update-labels añade o cambia solo esas claves; las demás se quedan. En la consola: IAM y administración › Etiquetas.': '--update-labels adds or changes only those keys; the rest stay. In the console: IAM & Admin › Labels.'

@@ -154,6 +154,21 @@ type Project struct {
 	LogSinks      map[string]*LogSink             `json:"logSinks"`
 	Perimeters    map[string]*Perimeter           `json:"perimeters"`
 	DenyPolicies  map[string]*DenyPolicy          `json:"denyPolicies,omitempty"`
+	RecaptchaKeys map[string]*RecaptchaKey        `json:"recaptchaKeys,omitempty"`
+}
+
+// RecaptchaKey is a reCAPTCHA (Enterprise) site key for websites: the page
+// that loads it must be served from one of Domains (subdomains included),
+// unless AllowAllDomains is set.
+type RecaptchaKey struct {
+	ID              string            `json:"keyId"`
+	DisplayName     string            `json:"displayName"`
+	Platform        string            `json:"platform"`        // WEB
+	IntegrationType string            `json:"integrationType"` // SCORE, CHECKBOX, INVISIBLE
+	Domains         []string          `json:"domains"`
+	AllowAllDomains bool              `json:"allowAllDomains,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+	Created         string            `json:"createTime"`
 }
 
 type ServiceAccount struct {
@@ -1151,7 +1166,7 @@ var DefaultEnabledAPIs = []string{
 	"cloudbuild.googleapis.com", "artifactregistry.googleapis.com", "clouddeploy.googleapis.com",
 	"bigquery.googleapis.com", "aiplatform.googleapis.com", "dns.googleapis.com",
 	"servicenetworking.googleapis.com", "securitycenter.googleapis.com", "sourcerepo.googleapis.com",
-	"billingbudgets.googleapis.com", "accesscontextmanager.googleapis.com",
+	"billingbudgets.googleapis.com", "accesscontextmanager.googleapis.com", "recaptchaenterprise.googleapis.com",
 }
 
 // Now returns the simulated clock formatted as RFC3339.

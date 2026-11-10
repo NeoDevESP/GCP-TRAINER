@@ -46,10 +46,43 @@ var builtinBaselines = map[string]func(st *sim.State, p *sim.Project){
 		st.Folders["folders/771300"] = &sim.Folder{ID: "771300", DisplayName: "production", Parent: "organizations/240158832107"}
 		p.Labels["purpose"] = "training-lab"
 	},
+	// zentra-entornos: the application projects of Zentra in three
+	// environments (DEV and AU under "previos", PRO under "produccion"),
+	// with fixed project numbers so tickets can quote them. The student's
+	// platform team owns them. Resources go in zentra-entornos-recursos.sh.
+	"zentra-entornos": func(st *sim.State, p *sim.Project) {
+		st.Folders["folders/771310"] = &sim.Folder{ID: "771310", DisplayName: "zentra-previos", Parent: "organizations/240158832107"}
+		st.Folders["folders/771320"] = &sim.Folder{ID: "771320", DisplayName: "zentra-produccion", Parent: "organizations/240158832107"}
+		for _, e := range ZentraEnvProjects {
+			parent := "folders/771310"
+			if e.Env == "pro" {
+				parent = "folders/771320"
+			}
+			np := st.NewProject(e.ID, parent)
+			np.Number, np.Name = e.Number, e.ID
+			np.Labels = map[string]string{"app": e.App, "env": e.Env}
+			np.IAM.AddBinding("roles/owner", "user:"+DefaultStudent, nil)
+		}
+	},
 	"restricted-org": func(st *sim.State, p *sim.Project) {
 		st.Org.OrgPolicies["iam.allowedPolicyMemberDomains"] = &sim.OrgPolicy{Constraint: "iam.allowedPolicyMemberDomains", Enforce: true}
 		st.Org.OrgPolicies["storage.publicAccessPrevention"] = &sim.OrgPolicy{Constraint: "storage.publicAccessPrevention", Enforce: true}
 	},
+}
+
+// DefaultStudent is the account labs use unless they set another.
+const DefaultStudent = "student@gcplab.dev"
+
+// ZentraEnv is one application project of zentra-entornos.
+type ZentraEnv struct{ ID, Number, App, Env string }
+
+// ZentraEnvProjects: DEV is "dev-zentra-<app>", AU "au-zentra-<app>" and PRO
+// "zentra-<app>" (the bank's naming).
+var ZentraEnvProjects = []ZentraEnv{
+	{"dev-zentra-altas", "318204657913", "altas", "dev"}, {"au-zentra-altas", "562918340276", "altas", "au"}, {"zentra-altas", "840137265518", "altas", "pro"},
+	{"dev-zentra-cartera", "418526730194", "cartera", "dev"}, {"au-zentra-cartera", "725361948027", "cartera", "au"}, {"zentra-cartera", "903174625518", "cartera", "pro"},
+	{"dev-zentra-asesores", "241875036912", "asesores", "dev"}, {"au-zentra-asesores", "659302187445", "asesores", "au"}, {"zentra-asesores", "776023815094", "asesores", "pro"},
+	{"dev-zentra-asesores-sp", "287419653021", "asesores-sp", "dev"}, {"au-zentra-asesores-sp", "691584302776", "asesores-sp", "au"}, {"zentra-asesores-sp", "712640958331", "asesores-sp", "pro"},
 }
 
 // AdminSession returns a platform session on the world (used by setup, faults

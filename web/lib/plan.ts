@@ -1,4 +1,4 @@
-// The 10-day plan (about 4 hours a day), shared by the plan page and the
+// The study plan modules, shared by the plan page and the
 // dashboard's "today" card.
 
 import { k } from "@/lib/i18n";
@@ -30,15 +30,17 @@ export const DAYS: Day[] = [
   { title: k("Día 5 · Externos, APIs y auditoría"), goal: k("Peticiones delicadas: consultores, APIs nuevas, auditores y grupos abiertos."),
     items: [{ topic: "support-google" }, ...Z("z12-external-consultant", "z13-enable-api", "z14-auditors", "z15-external-member", "z40-api-disabled", "z49-temporary-access", "z56-access-review"), ...L("ace-d13-lb-dns", "ace-d14-terraform", "bank-b15-sa-key-request"),
       { task: "d5-repeat", text: k("Repite z01, z02 y z03 sin tutor ni pistas") }] },
-  { title: k("Día 6 · El flujo de pagos: Pub/Sub y BigQuery"), goal: k("Permisos entre servicios: publicar, entregar y escribir."),
+  { title: k("Día 6 · Peticiones de plataforma en la consola"), goal: k("Lo que más llega a un equipo de plataforma: moverse entre DEV, AU y PRO, claves de reCAPTCHA, buckets con el estándar en los tres entornos, accesos de lectura, cuentas de servicio para GitHub, APIs, etiquetas y bajas de externos."),
+    items: [...Z("p01-environment-map", "p02-recaptcha-domain", "p03-bucket-three-envs", "p04-wrong-project-number", "p05-qa-read-access", "p06-github-deploy-sa", "p07-enable-api-previos", "p08-app-id-labels", "p09-revoke-consultant", "p10-week10-test")] },
+  { title: k("Día 7 · El flujo de pagos: Pub/Sub y BigQuery"), goal: k("Permisos entre servicios: publicar, entregar y escribir."),
     items: [{ topic: "support-data" }, ...Z("z16-publish-denied", "z17-push-backlog", "z18-bq-denied", "z31-bq-location", "z35-sql-connections", "z37-private-google-access", "z51-slow-query"), ...L("ace-d18-api-db-firewall", "ace-d20-sql-saturated", "bank-b05-run-403", "bank-b25-wrong-identity")] },
-  { title: k("Día 7 · GKE y balanceo"), goal: k("Pods que no arrancan, identidades de cargas y el balanceador."),
+  { title: k("Día 8 · GKE y balanceo"), goal: k("Pods que no arrancan, identidades de cargas y el balanceador."),
     items: [{ topic: "gke" }, { topic: "support-compute" }, { topic: "support-network" }, ...Z("z19-wi-namespace", "z20-armor-blocks-customers", "z33-redis-network", "z34-hpa-unknown", "z41-readiness-probe"), ...L("ace-d16-gke-two-services", "ace-d17-gke-hpa", "bank-b19-gke-oomkilled", "bank-b24-gke-imagepull")] },
-  { title: k("Día 8 · Seguridad e incidentes graves"), goal: k("Despliegues rotos, claves filtradas, perímetros de VPC Service Controls, claves de cifrado propias y políticas de denegación."),
+  { title: k("Día 9 · Seguridad e incidentes graves"), goal: k("Despliegues rotos, claves filtradas, perímetros de VPC Service Controls, claves de cifrado propias y políticas de denegación."),
     items: [{ topic: "support-governance" }, { topic: "support-banking" }, ...Z("z21-bad-release", "z22-leaked-key", "z47-public-kyc-bucket", "z50-retention-lock", "z59-week3-test", "z71-vpcsc-ingress", "z72-vpcsc-dryrun", "z73-cmek-agent", "z74-cmek-version", "z77-deny-policy"), ...L("ace-d25-public-exposure", "bank-b13-audit-sink")] },
-  { title: k("Día 9 · Guardia"), goal: k("Incidentes de producción con el reloj corriendo, la conexión con el CPD y varios tickets a la vez."),
+  { title: k("Día 10 · Guardia"), goal: k("Incidentes de producción con el reloj corriendo, la conexión con el CPD y varios tickets a la vez."),
     items: [...Z("z23-push-endpoint", "z24-healthcheck-path", "z36-disk-grow", "z44-listen-localhost", "z48-key-permissions", "z25-fx-no-egress", "z26-secret-version", "z28-nat-ports", "z29-zone-stockout", "z30-cpu-quota", "z38-firewall-priority", "z39-private-dns", "z43-default-route", "z45-lost-tag", "z46-named-port", "z67-week5-test", "z75-bgp-asn", "z76-dns-forwarding", "z78-vendor-static-ip"), { shift: 1 }, { shift: 2 }] },
-  { title: k("Día 10 · Día de la nómina y examen"), goal: k("El jefe final, el simulacro del ACE y un último turno."),
+  { title: k("Día 11 · Día de la nómina y examen"), goal: k("El jefe final, el simulacro del ACE y un último turno."),
     items: [...Z("z27-payday-boss", "z42-month-end-costs", "z69-week6-test", "z70-canary", "z52-zone-outage", "z79-terraform-drift", "z80-week9-test", "z32-sql-ha"), { exam: "ACE" }, { shift: 3 }, { task: "d10-review", text: k("Repasa los temas con las preguntas que fallaste en el simulacro") }, { task: "d10-final", text: k("Examen final de Zentra: la certificación interna de Soporte N2"), href: "/final" }] },
 ];
 
@@ -46,7 +48,7 @@ export const key = (it: Item) => ("lab" in it ? "lab:" + it.lab : "topic" in it 
 
 
 // ---- Real durations and priorities (the dynamic plan) ------------------------
-// The ten modules above are the curriculum order. How many days it takes is
+// The modules above are the curriculum order. How many days it takes is
 // computed from the real duration of every activity and the time the learner
 // chooses per day (see schedule in lib/model.ts).
 

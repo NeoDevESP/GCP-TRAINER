@@ -445,6 +445,9 @@ func gcloudStep(st Step, ws []string, en bool) Step {
 	}
 	st.Match = "^" + look + base
 	st.Where = Where{Page: r.page, Path: L(r.pathES, r.pathEN)}
+	if key == "projects" && verb == "update" { // project labels live on their own page
+		st.Where = Where{Page: "labels", Path: L("IAM y administración › Etiquetas", "IAM & Admin › Labels")}
+	}
 	st.Fields = fieldsOf(p.Flags, en)
 	if r.page == "" {
 		st.Where.Path = "Cloud Shell"

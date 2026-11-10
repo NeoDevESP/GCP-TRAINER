@@ -1,0 +1,237 @@
+id: zentra-p06-github-deploy-sa
+title: REQ · Cuenta de servicio para desplegar desde GitHub (adiós a Jenkins)
+summary: 'Con la migración de Bitbucket y Jenkins a GitHub, el backend de asesores necesita desplegar en DEV desde GitHub Actions. Crea la cuenta de servicio, dale solo lo necesario y deja que GitHub la use por federación de identidades, sin claves.'
+track: zentra
+day: 96
+level: professional
+branch: iam
+type: challenge
+mode: production
+skills:
+- iam.serviceaccounts
+- iam.impersonation
+- devops.cicd
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 30
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+ticket:
+  id: REQ-41281
+  kind: REQ
+  priority: P3
+  sla: 5d
+  reporter: Hugo Martín (Asesores)
+  summary: 'Apagamos Jenkins: el backend de asesores (repo zentra/asesores-backend) desplegará en Cloud Run de DEV desde GitHub Actions. Necesitamos una cuenta de servicio gh-deploy en dev-zentra-asesores-sp y su clave JSON para meterla como secreto en GitHub.'
+actors:
+- role: security
+  name: Nadia Kowalski (Seguridad cloud)
+  persona: Seguridad cloud. Dueña de la federación de identidades con GitHub.
+  fallback: Nada de claves JSON. GitHub entra por federación de identidades.
+  facts:
+  - keywords:
+    - - clave
+      - key
+      - json
+      - github
+      - federacion
+      - federación
+      - wif
+      - workload
+      - identidad
+    answer: 'Claves JSON, no: la política del banco lo impide. Ya tenemos el pool de GitHub. Da a la cuenta de servicio el rol Workload Identity User para este principal: principalSet://iam.googleapis.com/projects/287419653021/locations/global/workloadIdentityPools/github/attribute.repository/zentra/asesores-backend. Así solo ese repositorio puede usarla.'
+story: |-
+  **Backend de asesores en DEV**: `dev-zentra-asesores-sp` (número `287419653021`).
+
+  > **REQ-41281 · P3** · Asesores: *«Apagamos Jenkins: desplegaremos Cloud Run de DEV desde GitHub Actions. Necesitamos una cuenta de servicio `gh-deploy` y **su clave JSON** para meterla como secreto en GitHub.»*
+
+  Lo de la cuenta de servicio, sí. Lo de la **clave JSON, no**: una clave que vive en GitHub es una contraseña que no caduca, y la política del banco **impide crearlas**. La forma buena es la **federación de identidades** (Workload Identity Federation): GitHub presenta su propio token y Google le deja actuar como la cuenta de servicio **solo si viene de ese repositorio**.
+
+  **En la consola** (proyecto `dev-zentra-asesores-sp`):
+  1. Pregunta a Seguridad cuál es el principal de GitHub.
+  2. **IAM y administración › Cuentas de servicio › Crear cuenta de servicio**: `gh-deploy`.
+  3. **IAM y administración › IAM › Conceder acceso**: a `serviceAccount:gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com` el rol **`roles/run.developer`** (desplegar en Cloud Run, nada más).
+  4. En la cuenta de servicio › **Quién puede usar esta cuenta de servicio › Conceder acceso**: el principal de GitHub con **`roles/iam.workloadIdentityUser`**.
+  5. No crees claves. Responde explicando cómo se configura en GitHub (sin secreto) y resuelve.
+objectives:
+- Pregunta a Seguridad
+- Crea gh-deploy en DEV del backend
+- Solo el rol de despliegue
+- GitHub puede usarla por federación
+- Sin claves JSON
+- Responde y resuelve
+hints:
+- text: 'Cuentas de servicio › gh-deploy › «Quién puede usar esta cuenta de servicio» › Conceder acceso › el principalSet de GitHub › roles/iam.workloadIdentityUser.'
+quiz:
+- id: q1
+  question: ¿Por qué no se da una clave JSON para GitHub?
+  options:
+  - Es una credencial que no caduca y puede filtrarse; la federación da tokens cortos solo a ese repositorio
+  - Porque GitHub no admite secretos
+  - Porque las claves JSON cuestan dinero
+  - Se puede dar si se rota cada año
+  answer:
+  - 0
+solution: |
+  ticket
+  ask security "Piden una clave JSON de gh-deploy para GitHub. ¿Cuál es el principal de la federación de GitHub?"
+  gcloud config set project dev-zentra-asesores-sp
+  gcloud iam service-accounts create gh-deploy --display-name="Despliegue desde GitHub (asesores-backend)"
+  gcloud projects add-iam-policy-binding dev-zentra-asesores-sp --member=serviceAccount:gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com --role=roles/run.developer
+  gcloud iam service-accounts add-iam-policy-binding gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member=principalSet://iam.googleapis.com/projects/287419653021/locations/global/workloadIdentityPools/github/attribute.repository/zentra/asesores-backend
+  ticket update "Hola Hugo: creada la cuenta de servicio gh-deploy en dev-zentra-asesores-sp con el rol run.developer (desplegar en Cloud Run de DEV). No damos clave JSON (la política del banco no lo permite y sería una contraseña que no caduca): GitHub entra por federación de identidades. Solo el repositorio zentra/asesores-backend puede usarla (workloadIdentityUser). En el workflow usad google-github-actions/auth con workload_identity_provider (el pool github) y service_account gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com; no hace falta ningún secreto."
+  ticket resolve "gh-deploy creada con run.developer y federación para zentra/asesores-backend; sin claves."
+shortcuts:
+- name: owner and try to create a key
+  run: |
+    gcloud iam service-accounts create gh-deploy --project=dev-zentra-asesores-sp
+    gcloud projects add-iam-policy-binding dev-zentra-asesores-sp --member=serviceAccount:gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com --role=roles/owner
+    ticket update "Hola Hugo: creada gh-deploy como owner. La clave JSON la tiene que crear Seguridad."
+    ticket resolve "Cuenta de servicio creada con permisos de owner para el pipeline."
+rubric:
+- name: Cuenta de servicio de despliegue
+  validator: functional
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: dev-zentra-asesores-sp
+    path: serviceAccounts["gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com"]
+    desc: gh-deploy existe en DEV del backend
+  - type: iam
+    on: dev-zentra-asesores-sp
+    principal: serviceAccount:gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com
+    permission: run.services.update
+    resource: project
+    desc: Puede desplegar en Cloud Run
+- name: Federación sin claves
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: dev-zentra-asesores-sp
+    path: serviceAccounts["gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com"]
+    expect:
+      iamPolicy:
+        contains: workloadIdentityPools/github/attribute.repository/zentra/asesores-backend
+    desc: Solo el repositorio de GitHub puede usarla
+  - type: exists
+    on: dev-zentra-asesores-sp
+    path: serviceAccounts["gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com"]
+    expect:
+      iamPolicy:
+        contains: roles/iam.workloadIdentityUser
+    desc: Con el rol Workload Identity User
+  - type: iam
+    on: dev-zentra-asesores-sp
+    principal: serviceAccount:gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com
+    permission: resourcemanager.projects.setIamPolicy
+    resource: project
+    expect: false
+    desc: No puede cambiar permisos del proyecto
+- name: Con Seguridad
+  validator: diagnosis
+  points: 10
+  checks:
+  - type: asked
+    actor: security
+    min: 1
+    desc: Principal de GitHub confirmado con Seguridad
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - federaci
+      - workload identity
+      - wif
+    - - gh-deploy
+    desc: Explica la federación en vez de la clave
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: service-accounts create gh-deploy
+  title: Una identidad para el pipeline
+  why: Una cuenta de servicio por uso; así sus permisos se pueden acotar y revocar.
+- match: run.developer
+  title: Solo desplegar
+  why: run.developer despliega servicios de Cloud Run; no da permisos sobre IAM ni sobre otros servicios.
+- match: workloadIdentityUser
+  title: GitHub sin claves
+  why: El principalSet limita el uso de la cuenta a un repositorio concreto; GitHub obtiene tokens de corta duración.
+en:
+  title: REQ · Service account to deploy from GitHub (goodbye Jenkins)
+  summary: 'With the migration from Bitbucket and Jenkins to GitHub, the asesores backend needs to deploy to DEV from GitHub Actions. Create the service account, give it only what is needed and let GitHub use it through identity federation, without keys.'
+  story: |-
+    **Asesores backend in DEV**: `dev-zentra-asesores-sp` (number `287419653021`).
+
+    > **REQ-41281 · P3** · Asesores: *"We are switching Jenkins off: we will deploy Cloud Run in DEV from GitHub Actions. We need a `gh-deploy` service account and **its JSON key** to store it as a secret in GitHub."*
+
+    The service account, yes. The **JSON key, no**: a key living in GitHub is a password that never expires, and the bank's policy **blocks creating them**. The right way is **identity federation** (Workload Identity Federation): GitHub presents its own token and Google lets it act as the service account **only if it comes from that repository**.
+
+    **In the console** (project `dev-zentra-asesores-sp`):
+    1. Ask Security what the GitHub principal is.
+    2. **IAM & Admin › Service accounts › Create service account**: `gh-deploy`.
+    3. **IAM & Admin › IAM › Grant access**: give `serviceAccount:gh-deploy@dev-zentra-asesores-sp.iam.gserviceaccount.com` the **`roles/run.developer`** role (deploy to Cloud Run, nothing else).
+    4. On the service account › **Who can use this service account › Grant access**: the GitHub principal with **`roles/iam.workloadIdentityUser`**.
+    5. Don't create keys. Reply explaining how to configure it in GitHub (no secret) and resolve.
+  objectives:
+  - Ask Security
+  - Create gh-deploy in the backend DEV project
+  - Only the deploy role
+  - GitHub can use it through federation
+  - No JSON keys
+  - Reply and resolve
+  hints:
+  - 'Service accounts › gh-deploy › "Who can use this service account" › Grant access › the GitHub principalSet › roles/iam.workloadIdentityUser.'
+  ticket:
+    summary: 'We are switching Jenkins off: the asesores backend (repo zentra/asesores-backend) will deploy to Cloud Run in DEV from GitHub Actions. We need a gh-deploy service account in dev-zentra-asesores-sp and its JSON key to store it as a secret in GitHub.'
+  text:
+    Hugo Martín (Asesores): Hugo Martín (Asesores)
+    Nadia Kowalski (Seguridad cloud): Nadia Kowalski (Cloud security)
+    Seguridad cloud. Dueña de la federación de identidades con GitHub.: Cloud security. Owner of the identity federation with GitHub.
+    Nada de claves JSON. GitHub entra por federación de identidades.: No JSON keys. GitHub comes in through identity federation.
+    'Claves JSON, no: la política del banco lo impide. Ya tenemos el pool de GitHub. Da a la cuenta de servicio el rol Workload Identity User para este principal: principalSet://iam.googleapis.com/projects/287419653021/locations/global/workloadIdentityPools/github/attribute.repository/zentra/asesores-backend. Así solo ese repositorio puede usarla.': 'JSON keys, no: the bank''s policy blocks them. We already have the GitHub pool. Give the service account the Workload Identity User role for this principal: principalSet://iam.googleapis.com/projects/287419653021/locations/global/workloadIdentityPools/github/attribute.repository/zentra/asesores-backend. That way only that repository can use it.'
+    ¿Por qué no se da una clave JSON para GitHub?: Why is no JSON key given to GitHub?
+    Es una credencial que no caduca y puede filtrarse; la federación da tokens cortos solo a ese repositorio: It is a credential that never expires and can leak; federation gives short-lived tokens only to that repository
+    Porque GitHub no admite secretos: Because GitHub doesn't support secrets
+    Porque las claves JSON cuestan dinero: Because JSON keys cost money
+    Se puede dar si se rota cada año: It can be given if rotated every year
+    Cuenta de servicio de despliegue: Deploy service account
+    gh-deploy existe en DEV del backend: gh-deploy exists in the backend DEV project
+    Puede desplegar en Cloud Run: It can deploy to Cloud Run
+    Federación sin claves: Federation without keys
+    Solo el repositorio de GitHub puede usarla: Only the GitHub repository can use it
+    Con el rol Workload Identity User: With the Workload Identity User role
+    No puede cambiar permisos del proyecto: It cannot change project permissions
+    Con Seguridad: With Security
+    Principal de GitHub confirmado con Seguridad: GitHub principal confirmed with Security
+    Respuesta: Reply
+    Explica la federación en vez de la clave: Explains federation instead of the key
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    Una identidad para el pipeline: An identity for the pipeline
+    Una cuenta de servicio por uso; así sus permisos se pueden acotar y revocar.: One service account per use; that way its permissions can be scoped and revoked.
+    Solo desplegar: Deploy only
+    run.developer despliega servicios de Cloud Run; no da permisos sobre IAM ni sobre otros servicios.: run.developer deploys Cloud Run services; it gives no permissions on IAM or other services.
+    GitHub sin claves: GitHub without keys
+    El principalSet limita el uso de la cuenta a un repositorio concreto; GitHub obtiene tokens de corta duración.: The principalSet limits the account's use to one repository; GitHub gets short-lived tokens.

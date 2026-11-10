@@ -114,6 +114,8 @@ var resources = map[string]res{
 		"Secret Manager guarda contraseñas y claves fuera del código, con versiones y permisos.", "Secret Manager keeps passwords and keys out of the code, with versions and permissions."},
 	"secrets versions": {"secrets", "Seguridad › Secret Manager › Versiones", "Security › Secret Manager › Versions", "la versión del secreto", "the secret version", "las versiones", "the versions",
 		"Cada cambio del secreto crea una versión; las apps suelen leer «latest».", "Each change creates a version; apps usually read \"latest\"."},
+	"recaptcha keys": {"recaptcha", "Seguridad › reCAPTCHA", "Security › reCAPTCHA", "la clave de reCAPTCHA", "the reCAPTCHA key", "las claves de reCAPTCHA", "the reCAPTCHA keys",
+		"Una clave de reCAPTCHA de sitio web solo funciona en los dominios de su lista (sin https://); al actualizar, la lista se sustituye entera.", "A website reCAPTCHA key only works on the domains in its list (without https://); updating replaces the whole list."},
 	"kms keyrings": {"kms", "Seguridad › Gestión de claves", "Security › Key management", "el llavero", "the key ring", "los llaveros", "the key rings",
 		"Un llavero agrupa claves de cifrado en una ubicación.", "A key ring groups encryption keys in one location."},
 	"kms keys": {"kms", "Seguridad › Gestión de claves", "Security › Key management", "la clave de cifrado", "the encryption key", "las claves", "the keys",

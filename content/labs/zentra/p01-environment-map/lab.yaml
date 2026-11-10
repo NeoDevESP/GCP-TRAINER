@@ -1,0 +1,183 @@
+id: zentra-p01-environment-map
+title: Tutorial · Tu mapa de entornos (DEV, AU y PRO)
+summary: 'Antes de tocar nada: cada aplicación tiene tres proyectos que se parecen mucho. Aprende a moverte con el selector de proyectos y a leer el ID, el número y las etiquetas de cada uno.'
+track: zentra
+day: 91
+level: professional
+branch: foundations
+type: guided
+mode: lab
+skills:
+- foundations.hierarchy
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 1
+minutes: 15
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+ticket:
+  id: REQ-41190
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Elena Ríos (FinOps)
+  summary: 'Para el informe de costes necesito el número de proyecto de PRO de cartera y saber en qué carpeta está. ¿Me lo pasáis?'
+story: |-
+  En el banco cada aplicación tiene **tres proyectos**, uno por entorno:
+
+  | Entorno | Para qué | ID del proyecto (cartera) |
+  |---|---|---|
+  | **DEV** (desarrollo) | probar sin miedo | `dev-zentra-cartera` |
+  | **AU** (aceptación de usuario) | la prueba final con datos de prueba | `au-zentra-cartera` |
+  | **PRO** (producción) | los clientes de verdad | `zentra-cartera` |
+
+  Se llaman casi igual: **el error más caro de este trabajo es hacer en PRO lo que iba para DEV**. Cada proyecto tiene tres identificadores: el **nombre** (lo que ves), el **ID** (`dev-zentra-cartera`, no cambia) y el **número** (`418526730194`, lo usan Google y muchos nombres de recursos, como los buckets o las cuentas de servicio de Google).
+
+  **En la consola**
+  1. Lee el ticket (pestaña **Ticket**).
+  2. Abre el **selector de proyectos** (arriba, junto al logo): verás todos los proyectos a los que tienes acceso, con su ID y su número. Usa el buscador: escribe `cartera`.
+  3. Elige `zentra-cartera`. Fíjate en que el nombre del proyecto cambia en la barra y en Cloud Shell.
+  4. En el **Panel** mira la tarjeta «Información del proyecto»: el **número**.
+  5. **Menú › IAM y administración › Etiquetas**: `env=pro` y `app=cartera` confirman el entorno.
+  6. Responde al ticket con el número de PRO y la carpeta (los proyectos de PRO cuelgan de `zentra-produccion`; DEV y AU de `zentra-previos`) y resuélvelo.
+
+  En Cloud Shell: `gcloud projects list` enseña lo mismo que el selector y `gcloud projects describe zentra-cartera` el detalle.
+objectives:
+- Abre el selector de proyectos
+- Cámbiate al PRO de cartera
+- Lee el número y las etiquetas
+- Responde con el número de PRO
+hints:
+- text: 'Selector de proyectos › busca «cartera» › zentra-cartera. El número está en el Panel y en la columna «Número» del selector.'
+quiz:
+- id: q1
+  question: ¿Cómo sabes con seguridad que estás en PRO y no en DEV?
+  options:
+  - Por el ID del proyecto y la etiqueta env
+  - Por el color de la consola
+  - Porque PRO tiene más recursos
+  - Por el nombre del bucket
+  answer:
+  - 0
+- id: q2
+  question: ¿Qué identificador del proyecto usan los nombres como gcs-intercambio-dev-418526730194?
+  options:
+  - El número del proyecto
+  - El ID del proyecto
+  - El nombre visible
+  - El ID de la organización
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud projects list
+  gcloud config set project zentra-cartera
+  gcloud projects describe zentra-cartera
+  ticket update "Hola Elena: el proyecto de PRO de cartera es zentra-cartera, número 903174625518, en la carpeta zentra-produccion (etiquetas app=cartera, env=pro). DEV y AU (dev-zentra-cartera y au-zentra-cartera) están en zentra-previos."
+  ticket resolve "Número de proyecto de PRO de cartera y su carpeta comunicados a FinOps."
+shortcuts:
+- name: answer with the DEV number
+  run: |
+    ticket update "Hola Elena: el proyecto de cartera es el 418526730194, en la carpeta zentra-previos."
+    ticket resolve "Número de proyecto de cartera comunicado a FinOps."
+rubric:
+- name: Te mueves entre entornos
+  validator: functional
+  points: 30
+  all: true
+  checks:
+  - type: command
+    regex: config set project zentra-cartera|projects describe zentra-cartera
+    min: 1
+    desc: Has abierto el proyecto de PRO
+- name: El dato correcto
+  validator: evidence
+  points: 45
+  critical: true
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - '903174625518'
+    - - zentra-produccion
+      - produccion
+      - producción
+    desc: Número de PRO y su carpeta
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 25
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Preguntas del caso
+tutor:
+- match: '@intro'
+  why: 'El selector de proyectos de la consola es lo primero que se mira en cada ticket: DEV, AU y PRO se llaman casi igual.'
+- match: projects list
+  title: Todos tus proyectos
+  why: Lo mismo que el selector de proyectos, con el ID y el número de cada uno.
+- match: config set project
+  title: Cambiar de proyecto
+  why: Es lo que hace el selector de la consola. Desde aquí, todo lo que hagas va a ese proyecto.
+en:
+  title: Tutorial · Your environment map (DEV, AU and PRO)
+  summary: 'Before touching anything: each application has three projects that look very much alike. Learn to move with the project picker and to read the ID, number and labels of each.'
+  story: |-
+    At the bank each application has **three projects**, one per environment:
+
+    | Environment | What for | Project ID (cartera) |
+    |---|---|---|
+    | **DEV** (development) | testing without fear | `dev-zentra-cartera` |
+    | **AU** (user acceptance) | the final test with test data | `au-zentra-cartera` |
+    | **PRO** (production) | real customers | `zentra-cartera` |
+
+    Their names are almost the same: **the most expensive mistake in this job is doing in PRO what was meant for DEV**. Each project has three identifiers: the **name** (what you see), the **ID** (`dev-zentra-cartera`, it never changes) and the **number** (`418526730194`, used by Google and by many resource names, like buckets or Google's service accounts).
+
+    **In the console**
+    1. Read the ticket (**Ticket** tab).
+    2. Open the **project picker** (top, next to the logo): you will see every project you can access, with its ID and number. Use the search box: type `cartera`.
+    3. Choose `zentra-cartera`. Notice the project name changes in the bar and in Cloud Shell.
+    4. In the **Dashboard** look at the "Project info" card: the **number**.
+    5. **Menu › IAM & Admin › Labels**: `env=pro` and `app=cartera` confirm the environment.
+    6. Reply on the ticket with the PRO number and the folder (PRO projects hang from `zentra-produccion`; DEV and AU from `zentra-previos`) and resolve it.
+
+    In Cloud Shell: `gcloud projects list` shows the same as the picker and `gcloud projects describe zentra-cartera` the details.
+  objectives:
+  - Open the project picker
+  - Switch to the cartera PRO project
+  - Read the number and the labels
+  - Reply with the PRO number
+  hints:
+  - 'Project picker › search "cartera" › zentra-cartera. The number is on the Dashboard and in the "Number" column of the picker.'
+  ticket:
+    summary: 'For the cost report I need the project number of the cartera PRO project and which folder it is in. Can you send it over?'
+  text:
+    Elena Ríos (FinOps): Elena Ríos (FinOps)
+    ¿Cómo sabes con seguridad que estás en PRO y no en DEV?: How do you know for sure you are in PRO and not in DEV?
+    Por el ID del proyecto y la etiqueta env: By the project ID and the env label
+    Por el color de la consola: By the colour of the console
+    Porque PRO tiene más recursos: Because PRO has more resources
+    Por el nombre del bucket: By the bucket name
+    ¿Qué identificador del proyecto usan los nombres como gcs-intercambio-dev-418526730194?: Which project identifier do names like gcs-intercambio-dev-418526730194 use?
+    El número del proyecto: The project number
+    El ID del proyecto: The project ID
+    El nombre visible: The display name
+    El ID de la organización: The organisation ID
+    Te mueves entre entornos: You move between environments
+    Has abierto el proyecto de PRO: You opened the PRO project
+    El dato correcto: The right data
+    Número de PRO y su carpeta: PRO number and its folder
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Preguntas del caso: Case questions
+    'El selector de proyectos de la consola es lo primero que se mira en cada ticket: DEV, AU y PRO se llaman casi igual.': 'The console project picker is the first thing to check on every ticket: DEV, AU and PRO have almost the same name.'
+    Todos tus proyectos: All your projects
+    Lo mismo que el selector de proyectos, con el ID y el número de cada uno.: The same as the project picker, with each one's ID and number.
+    Cambiar de proyecto: Switch project
+    'Es lo que hace el selector de la consola. Desde aquí, todo lo que hagas va a ese proyecto.': 'It is what the console picker does. From here on, everything you do goes to that project.'

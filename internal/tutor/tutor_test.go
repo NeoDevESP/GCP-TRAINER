@@ -15,7 +15,7 @@ import (
 var pages = map[string]bool{}
 
 func init() {
-	for _, p := range strings.Fields(`iam sa roles orgpolicies scc apis billing budgets vm templates groups healthchecks disks snapshots gke workloads k8sservices k8sconfig run functions appengine scheduler tasks buckets sql filestore spanner firestore redis bigquery dataflow dataproc composer vertex pubsub vpc addresses firewall routes peering lb dns nat armor vpn topology secrets kms artifacts build deploy repos logs logmetrics sinks metrics alerting uptime activity`) {
+	for _, p := range strings.Fields(`iam sa roles orgpolicies labels scc recaptcha apis billing budgets vm templates groups healthchecks disks snapshots gke workloads k8sservices k8sconfig run functions appengine scheduler tasks buckets sql filestore spanner firestore redis bigquery dataflow dataproc composer vertex pubsub vpc addresses firewall routes peering lb dns nat armor vpn topology secrets kms artifacts build deploy repos logs logmetrics sinks metrics alerting uptime activity`) {
 		pages[p] = true
 	}
 }

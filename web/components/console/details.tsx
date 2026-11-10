@@ -1115,3 +1115,49 @@ export function ClusterDetail({ ctx, c, close }: { ctx: Ctx; c: any; close: () =
     </>
   );
 }
+
+/** RecaptchaDetail: a reCAPTCHA key, its domains and how to change them. */
+export function RecaptchaDetail({ ctx, k, close }: { ctx: Ctx; k: any; close: () => void }) {
+  const { t } = useI18n();
+  const h = useCtxHost(ctx);
+  const domains: string[] = k.domains ?? [];
+  const update = (list: string[], name = k.displayName) => `gcloud recaptcha keys update ${k.keyId} --web --display-name=${q(name)} --domains=${list.join(",")}`;
+  const split = (v: string) => v.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+  if (h.page) return h.page;
+  return (
+    <>
+      <Detail
+        title={k.displayName}
+        onBack={close}
+        actions={
+          <>
+            <Tool icon="add" label={t("Añadir un dominio")} onClick={() => h.form({ kind: "drawer", title: t("Añadir un dominio a {k}", { k: k.displayName }), submit: t("Guardar"), note: t("Añadir dominio a la clave de reCAPTCHA"), initial: { domain: "" }, fields: [{ id: "domain", label: t("Dominio"), required: true, help: t("Solo el nombre del dominio, sin https:// ni ruta (por ejemplo, ficheros.example.com). Incluye sus subdominios.") }], build: (v) => update([...domains, v.domain.trim()]) })} />
+            <Tool icon="edit" label={t("Editar clave")} onClick={() => h.form({ kind: "drawer", title: t("Editar la clave {k}", { k: k.displayName }), submit: t("Guardar"), note: t("Editar clave de reCAPTCHA"), initial: { name: k.displayName, domains: domains.join("\n") }, fields: [{ id: "name", label: t("Nombre visible"), required: true }, { id: "domains", label: t("Dominios (uno por línea)"), type: "textarea", required: true, help: t("La lista entera: si borras uno, la clave deja de funcionar en ese dominio.") }], build: (v) => update(split(v.domains), v.name.trim()) })} />
+            <Tool icon="delete" label={t("Eliminar")} danger onClick={() => h.confirm({ title: t("¿Eliminar la clave {k}?", { k: k.displayName }), text: t("Los formularios que la usan dejarán de validar a los usuarios."), cmds: [`gcloud recaptcha keys delete ${k.keyId} --quiet`], button: t("Eliminar"), note: t("Eliminar clave de reCAPTCHA") })} />
+          </>
+        }
+        tabs={[
+          {
+            id: "info",
+            label: t("Detalles"),
+            render: () => (
+              <dl className="cc-dl">
+                <dt>{t("ID de la clave")}</dt>
+                <dd><code>{k.keyId}</code></dd>
+                <dt>{t("Plataforma")}</dt>
+                <dd>{t("Sitio web")}</dd>
+                <dt>{t("Tipo")}</dt>
+                <dd>{k.integrationType === "CHECKBOX" ? t("Casilla de verificación") : k.integrationType === "INVISIBLE" ? t("Invisible") : t("Puntuación")}</dd>
+                <dt>{t("Dominios")}</dt>
+                <dd>{k.allowAllDomains ? t("Todos los dominios (no recomendado)") : domains.length ? <ul className="cc-plain">{domains.map((d) => <li key={d}><code>{d}</code></li>)}</ul> : "—"}</dd>
+                <dt>{t("Etiquetas")}</dt>
+                <dd>{Object.entries(k.labels ?? {}).map(([a, b]) => `${a}=${b}`).join(", ") || "—"}</dd>
+              </dl>
+            ),
+          },
+        ]}
+      />
+      {h.node}
+    </>
+  );
+}

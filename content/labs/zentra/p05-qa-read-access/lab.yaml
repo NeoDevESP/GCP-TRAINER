@@ -1,0 +1,208 @@
+id: zentra-p05-qa-read-access
+title: REQ · Acceso de lectura para QA a un bucket de previos
+summary: 'QA necesita leer los ficheros del bucket de intercambio en DEV y AU. Dale al grupo solo lectura, solo en esos buckets y nunca en PRO.'
+track: zentra
+day: 95
+level: professional
+branch: iam
+type: challenge
+mode: production
+skills:
+- iam.leastprivilege
+- storage.access
+wellArchitected:
+- security
+certs:
+- ACE
+- PCSE
+difficulty: 2
+minutes: 20
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+setup: |
+  gcloud storage buckets create gs://gcs-intercambio-dev-418526730194 --project=dev-zentra-cartera --location={{.region}} --uniform-bucket-level-access --public-access-prevention --labels=app=cartera,env=dev
+  gcloud storage buckets create gs://gcs-intercambio-au-725361948027 --project=au-zentra-cartera --location={{.region}} --uniform-bucket-level-access --public-access-prevention --labels=app=cartera,env=au
+  gcloud storage buckets create gs://gcs-intercambio-pro-903174625518 --project=zentra-cartera --location={{.region}} --uniform-bucket-level-access --public-access-prevention --labels=app=cartera,env=pro
+ticket:
+  id: REQ-41266
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Pablo Costa (QA · Cartera)
+  summary: 'Desde QA necesitamos acceso a los buckets de intercambio de entornos previos para validar los ficheros. Grupo: gcp-cartera-qa@zentra.dev. Si nos dais editor en el proyecto, mejor, así no volvemos a pedir.'
+story: |-
+  > **REQ-41266 · P4** · QA: *«Necesitamos acceso a los buckets de intercambio de previos para validar los ficheros. Grupo `gcp-cartera-qa@zentra.dev`. Si nos dais editor en el proyecto, mejor.»*
+
+  QA solo necesita **leer** ficheros, en **DEV y AU** («previos»). Mínimo privilegio:
+  - **Rol**: `Storage Object Viewer` (`roles/storage.objectViewer`): lee y lista objetos; no borra ni sube.
+  - **Dónde**: en **cada bucket**, no en el proyecto entero (editor en el proyecto les dejaría tocar todo).
+  - **A quién**: al **grupo** (`group:gcp-cartera-qa@zentra.dev`), nunca persona a persona.
+  - **PRO**: no se pide y no se da.
+
+  **En la consola**, en DEV y luego en AU:
+  1. **Selector de proyectos** › el proyecto del entorno.
+  2. **Cloud Storage › Buckets** › el bucket `gcs-intercambio-…` › pestaña **Permisos** › **Conceder acceso**.
+  3. Principal `group:gcp-cartera-qa@zentra.dev`, rol `roles/storage.objectViewer`.
+
+  Responde explicando qué se ha dado (y por qué no editor) y resuelve.
+objectives:
+- Lectura en el bucket de DEV
+- Lectura en el bucket de AU
+- Nada en PRO
+- Sin roles de proyecto
+- Responde y resuelve
+hints:
+- text: 'Bucket › Permisos › Conceder acceso › group:gcp-cartera-qa@zentra.dev › roles/storage.objectViewer. En los dos entornos.'
+quiz:
+- id: q1
+  question: Piden «editor en el proyecto» para leer ficheros. ¿Qué das?
+  options:
+  - Storage Object Viewer en los buckets que necesitan
+  - Editor en el proyecto, lo piden ellos
+  - Storage Admin en el proyecto
+  - Owner en el bucket
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud config set project dev-zentra-cartera
+  gcloud storage buckets add-iam-policy-binding gs://gcs-intercambio-dev-418526730194 --member=group:gcp-cartera-qa@zentra.dev --role=roles/storage.objectViewer
+  gcloud config set project au-zentra-cartera
+  gcloud storage buckets add-iam-policy-binding gs://gcs-intercambio-au-725361948027 --member=group:gcp-cartera-qa@zentra.dev --role=roles/storage.objectViewer
+  ticket update "Hola Pablo: el grupo gcp-cartera-qa ya puede leer y listar ficheros (Storage Object Viewer) en gcs-intercambio-dev-418526730194 (DEV) y gcs-intercambio-au-725361948027 (AU). No damos editor en el proyecto: con eso podríais cambiar o borrar cualquier recurso, y para validar ficheros basta con lectura. PRO no se ha tocado."
+  ticket resolve "Lectura de objetos para gcp-cartera-qa en los buckets de intercambio de DEV y AU; sin roles de proyecto ni acceso en PRO."
+shortcuts:
+- name: editor on the projects, as asked
+  run: |
+    gcloud projects add-iam-policy-binding dev-zentra-cartera --member=group:gcp-cartera-qa@zentra.dev --role=roles/editor
+    gcloud projects add-iam-policy-binding au-zentra-cartera --member=group:gcp-cartera-qa@zentra.dev --role=roles/editor
+    ticket update "Hola Pablo: dado editor al grupo gcp-cartera-qa en DEV y AU."
+    ticket resolve "Acceso de editor dado al grupo de QA en previos."
+- name: read access in PRO as well
+  run: |
+    gcloud storage buckets add-iam-policy-binding gs://gcs-intercambio-dev-418526730194 --member=group:gcp-cartera-qa@zentra.dev --role=roles/storage.objectViewer
+    gcloud storage buckets add-iam-policy-binding gs://gcs-intercambio-au-725361948027 --member=group:gcp-cartera-qa@zentra.dev --role=roles/storage.objectViewer
+    gcloud storage buckets add-iam-policy-binding gs://gcs-intercambio-pro-903174625518 --member=group:gcp-cartera-qa@zentra.dev --role=roles/storage.objectViewer
+    ticket update "Hola Pablo: lectura para gcp-cartera-qa en DEV, AU y, ya puestos, PRO."
+    ticket resolve "Lectura dada al grupo de QA en los tres entornos."
+rubric:
+- name: QA lee en previos
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:pablo.costa@zentra.dev
+    permission: storage.objects.get
+    resource: bucket:gcs-intercambio-dev-418526730194
+    desc: QA lee en el bucket de DEV
+  - type: iam
+    principal: user:pablo.costa@zentra.dev
+    permission: storage.objects.get
+    resource: bucket:gcs-intercambio-au-725361948027
+    desc: QA lee en el bucket de AU
+- name: Mínimo privilegio
+  validator: security
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: iam
+    principal: user:pablo.costa@zentra.dev
+    permission: storage.objects.delete
+    resource: bucket:gcs-intercambio-dev-418526730194
+    expect: false
+    desc: QA no puede borrar ficheros
+  - type: iam
+    principal: user:pablo.costa@zentra.dev
+    permission: storage.objects.get
+    resource: bucket:gcs-intercambio-pro-903174625518
+    expect: false
+    desc: Nada en PRO
+  - type: no_basic_roles
+    on: dev-zentra-cartera
+    members: [group:gcp-cartera-qa@zentra.dev]
+    desc: Sin roles básicos en el proyecto de DEV
+  - type: no_basic_roles
+    on: au-zentra-cartera
+    members: [group:gcp-cartera-qa@zentra.dev]
+    desc: Sin roles básicos en el proyecto de AU
+- name: Respuesta
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - viewer
+      - lectura
+      - leer
+      - read
+    - - editor
+    desc: Qué se ha dado y por qué no editor
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: buckets add-iam-policy-binding gs://gcs-intercambio-dev
+  title: En el bucket, no en el proyecto
+  why: 'El permiso más pequeño que sirve: leer objetos de ese bucket.'
+en:
+  title: REQ · Read access for QA to a pre-production bucket
+  summary: 'QA needs to read the files of the exchange bucket in DEV and AU. Give the group read only, only on those buckets and never in PRO.'
+  story: |-
+    > **REQ-41266 · P4** · QA: *"We need access to the pre-production exchange buckets to validate the files. Group `gcp-cartera-qa@zentra.dev`. If you give us editor on the project, even better."*
+
+    QA only needs to **read** files, in **DEV and AU** ("pre-production"). Least privilege:
+    - **Role**: `Storage Object Viewer` (`roles/storage.objectViewer`): reads and lists objects; doesn't delete or upload.
+    - **Where**: on **each bucket**, not on the whole project (editor on the project would let them touch everything).
+    - **To whom**: to the **group** (`group:gcp-cartera-qa@zentra.dev`), never person by person.
+    - **PRO**: not requested and not given.
+
+    **In the console**, in DEV and then in AU:
+    1. **Project picker** › the environment's project.
+    2. **Cloud Storage › Buckets** › the `gcs-intercambio-…` bucket › **Permissions** tab › **Grant access**.
+    3. Principal `group:gcp-cartera-qa@zentra.dev`, role `roles/storage.objectViewer`.
+
+    Reply explaining what was given (and why not editor) and resolve.
+  objectives:
+  - Read on the DEV bucket
+  - Read on the AU bucket
+  - Nothing in PRO
+  - No project roles
+  - Reply and resolve
+  hints:
+  - 'Bucket › Permissions › Grant access › group:gcp-cartera-qa@zentra.dev › roles/storage.objectViewer. In both environments.'
+  ticket:
+    summary: 'QA needs access to the pre-production exchange buckets to validate the files. Group: gcp-cartera-qa@zentra.dev. If you give us editor on the project, even better, so we don''t have to ask again.'
+  text:
+    Pablo Costa (QA · Cartera): Pablo Costa (QA · Cartera)
+    Piden «editor en el proyecto» para leer ficheros. ¿Qué das?: They ask for "editor on the project" to read files. What do you give?
+    Storage Object Viewer en los buckets que necesitan: Storage Object Viewer on the buckets they need
+    Editor en el proyecto, lo piden ellos: Editor on the project, they asked for it
+    Storage Admin en el proyecto: Storage Admin on the project
+    Owner en el bucket: Owner on the bucket
+    QA lee en previos: QA reads in pre-production
+    QA lee en el bucket de DEV: QA reads on the DEV bucket
+    QA lee en el bucket de AU: QA reads on the AU bucket
+    Mínimo privilegio: Least privilege
+    QA no puede borrar ficheros: QA cannot delete files
+    Nada en PRO: Nothing in PRO
+    Sin roles básicos en el proyecto de DEV: No basic roles on the DEV project
+    Sin roles básicos en el proyecto de AU: No basic roles on the AU project
+    Respuesta: Reply
+    Qué se ha dado y por qué no editor: What was given and why not editor
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    En el bucket, no en el proyecto: On the bucket, not on the project
+    'El permiso más pequeño que sirve: leer objetos de ese bucket.': 'The smallest permission that works: reading objects of that bucket.'

@@ -23,7 +23,7 @@ type Product = { id: string; label: string; icon: string; group: string; pages: 
 const n = (m: any) => (m ? (Array.isArray(m) ? m.length : Object.keys(m).length) : 0);
 
 export const PRODUCTS: Product[] = [
-  { id: "iam", label: k("IAM y administración"), icon: "person", group: k("Gestión"), pages: [{ id: "iam", label: k("IAM") }, { id: "sa", label: k("Cuentas de servicio"), count: (d) => n(d.serviceAccounts) }, { id: "roles", label: k("Roles"), count: (d) => n(d.customRoles) }, { id: "orgpolicies", label: k("Políticas de organización") }] },
+  { id: "iam", label: k("IAM y administración"), icon: "person", group: k("Gestión"), pages: [{ id: "iam", label: k("IAM") }, { id: "sa", label: k("Cuentas de servicio"), count: (d) => n(d.serviceAccounts) }, { id: "roles", label: k("Roles"), count: (d) => n(d.customRoles) }, { id: "orgpolicies", label: k("Políticas de organización") }, { id: "labels", label: k("Etiquetas") }] },
   { id: "scc", label: k("Security Command Center"), icon: "shield", group: k("Seguridad"), pages: [{ id: "scc", label: k("Hallazgos y recomendaciones") }] },
   { id: "apis", label: k("APIs y servicios"), icon: "api", group: k("Gestión"), pages: [{ id: "apis", label: k("APIs y servicios habilitados") }] },
   { id: "billing", label: k("Facturación"), icon: "billing", group: k("Gestión"), pages: [{ id: "billing", label: k("Informes") }, { id: "budgets", label: k("Presupuestos y alertas"), count: (d) => n(d.budgets) }] },
@@ -50,6 +50,7 @@ export const PRODUCTS: Product[] = [
   { id: "netservices", label: k("Servicios de red"), icon: "network", group: k("Redes"), pages: [{ id: "lb", label: k("Balanceo de carga"), count: (d) => n(d.forwardingRules) }, { id: "dns", label: k("Cloud DNS"), count: (d) => n(d.dnsZones) }, { id: "nat", label: k("Cloud NAT") }, { id: "armor", label: k("Cloud Armor"), count: (d) => n(d.securityPolicies) }, { id: "vpn", label: k("Cloud VPN") }] },
   { id: "nic", label: k("Network Intelligence Center"), icon: "network", group: k("Redes"), pages: [{ id: "topology", label: k("Topología de red") }] },
   { id: "secrets", label: k("Secret Manager"), icon: "lock", group: k("Seguridad"), pages: [{ id: "secrets", label: k("Secretos"), count: (d) => n(d.secrets) }] },
+  { id: "recaptcha", label: k("reCAPTCHA"), icon: "lock", group: k("Seguridad"), pages: [{ id: "recaptcha", label: k("Claves"), count: (d) => n(d.recaptchaKeys) }] },
   { id: "kms", label: k("Gestión de claves"), icon: "key", group: k("Seguridad"), pages: [{ id: "kms", label: k("Llaveros"), count: (d) => n(d.keyRings) }] },
   { id: "artifacts", label: k("Artifact Registry"), icon: "storage", group: k("CI/CD"), pages: [{ id: "artifacts", label: k("Repositorios"), count: (d) => n(d.artifactRepos) }] },
   { id: "build", label: k("Cloud Build"), icon: "refresh", group: k("CI/CD"), pages: [{ id: "build", label: k("Historial y activadores"), count: (d) => n(d.builds) }] },
@@ -66,7 +67,7 @@ type Toast = { ok: boolean; text: string; detail?: string; cmd: string; at: Date
 
 export default function CloudConsole({
   sessionId,
-  project,
+  project: labProject,
   region,
   zone,
   tick,
@@ -107,12 +108,16 @@ export default function CloudConsole({
   const [menu, setMenu] = useState(false);
   const [popup, setPopup] = useState<"" | "bell" | "help" | "project">("");
   const [creating, setCreating] = useState("");
+  const [pq, setPq] = useState("");
   const [reload, setReload] = useState(0);
   const [shell, setShell] = useState<"open" | "min" | "max">("open");
   const [shellMode, setShellMode] = useState<"terminal" | "editor">("terminal");
   const [shellH, setShellH] = useState(300);
   const menuRef = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
+  // the project chosen in the picker (shared with Cloud Shell's gcloud config)
+  const project: string = data?.currentProject ?? labProject;
+  const projects: { id: string; name: string; number: string }[] = data?.projects ?? [];
 
   useEffect(() => {
     try {
@@ -341,6 +346,8 @@ export default function CloudConsole({
       case "alerting": return <M.Alerting ctx={ctx} />;
       case "gke": return <P.GKE ctx={ctx} />;
       case "secrets": return <P.Secrets ctx={ctx} />;
+      case "recaptcha": return <P.Recaptcha ctx={ctx} />;
+      case "labels": return <P.ProjectLabels ctx={ctx} />;
       case "apis": return <P.APIs ctx={ctx} />;
       case "logs": return <O.LogsExplorer ctx={ctx} />;
       case "metrics": return <O.MetricsExplorer ctx={ctx} />;
@@ -373,13 +380,39 @@ export default function CloudConsole({
           {popup === "project" && (
             <div className="cc-pop wide" role="dialog" aria-label={t("Seleccionar un proyecto")}>
               <h2>{t("Seleccionar un proyecto")}</h2>
+              <input className="cc-pop-search" value={pq} onChange={(e) => setPq(e.target.value)} placeholder={t("Buscar proyectos")} aria-label={t("Buscar proyectos")} autoFocus />
               <table className="cc-table">
-                <thead><tr><th>{t("Nombre")}</th><th>ID</th></tr></thead>
+                <thead><tr><th>{t("Nombre")}</th><th>ID</th><th>{t("Número")}</th></tr></thead>
                 <tbody>
-                  <tr className="selected"><td>✓ {data?.name ?? project}</td><td><code>{project}</code></td></tr>
+                  {(projects.length ? projects : [{ id: project, name: data?.name ?? project, number: data?.projectNumber ?? "" }])
+                    .filter((p) => !pq || (p.name + " " + p.id + " " + p.number).toLowerCase().includes(pq.toLowerCase()))
+                    .map((p) => (
+                      <tr key={p.id} className={p.id === project ? "selected" : ""}>
+                        <td>
+                          {p.id === project ? (
+                            <span>✓ {p.name}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="cc-link"
+                              onClick={async () => {
+                                setPopup("");
+                                setPq("");
+                                await run(`gcloud config set project ${p.id}`, t("Cambiar al proyecto {p}", { p: p.id }));
+                                setReload((x) => x + 1);
+                              }}
+                            >
+                              {p.name}
+                            </button>
+                          )}
+                        </td>
+                        <td><code>{p.id}</code></td>
+                        <td><code>{p.number}</code></td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
-              <p className="cc-help">{t("Este laboratorio trabaja en un único proyecto. En la terminal: gcloud config get-value project")}</p>
+              <p className="cc-help">{t("Mira siempre el proyecto antes de cambiar nada: DEV, AU y PRO se parecen mucho. Cloud Shell usa el mismo proyecto (gcloud config get-value project).")}</p>
             </div>
           )}
         </div>

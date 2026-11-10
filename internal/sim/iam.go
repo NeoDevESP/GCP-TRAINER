@@ -67,6 +67,9 @@ var PredefinedRoles = map[string][]string{
 	"roles/pubsub.editor":     {"pubsub.topics.*", "pubsub.subscriptions.*", "pubsub.snapshots.*"},
 	"roles/pubsub.admin":      {"pubsub.*"},
 
+	"roles/recaptchaenterprise.admin":  {"recaptchaenterprise.*"},
+	"roles/recaptchaenterprise.viewer": {"recaptchaenterprise.keys.get", "recaptchaenterprise.keys.list"},
+
 	"roles/secretmanager.secretAccessor":       {"secretmanager.versions.access"},
 	"roles/secretmanager.viewer":               {"secretmanager.secrets.get", "secretmanager.secrets.list", "secretmanager.versions.get", "secretmanager.versions.list"},
 	"roles/secretmanager.secretVersionAdder":   {"secretmanager.versions.add"},

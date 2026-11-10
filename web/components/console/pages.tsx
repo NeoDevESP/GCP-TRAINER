@@ -718,16 +718,19 @@ export function Buckets({ ctx }: { ctx: Ctx }) {
         title: t("Crear un bucket"),
         submit: t("Crear"),
         note: () => t("Crear bucket"),
-        initial: { name: `${ctx.project}-bucket`, location: ctx.region, cls: "STANDARD", ubla: true, pap: true },
+        initial: { name: `${ctx.project}-bucket`, location: ctx.region, cls: "STANDARD", ubla: true, pap: true, enc: "google", kms: "", labels: "" },
         fields: [
           { id: "name", label: t("Nombre"), required: true, help: t("Único en todo el mundo: minúsculas, números, guiones y puntos.") },
           { id: "location", label: t("Ubicación"), type: "select", options: [...(REGIONS.includes(ctx.region) ? REGIONS : [ctx.region, ...REGIONS]), ["EU", t("EU (multirregión)")], ["US", t("US (multirregión)")]] },
           { id: "cls", label: t("Clase de almacenamiento"), type: "select", options: ["STANDARD", "NEARLINE", "COLDLINE", "ARCHIVE"] },
           { id: "ubla", label: t("Acceso uniforme a nivel de bucket"), type: "check", help: t("Solo IAM decide quién accede (sin ACL por objeto).") },
           { id: "pap", label: t("Aplicar la prevención de acceso público"), type: "check", help: t("Impide que el bucket se haga público por error.") },
+          { id: "enc", label: t("Cifrado"), type: "select", section: t("Protección de los datos"), options: [["google", t("Clave gestionada por Google")], ["cmek", t("Clave gestionada por el cliente (Cloud KMS)")]] },
+          { id: "kms", label: t("Clave de Cloud KMS"), required: true, placeholder: "projects/PROYECTO/locations/REGION/keyRings/LLAVERO/cryptoKeys/CLAVE", help: t("La clave debe estar en la misma ubicación que el bucket y el agente de Cloud Storage del proyecto necesita permiso sobre ella."), when: (v) => v.enc === "cmek" },
+          { id: "labels", label: t("Etiquetas"), section: t("Organización"), placeholder: "app=cartera,env=dev", help: t("clave=valor separadas por comas, en minúsculas.") },
         ],
         build: (v) =>
-          `gcloud storage buckets create gs://${v.name.trim()} --location=${v.location}${v.cls !== "STANDARD" ? ` --default-storage-class=${v.cls}` : ""}${v.ubla ? " --uniform-bucket-level-access" : ""}${v.pap ? " --public-access-prevention" : ""}`,
+          `gcloud storage buckets create gs://${v.name.trim()} --location=${v.location}${v.cls !== "STANDARD" ? ` --default-storage-class=${v.cls}` : ""}${v.ubla ? " --uniform-bucket-level-access" : ""}${v.pap ? " --public-access-prevention" : ""}${v.enc === "cmek" && v.kms.trim() ? ` --default-encryption-key=${v.kms.trim()}` : ""}${v.labels.trim() ? ` --labels=${v.labels.replace(/\s+/g, "")}` : ""}`,
       }}
       actions={[
         { icon: "⧉", label: t("Activar versiones"), note: () => t("Activar versiones de objetos"), cmds: (rs) => rs.map((r) => `gcloud storage buckets update gs://${r.name} --versioning`) },
@@ -1161,6 +1164,111 @@ export function Secrets({ ctx }: { ctx: Ctx }) {
         />
       )}
     </Resource>
+  );
+}
+
+// ---------------------------------------------------------------- project labels
+
+export function ProjectLabels({ ctx }: { ctx: Ctx }) {
+  const { t } = useI18n();
+  const d = ctx.data;
+  const rows = Object.entries((d.labels ?? {}) as Record<string, string>).map(([key, value]) => ({ key, value })).sort((a, b) => a.key.localeCompare(b.key));
+  const [edit, setEdit] = useState<{ key: string; value: string } | null>(null);
+  return (
+    <Resource
+      ctx={ctx}
+      title={t("Etiquetas")}
+      intro={
+        <>
+          {t("Proyecto")} <strong>{d.name ?? ctx.project}</strong> · ID <code>{ctx.project}</code> · {t("Número")} <code>{d.projectNumber}</code>.{" "}
+          {t("Las etiquetas (clave=valor) clasifican el proyecto: aplicación, entorno, centro de coste. Las usan la facturación y los inventarios.")}
+        </>
+      }
+      caption={t("Etiquetas del proyecto")}
+      rows={rows}
+      rowKey={(r) => r.key}
+      link="none"
+      empty={t("El proyecto no tiene etiquetas.")}
+      cols={[
+        { key: "k", label: t("Clave"), render: (r) => <code>{r.key}</code> },
+        { key: "v", label: t("Valor"), render: (r) => <code>{r.value}</code> },
+        { key: "e", label: t("Editar"), render: (r) => <button type="button" className="cc-link" onClick={() => setEdit(r)}>{t("Editar")}</button> },
+      ]}
+      create={{
+        label: t("Añadir etiqueta"),
+        title: t("Añadir una etiqueta al proyecto {p}", { p: ctx.project }),
+        submit: t("Guardar"),
+        note: () => t("Añadir etiqueta al proyecto"),
+        initial: { key: "", value: "" },
+        fields: [
+          { id: "key", label: t("Clave"), required: true, help: t("Minúsculas, números, _ y -; empieza por una letra.") },
+          { id: "value", label: t("Valor"), help: t("Minúsculas, números, _ y -.") },
+        ],
+        build: (v) => `gcloud projects update ${ctx.project} --update-labels=${v.key.trim()}=${v.value.trim()}`,
+      }}
+      actions={[
+        {
+          icon: "🗑",
+          label: t("Quitar"),
+          danger: true,
+          note: () => t("Quitar etiqueta del proyecto"),
+          cmds: (rs) => [`gcloud projects update ${ctx.project} --remove-labels=${rs.map((r) => r.key).join(",")}`],
+          confirm: { title: t("¿Quitar las etiquetas?"), text: t("Los informes de coste e inventario que las usan dejarán de ver el proyecto así."), button: t("Quitar") },
+        },
+      ]}
+    >
+      {edit && (
+        <Drawer
+          title={t("Editar la etiqueta {k}", { k: edit.key })}
+          submit={t("Guardar")}
+          initial={{ value: edit.value }}
+          fields={[{ id: "value", label: t("Valor"), help: t("Minúsculas, números, _ y -.") }]}
+          build={(v) => `gcloud projects update ${ctx.project} --update-labels=${edit.key}=${v.value.trim()}`}
+          onClose={() => setEdit(null)}
+          onRun={(cmd) => ctx.run(cmd, t("Editar etiqueta del proyecto"))}
+          onPaste={ctx.paste}
+        />
+      )}
+    </Resource>
+  );
+}
+
+// ---------------------------------------------------------------- reCAPTCHA
+
+export function Recaptcha({ ctx }: { ctx: Ctx }) {
+  const { t } = useI18n();
+  const rows = vals(ctx.data.recaptchaKeys).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  return (
+    <Resource
+      ctx={ctx}
+      detail={(r, close) => <D.RecaptchaDetail ctx={ctx} k={r} close={close} />}
+      link="name"
+      title={t("reCAPTCHA")}
+      intro={t("Claves que protegen formularios de bots. Una clave de sitio web solo funciona en los dominios de su lista (y sus subdominios).")}
+      caption={t("Claves")}
+      rows={rows}
+      rowKey={(r) => r.keyId}
+      empty={t("No hay claves en este proyecto.")}
+      cols={[
+        { key: "name", label: t("Nombre visible"), render: (r) => <strong>{r.displayName}</strong> },
+        { key: "id", label: t("ID de la clave"), render: (r) => <code>{r.keyId}</code> },
+        { key: "type", label: t("Tipo"), render: (r) => (r.integrationType === "CHECKBOX" ? t("Casilla de verificación") : r.integrationType === "INVISIBLE" ? t("Invisible") : t("Puntuación")) },
+        { key: "dom", label: t("Dominios"), render: (r) => (r.allowAllDomains ? t("Todos") : (r.domains ?? []).join(", ")) },
+      ]}
+      create={{
+        label: t("Crear clave"),
+        title: t("Crear una clave de reCAPTCHA"),
+        submit: t("Crear"),
+        note: () => t("Crear clave de reCAPTCHA"),
+        initial: { name: "", domains: "", type: "SCORE" },
+        fields: [
+          { id: "name", label: t("Nombre visible"), required: true },
+          { id: "type", label: t("Tipo"), type: "select", options: [["SCORE", t("Puntuación")], ["CHECKBOX", t("Casilla de verificación")], ["INVISIBLE", t("Invisible")]] },
+          { id: "domains", label: t("Dominios (uno por línea)"), type: "textarea", required: true, help: t("Solo el nombre del dominio, sin https:// ni ruta (por ejemplo, ficheros.example.com). Incluye sus subdominios.") },
+        ],
+        build: (v) => `gcloud recaptcha keys create --display-name=${q(v.name.trim())} --web --integration-type=${v.type.toLowerCase()} --domains=${v.domains.split(/[\s,]+/).filter(Boolean).join(",")}`,
+      }}
+    />
   );
 }
 

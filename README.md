@@ -28,12 +28,15 @@ camino: diagnóstico antes del cambio, seguridad, coste, riesgo y comunicación.
 | Planos | `internal/api`, `internal/orchestrator` | Plano de aprendizaje (usuarios, progreso) separado del plano de laboratorios (sesiones) y un evaluador aislado |
 | Web | `web/` | Exportación estática de Next.js servida por el binario de Go: panel, catálogo, espacio de trabajo del laboratorio con una consola gráfica al estilo de la de Google Cloud y Cloud Shell acoplado debajo (cada clic ejecuta y muestra el comando `gcloud` equivalente), xterm, Monaco, Mermaid, incidentes, empresa, grafo de habilidades, ligas y consola del instructor; WCAG 2 AA (auditado con axe, modo claro y oscuro) y modo lector de pantalla en la terminal |
 
-Contenido actual: 60 laboratorios en 15 rutas (un programa de 30 días de
-Associate Cloud Engineer, fundamentos, Linux, GKE, seguridad, redes, datos, sin servidor y big data, ML,
-arquitectura, DevOps, SRE, FinOps, proyectos finales y carrera), 13 misiones de
-empresa con sus incidentes por consecuencias, 20 modos de fallo en 3 sistemas
-(tres capas, tienda serverless y tienda en GKE), 16 insignias, 6 etapas
-profesionales y 10 especializaciones. Los laboratorios declaran las
+Contenido actual: 197 laboratorios en 17 rutas. La principal es Zentra, un banco
+digital ficticio: una Semana 0 desde cero, una Semana 1 con el oficio de soporte y
+nueve semanas de casos (la Semana 10, peticiones de plataforma resueltas en la
+consola entre DEV, AU y PRO: selector de proyectos, claves de reCAPTCHA, buckets con
+el estándar del banco, accesos, cuentas de servicio para GitHub, APIs, etiquetas y
+bajas). Además, un programa de 30 días de Associate Cloud Engineer, fundamentos,
+Linux, GKE, seguridad, redes, datos, sin servidor y big data, ML, arquitectura,
+DevOps, SRE, FinOps, proyectos finales y carrera; 13 misiones de empresa, 28
+insignias, 6 etapas profesionales y 10 especializaciones. Los laboratorios declaran las
 correcciones erróneas tentadoras («atajos») y CI demuestra que fallan.
 
 ## Idiomas
@@ -234,6 +237,7 @@ CI (`.github/workflows/ci.yml`) ejecuta las mismas comprobaciones más
 ## Documentación
 
 - [Conectar VS Code y Antigravity con el simulador](docs/editores.md)
+- [Chuleta: peticiones de plataforma en la consola (DEV, AU y PRO)](docs/peticiones-plataforma.md)
 - [CloudMastery 2.0: informe de entrega](docs/cloudmastery-2.0-informe.md) y [auditoría de partida](docs/cloudmastery-2.0-auditoria.md)
 - [Blueprint maestro de implementación](docs/blueprint/01-master-implementation-blueprint.md): arquitectura, contratos, esquema, DSL, fases y registro de cambios
 - [Auditoría del repositorio](docs/blueprint/00-repository-audit.md)

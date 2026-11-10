@@ -1,0 +1,211 @@
+id: zentra-p10-week10-test
+title: 'Prueba · Semana 10: puesta en marcha de la subida de documentos'
+summary: 'Una petición con todo lo de la semana: dominio en la clave de reCAPTCHA de AU, buckets con el estándar en AU y PRO, un número de proyecto mal copiado y el cambio de PRO. Sin pistas.'
+track: zentra
+day: 100
+level: professional
+branch: storage
+type: boss
+mode: production
+skills:
+- security.recaptcha
+- storage.buckets
+- storage.encryption
+- foundations.hierarchy
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+- PCSE
+difficulty: 4
+minutes: 45
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+ticket:
+  id: REQ-41350
+  kind: REQ
+  priority: P3
+  sla: 3d
+  reporter: Carla Méndez (Producto · Altas)
+  summary: 'Puesta en marcha de la subida de documentos en el alta de clientes, entornos AU y PRO. 1) Añadir a la clave de reCAPTCHA de AU (6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP) el dominio https://au-zentra-docs.s3.amazonaws.com. 2) Bucket con el estándar en AU: gcs-documentos-au-562918340276. 3) Bucket con el estándar en PRO: gcs-documentos-pro-562918340276.'
+actors:
+- role: requester
+  name: Carla Méndez (Producto · Altas)
+  persona: Product owner del formulario de alta de clientes.
+  fallback: Lo que va en el ticket es lo que necesitamos.
+  facts:
+  - keywords:
+    - - numero
+      - número
+      - pro
+      - '562918340276'
+      - '840137265518'
+      - error
+    answer: 'Tienes razón, en PRO copié el número de AU. Es el del proyecto zentra-altas: gcs-documentos-pro-840137265518.'
+  - keywords:
+    - - recaptcha
+      - pro
+      - clave
+      - key
+    answer: 'La clave de PRO no la toquéis todavía: el dominio de PRO lo pediremos cuando salgamos.'
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: 'Crear un bucket nuevo en PRO con el estándar: cambio estándar.'
+  facts:
+  - keywords:
+    - - pro
+      - bucket
+      - cambio
+      - change
+    answer: 'Cambio estándar CHG-8155 para crear el bucket en PRO. Anótalo en el ticket.'
+story: |-
+  **Proyectos de altas**: `dev-zentra-altas` (DEV), `au-zentra-altas` (AU) y `zentra-altas` (PRO).
+
+  > **REQ-41350 · P3** · Altas: *«1) Añadir a la clave de reCAPTCHA de AU el dominio `https://au-zentra-docs.s3.amazonaws.com`. 2) Bucket con el estándar en AU: `gcs-documentos-au-562918340276`. 3) Bucket con el estándar en PRO: `gcs-documentos-pro-562918340276`.»*
+
+  Todo lo de la semana, sin pistas. El **estándar de buckets**: región `europe-west1`, acceso uniforme, prevención de acceso público, CMEK con la clave `gcs` del llavero `zentra-almacen` **del propio proyecto** y etiquetas `app=altas` y `env=au`/`pro`. PRO, con su cambio.
+objectives:
+- Dominio en la clave de AU (sin perder el que tiene)
+- Bucket de AU con el estándar
+- Detecta y confirma el número de PRO
+- Cambio para PRO
+- Bucket de PRO con el estándar y el número correcto
+- Responde y resuelve
+solution: |
+  ticket
+  gcloud config set project au-zentra-altas
+  gcloud recaptcha keys describe 6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP
+  gcloud recaptcha keys update 6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP --web --display-name=altas-web-au --domains=altas.au.zentra.dev,au-zentra-docs.s3.amazonaws.com
+  gcloud projects describe au-zentra-altas --format='value(projectNumber)'
+  gcloud storage buckets create gs://gcs-documentos-au-562918340276 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/au-zentra-altas/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=altas,env=au
+  gcloud projects describe zentra-altas --format='value(projectNumber)'
+  ask requester "El bucket de PRO lleva 562918340276, que es el número de AU. ¿Uso el de zentra-altas?"
+  ask change "Necesito crear un bucket nuevo en PRO de altas con el estándar. ¿Qué cambio uso?"
+  gcloud config set project zentra-altas
+  gcloud storage buckets create gs://gcs-documentos-pro-840137265518 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/zentra-altas/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=altas,env=pro
+  ticket update "Hola Carla: 1) añadido au-zentra-docs.s3.amazonaws.com (sin https://) a la clave de reCAPTCHA de AU, que conserva altas.au.zentra.dev; la de PRO no se ha tocado. 2) Creado gcs-documentos-au-562918340276 en au-zentra-altas con el estándar. 3) En PRO el ticket traía el número de AU; confirmado contigo, creado gcs-documentos-pro-840137265518 en zentra-altas con el estándar y el cambio estándar CHG-8155."
+  ticket resolve "Dominio en la clave de AU, buckets de documentos en AU y PRO con el estándar (PRO con el número corregido y CHG-8155)."
+shortcuts:
+- name: everything as written in the ticket
+  run: |
+    gcloud recaptcha keys update 6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP --project=au-zentra-altas --web --domains=au-zentra-docs.s3.amazonaws.com
+    gcloud storage buckets create gs://gcs-documentos-au-562918340276 --project=au-zentra-altas --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/au-zentra-altas/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=altas,env=au
+    gcloud storage buckets create gs://gcs-documentos-pro-562918340276 --project=zentra-altas --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/zentra-altas/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=altas,env=pro
+    ticket update "Hola Carla: hecho todo tal como venía en el ticket."
+    ticket resolve "Dominio y buckets de documentos creados según el ticket."
+rubric:
+- name: reCAPTCHA de AU
+  validator: functional
+  points: 20
+  critical: true
+  all: true
+  checks:
+  - {type: exists, on: au-zentra-altas, path: 'recaptchaKeys["6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP"]', expect: {domains: {contains: au-zentra-docs.s3.amazonaws.com}}, desc: Dominio nuevo en la clave de AU}
+  - {type: exists, on: au-zentra-altas, path: 'recaptchaKeys["6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP"]', expect: {domains: {contains: altas.au.zentra.dev}}, desc: Se conserva altas.au.zentra.dev}
+  - {type: exists, on: zentra-altas, path: 'recaptchaKeys["6LfB7yKsAAAAAN5mQw2rT8vXc3hZp6jL1dEu9SgR"]', expect: {domains: {notContains: au-zentra-docs.s3.amazonaws.com}}, desc: La clave de PRO no cambia}
+- name: Buckets correctos
+  validator: functional
+  points: 25
+  critical: true
+  all: true
+  checks:
+  - {type: exists, on: au-zentra-altas, path: 'buckets["gcs-documentos-au-562918340276"]', desc: Bucket de AU}
+  - {type: exists, on: zentra-altas, path: 'buckets["gcs-documentos-pro-840137265518"]', desc: Bucket de PRO con el número de PRO}
+  - {type: absent, on: zentra-altas, path: 'buckets["gcs-documentos-pro-562918340276"]', desc: Ningún bucket de PRO con el número de AU}
+- name: Estándar del banco
+  validator: security
+  points: 20
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: au-zentra-altas
+    path: buckets["gcs-documentos-au-562918340276"]
+    expect:
+      location: EUROPE-WEST1
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      defaultKmsKey:
+        contains: au-zentra-altas/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs
+      labels.env: au
+    desc: AU cumple el estándar
+  - type: exists
+    on: zentra-altas
+    path: buckets["gcs-documentos-pro-840137265518"]
+    expect:
+      location: EUROPE-WEST1
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      defaultKmsKey:
+        contains: zentra-altas/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs
+      labels.env: pro
+    desc: PRO cumple el estándar
+- name: Proceso
+  validator: diagnosis
+  points: 20
+  all: true
+  checks:
+  - {type: asked, actor: requester, min: 1, desc: Número de PRO confirmado}
+  - {type: asked, actor: change, min: 1, desc: Cambio para PRO}
+- name: Respuesta
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - gcs-documentos-pro-840137265518
+    - - au-zentra-docs.s3.amazonaws.com
+    - - chg-8155
+    desc: Lo hecho, el número corregido y el cambio
+  - type: ticket_resolved
+    desc: Ticket resuelto
+en:
+  title: 'Test · Week 10: launching document upload'
+  summary: 'One request with everything from the week: a domain on the AU reCAPTCHA key, buckets with the standard in AU and PRO, a miscopied project number and the PRO change. No hints.'
+  story: |-
+    **Sign-up projects**: `dev-zentra-altas` (DEV), `au-zentra-altas` (AU) and `zentra-altas` (PRO).
+
+    > **REQ-41350 · P3** · Sign-up: *"1) Add the domain `https://au-zentra-docs.s3.amazonaws.com` to the AU reCAPTCHA key. 2) Bucket with the standard in AU: `gcs-documentos-au-562918340276`. 3) Bucket with the standard in PRO: `gcs-documentos-pro-562918340276`."*
+
+    Everything from the week, no hints. The **bucket standard**: region `europe-west1`, uniform access, public access prevention, CMEK with the `gcs` key of the `zentra-almacen` key ring **of the project itself** and labels `app=altas` and `env=au`/`pro`. PRO, with its change.
+  objectives:
+  - Domain on the AU key (keeping the one it has)
+  - AU bucket with the standard
+  - Spot and confirm the PRO number
+  - Change for PRO
+  - PRO bucket with the standard and the right number
+  - Reply and resolve
+  ticket:
+    summary: 'Launching document upload in customer sign-up, AU and PRO environments. 1) Add to the AU reCAPTCHA key (6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP) the domain https://au-zentra-docs.s3.amazonaws.com. 2) Bucket with the standard in AU: gcs-documentos-au-562918340276. 3) Bucket with the standard in PRO: gcs-documentos-pro-562918340276.'
+  text:
+    Carla Méndez (Producto · Altas): Carla Méndez (Product · Sign-up)
+    Product owner del formulario de alta de clientes.: Product owner of the customer sign-up form.
+    Lo que va en el ticket es lo que necesitamos.: What's in the ticket is what we need.
+    'Tienes razón, en PRO copié el número de AU. Es el del proyecto zentra-altas: gcs-documentos-pro-840137265518.': 'You''re right, in PRO I copied the AU number. It''s the zentra-altas project''s: gcs-documentos-pro-840137265518.'
+    'La clave de PRO no la toquéis todavía: el dominio de PRO lo pediremos cuando salgamos.': 'Don''t touch the PRO key yet: we''ll request the PRO domain when we go live.'
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    'Crear un bucket nuevo en PRO con el estándar: cambio estándar.': 'Creating a new bucket in PRO with the standard: a standard change.'
+    Cambio estándar CHG-8155 para crear el bucket en PRO. Anótalo en el ticket.: Standard change CHG-8155 to create the bucket in PRO. Note it on the ticket.
+    reCAPTCHA de AU: AU reCAPTCHA
+    Dominio nuevo en la clave de AU: New domain on the AU key
+    Se conserva altas.au.zentra.dev: altas.au.zentra.dev is kept
+    La clave de PRO no cambia: The PRO key does not change
+    Buckets correctos: Correct buckets
+    Bucket de AU: AU bucket
+    Bucket de PRO con el número de PRO: PRO bucket with the PRO number
+    Ningún bucket de PRO con el número de AU: No PRO bucket with the AU number
+    Estándar del banco: Bank standard
+    AU cumple el estándar: AU meets the standard
+    PRO cumple el estándar: PRO meets the standard
+    Proceso: Process
+    Número de PRO confirmado: PRO number confirmed
+    Cambio para PRO: Change for PRO
+    Respuesta: Reply
+    Lo hecho, el número corregido y el cambio: What was done, the corrected number and the change
+    Ticket resuelto: Ticket resolved

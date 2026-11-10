@@ -124,6 +124,7 @@ export interface SessionInfo {
   learnMode?: string;
   labId: string;
   project: string;
+  shellProject?: string; // gcloud config project, when switched away from the lab project
   region: string;
   zone: string;
   fidelity: string;

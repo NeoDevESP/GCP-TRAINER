@@ -1,0 +1,264 @@
+id: zentra-p02-recaptcha-domain
+title: REQ · Añadir un dominio a la clave de reCAPTCHA de previos
+summary: 'El equipo de altas migra a GitHub y sirve unos ficheros desde un dominio nuevo. Hay que añadirlo a la clave de reCAPTCHA de DEV, sin quitar los que ya tiene y sin tocar PRO.'
+track: zentra
+day: 92
+level: professional
+branch: security
+type: challenge
+mode: production
+skills:
+- security.recaptcha
+- foundations.hierarchy
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+difficulty: 2
+minutes: 20
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+ticket:
+  id: REQ-41207
+  kind: REQ
+  priority: P4
+  sla: 3d
+  reporter: Carla Méndez (Producto · Altas)
+  summary: 'Necesitamos configurar la clave de reCAPTCHA de entornos previos (DEV) del proyecto de altas. Clave: 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA. Nuevo dominio a incorporar: https://dev-zentra-docs.s3.amazonaws.com. Viene por la migración de Bitbucket a GitHub y el apagado de Jenkins.'
+actors:
+- role: requester
+  name: Carla Méndez (Producto · Altas)
+  persona: Product owner del formulario de alta de clientes.
+  fallback: 'Es solo para DEV: AU y PRO se piden cuando toque, con su cambio.'
+  facts:
+  - keywords:
+    - - pro
+      - au
+      - entorno
+      - environment
+      - produccion
+      - producción
+    answer: 'Solo DEV. En AU y PRO no hace falta todavía: cuando lleguemos, abriremos otra petición.'
+  - keywords:
+    - - https
+      - dominio
+      - domain
+      - ruta
+      - path
+    answer: 'Es el bucket de ficheros que ahora sirve la página de pruebas: dev-zentra-docs.s3.amazonaws.com. Lo de https:// es como lo copié del navegador.'
+story: |-
+  **Proyectos de altas**: `dev-zentra-altas` (DEV), `au-zentra-altas` (AU) y `zentra-altas` (PRO). Trabajas desde el proyecto de tu equipo (`{{.project}}`): los de la aplicación se abren con el **selector de proyectos** de la barra de arriba.
+
+  > **REQ-41207 · P4** · Altas: *«Necesitamos configurar la clave de reCAPTCHA de previos. Clave: `6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA`. Nuevo dominio a incorporar: `https://dev-zentra-docs.s3.amazonaws.com`»*
+
+  Aunque digan «API key», un ID que empieza por **6L** es una **clave de sitio de reCAPTCHA**. Una clave web solo funciona en los **dominios de su lista** (y sus subdominios). Tres trampas:
+
+  - El dominio va **sin `https://`** ni ruta: `dev-zentra-docs.s3.amazonaws.com`.
+  - La lista ya tiene dominios que **hay que conservar**. En la consola, «Añadir un dominio» los mantiene; en la terminal, `--domains` **sustituye** la lista entera.
+  - Es **solo DEV**: la clave de PRO es otra y no se toca.
+
+  **En la consola**
+  1. Lee el ticket (pestaña **Ticket**).
+  2. **Selector de proyectos** › `dev-zentra-altas`. Mira siempre el proyecto antes de cambiar nada.
+  3. **Menú › Seguridad › reCAPTCHA** y abre la clave cuyo ID coincide con el del ticket.
+  4. **Añadir un dominio** › `dev-zentra-docs.s3.amazonaws.com` › Guardar.
+  5. Comprueba en **Detalles** que están los tres dominios.
+  6. Responde al ticket (dominio añadido, en qué clave y entorno) y resuélvelo.
+
+  Abajo, en Cloud Shell, verás el comando equivalente de cada botón.
+objectives:
+- Abre el proyecto DEV de altas
+- Encuentra la clave del ticket
+- Añade el dominio sin quitar los demás
+- PRO y AU sin tocar
+- Responde y resuelve el ticket
+hints:
+- text: 'En la consola: Seguridad › reCAPTCHA › la clave › «Añadir un dominio». Solo el nombre: dev-zentra-docs.s3.amazonaws.com.'
+quiz:
+- id: q1
+  question: El ticket pide añadir https://dev-zentra-docs.s3.amazonaws.com. ¿Qué escribes en la lista de dominios?
+  options:
+  - dev-zentra-docs.s3.amazonaws.com
+  - https://dev-zentra-docs.s3.amazonaws.com
+  - https://dev-zentra-docs.s3.amazonaws.com/
+  - '*.amazonaws.com'
+  answer:
+  - 0
+- id: q2
+  question: En la terminal, ¿qué hace «gcloud recaptcha keys update CLAVE --web --domains=nuevo.example.com»?
+  options:
+  - Deja la clave solo con nuevo.example.com
+  - Añade nuevo.example.com a los que ya tenía
+  - Crea una clave nueva
+  - Nada sin --add
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud config set project dev-zentra-altas
+  gcloud recaptcha keys list
+  gcloud recaptcha keys describe 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA
+  gcloud recaptcha keys update 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA --web --display-name=altas-web-dev --domains=altas.dev.zentra.dev,localhost,dev-zentra-docs.s3.amazonaws.com
+  gcloud recaptcha keys describe 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA
+  ticket update "Hola Carla: añadido el dominio dev-zentra-docs.s3.amazonaws.com (sin https://, la lista solo admite el nombre) a la clave de reCAPTCHA altas-web-dev (6LdZtR8q…) del proyecto DEV dev-zentra-altas. Se mantienen altas.dev.zentra.dev y localhost. AU y PRO no se han tocado: cuando los necesitéis, abrid otra petición."
+  ticket resolve "Dominio dev-zentra-docs.s3.amazonaws.com añadido a la clave de reCAPTCHA de DEV; dominios anteriores conservados; PRO sin cambios."
+shortcuts:
+- name: replace the domain list with the new one
+  run: |
+    gcloud recaptcha keys update 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA --project=dev-zentra-altas --web --domains=dev-zentra-docs.s3.amazonaws.com
+    ticket update "Hola Carla: añadido el dominio dev-zentra-docs.s3.amazonaws.com a la clave de DEV."
+    ticket resolve "Dominio nuevo añadido a la clave de DEV."
+- name: add it to the PRO key too
+  run: |
+    gcloud recaptcha keys update 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA --project=dev-zentra-altas --web --domains=altas.dev.zentra.dev,localhost,dev-zentra-docs.s3.amazonaws.com
+    gcloud recaptcha keys update 6LfB7yKsAAAAAN5mQw2rT8vXc3hZp6jL1dEu9SgR --project=zentra-altas --web --domains=altas.zentra.dev,www.zentra.dev,dev-zentra-docs.s3.amazonaws.com
+    ticket update "Hola Carla: añadido el dominio dev-zentra-docs.s3.amazonaws.com en DEV y, ya puestos, en PRO."
+    ticket resolve "Dominio nuevo añadido en las claves de DEV y PRO."
+rubric:
+- name: Dominio en la clave de DEV
+  validator: functional
+  points: 40
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: dev-zentra-altas
+    path: recaptchaKeys["6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA"]
+    expect:
+      domains:
+        contains: dev-zentra-docs.s3.amazonaws.com
+    desc: El dominio nuevo está en la clave de DEV
+  - type: exists
+    on: dev-zentra-altas
+    path: recaptchaKeys["6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA"]
+    expect:
+      domains:
+        contains: altas.dev.zentra.dev
+    desc: Se conserva altas.dev.zentra.dev
+  - type: exists
+    on: dev-zentra-altas
+    path: recaptchaKeys["6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA"]
+    expect:
+      domains:
+        contains: localhost
+    desc: Se conserva localhost
+- name: Solo DEV
+  validator: security
+  points: 20
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: zentra-altas
+    path: recaptchaKeys["6LfB7yKsAAAAAN5mQw2rT8vXc3hZp6jL1dEu9SgR"]
+    expect:
+      domains:
+        notContains: dev-zentra-docs.s3.amazonaws.com
+    desc: La clave de PRO no cambia
+  - type: exists
+    on: au-zentra-altas
+    path: recaptchaKeys["6LcQ2nWpAAAAAHk8Rt3vMx7bZq1sY6dJ9fGa4LeP"]
+    expect:
+      domains:
+        notContains: dev-zentra-docs.s3.amazonaws.com
+    desc: La clave de AU no cambia
+- name: Respuesta al solicitante
+  validator: evidence
+  points: 25
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - dev-zentra-docs.s3.amazonaws.com
+    - - dev
+      - previos
+    desc: Dice qué dominio y en qué entorno
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 15
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Preguntas del caso
+tutor:
+- match: config set project
+  title: El proyecto correcto
+  why: 'En la consola es el selector de proyectos. DEV, AU y PRO se llaman casi igual: compruébalo antes de cambiar nada.'
+- match: recaptcha keys describe
+  title: Mira la lista actual
+  why: Antes de cambiar, apunta los dominios que ya tiene la clave.
+- match: recaptcha keys update
+  title: La lista entera
+  why: 'Con --domains se envía la lista completa: los de antes más el nuevo, sin https://.'
+en:
+  title: REQ · Add a domain to the pre-production reCAPTCHA key
+  summary: 'The sign-up team moves to GitHub and serves files from a new domain. Add it to the DEV reCAPTCHA key, without removing the ones it has and without touching PRO.'
+  story: |-
+    **Sign-up projects**: `dev-zentra-altas` (DEV), `au-zentra-altas` (AU) and `zentra-altas` (PRO). You work from your team's project (`{{.project}}`): the application ones open with the **project picker** in the top bar.
+
+    > **REQ-41207 · P4** · Sign-up: *"We need to configure the pre-production reCAPTCHA key. Key: `6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA`. New domain to add: `https://dev-zentra-docs.s3.amazonaws.com`"*
+
+    Even if they say "API key", an ID starting with **6L** is a **reCAPTCHA site key**. A web key only works on the **domains in its list** (and their subdomains). Three traps:
+
+    - The domain goes **without `https://`** or a path: `dev-zentra-docs.s3.amazonaws.com`.
+    - The list already has domains that **must stay**. In the console, "Add a domain" keeps them; in the terminal, `--domains` **replaces** the whole list.
+    - It is **DEV only**: the PRO key is a different one and is not touched.
+
+    **In the console**
+    1. Read the ticket (**Ticket** tab).
+    2. **Project picker** › `dev-zentra-altas`. Always check the project before changing anything.
+    3. **Menu › Security › reCAPTCHA** and open the key whose ID matches the ticket.
+    4. **Add a domain** › `dev-zentra-docs.s3.amazonaws.com` › Save.
+    5. Check in **Details** that the three domains are there.
+    6. Reply on the ticket (domain added, on which key and environment) and resolve it.
+
+    Below, in Cloud Shell, you'll see the equivalent command of each button.
+  objectives:
+  - Open the sign-up DEV project
+  - Find the ticket's key
+  - Add the domain without removing the others
+  - PRO and AU untouched
+  - Reply and resolve the ticket
+  hints:
+  - 'In the console: Security › reCAPTCHA › the key › "Add a domain". Just the name: dev-zentra-docs.s3.amazonaws.com.'
+  ticket:
+    summary: 'We need to configure the pre-production (DEV) reCAPTCHA key of the sign-up project. Key: 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA. New domain to add: https://dev-zentra-docs.s3.amazonaws.com. It comes from the migration from Bitbucket to GitHub and switching Jenkins off.'
+  text:
+    dev-zentra-docs.s3.amazonaws.com: dev-zentra-docs.s3.amazonaws.com
+    https://dev-zentra-docs.s3.amazonaws.com: https://dev-zentra-docs.s3.amazonaws.com
+    https://dev-zentra-docs.s3.amazonaws.com/: https://dev-zentra-docs.s3.amazonaws.com/
+    '*.amazonaws.com': '*.amazonaws.com'
+    Carla Méndez (Producto · Altas): Carla Méndez (Product · Sign-up)
+    Product owner del formulario de alta de clientes.: Product owner of the customer sign-up form.
+    'Es solo para DEV: AU y PRO se piden cuando toque, con su cambio.': 'It is DEV only: AU and PRO will be requested when needed, with their change.'
+    'Solo DEV. En AU y PRO no hace falta todavía: cuando lleguemos, abriremos otra petición.': 'DEV only. AU and PRO are not needed yet: when we get there, we will open another request.'
+    'Es el bucket de ficheros que ahora sirve la página de pruebas: dev-zentra-docs.s3.amazonaws.com. Lo de https:// es como lo copié del navegador.': 'It is the files bucket that now serves the test page: dev-zentra-docs.s3.amazonaws.com. The https:// is how I copied it from the browser.'
+    El ticket pide añadir https://dev-zentra-docs.s3.amazonaws.com. ¿Qué escribes en la lista de dominios?: The ticket asks to add https://dev-zentra-docs.s3.amazonaws.com. What do you type in the domain list?
+    En la terminal, ¿qué hace «gcloud recaptcha keys update CLAVE --web --domains=nuevo.example.com»?: In the terminal, what does "gcloud recaptcha keys update KEY --web --domains=nuevo.example.com" do?
+    Deja la clave solo con nuevo.example.com: Leaves the key with only nuevo.example.com
+    Añade nuevo.example.com a los que ya tenía: Adds nuevo.example.com to the ones it had
+    Crea una clave nueva: Creates a new key
+    Nada sin --add: Nothing without --add
+    Dominio en la clave de DEV: Domain on the DEV key
+    El dominio nuevo está en la clave de DEV: The new domain is on the DEV key
+    Se conserva altas.dev.zentra.dev: altas.dev.zentra.dev is kept
+    Se conserva localhost: localhost is kept
+    Solo DEV: DEV only
+    La clave de PRO no cambia: The PRO key does not change
+    La clave de AU no cambia: The AU key does not change
+    Respuesta al solicitante: Reply to the requester
+    Dice qué dominio y en qué entorno: Says which domain and which environment
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Preguntas del caso: Case questions
+    El proyecto correcto: The right project
+    'En la consola es el selector de proyectos. DEV, AU y PRO se llaman casi igual: compruébalo antes de cambiar nada.': 'In the console it is the project picker. DEV, AU and PRO have almost the same name: check it before changing anything.'
+    Mira la lista actual: Look at the current list
+    Antes de cambiar, apunta los dominios que ya tiene la clave.: Before changing, note the domains the key already has.
+    La lista entera: The whole list
+    'Con --domains se envía la lista completa: los de antes más el nuevo, sin https://.': 'With --domains you send the complete list: the old ones plus the new one, without https://.'

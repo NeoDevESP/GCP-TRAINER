@@ -423,6 +423,49 @@ Object.assign(flows, {
     check("free console: no page errors", errors.length === 0, errors.join("; "));
     await ctx.close();
   },
+
+  // Platform requests (week 10): find a project by its number in the picker,
+  // switch to it (Cloud Shell follows) and add a domain to its reCAPTCHA key
+  // from the console, keeping the domains it already had.
+  async projectPickerRecaptcha(browser) {
+    const tok = await account("pick");
+    const s = await (await call(tok, "/api/labs/zentra-p02-recaptcha-domain/start", { mode: "assisted" })).json();
+    const { ctx, p, errors } = await page(browser, tok);
+    await p.goto(`${base}/lab?session=${s.id}&id=zentra-p02-recaptcha-domain`, { waitUntil: "networkidle" });
+    await skipTour(p);
+    await p.locator(".cc-project").click();
+    const pop = p.getByRole("dialog", { name: "Seleccionar un proyecto" });
+    const rows = await pop.locator("tbody tr").count();
+    check("picker: lists the DEV, AU and PRO projects", rows >= 12, `${rows} projects`);
+    await pop.getByLabel("Buscar proyectos").fill("318204657913");
+    const found = await pop.locator("tbody tr").allInnerTexts();
+    check("picker: searching by number finds the one project", found.length === 1 && found[0].includes("dev-zentra-altas"), found.join(" | "));
+    await pop.locator("tbody tr button.cc-link").click();
+    await p.locator(".cc-project", { hasText: "dev-zentra-altas" }).waitFor({ timeout: 15000 });
+    const cfg = await (await exec(tok, s.id, "gcloud config get-value project")).json();
+    check("picker: Cloud Shell follows the chosen project", cfg.output.trim() === "dev-zentra-altas", cfg.output.trim());
+    // Menu › reCAPTCHA › the key › Añadir un dominio
+    await p.getByRole("button", { name: "Menú de navegación" }).click();
+    await p.locator(".cc-menu-item", { hasText: "reCAPTCHA" }).click();
+    const row = p.locator(".cc-main tbody tr", { hasText: "6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA" });
+    await row.waitFor({ timeout: 15000 });
+    check("recaptcha: the DEV key is listed in the DEV project", (await row.count()) === 1);
+    await row.locator("button, a").first().click();
+    await p.getByRole("button", { name: "Añadir un dominio" }).click();
+    await p.getByRole("textbox", { name: /^Dominio/ }).fill("dev-zentra-docs.s3.amazonaws.com");
+    await p.getByRole("button", { name: "Guardar", exact: true }).click();
+    let d = { output: "" };
+    for (let i = 0; i < 10 && !d.output.includes("dev-zentra-docs"); i++) {
+      d = await (await exec(tok, s.id, "gcloud recaptcha keys describe 6LdZtR8qAAAAAJx3wPm7vK2nYq5cT9bH4sLfE1uA --format='value(webSettings.allowedDomains)'")).json();
+      if (!d.output.includes("dev-zentra-docs")) await p.waitForTimeout(500);
+    }
+    check("recaptcha: the domain is added and the old ones kept", ["dev-zentra-docs.s3.amazonaws.com", "altas.dev.zentra.dev", "localhost"].every((x) => d.output.includes(x)), d.output.trim());
+    await p.reload({ waitUntil: "networkidle" });
+    const shell = p.locator(".xterm-rows", { hasText: "(dev-zentra-altas)$" });
+    check("picker: after a reload Cloud Shell still shows the chosen project", await shell.waitFor({ timeout: 15000 }).then(() => true, () => false));
+    check("recaptcha: no page errors", errors.length === 0, errors.join("; "));
+    await ctx.close();
+  },
 });
 
 const only = process.argv[3];

@@ -1,0 +1,318 @@
+id: zentra-p03-bucket-three-envs
+title: REQ · Un bucket en DEV, AU y PRO con el estándar del banco
+summary: 'Cartera pide el mismo bucket en los tres entornos, con el nombre gcs-intercambio-<entorno>-<número de proyecto>. Comprueba cada número, aplica el estándar (UE, acceso uniforme, sin acceso público, CMEK, etiquetas) y PRO con su cambio.'
+track: zentra
+day: 93
+level: professional
+branch: storage
+type: challenge
+mode: production
+skills:
+- storage.buckets
+- storage.encryption
+- foundations.hierarchy
+wellArchitected:
+- security
+- operations
+certs:
+- ACE
+- PCSE
+difficulty: 3
+minutes: 35
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+ticket:
+  id: REQ-41233
+  kind: REQ
+  priority: P3
+  sla: 5d
+  reporter: Sara Benítez (Datos · Cartera)
+  summary: 'Para la iniciativa «Intercambio con gestoras» solicitamos la creación de un bucket en los tres entornos, DEV, AU y PRO. DEV: gcs-intercambio-dev-418526730194. AU: gcs-intercambio-au-725361948027. PRO: gcs-intercambio-pro-903174625518. Nombre: gcs-intercambio-<env>-<project-number>.'
+actors:
+- role: change
+  name: Javier Luna (Gestión de cambios)
+  persona: Gestor de cambios (CAB).
+  fallback: 'Crear un recurso nuevo en PRO es un cambio estándar: te doy número.'
+  facts:
+  - keywords:
+    - - pro
+      - produccion
+      - producción
+      - cambio
+      - change
+      - bucket
+    answer: 'Crear un bucket nuevo en PRO con el estándar es un cambio estándar preaprobado: usa CHG-8110 y anótalo en el ticket.'
+- role: requester
+  name: Sara Benítez (Datos · Cartera)
+  persona: Ingeniera de datos del equipo de cartera.
+  fallback: Los nombres y los proyectos van en el ticket.
+  facts:
+  - keywords:
+    - - region
+      - región
+      - ubicacion
+      - ubicación
+      - location
+      - cifrado
+      - cmek
+      - estandar
+      - estándar
+    answer: 'Lo de siempre: el estándar del banco. En la región de Bélgica, con la clave de cada proyecto.'
+story: |-
+  **Proyectos de cartera**: `dev-zentra-cartera` (DEV), `au-zentra-cartera` (AU) y `zentra-cartera` (PRO).
+
+  > **REQ-41233 · P3** · Cartera: *«Solicitamos la creación de un bucket en los tres entornos. DEV: `gcs-intercambio-dev-418526730194` · AU: `gcs-intercambio-au-725361948027` · PRO: `gcs-intercambio-pro-903174625518`»*
+
+  **Estándar de buckets de Zentra** (lo que el banco exige siempre, aunque el ticket no lo diga):
+
+  | Campo | Valor |
+  |---|---|
+  | Ubicación | Región `europe-west1` (datos en la UE) |
+  | Control de acceso | **Uniforme** |
+  | Acceso público | **Prevención aplicada** |
+  | Cifrado | **Clave del cliente** del propio proyecto: `projects/<proyecto>/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs` |
+  | Etiquetas | `app=cartera` y `env=dev` / `au` / `pro` |
+
+  **En la consola**, para **cada entorno**:
+  1. **Selector de proyectos** › el proyecto del entorno. Comprueba en el **Panel** que el **número** coincide con el del nombre del bucket.
+  2. **Menú › Cloud Storage › Buckets › Crear bucket** y rellena con el estándar (el cifrado y las etiquetas están al final del formulario).
+  3. Crear y revisar el bucket.
+
+  **PRO** no se toca sin cambio: pregunta a Gestión de cambios y anota el número en el ticket. Al terminar, responde con los tres nombres y resuelve.
+objectives:
+- Comprueba el número de cada proyecto
+- Bucket en DEV con el estándar
+- Bucket en AU con el estándar
+- Cambio para PRO
+- Bucket en PRO con el estándar
+- Responde y resuelve el ticket
+hints:
+- text: 'Cada bucket va en su proyecto: cambia el proyecto en el selector antes de pulsar «Crear bucket». La clave CMEK es la del mismo proyecto.'
+quiz:
+- id: q1
+  question: ¿Por qué cada bucket usa la clave KMS de su propio proyecto y no una común?
+  options:
+  - Cada entorno queda aislado y PRO no depende de DEV
+  - Porque es más barato
+  - Porque Cloud Storage no deja usar claves de otro proyecto
+  - Da igual, es por costumbre
+  answer:
+  - 0
+- id: q2
+  question: Vas a crear el bucket de AU y el selector dice dev-zentra-cartera. ¿Qué haces?
+  options:
+  - Cambio al proyecto de AU y compruebo su número antes de crear nada
+  - Lo creo y luego lo muevo
+  - Lo creo igual, el nombre ya dice que es de AU
+  - Pongo --project en el nombre
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud config set project dev-zentra-cartera
+  gcloud projects describe dev-zentra-cartera --format='value(projectNumber)'
+  gcloud storage buckets create gs://gcs-intercambio-dev-418526730194 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/dev-zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=cartera,env=dev
+  gcloud config set project au-zentra-cartera
+  gcloud projects describe au-zentra-cartera --format='value(projectNumber)'
+  gcloud storage buckets create gs://gcs-intercambio-au-725361948027 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/au-zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=cartera,env=au
+  ask change "¿Qué cambio uso para crear un bucket nuevo en PRO de cartera?"
+  gcloud config set project zentra-cartera
+  gcloud projects describe zentra-cartera --format='value(projectNumber)'
+  gcloud storage buckets create gs://gcs-intercambio-pro-903174625518 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=cartera,env=pro
+  gcloud storage buckets describe gs://gcs-intercambio-pro-903174625518
+  ticket update "Hola Sara: creados los tres buckets con el estándar del banco (europe-west1, acceso uniforme, prevención de acceso público, CMEK con la clave gcs de cada proyecto y etiquetas app/env). DEV: gcs-intercambio-dev-418526730194 en dev-zentra-cartera. AU: gcs-intercambio-au-725361948027 en au-zentra-cartera. PRO: gcs-intercambio-pro-903174625518 en zentra-cartera, con el cambio estándar CHG-8110."
+  ticket resolve "Buckets gcs-intercambio creados en DEV, AU y PRO con el estándar; PRO con CHG-8110."
+shortcuts:
+- name: all three in the DEV project
+  run: |
+    gcloud config set project dev-zentra-cartera
+    gcloud storage buckets create gs://gcs-intercambio-dev-418526730194 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/dev-zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=cartera,env=dev
+    gcloud storage buckets create gs://gcs-intercambio-au-725361948027 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/dev-zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=cartera,env=au
+    gcloud storage buckets create gs://gcs-intercambio-pro-903174625518 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/dev-zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=cartera,env=pro
+    ticket update "Hola Sara: creados los tres buckets gcs-intercambio de DEV, AU y PRO."
+    ticket resolve "Buckets gcs-intercambio creados en los tres entornos pedidos."
+- name: buckets without the standard
+  run: |
+    gcloud storage buckets create gs://gcs-intercambio-dev-418526730194 --project=dev-zentra-cartera --location=europe-west1
+    gcloud storage buckets create gs://gcs-intercambio-au-725361948027 --project=au-zentra-cartera --location=europe-west1
+    gcloud storage buckets create gs://gcs-intercambio-pro-903174625518 --project=zentra-cartera --location=europe-west1
+    ticket update "Hola Sara: creados los tres buckets gcs-intercambio en DEV, AU y PRO con CHG-8110."
+    ticket resolve "Buckets gcs-intercambio creados en los tres entornos pedidos."
+rubric:
+- name: Cada bucket en su proyecto
+  validator: functional
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: dev-zentra-cartera
+    path: buckets["gcs-intercambio-dev-418526730194"]
+    desc: Bucket de DEV en dev-zentra-cartera
+  - type: exists
+    on: au-zentra-cartera
+    path: buckets["gcs-intercambio-au-725361948027"]
+    desc: Bucket de AU en au-zentra-cartera
+  - type: exists
+    on: zentra-cartera
+    path: buckets["gcs-intercambio-pro-903174625518"]
+    desc: Bucket de PRO en zentra-cartera
+- name: Estándar del banco
+  validator: security
+  points: 30
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: dev-zentra-cartera
+    path: buckets["gcs-intercambio-dev-418526730194"]
+    expect:
+      location: EUROPE-WEST1
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      defaultKmsKey:
+        contains: dev-zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs
+      labels.env: dev
+      labels.app: cartera
+    desc: DEV cumple el estándar
+  - type: exists
+    on: au-zentra-cartera
+    path: buckets["gcs-intercambio-au-725361948027"]
+    expect:
+      location: EUROPE-WEST1
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      defaultKmsKey:
+        contains: au-zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs
+      labels.env: au
+      labels.app: cartera
+    desc: AU cumple el estándar
+  - type: exists
+    on: zentra-cartera
+    path: buckets["gcs-intercambio-pro-903174625518"]
+    expect:
+      location: EUROPE-WEST1
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      defaultKmsKey:
+        contains: zentra-cartera/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs
+      labels.env: pro
+      labels.app: cartera
+    desc: PRO cumple el estándar
+- name: PRO con cambio
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: asked
+    actor: change
+    min: 1
+    desc: Cambio pedido para PRO
+- name: Respuesta al solicitante
+  validator: evidence
+  points: 15
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - gcs-intercambio-dev-418526730194
+    - - gcs-intercambio-au-725361948027
+    - - gcs-intercambio-pro-903174625518
+    - - chg-8110
+    desc: Los tres buckets y el cambio de PRO
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Preguntas del caso
+tutor:
+- match: config set project
+  title: Primero, el proyecto
+  why: 'En la consola es el selector. Cada bucket va en el proyecto de su entorno: créalo con el proyecto equivocado y estará en el entorno equivocado.'
+- match: projects describe
+  title: El número cuadra
+  why: El número del proyecto debe ser el mismo que el del nombre del bucket.
+- match: storage buckets create
+  title: Con el estándar
+  why: 'Ubicación UE, acceso uniforme, sin acceso público, la clave CMEK del propio proyecto y etiquetas app/env.'
+en:
+  title: REQ · A bucket in DEV, AU and PRO with the bank's standard
+  summary: 'Cartera asks for the same bucket in the three environments, named gcs-intercambio-<environment>-<project number>. Check each number, apply the standard (EU, uniform access, no public access, CMEK, labels) and PRO with its change.'
+  story: |-
+    **Cartera projects**: `dev-zentra-cartera` (DEV), `au-zentra-cartera` (AU) and `zentra-cartera` (PRO).
+
+    > **REQ-41233 · P3** · Cartera: *"We request a bucket in the three environments. DEV: `gcs-intercambio-dev-418526730194` · AU: `gcs-intercambio-au-725361948027` · PRO: `gcs-intercambio-pro-903174625518`"*
+
+    **Zentra bucket standard** (what the bank always requires, even if the ticket doesn't say):
+
+    | Field | Value |
+    |---|---|
+    | Location | Region `europe-west1` (data in the EU) |
+    | Access control | **Uniform** |
+    | Public access | **Prevention enforced** |
+    | Encryption | **Customer-managed key** of the project itself: `projects/<project>/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs` |
+    | Labels | `app=cartera` and `env=dev` / `au` / `pro` |
+
+    **In the console**, for **each environment**:
+    1. **Project picker** › the environment's project. Check on the **Dashboard** that the **number** matches the one in the bucket name.
+    2. **Menu › Cloud Storage › Buckets › Create bucket** and fill it in with the standard (encryption and labels are at the end of the form).
+    3. Create and review the bucket.
+
+    **PRO** is not touched without a change: ask Change management and note the number on the ticket. When done, reply with the three names and resolve.
+  objectives:
+  - Check each project's number
+  - DEV bucket with the standard
+  - AU bucket with the standard
+  - Change for PRO
+  - PRO bucket with the standard
+  - Reply and resolve the ticket
+  hints:
+  - 'Each bucket goes in its project: switch the project in the picker before pressing "Create bucket". The CMEK key is the one of the same project.'
+  ticket:
+    summary: 'For the "Exchange with asset managers" initiative we request a bucket in the three environments, DEV, AU and PRO. DEV: gcs-intercambio-dev-418526730194. AU: gcs-intercambio-au-725361948027. PRO: gcs-intercambio-pro-903174625518. Name: gcs-intercambio-<env>-<project-number>.'
+  text:
+    Sara Benítez (Datos · Cartera): Sara Benítez (Data · Cartera)
+    Javier Luna (Gestión de cambios): Javier Luna (Change management)
+    Gestor de cambios (CAB).: Change manager (CAB).
+    'Crear un recurso nuevo en PRO es un cambio estándar: te doy número.': 'Creating a new resource in PRO is a standard change: I''ll give you a number.'
+    'Crear un bucket nuevo en PRO con el estándar es un cambio estándar preaprobado: usa CHG-8110 y anótalo en el ticket.': 'Creating a new bucket in PRO with the standard is a pre-approved standard change: use CHG-8110 and note it on the ticket.'
+    Ingeniera de datos del equipo de cartera.: Data engineer of the cartera team.
+    Los nombres y los proyectos van en el ticket.: The names and projects are in the ticket.
+    'Lo de siempre: el estándar del banco. En la región de Bélgica, con la clave de cada proyecto.': 'The usual: the bank standard. In the Belgium region, with each project''s key.'
+    ¿Por qué cada bucket usa la clave KMS de su propio proyecto y no una común?: Why does each bucket use its own project's KMS key and not a shared one?
+    Cada entorno queda aislado y PRO no depende de DEV: Each environment stays isolated and PRO does not depend on DEV
+    Porque es más barato: Because it is cheaper
+    Porque Cloud Storage no deja usar claves de otro proyecto: Because Cloud Storage does not allow keys from another project
+    Da igual, es por costumbre: It doesn't matter, it's habit
+    Vas a crear el bucket de AU y el selector dice dev-zentra-cartera. ¿Qué haces?: You are about to create the AU bucket and the picker says dev-zentra-cartera. What do you do?
+    Cambio al proyecto de AU y compruebo su número antes de crear nada: I switch to the AU project and check its number before creating anything
+    Lo creo y luego lo muevo: I create it and move it later
+    Lo creo igual, el nombre ya dice que es de AU: I create it anyway, the name already says it is AU
+    Pongo --project en el nombre: I put --project in the name
+    Cada bucket en su proyecto: Each bucket in its project
+    Bucket de DEV en dev-zentra-cartera: DEV bucket in dev-zentra-cartera
+    Bucket de AU en au-zentra-cartera: AU bucket in au-zentra-cartera
+    Bucket de PRO en zentra-cartera: PRO bucket in zentra-cartera
+    Estándar del banco: Bank standard
+    DEV cumple el estándar: DEV meets the standard
+    AU cumple el estándar: AU meets the standard
+    PRO cumple el estándar: PRO meets the standard
+    PRO con cambio: PRO with a change
+    Cambio pedido para PRO: Change requested for PRO
+    Respuesta al solicitante: Reply to the requester
+    Los tres buckets y el cambio de PRO: The three buckets and the PRO change
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Preguntas del caso: Case questions
+    Primero, el proyecto: First, the project
+    'En la consola es el selector. Cada bucket va en el proyecto de su entorno: créalo con el proyecto equivocado y estará en el entorno equivocado.': 'In the console it is the picker. Each bucket goes in its environment''s project: create it with the wrong project and it will be in the wrong environment.'
+    El número cuadra: The number matches
+    El número del proyecto debe ser el mismo que el del nombre del bucket.: The project number must be the same as the one in the bucket name.
+    Con el estándar: With the standard
+    'Ubicación UE, acceso uniforme, sin acceso público, la clave CMEK del propio proyecto y etiquetas app/env.': 'EU location, uniform access, no public access, the project''s own CMEK key and app/env labels.'

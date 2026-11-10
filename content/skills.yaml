@@ -115,6 +115,7 @@ branches:
   - id: security
     name: Seguridad
     skills:
+      - {id: security.recaptcha, name: reCAPTCHA, observable: "Gestiona las claves de reCAPTCHA y sus dominios permitidos sin romper los que ya funcionan", requires: [foundations.hierarchy], en: {name: reCAPTCHA, observable: "Manages reCAPTCHA keys and their allowed domains without breaking the ones that work"}}
       - {id: security.secrets, name: Secret Manager, observable: "Saca los secretos de la configuración, los rota y acota su acceso", requires: [iam.leastprivilege], en: {name: Secret Manager, observable: "Removes secrets from configuration, rotates and scopes access"}}
       - {id: security.kms, name: Cloud KMS, observable: "Gestiona claves, su rotación y la separación entre cifrado y descifrado", requires: [iam.leastprivilege], en: {name: Cloud KMS, observable: "Manages keys, rotation and encrypter/decrypter separation"}}
       - {id: security.armor, name: Cloud Armor y exposición, observable: "Detecta y cierra exposiciones no deseadas", requires: [networking.lb, iam.leastprivilege], en: {name: Cloud Armor & exposure, observable: "Detects and closes unintended exposure"}}

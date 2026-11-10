@@ -1,6 +1,6 @@
 "use client";
 
-// The study plan. The curriculum is ten modules in order (lib/plan.ts); how
+// The study plan. The curriculum is a list of modules in order (lib/plan.ts); how
 // many days it takes depends on the time the learner chooses per day: pending
 // activities are packed into sessions with their real duration (lab minutes,
 // concepts and questions of each topic, the exam, shifts). Each activity is
@@ -121,7 +121,7 @@ export default function PlanPage() {
           <div>
             <h1>{t("Tu plan de estudio")}</h1>
             <p className="muted" style={{ margin: "6px 0 0", maxWidth: 700 }}>
-              {t("Diez módulos en orden, de cero al puesto de soporte. Tú eliges cuánto tiempo tienes al día y el plan reparte lo pendiente con la duración real de cada actividad. Las casillas se marcan solas al superar cada cosa.")}
+              {t("Módulos en orden, de cero al puesto de soporte. Tú eliges cuánto tiempo tienes al día y el plan reparte lo pendiente con la duración real de cada actividad. Las casillas se marcan solas al superar cada cosa.")}
             </p>
           </div>
           <div className="pl-total" aria-label={t("Progreso del plan")}>
@@ -159,7 +159,7 @@ export default function PlanPage() {
                         <span className="pl-num">{i + 1}</span>
                         <span className="pl-dtitle">
                           {i === 0 ? t("Hoy") : t("Sesión {n}", { n: i + 1 })} · {fmtMin(d.minutes)}
-                          <span className="pl-dsub">{t(moduleTitle(DAYS[d.entries[0].module].title))}</span>
+                          <span className="pl-dsub">{moduleTitle(t(DAYS[d.entries[0].module].title))}</span>
                         </span>
                       </button>
                     </li>
@@ -175,7 +175,7 @@ export default function PlanPage() {
                     </p>
                     {Array.from(new Set(session.entries.map((e) => e.module))).map((m) => (
                       <div key={m}>
-                        <h3 className="pl-module">{t("Módulo {n}", { n: m + 1 })} · {t(moduleTitle(DAYS[m].title))}</h3>
+                        <h3 className="pl-module">{t("Módulo {n}", { n: m + 1 })} · {moduleTitle(t(DAYS[m].title))}</h3>
                         <p className="muted small" style={{ marginTop: 0 }}>{t(DAYS[m].goal)}</p>
                         <ul className="pl-items">{session.entries.filter((e) => e.module === m).map(row)}</ul>
                       </div>
@@ -191,7 +191,7 @@ export default function PlanPage() {
                 const min = items.reduce((a, e) => a + e.minutes, 0);
                 return (
                   <div key={m}>
-                    <h3 className="pl-module">{t("Módulo {n}", { n: m + 1 })} · {t(moduleTitle(d.title))} <span className="muted small">· {fmtMin(min)} · {items.filter((e) => e.done).length}/{items.length}</span></h3>
+                    <h3 className="pl-module">{t("Módulo {n}", { n: m + 1 })} · {moduleTitle(t(d.title))} <span className="muted small">· {fmtMin(min)} · {items.filter((e) => e.done).length}/{items.length}</span></h3>
                     <ul className="pl-items">{items.map(row)}</ul>
                   </div>
                 );

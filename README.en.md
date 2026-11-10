@@ -28,11 +28,14 @@ and communication.
 | Planes | `internal/api`, `internal/orchestrator` | Learning plane (users, progress) separated from the lab plane (sessions) and an isolated grader worker |
 | Web | `web/` | Next.js static export served by the Go binary: dashboard, catalog, lab workspace with a graphical console modelled on the Google Cloud console and Cloud Shell docked below (every click runs and shows the equivalent `gcloud` command), xterm, Monaco, Mermaid, incidents, company, skill graph, leagues, instructor console; WCAG 2 AA (axe-audited, light and dark), terminal screen-reader mode |
 
-Content today: 60 labs in 15 tracks (a 30-day Associate Cloud Engineer
-programme, foundations, Linux, GKE, security, network, data, serverless and big data, ML, architect,
-DevOps, SRE, FinOps, capstones and career), 13 company missions and consequence
-incidents, 20 failure modes in 3 systems (three-tier, serverless shop, GKE
-shop), 16 badges, 6 career stages and 10 specialisations. Labs declare the
+Content today: 197 labs in 17 tracks. The main one is Zentra, a fictional
+digital bank: a Week 0 from zero, a Week 1 on the support craft and nine weeks of
+cases (Week 10, platform requests solved in the console across DEV, AU and PRO:
+project picker, reCAPTCHA keys, buckets with the bank's standard, access, service
+accounts for GitHub, APIs, labels and offboarding). Also a 30-day Associate Cloud
+Engineer programme, foundations, Linux, GKE, security, network, data, serverless
+and big data, ML, architect, DevOps, SRE, FinOps, capstones and career; 13 company
+missions, 28 badges, 6 career stages and 10 specialisations. Labs declare the
 tempting wrong fixes ("shortcuts") and CI proves they fail.
 
 ## Languages
@@ -218,6 +221,7 @@ and an image build.
 ## Documentation
 
 - [Connect VS Code and Antigravity to the simulator](docs/editores.md) (Spanish)
+- [Cheat sheet: platform requests in the console (DEV, AU and PRO)](docs/peticiones-plataforma.md) (Spanish)
 - [CloudMastery 2.0 delivery report](docs/cloudmastery-2.0-informe.md) (Spanish) and [starting audit](docs/cloudmastery-2.0-auditoria.md)
 - [Master implementation blueprint](docs/blueprint/01-master-implementation-blueprint.md): architecture, contracts, schema, DSL, phases, changelog
 - [Repository audit](docs/blueprint/00-repository-audit.md)

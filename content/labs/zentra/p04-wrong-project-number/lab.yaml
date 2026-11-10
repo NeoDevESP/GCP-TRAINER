@@ -1,0 +1,224 @@
+id: zentra-p04-wrong-project-number
+title: REQ · El número de proyecto del ticket no cuadra
+summary: 'Piden buckets en DEV y AU de asesores con el número de proyecto en el nombre, pero el de AU está mal copiado. Detéctalo, confírmalo con quien lo pidió y crea el bucket con el número correcto.'
+track: zentra
+day: 94
+level: professional
+branch: storage
+type: challenge
+mode: production
+skills:
+- storage.buckets
+- foundations.hierarchy
+wellArchitected:
+- operations
+certs:
+- ACE
+difficulty: 3
+minutes: 25
+baseline:
+- zentra-core
+- zentra-entornos
+- zentra-entornos-recursos
+ticket:
+  id: REQ-41258
+  kind: REQ
+  priority: P3
+  sla: 5d
+  reporter: Hugo Martín (Asesores)
+  summary: 'Necesitamos un bucket de informes en entornos previos de asesores. DEV: gcs-informes-dev-241875036912. AU: gcs-informes-au-241875036912. Mismo estándar de siempre.'
+actors:
+- role: requester
+  name: Hugo Martín (Asesores)
+  persona: Desarrollador del portal de asesores.
+  fallback: Los nombres los saqué de la plantilla, cambiando el entorno y el número.
+  facts:
+  - keywords:
+    - - numero
+      - número
+      - number
+      - au
+      - '241875036912'
+      - '659302187445'
+      - error
+      - mal
+    answer: '¡Uy, sí! Copié el número de DEV también en AU. El bueno es el del proyecto au-zentra-asesores: gcs-informes-au-659302187445. Gracias por mirarlo.'
+story: |-
+  **Proyectos de asesores**: `dev-zentra-asesores` (DEV), `au-zentra-asesores` (AU) y `zentra-asesores` (PRO).
+
+  > **REQ-41258 · P3** · Asesores: *«DEV: `gcs-informes-dev-241875036912` · AU: `gcs-informes-au-241875036912`. Mismo estándar de siempre.»*
+
+  Fíjate bien: **los dos nombres llevan el mismo número**, y cada proyecto tiene el suyo. Uno de los dos está mal. Si creas el bucket con el número equivocado, el nombre miente para siempre (un bucket **no se puede renombrar**) y los procesos que construyen el nombre a partir del número del proyecto no lo encontrarán.
+
+  **En la consola**
+  1. **Selector de proyectos**: compara el **número** de `dev-zentra-asesores` y el de `au-zentra-asesores` con los del ticket.
+  2. Pregunta al solicitante (pestaña **Ticket**) antes de inventarte el nombre.
+  3. Crea el bucket de DEV en su proyecto y el de AU **con el número correcto** en el suyo, con el estándar: `europe-west1`, acceso uniforme, prevención de acceso público, CMEK `projects/<proyecto>/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs` y etiquetas `app=asesores`, `env=dev`/`au`.
+  4. Responde explicando el cambio de nombre y resuelve.
+objectives:
+- Compara los números de DEV y AU
+- Confirma con el solicitante
+- Bucket de DEV con el estándar
+- Bucket de AU con el número correcto
+- Explica el cambio en el ticket
+hints:
+- text: 'El selector de proyectos muestra la columna «Número»: 241875036912 es DEV. ¿Cuál es el de AU?'
+quiz:
+- id: q1
+  question: Un bucket se creó con un nombre equivocado. ¿Cómo se arregla?
+  options:
+  - Se crea otro con el nombre bueno, se copian los datos y se borra el malo
+  - Se renombra desde la consola
+  - Se cambia la etiqueta del nombre
+  - No hace falta arreglarlo
+  answer:
+  - 0
+solution: |
+  ticket
+  gcloud projects describe dev-zentra-asesores --format='value(projectNumber)'
+  gcloud projects describe au-zentra-asesores --format='value(projectNumber)'
+  ask requester "El número del bucket de AU (241875036912) es el del proyecto de DEV. ¿Uso el de au-zentra-asesores?"
+  gcloud config set project dev-zentra-asesores
+  gcloud storage buckets create gs://gcs-informes-dev-241875036912 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/dev-zentra-asesores/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=asesores,env=dev
+  gcloud config set project au-zentra-asesores
+  gcloud storage buckets create gs://gcs-informes-au-659302187445 --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/au-zentra-asesores/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=asesores,env=au
+  ticket update "Hola Hugo: creados con el estándar. DEV: gcs-informes-dev-241875036912 en dev-zentra-asesores. AU: gcs-informes-au-659302187445 en au-zentra-asesores; como hablamos, el ticket traía el número de DEV (241875036912) también en AU y el número correcto del proyecto de AU es 659302187445. Revisad la plantilla para que no se repita."
+  ticket resolve "Buckets de informes creados en DEV y AU; el número de AU corregido tras confirmarlo con el solicitante."
+shortcuts:
+- name: create them exactly as written
+  run: |
+    gcloud storage buckets create gs://gcs-informes-dev-241875036912 --project=dev-zentra-asesores --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/dev-zentra-asesores/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=asesores,env=dev
+    gcloud storage buckets create gs://gcs-informes-au-241875036912 --project=au-zentra-asesores --location=europe-west1 --uniform-bucket-level-access --public-access-prevention --default-encryption-key=projects/au-zentra-asesores/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs --labels=app=asesores,env=au
+    ticket update "Hola Hugo: creados gcs-informes-dev-241875036912 y gcs-informes-au-241875036912 con el estándar."
+    ticket resolve "Buckets de informes creados en DEV y AU tal como se pidieron."
+rubric:
+- name: Buckets con el nombre correcto
+  validator: functional
+  points: 35
+  critical: true
+  all: true
+  checks:
+  - type: exists
+    on: dev-zentra-asesores
+    path: buckets["gcs-informes-dev-241875036912"]
+    desc: Bucket de DEV en su proyecto
+  - type: exists
+    on: au-zentra-asesores
+    path: buckets["gcs-informes-au-659302187445"]
+    desc: Bucket de AU con el número de AU
+  - type: absent
+    on: au-zentra-asesores
+    path: buckets["gcs-informes-au-241875036912"]
+    desc: Ningún bucket de AU con el número de DEV
+- name: Estándar del banco
+  validator: security
+  points: 20
+  all: true
+  checks:
+  - type: exists
+    on: au-zentra-asesores
+    path: buckets["gcs-informes-au-659302187445"]
+    expect:
+      location: EUROPE-WEST1
+      uniformBucketLevelAccess: true
+      publicAccessPrevention: enforced
+      defaultKmsKey:
+        contains: au-zentra-asesores/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs
+      labels.env: au
+    desc: AU cumple el estándar
+  - type: exists
+    on: dev-zentra-asesores
+    path: buckets["gcs-informes-dev-241875036912"]
+    expect:
+      publicAccessPrevention: enforced
+      defaultKmsKey:
+        contains: dev-zentra-asesores/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs
+      labels.env: dev
+    desc: DEV cumple el estándar
+- name: Preguntar en vez de suponer
+  validator: diagnosis
+  points: 15
+  checks:
+  - type: asked
+    actor: requester
+    min: 1
+    desc: Lo has confirmado con el solicitante
+- name: Explicación en el ticket
+  validator: evidence
+  points: 20
+  all: true
+  checks:
+  - type: ticket_update
+    keywords:
+    - - '659302187445'
+    - - gcs-informes-dev-241875036912
+    desc: Nombres finales y el número corregido
+  - type: ticket_resolved
+    desc: Ticket resuelto
+- name: Lo has entendido
+  validator: quiz
+  points: 10
+  checks:
+  - type: quiz
+    ratio: 1
+    desc: Pregunta del caso
+tutor:
+- match: projects describe au-zentra-asesores
+  title: Compara los números
+  why: 'Cada proyecto tiene su número: si dos entornos traen el mismo, uno está mal.'
+- match: storage buckets create gs://gcs-informes-au
+  title: El nombre bueno
+  why: Un bucket no se puede renombrar. Mejor confirmarlo antes que borrar y copiar después.
+en:
+  title: REQ · The project number in the ticket doesn't match
+  summary: 'They ask for buckets in asesores DEV and AU with the project number in the name, but the AU one is miscopied. Spot it, confirm it with the requester and create the bucket with the right number.'
+  story: |-
+    **Asesores projects**: `dev-zentra-asesores` (DEV), `au-zentra-asesores` (AU) and `zentra-asesores` (PRO).
+
+    > **REQ-41258 · P3** · Asesores: *"DEV: `gcs-informes-dev-241875036912` · AU: `gcs-informes-au-241875036912`. Same standard as always."*
+
+    Look closely: **both names carry the same number**, and each project has its own. One of them is wrong. If you create the bucket with the wrong number, the name lies forever (a bucket **cannot be renamed**) and processes that build the name from the project number won't find it.
+
+    **In the console**
+    1. **Project picker**: compare the **number** of `dev-zentra-asesores` and `au-zentra-asesores` with the ones in the ticket.
+    2. Ask the requester (**Ticket** tab) before making up the name.
+    3. Create the DEV bucket in its project and the AU one **with the right number** in its own, with the standard: `europe-west1`, uniform access, public access prevention, CMEK `projects/<project>/locations/europe-west1/keyRings/zentra-almacen/cryptoKeys/gcs` and labels `app=asesores`, `env=dev`/`au`.
+    4. Reply explaining the name change and resolve.
+  objectives:
+  - Compare the DEV and AU numbers
+  - Confirm with the requester
+  - DEV bucket with the standard
+  - AU bucket with the right number
+  - Explain the change on the ticket
+  hints:
+  - 'The project picker shows the "Number" column: 241875036912 is DEV. Which one is AU?'
+  ticket:
+    summary: 'We need a reports bucket in the asesores pre-production environments. DEV: gcs-informes-dev-241875036912. AU: gcs-informes-au-241875036912. Same standard as always.'
+  text:
+    Hugo Martín (Asesores): Hugo Martín (Asesores)
+    Desarrollador del portal de asesores.: Developer of the advisers portal.
+    Los nombres los saqué de la plantilla, cambiando el entorno y el número.: I took the names from the template, changing the environment and the number.
+    '¡Uy, sí! Copié el número de DEV también en AU. El bueno es el del proyecto au-zentra-asesores: gcs-informes-au-659302187445. Gracias por mirarlo.': 'Oops, yes! I copied the DEV number into AU too. The right one is the au-zentra-asesores project''s: gcs-informes-au-659302187445. Thanks for checking.'
+    Un bucket se creó con un nombre equivocado. ¿Cómo se arregla?: A bucket was created with a wrong name. How is it fixed?
+    Se crea otro con el nombre bueno, se copian los datos y se borra el malo: Create another one with the right name, copy the data and delete the wrong one
+    Se renombra desde la consola: Rename it from the console
+    Se cambia la etiqueta del nombre: Change the name label
+    No hace falta arreglarlo: It doesn't need fixing
+    Buckets con el nombre correcto: Buckets with the right name
+    Bucket de DEV en su proyecto: DEV bucket in its project
+    Bucket de AU con el número de AU: AU bucket with the AU number
+    Ningún bucket de AU con el número de DEV: No AU bucket with the DEV number
+    Estándar del banco: Bank standard
+    AU cumple el estándar: AU meets the standard
+    DEV cumple el estándar: DEV meets the standard
+    Preguntar en vez de suponer: Ask instead of assuming
+    Lo has confirmado con el solicitante: You confirmed it with the requester
+    Explicación en el ticket: Explanation on the ticket
+    Nombres finales y el número corregido: Final names and the corrected number
+    Ticket resuelto: Ticket resolved
+    Lo has entendido: You understood it
+    Pregunta del caso: Case question
+    Compara los números: Compare the numbers
+    'Cada proyecto tiene su número: si dos entornos traen el mismo, uno está mal.': 'Each project has its own number: if two environments carry the same one, one is wrong.'
+    El nombre bueno: The right name
+    Un bucket no se puede renombrar. Mejor confirmarlo antes que borrar y copiar después.: A bucket cannot be renamed. Better to confirm it first than to delete and copy later.
